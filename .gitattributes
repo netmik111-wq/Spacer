@@ -1,0 +1,11 @@
+# Text files are stored with LF line endings and checked out the same way on
+# every system, so a copy made on Windows is byte-identical to one made on Linux.
+* text=auto eol=lf
+
+# Files meant to be opened on Windows keep Windows line endings.
+*.bat text eol=crlf
+dist_files/*.txt text eol=crlf
+
+# Never touch these.
+*.png binary
+*.dmi binary

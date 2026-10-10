@@ -1,0 +1,22 @@
+# Godot's import cache: rebuilt when the project is opened
+.godot/
+/android/
+
+# exported games: too large for git (the Windows build is over GitHub's 100 MB file limit)
+build/
+
+# previews drawn by tools/make_assets.py
+tools/preview/
+
+# compiled helpers and test output
+/tools/lagproxy
+/research/native/atmos_native
+/research/bench/logs/
+/research/bench/.godot/
+
+# temporary and system files
+*.tmp
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

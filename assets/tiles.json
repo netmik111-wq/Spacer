@@ -1,0 +1,156 @@
+{
+ "tile_size": 32,
+ "columns": 8,
+ "tiles": [
+  {
+   "id": 0,
+   "name": "wall_h",
+   "kind": "wall"
+  },
+  {
+   "id": 1,
+   "name": "wall_tl",
+   "kind": "wall"
+  },
+  {
+   "id": 2,
+   "name": "wall_tr",
+   "kind": "wall"
+  },
+  {
+   "id": 3,
+   "name": "wall_bl",
+   "kind": "wall"
+  },
+  {
+   "id": 4,
+   "name": "wall_br",
+   "kind": "wall"
+  },
+  {
+   "id": 5,
+   "name": "wall_tdown",
+   "kind": "wall"
+  },
+  {
+   "id": 6,
+   "name": "wall_cross",
+   "kind": "wall"
+  },
+  {
+   "id": 7,
+   "name": "wall_v",
+   "kind": "wall"
+  },
+  {
+   "id": 8,
+   "name": "wall_v_end",
+   "kind": "wall"
+  },
+  {
+   "id": 9,
+   "name": "wall_v_end_l",
+   "kind": "wall"
+  },
+  {
+   "id": 10,
+   "name": "wall_v_end_r",
+   "kind": "wall"
+  },
+  {
+   "id": 11,
+   "name": "wall_v_end_a",
+   "kind": "wall"
+  },
+  {
+   "id": 12,
+   "name": "airlock",
+   "kind": "door"
+  },
+  {
+   "id": 13,
+   "name": "door",
+   "kind": "wall"
+  },
+  {
+   "id": 14,
+   "name": "door_open",
+   "kind": "door"
+  },
+  {
+   "id": 15,
+   "name": "window",
+   "kind": "wall"
+  },
+  {
+   "id": 16,
+   "name": "window_l",
+   "kind": "wall"
+  },
+  {
+   "id": 17,
+   "name": "window_r",
+   "kind": "wall"
+  },
+  {
+   "id": 18,
+   "name": "console_1",
+   "kind": "wall"
+  },
+  {
+   "id": 19,
+   "name": "console_2",
+   "kind": "wall"
+  },
+  {
+   "id": 20,
+   "name": "console_3",
+   "kind": "wall"
+  },
+  {
+   "id": 21,
+   "name": "console_4",
+   "kind": "wall"
+  },
+  {
+   "id": 22,
+   "name": "console_5",
+   "kind": "wall"
+  },
+  {
+   "id": 23,
+   "name": "floor_l_t",
+   "kind": "floor"
+  },
+  {
+   "id": 24,
+   "name": "floor_m_t",
+   "kind": "floor"
+  },
+  {
+   "id": 25,
+   "name": "floor_r_t",
+   "kind": "floor"
+  },
+  {
+   "id": 26,
+   "name": "floor_l_b",
+   "kind": "floor"
+  },
+  {
+   "id": 27,
+   "name": "floor_m_b",
+   "kind": "floor"
+  },
+  {
+   "id": 28,
+   "name": "floor_r_b",
+   "kind": "floor"
+  },
+  {
+   "id": 29,
+   "name": "floor_n",
+   "kind": "floor"
+  }
+ ]
+}
