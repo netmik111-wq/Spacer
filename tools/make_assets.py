@@ -260,8 +260,13 @@ def build_maps(images, ids):
 # cropped feet, so it cannot be used directly). One 32x48 frame per
 # (direction, pose); one row of 12 frames per suit colour.
 #   directions in order: down, up, left, right;  poses: stand, step A, step B
+# Every frame sits in a cell with a transparent border of CHAR_PAD pixels, so a
+# graphics card that samples a hair outside a frame picks up nothing (without
+# it, the shadow of the frame above showed as a thin line over the head).
 
 CHAR_W, CHAR_H = 32, 48
+CHAR_PAD = 1
+CELL_W, CELL_H = CHAR_W + 2 * CHAR_PAD, CHAR_H + 2 * CHAR_PAD
 SUIT_COLOURS = [
     ("red", (200, 55, 45)), ("blue", (47, 111, 208)), ("green", (58, 154, 74)),
     ("yellow", (217, 165, 32)), ("purple", (138, 79, 200)), ("orange", (217, 112, 42)),
@@ -388,11 +393,11 @@ def draw_char(colour, direction, pose):
 
 
 def build_chars():
-    sheet = Image.new("RGBA", (CHAR_W * 12, CHAR_H * len(SUIT_COLOURS)), (0, 0, 0, 0))
+    sheet = Image.new("RGBA", (CELL_W * 12, CELL_H * len(SUIT_COLOURS)), (0, 0, 0, 0))
     for row, (_, colour) in enumerate(SUIT_COLOURS):
         for d in range(4):
             for pose in range(3):
-                sheet.paste(draw_char(colour, d, pose), ((d * 3 + pose) * CHAR_W, row * CHAR_H))
+                sheet.paste(draw_char(colour, d, pose), ((d * 3 + pose) * CELL_W + CHAR_PAD, row * CELL_H + CHAR_PAD))
     sheet.save(os.path.join(OUT, "chars.png"))
     prev = sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
     bg = Image.new("RGBA", prev.size, (74, 78, 88, 255))

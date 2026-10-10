@@ -7,6 +7,7 @@ const GameClient := preload("res://src/client/game_client.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
+const CHAR_PAD := 1                  # transparent border around every frame in assets/chars.png
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
 # column of the first frame for each facing in assets/chars.png (down, up, left, right)
 const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
@@ -100,7 +101,11 @@ func _frame(facing: int, moving: bool, pos_tiles: Vector2, colour: int) -> Rect2
 	if moving:
 		# alternate the two step poses tile by tile, switching in the middle of a slide
 		column += 1 + (int(floorf(pos_tiles.x + pos_tiles.y + 0.5)) & 1)
-	return Rect2(column * CHAR_W, colour * CHAR_H, CHAR_W, CHAR_H)
+	return _cell(column, colour)
+
+
+func _cell(column: int, colour: int) -> Rect2:
+	return Rect2(column * (CHAR_W + 2 * CHAR_PAD) + CHAR_PAD, colour * (CHAR_H + 2 * CHAR_PAD) + CHAR_PAD, CHAR_W, CHAR_H)
 
 
 func _process(_delta: float) -> void:
@@ -132,7 +137,7 @@ func _process(_delta: float) -> void:
 			_label_layer.add_child(label)
 			_labels[id] = label
 		var pos: Vector2 = s[0]
-		sprite.position = _feet(pos)
+		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2], pos, client.player_colour(id))
 	for id: int in _views.keys():
 		if not client.ents.has(id):
@@ -155,7 +160,11 @@ func _process(_delta: float) -> void:
 		focus.y = map_size.y * 0.5
 	else:
 		focus.y = clampf(focus.y, half.y - margin, map_size.y - half.y + margin)
-	_camera.position = (focus * zoom).round() / zoom
+	# Keep the world on whole screen pixels. The camera's centre lands on half a
+	# pixel when the window has an odd width or height (a maximised window, for
+	# one), so the rounding has to take the screen centre into account.
+	var screen_half := get_viewport_rect().size * 0.5
+	_camera.position = ((focus * zoom - screen_half).round() + screen_half) / zoom
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5
@@ -179,4 +188,4 @@ func _process(_delta: float) -> void:
 	_ghost.visible = show_ghost and mine != null
 	if _ghost.visible:
 		_ghost.position = _feet(Vector2(mine.x, mine.y))
-		_ghost.region_rect = Rect2(FACING_COLUMN.get(mine.facing, 0) * CHAR_W, client.player_colour(client.my_id) * CHAR_H, CHAR_W, CHAR_H)
+		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), client.player_colour(client.my_id))
