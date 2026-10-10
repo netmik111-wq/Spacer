@@ -1,0 +1,16 @@
+--- N=256 ---
+RESULT clients=256 crowded=false compress=false polls=8 seconds=20.0 ticks=402 (20.1 Hz)
+  tick ms: avg=8.669 p95=15.439 max=45.368 | parts avg: move=0.073 atmos=4.698 replicate=3.898
+  server process CPU: 19.3% of one core
+  net: down to each client 59.6 kbit/s, up from each client 2.6 kbit/s, server total out 15.27 Mbit/s, udp packets out 7143/s
+  inputs received per client per second: 19.6, snapshots sent per client per second: 20.1
+BOTS n=256 seconds=18.5 snapshots/s per bot: min=19.98 avg=20.04 max=20.04 | missed=3 (0.003%) | avg entities per snapshot=40.9 avg snapshot bytes=293 | atmos packets/s per bot=4.00 | bot process CPU=9%
+  server socket drops: total=1410, during measured window=848 (connect phase=562)
+--- N=512 ---
+RESULT clients=512 crowded=false compress=false polls=8 seconds=20.0 ticks=401 (20.0 Hz)
+  tick ms: avg=13.752 p95=23.680 max=38.375 | parts avg: move=0.144 atmos=4.964 replicate=8.645
+  server process CPU: 31.0% of one core
+  net: down to each client 104.6 kbit/s, up from each client 2.5 kbit/s, server total out 53.56 Mbit/s, udp packets out 14291/s
+  inputs received per client per second: 18.8, snapshots sent per client per second: 20.0
+BOTS n=512 seconds=18.5 snapshots/s per bot: min=18.96 avg=19.97 max=19.99 | missed=93 (0.049%) | avg entities per snapshot=81.1 avg snapshot bytes=575 | atmos packets/s per bot=3.99 | bot process CPU=16%
+  server socket drops: total=27470, during measured window=12358 (connect phase=15112)

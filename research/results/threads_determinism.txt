@@ -1,0 +1,27 @@
+# det_test.gd: the same world for the same 200 server ticks. Does the atmosphere
+# end in the same state every time?
+#   sync      = stepped inside the tick, on the main thread
+#   async     = stepped on a worker thread, result taken whenever it is ready
+#   asyncwait = worker thread, but the tick that needs the result waits for it
+# Godot 4.7.2, 2 logical cores, 10 Oct 2026.
+
+--- idle machine: every mode repeats itself ---
+DET map=128x96 mode=sync ticks=200 wall=10.0 s atmosphere steps applied=100 state checksum=277621291
+DET map=128x96 mode=sync ticks=200 wall=10.0 s atmosphere steps applied=100 state checksum=277621291
+DET map=128x96 mode=async ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=277627092
+DET map=128x96 mode=async ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=277627092
+DET map=128x96 mode=asyncwait ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=277627092
+DET map=128x96 mode=asyncwait ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=277627092
+DET map=255x255 mode=sync ticks=200 wall=10.0 s atmosphere steps applied=100 state checksum=1498928736
+DET map=255x255 mode=sync ticks=200 wall=10.0 s atmosphere steps applied=100 state checksum=1498928736
+DET map=255x255 mode=async ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=1498942284
+DET map=255x255 mode=async ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=1498942284
+DET map=255x255 mode=asyncwait ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=1498942284
+DET map=255x255 mode=asyncwait ticks=200 wall=9.9 s atmosphere steps applied=99 state checksum=1498942284
+
+--- busy machine (3 other processes competing for the 2 cores) ---
+DET map=255x255 mode=async ticks=200 wall=9.9 s atmosphere steps applied=80 state checksum=1499226184
+DET map=255x255 mode=async ticks=200 wall=9.9 s atmosphere steps applied=77 state checksum=1499270572
+DET map=255x255 mode=async ticks=200 wall=9.9 s atmosphere steps applied=81 state checksum=1499212523
+DET map=255x255 mode=asyncwait ticks=200 wall=10.0 s atmosphere steps applied=99 state checksum=1498942284
+DET map=255x255 mode=sync ticks=200 wall=10.0 s atmosphere steps applied=100 state checksum=1498928736

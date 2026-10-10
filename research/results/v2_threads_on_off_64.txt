@@ -1,0 +1,28 @@
+--- netthread=0 async=0 ---
+RESULT2 clients=64 crowded=false compress=false netthread=false async_atmos=false send_every=1 seconds=20.1 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=5.112 p95=13.056 max=17.255 | parts avg: move=0.061 atmos=4.526 replicate=0.525
+  server process CPU (all threads): 11.7% of one core
+  net: down to each client 6.9 kbit/s, up from each client 1.7 kbit/s, server total out 0.44 Mbit/s, udp out 1366/s, udp in 1366/s
+  inputs received per client per second: 2.31, update packets per client per second: 18.0
+ERROR: The ENetConnection instance isn't currently active.
+  threads (% of a core): main+others=11.7  network thread=0.0  worker threads=0.0
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.0 avg packet=36 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=74 bad entities=0 bad atmosphere=0 | avg entities known=10.9 | bot process CPU=2%
+  server socket drops: total=0, during measured window=0
+--- netthread=1 async=0 ---
+RESULT2 clients=64 crowded=false compress=false netthread=true async_atmos=false send_every=1 seconds=20.0 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=5.394 p95=13.498 max=20.426 | parts avg: move=0.068 atmos=4.770 replicate=0.557
+  server process CPU (all threads): 17.1% of one core
+  net: down to each client 7.1 kbit/s, up from each client 1.8 kbit/s, server total out 0.45 Mbit/s, udp out 1390/s, udp in 1387/s
+  inputs received per client per second: 2.31, update packets per client per second: 18.5
+  threads (% of a core): main+others=10.9  network thread=6.2  worker threads=0.0
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.5 avg packet=36 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=74 bad entities=0 bad atmosphere=0 | avg entities known=10.8 | bot process CPU=3%
+  server socket drops: total=0, during measured window=0
+--- netthread=1 async=1 ---
+RESULT2 clients=64 crowded=false compress=false netthread=true async_atmos=true send_every=1 seconds=20.1 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=0.674 p95=0.968 max=4.153 | parts avg: move=0.066 atmos=0.031 replicate=0.577
+  server process CPU (all threads): 17.1% of one core
+  net: down to each client 6.9 kbit/s, up from each client 1.7 kbit/s, server total out 0.44 Mbit/s, udp out 1365/s, udp in 1365/s
+  inputs received per client per second: 2.30, update packets per client per second: 18.1
+  threads (% of a core): main+others=1.6  network thread=6.1  worker threads=9.2
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.0 avg packet=36 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=74 bad entities=0 bad atmosphere=0 | avg entities known=10.9 | bot process CPU=2%
+  server socket drops: total=0, during measured window=0

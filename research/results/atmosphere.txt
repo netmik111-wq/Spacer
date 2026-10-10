@@ -1,0 +1,24 @@
+# Cost of one atmosphere step (three gases per tile, every tile every step).
+# Godot 4.7.2, 2 logical cores, 10 Oct 2026. The machine is shared, so the same
+# test gives 7..11 ms on the 128x96 grid from run to run.
+
+--- atmos_bench.gd: GDScript, one thread ---
+grid 60x40 tiles=2400 open=1994  step median=1.323 ms  p95=1.488 ms  max=1.519 ms  | gas drift=0.00000%  | at 10 Hz = 1.32% of one core
+grid 128x96 tiles=12288 open=10673  step median=11.309 ms  p95=12.925 ms  max=13.176 ms  | gas drift=0.00000%  | at 10 Hz = 11.31% of one core
+grid 255x255 tiles=65025 open=57124  step median=42.501 ms  p95=63.398 ms  max=65.028 ms  | gas drift=0.00000%  | at 10 Hz = 42.50% of one core
+
+--- atmos_bench2.gd: the same loop split into row bands on worker threads ---
+godot 4.7.2-stable (official) | logical cores: 2
+grid 60x40: original=2.001 ms | restructured 1 thread=1.292 ms | 2 bands=1.448 ms (x0.89) | 4 bands=1.397 ms (x0.92) | identical results=true
+grid 128x96: original=6.873 ms | restructured 1 thread=7.142 ms | 2 bands=5.612 ms (x1.27) | 4 bands=3.921 ms (x1.82) | identical results=true
+grid 255x255: original=37.931 ms | restructured 1 thread=39.384 ms | 2 bands=20.741 ms (x1.90) | 4 bands=20.030 ms (x1.97) | identical results=true
+
+--- native/atmos.rs: the same algorithm compiled with rustc -O ---
+native grid 60x40 step median=0.0186 ms p95=0.0235 ms (checksum 208390.2, q[mid]=209)
+native grid 128x96 step median=0.1033 ms p95=0.1990 ms (checksum 1115356.0, q[mid]=0)
+native grid 255x255 step median=0.5712 ms p95=0.6411 ms (checksum 5968895.9, q[mid]=0)
+
+--- atmos_check.gd: does a hull breach drain the air? ---
+o2 at probe tile: before=21.9396 after=23.0467
+with a hull breach, total gas went 208362.7 -> 201413.7 (3.3% lost in 200 steps)
+pressure byte near breach=67, far room=209

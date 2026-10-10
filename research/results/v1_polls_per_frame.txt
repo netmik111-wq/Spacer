@@ -1,0 +1,24 @@
+===== spread N=256 polls/frame=1 =====
+RESULT clients=255 crowded=false compress=false polls=1 seconds=20.0 ticks=401 (20.0 Hz)
+  tick ms: avg=7.994 p95=15.833 max=23.747 | parts avg: move=0.069 atmos=4.193 replicate=3.732
+  server process CPU: 18.8% of one core
+  net: down to each client 59.3 kbit/s, up from each client 2.7 kbit/s, server total out 15.13 Mbit/s, udp packets out 7119/s
+  inputs received per client per second: 19.8, snapshots sent per client per second: 20.0
+BOTS n=256 seconds=18.5 snapshots/s per bot: min=4.64 avg=19.97 max=20.04 | missed=29 (0.031%) | avg entities per snapshot=40.5 avg snapshot bytes=291 | atmos packets/s per bot=3.98 | bot process CPU=9%
+  server socket drops: total=13366, during measured window=971 (connect phase=12395)
+===== spread N=256 polls/frame=8 =====
+RESULT clients=256 crowded=false compress=false polls=8 seconds=20.0 ticks=400 (20.0 Hz)
+  tick ms: avg=7.879 p95=15.327 max=19.218 | parts avg: move=0.074 atmos=4.189 replicate=3.616
+  server process CPU: 19.1% of one core
+  net: down to each client 59.4 kbit/s, up from each client 2.6 kbit/s, server total out 15.21 Mbit/s, udp packets out 7122/s
+  inputs received per client per second: 19.4, snapshots sent per client per second: 20.0
+BOTS n=256 seconds=18.5 snapshots/s per bot: min=18.20 avg=19.97 max=19.98 | missed=58 (0.061%) | avg entities per snapshot=40.8 avg snapshot bytes=293 | atmos packets/s per bot=3.99 | bot process CPU=9%
+  server socket drops: total=2145, during measured window=1207 (connect phase=938)
+===== spread N=512 polls/frame=8 =====
+RESULT clients=512 crowded=false compress=false polls=8 seconds=20.0 ticks=401 (20.0 Hz)
+  tick ms: avg=12.497 p95=21.558 max=69.992 | parts avg: move=0.139 atmos=4.301 replicate=8.057
+  server process CPU: 29.5% of one core
+  net: down to each client 104.0 kbit/s, up from each client 2.2 kbit/s, server total out 53.27 Mbit/s, udp packets out 14229/s
+  inputs received per client per second: 16.1, snapshots sent per client per second: 20.0
+BOTS n=512 seconds=18.5 snapshots/s per bot: min=18.69 avg=19.86 max=20.04 | missed=1680 (0.885%) | avg entities per snapshot=81.1 avg snapshot bytes=575 | atmos packets/s per bot=3.96 | bot process CPU=16%
+  server socket drops: total=56569, during measured window=38559 (connect phase=18010)

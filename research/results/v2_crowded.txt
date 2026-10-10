@@ -1,0 +1,18 @@
+--- N=128 ---
+RESULT2 clients=128 crowded=true compress=false netthread=true async_atmos=true send_every=1 seconds=20.0 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=0.981 p95=1.408 max=7.011 | parts avg: move=0.100 atmos=0.038 replicate=0.842
+  server process CPU (all threads): 18.6% of one core
+  net: down to each client 28.8 kbit/s, up from each client 1.9 kbit/s, server total out 3.69 Mbit/s, udp out 2984/s, udp in 2979/s
+  inputs received per client per second: 2.36, update packets per client per second: 20.0
+  threads (% of a core): main+others=2.2  network thread=7.3  worker threads=9.0
+BOTS2 n=128 seconds=18.5 | packets/s per bot=20.0 avg packet=168 bytes | inputs sent/s per bot=2.36 | verifier bots=16 checks ok=147 bad entities=0 bad atmosphere=0 | avg entities known=128.0 | bot process CPU=5%
+  server socket drops: total=0, during measured window=0
+--- N=256 ---
+RESULT2 clients=256 crowded=true compress=false netthread=true async_atmos=true send_every=1 seconds=20.0 ticks=400 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=1.882 p95=2.684 max=6.749 | parts avg: move=0.174 atmos=0.043 replicate=1.665
+  server process CPU (all threads): 23.5% of one core
+  net: down to each client 54.0 kbit/s, up from each client 1.9 kbit/s, server total out 13.83 Mbit/s, udp out 5974/s, udp in 5968/s
+  inputs received per client per second: 2.41, update packets per client per second: 20.0
+  threads (% of a core): main+others=4.0  network thread=10.0  worker threads=9.5
+BOTS2 n=256 seconds=18.5 | packets/s per bot=20.0 avg packet=325 bytes | inputs sent/s per bot=2.41 | verifier bots=32 checks ok=301 bad entities=0 bad atmosphere=0 | avg entities known=256.0 | bot process CPU=10%
+  server socket drops: total=119, during measured window=119

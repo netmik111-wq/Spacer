@@ -1,0 +1,27 @@
+--- N=128 ---
+RESULT2 clients=128 crowded=false compress=false netthread=true async_atmos=true send_every=1 seconds=20.0 ticks=400 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=1.194 p95=1.754 max=3.301 | parts avg: move=0.111 atmos=0.034 replicate=1.049
+  server process CPU (all threads): 19.7% of one core
+  net: down to each client 10.1 kbit/s, up from each client 1.8 kbit/s, server total out 1.29 Mbit/s, udp out 2910/s, udp in 2911/s
+  inputs received per client per second: 2.36, update packets per client per second: 19.5
+  threads (% of a core): main+others=2.6  network thread=7.5  worker threads=9.4
+BOTS2 n=128 seconds=18.5 | packets/s per bot=19.5 avg packet=53 bytes | inputs sent/s per bot=2.36 | verifier bots=16 checks ok=147 bad entities=0 bad atmosphere=0 | avg entities known=19.5 | bot process CPU=5%
+  server socket drops: total=0, during measured window=0
+--- N=256 ---
+RESULT2 clients=256 crowded=false compress=false netthread=true async_atmos=true send_every=1 seconds=20.0 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=2.171 p95=3.272 max=5.641 | parts avg: move=0.167 atmos=0.031 replicate=1.973
+  server process CPU (all threads): 23.8% of one core
+  net: down to each client 15.2 kbit/s, up from each client 1.9 kbit/s, server total out 3.88 Mbit/s, udp out 6007/s, udp in 5963/s
+  inputs received per client per second: 2.41, update packets per client per second: 20.0
+  threads (% of a core): main+others=4.6  network thread=9.8  worker threads=9.3
+BOTS2 n=256 seconds=18.5 | packets/s per bot=20.0 avg packet=82 bytes | inputs sent/s per bot=2.40 | verifier bots=32 checks ok=294 bad entities=0 bad atmosphere=0 | avg entities known=38.2 | bot process CPU=8%
+  server socket drops: total=679, during measured window=615
+--- N=512 ---
+RESULT2 clients=512 crowded=false compress=false netthread=true async_atmos=true send_every=1 seconds=20.1 ticks=401 (20.0 Hz) atmos_steps/s=10.0
+  tick ms: avg=4.017 p95=5.966 max=15.307 | parts avg: move=0.290 atmos=0.029 replicate=3.698
+  server process CPU (all threads): 32.4% of one core
+  net: down to each client 25.0 kbit/s, up from each client 1.9 kbit/s, server total out 12.82 Mbit/s, udp out 12473/s, udp in 11931/s
+  inputs received per client per second: 2.42, update packets per client per second: 20.0
+  threads (% of a core): main+others=8.1  network thread=15.1  worker threads=9.1
+BOTS2 n=512 seconds=18.5 | packets/s per bot=20.0 avg packet=138 bytes | inputs sent/s per bot=2.43 | verifier bots=64 checks ok=589 bad entities=0 bad atmosphere=0 | avg entities known=77.2 | bot process CPU=17%
+  server socket drops: total=12482, during measured window=10413

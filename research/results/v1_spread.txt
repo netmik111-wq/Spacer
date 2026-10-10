@@ -1,0 +1,31 @@
+===== spread N=16 =====
+RESULT clients=16 crowded=false compress=false seconds=20.0 ticks=402 (20.1 Hz)
+  tick ms: avg=4.553 p95=10.980 max=16.705 | parts avg: move=0.019 atmos=4.225 replicate=0.310
+  server process CPU: 9.8% of one core
+  net: down to each client 17.5 kbit/s, up from each client 2.7 kbit/s, server total out 0.28 Mbit/s, udp packets out 448/s
+  inputs received per client per second: 20.0, snapshots sent per client per second: 20.1
+BOTS n=16 seconds=18.5 snapshots/s per bot: min=20.04 avg=20.04 max=20.04 | missed=0 (0.000%) | avg entities per snapshot=3.3 avg snapshot bytes=30 | atmos packets/s per bot=4.00 | bot process CPU=1%
+===== spread N=32 =====
+RESULT clients=32 crowded=false compress=false seconds=20.0 ticks=401 (20.0 Hz)
+  tick ms: avg=4.717 p95=11.778 max=15.053 | parts avg: move=0.023 atmos=4.199 replicate=0.495
+  server process CPU: 10.1% of one core
+  net: down to each client 20.9 kbit/s, up from each client 2.7 kbit/s, server total out 0.67 Mbit/s, udp packets out 893/s
+  inputs received per client per second: 20.0, snapshots sent per client per second: 20.0
+BOTS n=32 seconds=18.5 snapshots/s per bot: min=20.04 avg=20.04 max=20.04 | missed=0 (0.000%) | avg entities per snapshot=6.4 avg snapshot bytes=52 | atmos packets/s per bot=4.00 | bot process CPU=2%
+===== spread N=64 =====
+RESULT clients=64 crowded=false compress=false seconds=20.0 ticks=400 (20.0 Hz)
+  tick ms: avg=5.088 p95=12.370 max=15.065 | parts avg: move=0.029 atmos=4.155 replicate=0.905
+  server process CPU: 11.2% of one core
+  net: down to each client 26.1 kbit/s, up from each client 2.7 kbit/s, server total out 1.67 Mbit/s, udp packets out 1780/s
+  inputs received per client per second: 20.0, snapshots sent per client per second: 20.0
+BOTS n=64 seconds=18.5 snapshots/s per bot: min=20.00 avg=20.00 max=20.00 | missed=0 (0.000%) | avg entities per snapshot=11.1 avg snapshot bytes=85 | atmos packets/s per bot=4.00 | bot process CPU=3%
+===== spread N=128 =====
+RESULT clients=128 crowded=false compress=false seconds=20.0 ticks=401 (20.0 Hz)
+  tick ms: avg=5.818 p95=12.249 max=18.334 | parts avg: move=0.041 atmos=4.058 replicate=1.719
+  server process CPU: 13.2% of one core
+  net: down to each client 36.7 kbit/s, up from each client 2.7 kbit/s, server total out 4.70 Mbit/s, udp packets out 3572/s
+  inputs received per client per second: 20.0, snapshots sent per client per second: 20.0
+BOTS n=128 seconds=18.5 snapshots/s per bot: min=19.99 avg=19.99 max=19.99 | missed=0 (0.000%) | avg entities per snapshot=20.5 avg snapshot bytes=150 | atmos packets/s per bot=4.00 | bot process CPU=4%
+===== spread N=256 =====
+SERVER_FAIL only 240 of 256 clients connected after 60 s
+BOT_FAIL only 0 of 256 connected after 60 s

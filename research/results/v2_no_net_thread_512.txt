@@ -1,0 +1,3 @@
+SERVER_FAIL only 307 of 512 clients connected after 60 s
+BOT_FAIL only 313 of 512 connected after 60 s
+  server socket drops: total=146373, during measured window=0

@@ -1,0 +1,16 @@
+===== spread N=128 (staggered inputs, 4 new connections per frame) =====
+RESULT clients=128 crowded=false compress=false seconds=20.1 ticks=401 (20.0 Hz)
+  tick ms: avg=6.301 p95=13.695 max=17.199 | parts avg: move=0.046 atmos=4.375 replicate=1.880
+  server process CPU: 14.4% of one core
+  net: down to each client 37.3 kbit/s, up from each client 2.7 kbit/s, server total out 4.77 Mbit/s, udp packets out 3571/s
+  inputs received per client per second: 20.0, snapshots sent per client per second: 20.0
+BOTS n=128 seconds=18.5 snapshots/s per bot: min=20.00 avg=20.00 max=20.00 | missed=0 (0.000%) | avg entities per snapshot=20.9 avg snapshot bytes=153 | atmos packets/s per bot=4.00 | bot process CPU=5%
+  kernel UDP receive-buffer drops during run: 3030
+===== spread N=256 (staggered inputs, 4 new connections per frame) =====
+SERVER_FAIL only 252 of 256 clients connected after 60 s
+BOT_FAIL only 0 of 256 connected after 60 s
+  kernel UDP receive-buffer drops during run: 16800
+===== spread N=512 (staggered inputs, 4 new connections per frame) =====
+SERVER_FAIL only 476 of 512 clients connected after 60 s
+BOT_FAIL only 0 of 512 connected after 60 s
+  kernel UDP receive-buffer drops during run: 108075

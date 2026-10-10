@@ -1,0 +1,7 @@
+# race_demo.gd: two threads add 1 to the same number a million times each.
+# Godot 4.7.2, 2 logical cores, 10 Oct 2026.
+one thread:              result=2000000 (expected 2000000)  time=29 ms
+two threads, no lock:    result=1538943  lost=461057 (23.1%)  time=44 ms
+two threads, no lock:    result=1335664  lost=664336 (33.2%)  time=53 ms
+two threads, no lock:    result=1412389  lost=587611 (29.4%)  time=50 ms
+two threads, with lock:  result=2000000 (expected 2000000)  time=681 ms

@@ -1,0 +1,15 @@
+--- 64 clients, no relay ---
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.3 avg packet=41 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=76 bad entities=0 bad atmosphere=0 | avg entities known=10.8 | bot process CPU=3%
+LATENCY ms from server tick to client: samples=21703 p50=16 p90=16 p99=17 p99.9=19 max=19 | share above 150 ms=0.00%
+--- 64 clients, 40+-10 ms each way, no loss ---
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.6 avg packet=40 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=76 bad entities=0 bad atmosphere=0 | avg entities known=11.3 | bot process CPU=3%
+LATENCY ms from server tick to client: samples=21987 p50=53 p90=62 p99=62 p99.9=70 max=70 | share above 150 ms=0.00%
+PROXY forwarded=63955 dropped=0 clients=64
+--- 64 clients, 40+-10 ms each way, 2% loss ---
+BOTS2 n=64 seconds=18.5 | packets/s per bot=17.8 avg packet=41 bytes | inputs sent/s per bot=2.30 | verifier bots=8 checks ok=74 bad entities=0 bad atmosphere=0 | avg entities known=11.5 | bot process CPU=3%
+LATENCY ms from server tick to client: samples=21107 p50=51 p90=67 p99=167 p99.9=216 max=433 | share above 150 ms=1.92%
+PROXY forwarded=62974 dropped=1310 clients=64
+--- 64 clients, 40+-10 ms each way, 5% loss ---
+BOTS2 n=64 seconds=18.5 | packets/s per bot=18.4 avg packet=38 bytes | inputs sent/s per bot=2.31 | verifier bots=8 checks ok=73 bad entities=0 bad atmosphere=0 | avg entities known=11.2 | bot process CPU=3%
+LATENCY ms from server tick to client: samples=21759 p50=52 p90=103 p99=268 p99.9=519 max=835 | share above 150 ms=6.54%
+PROXY forwarded=63877 dropped=3426 clients=64
