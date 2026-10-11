@@ -175,15 +175,10 @@ func _update_ship(delta: float) -> void:
 
 
 func _draw_air() -> void:
-	## Thin air darkens a cell; next to a hole, streaks show the air rushing out.
+	## Next to a hole, streaks show the air rushing out.
+	## Thin air itself is deliberately not drawn: a compartment without air looks
+	## like any other, and only the pressure gauge tells (the author's decision).
 	var map := client.map
-	for y in map.height:
-		for x in map.width:
-			var a := client.air_at(x, y)
-			if a < 0 or a >= Net.AIR_FULL - 2:
-				continue
-			var thin := 1.0 - float(a) / Net.AIR_FULL
-			_air_view.draw_rect(Rect2(x * _tile, y * _tile, _tile, _tile), Color(0.03, 0.05, 0.16, 0.62 * pow(thin, 0.8)))
 	var now := Time.get_ticks_msec() / 1000.0
 	for cell: int in client.holes.keys():
 		var hx := cell % map.width
