@@ -19,6 +19,7 @@ var door_kind := PackedByteArray()   # DOOR_BAND or DOOR_AIRLOCK, per door
 var door_of := PackedInt32Array()    # door number per cell, -1 = no door there
 var hull := PackedInt32Array()       # cells of the outer shell that can be breached: wall or window
                                      # with a walkable cell on one side and space on another
+var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
 
 var tile_size := 32
 var atlas_columns := 8
@@ -81,6 +82,12 @@ func load_from(name: String) -> String:
 		h = (h * 31 + at.x * 131 + at.y + 5) & 0x7FFFFFFF
 	crc = (h * 31 + width) & 0x7FFFFFFF
 
+	oxygen = {}
+	var station: int = tile_ids.get("console_2", -1)
+	for i in cells.size():
+		if cells[i] == station and station >= 0:
+			oxygen[i] = true
+
 	hull = PackedInt32Array()
 	for y in height:
 		for x in width:
@@ -106,6 +113,15 @@ func door_at(x: int, y: int) -> int:
 	if x < 0 or y < 0 or x >= width or y >= height:
 		return -1
 	return door_of[y * width + x]
+
+
+func cell_ahead(x: int, y: int, facing: int) -> int:
+	## The cell a character standing at x,y and facing that way looks at, or -1 outside the map.
+	var tx: int = x + [0, 0, 0, -1, 1][facing]
+	var ty: int = y + [0, -1, 1, 0, 0][facing]
+	if tx < 0 or ty < 0 or tx >= width or ty >= height:
+		return -1
+	return ty * width + tx
 
 
 func chunks_wide() -> int:

@@ -26,6 +26,7 @@ const MAX_INPUT_LEAD := 40          # inputs stamped further ahead than this are
 const CHAT_BURST := 5               # messages allowed per CHAT_WINDOW_MS
 const CHAT_WINDOW_MS := 5000
 const BOT_RESPAWN_TICKS := 300      # a dead bot is replaced after 15 s
+const MAX_CORPSES := 30             # the oldest body is cleared away when there are more
 
 var port := Net.DEFAULT_PORT
 var max_players := 32
@@ -40,6 +41,7 @@ var _pending := {}                  # peer -> msec when it connected (waiting fo
 var _slot_of := {}                  # peer -> slot
 var players: Array = []             # slot -> Player, or null when the slot is free
 var _free: Array[int] = []
+var _corpses: Array[int] = []       # slots of the bodies left behind, oldest first
 var _rng := RandomNumberGenerator.new()
 
 var _cw := 1                        # chunks across / down
@@ -140,13 +142,14 @@ func stop() -> void:
 	_pending.clear()
 	players.clear()
 	_free.clear()
+	_corpses.clear()
 	log_line.emit("Сервер остановлен.")
 
 
 func player_count() -> int:
 	var n := 0
 	for p: Player in players:
-		if p != null and not p.bot:
+		if p != null and p.peer != null:
 			n += 1
 	return n
 
@@ -237,13 +240,21 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_SHUTDOWN:
 		if shutdown_token != "" and pkt.slice(1).get_string_from_utf8() == shutdown_token:
 			shutdown_requested.emit()
+	elif kind == Net.C_USE:
+		p.using = pkt.size() > 1 and pkt[1] != 0
+	elif kind == Net.C_SUIT:
+		if p.cond == Net.COND_OK and pkt.size() > 1:
+			p.supply = pkt[1] != 0 and p.tank > 0.0
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
 			_respawn(p)
 	elif kind == Net.C_ADMIN:
 		if pkt.size() > 2 and shutdown_token != "" and pkt.slice(2).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
-				breach_near(p.st.x, p.st.y)
+				# the wall the player faces, if it can be breached; otherwise the nearest that can
+				var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+				if not (ahead >= 0 and map.hull.has(ahead) and breach(ahead)):
+					breach_near(p.st.x, p.st.y)
 			elif pkt[1] == Net.ADMIN_SEAL:
 				seal_all()
 
@@ -299,7 +310,8 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
 
 
-func _new_player(player_name: String) -> Player:
+func _alloc(player_name: String) -> Player:
+	## A new record in a free slot. The slot number is the character's id.
 	var p := Player.new()
 	if _free.is_empty():
 		p.slot = players.size()
@@ -308,6 +320,11 @@ func _new_player(player_name: String) -> Player:
 		p.slot = _free.pop_back()
 		players[p.slot] = p
 	p.name = player_name
+	return p
+
+
+func _new_player(player_name: String) -> Player:
+	var p := _alloc(player_name)
 	p.colour = p.slot % Net.SUIT_COLOURS
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
@@ -339,7 +356,7 @@ func _roster_entry(p: Player) -> PackedByteArray:
 	e.resize(5)
 	e.encode_u16(0, p.slot)
 	e.encode_u8(2, p.colour)
-	e.encode_u8(3, 1 if p.bot else 0)
+	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_BOT if p.bot else Net.KIND_PLAYER))
 	e.encode_u8(4, name_bytes.size())
 	e.append_array(name_bytes)
 	return e
@@ -366,9 +383,21 @@ func _drop(peer: ENetPacketPeer) -> void:
 		return
 	var p: Player = players[_slot_of[peer]]
 	_slot_of.erase(peer)
+	if p.cond == Net.COND_DEAD:
+		# the dead stay where they fell, whether or not their player is still here
+		p.peer = null
+		_becomes_corpse(p)
+	else:
+		_remove(p)
+	log_line.emit("%s вышел (игроков: %d)." % [p.name, player_count()])
+
+
+func _remove(p: Player) -> void:
+	## Takes a character out of the world altogether.
 	_record(p, true)
 	players[p.slot] = null
 	_free.append(p.slot)
+	_corpses.erase(p.slot)
 	var msg := PackedByteArray()
 	msg.resize(3)
 	msg.encode_u8(0, Net.S_LEAVE)
@@ -376,7 +405,31 @@ func _drop(peer: ENetPacketPeer) -> void:
 	for q: Player in players:
 		if q != null and q.peer != null:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
-	log_line.emit("%s вышел (игроков: %d)." % [p.name, player_count()])
+
+
+func _becomes_corpse(c: Player) -> void:
+	## Marks a record as a body nobody controls and tells everyone what it is now.
+	c.corpse = true
+	c.bot = false
+	c.using = false
+	c.inputs.clear()
+	_corpses.append(c.slot)
+	_announce_join(c, null)
+	if _corpses.size() > MAX_CORPSES:
+		_remove(players[_corpses[0]])
+
+
+func _leave_body(p: Player) -> void:
+	## The character is about to be given a new body: its old one stays where it lies.
+	var c := _alloc(p.name)
+	c.colour = p.colour
+	c.st.copy_from(p.st)
+	c.st.dir = Net.DIR_NONE
+	c.st.down = true
+	c.cond = Net.COND_DEAD
+	c.health = Net.HEALTH_DEAD
+	_becomes_corpse(c)
+	_record(c)
 
 
 func _clean(text: String, limit: int, fallback: String) -> String:
@@ -395,7 +448,7 @@ func _unique_name(wanted: String) -> String:
 	while true:
 		var clash := false
 		for q: Player in players:
-			if q != null and q.name == candidate:
+			if q != null and not q.corpse and q.name == candidate:
 				clash = true
 				break
 		if not clash:
@@ -482,7 +535,7 @@ func seal_all() -> void:
 	for cell: int in air.holes.keys():
 		air.set_hole(cell, false)
 		_hull_record(cell, 0)
-	_ship_says("Пробоины заделаны. Воздух в отсеки не вернётся сам: откройте двери в целые отсеки.")
+	_ship_says("Пробоины заделаны.")
 
 
 func _hull_record(cell: int, state: int) -> void:
@@ -502,7 +555,7 @@ func _hull_record(cell: int, state: int) -> void:
 func _tick() -> void:
 	tick += 1
 	for p: Player in players:
-		if p == null:
+		if p == null or p.corpse:
 			continue
 		while not p.inputs.is_empty() and int(p.inputs[0][0]) <= tick:
 			var inp: Array = p.inputs.pop_front()
@@ -514,6 +567,7 @@ func _tick() -> void:
 		if Mover.step(p.st, map, doors, tick):
 			p.self_dirty = true
 		_update_vitals(p)
+		_update_work(p)
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
 			_record(p)
 	_update_doors()
@@ -530,7 +584,15 @@ func _update_vitals(p: Player) -> void:
 		if p.bot and tick - p.died_tick >= BOT_RESPAWN_TICKS:
 			_respawn(p)
 		return
-	p.health = Vitals.advance(p.health, p.cond, air.air[p.st.y * map.width + p.st.x], Net.TICK_SEC)
+	var breathes := air.air[p.st.y * map.width + p.st.x]
+	if p.supply:
+		# on the tank: the air around does not matter while there is oxygen left
+		p.tank = maxf(p.tank - Net.TICK_SEC / Vitals.TANK_SECONDS, 0.0)
+		if p.tank > 0.0:
+			breathes = 1.0
+		else:
+			p.supply = false
+	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC)
 	var cond := Vitals.condition(p.health, p.cond)
 	if cond == p.cond:
 		return
@@ -548,8 +610,36 @@ func _update_vitals(p: Player) -> void:
 	p.self_dirty = true
 
 
+func _update_work(p: Player) -> void:
+	## Holding "use" on what the character faces: a hole is mended, an oxygen station fills the tank.
+	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
+		p.work = 0
+		return
+	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	if cell >= 0 and air.holes.has(cell):
+		if p.work_cell != cell:
+			p.work_cell = cell
+			p.work = 0
+		p.work += 1
+		if p.work >= Net.REPAIR_TICKS:
+			p.work = 0
+			air.set_hole(cell, false)
+			_hull_record(cell, 0)
+			_ship_says("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
+	elif cell >= 0 and map.oxygen.has(cell):
+		p.work = 0
+		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
+	else:
+		p.work = 0
+
+
 func _respawn(p: Player) -> void:
-	## A dead character comes back as a fresh crew member at a spawn point.
+	## A dead character comes back as a fresh crew member at a spawn point; the body stays.
+	_leave_body(p)
+	p.tank = 1.0
+	p.supply = false
+	p.using = false
+	p.work = 0
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
@@ -817,12 +907,18 @@ func _send_world() -> void:
 					sum += _sums[c]
 					ship_sum += _ship_sums[c]
 		var health_now := roundi(p.health)
-		if health_now != p.health_sent:
-			p.health_sent = health_now
+		var tank_now := roundi(p.tank * Net.TANK_FULL)
+		var work_now := p.work * 100 / Net.REPAIR_TICKS
+		var vitals := ((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)
+		if vitals != p.vitals_sent:
+			p.vitals_sent = vitals
 			var ov := out.size()
-			out.resize(ov + 3)
+			out.resize(ov + 1 + Net.VITALS_BYTES)
 			out.encode_u8(ov, Net.SEC_VITALS)
 			out.encode_s16(ov + 1, health_now)
+			out.encode_u8(ov + 3, tank_now)
+			out.encode_u8(ov + 4, 1 if p.supply else 0)
+			out.encode_u8(ov + 5, work_now)
 		if p.self_dirty or tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)

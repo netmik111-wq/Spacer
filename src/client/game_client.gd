@@ -45,7 +45,7 @@ class Ent:
 var phase := IDLE
 var my_id := -1
 var map := ShipMap.new()
-var roster := {}                     # id -> {"name": String, "colour": int, "bot": bool}
+var roster := {}                     # id -> {"name": String, "colour": int, "kind": Net.KIND_*}
 var ents := {}                       # id -> Ent, exactly as the server reported
 var predict := true                  # predict our own character (false = wait for the server)
 var admin_token := ""                # set when this game started the server: unlocks the host's test tools
@@ -59,6 +59,9 @@ var ship_changes := 0                # goes up whenever doors, hull or air chang
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
 var my_cond := 0                     # Net.COND_*
+var tank := Net.TANK_FULL            # oxygen left in the suit's tank, 0..Net.TANK_FULL
+var supply := false                  # breathing from the tank
+var work := 0                        # progress of what we are doing with the "use" key, 0..100
 var want_dir := 0                    # direction the player holds right now; set by the game screen
 
 # for the debug overlay
@@ -158,6 +161,9 @@ func close() -> void:
 	admin_token = ""
 	health = 100
 	my_cond = 0
+	tank = Net.TANK_FULL
+	supply = false
+	work = 0
 	bytes_in = 0
 	packets_in = 0
 
@@ -190,6 +196,45 @@ func stop_server_and_close(token: String) -> void:
 			_host.service(0)
 			OS.delay_msec(5)
 	close()
+
+
+func send_use(held: bool) -> void:
+	## The "use" key went down or up. The server decides what it does (see GameServer._update_work).
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_USE, 1 if held else 0]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_suit(on: bool) -> void:
+	## Turns the suit's oxygen supply on or off.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_SUIT, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func use_target() -> int:
+	## What our character would use right now: 0 = nothing, 1 = a hole to mend, 2 = an oxygen station.
+	if phase != PLAYING or my_cond != Net.COND_OK:
+		return 0
+	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
+	if cell < 0:
+		return 0
+	if holes.has(cell):
+		return 1
+	if map.oxygen.has(cell):
+		return 2
+	return 0
+
+
+func crew_count() -> int:
+	## Everybody aboard who is not a body left behind.
+	var n := 0
+	for id: int in roster.keys():
+		if int(roster[id]["kind"]) != Net.KIND_CORPSE:
+			n += 1
+	return n
+
+
+func is_corpse(id: int) -> bool:
+	return roster.has(id) and int(roster[id]["kind"]) == Net.KIND_CORPSE
 
 
 func send_respawn() -> void:
@@ -229,7 +274,7 @@ func player_name(id: int) -> String:
 
 
 func is_bot(id: int) -> bool:
-	return roster.has(id) and bool(roster[id]["bot"])
+	return roster.has(id) and int(roster[id]["kind"]) == Net.KIND_BOT
 
 
 func player_colour(id: int) -> int:
@@ -361,11 +406,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			var id := pkt.decode_u16(1)
 			_read_roster_entry(pkt, 1)
 			roster_changed.emit()
-			if id != my_id:
+			if id != my_id and not is_corpse(id):
 				notice.emit("%s на борту." % player_name(id))
 		Net.S_LEAVE:
 			var gone := pkt.decode_u16(1)
-			if roster.has(gone):
+			if roster.has(gone) and not is_corpse(gone):
 				notice.emit("%s покинул корабль." % player_name(gone))
 			roster.erase(gone)
 			ents.erase(gone)
@@ -379,7 +424,7 @@ func _read_roster_entry(pkt: PackedByteArray, pos: int) -> int:
 	var n := pkt[pos + 4]
 	roster[pkt.decode_u16(pos)] = {
 		"colour": pkt[pos + 2],
-		"bot": pkt[pos + 3] != 0,
+		"kind": pkt[pos + 3],
 		"name": pkt.slice(pos + 5, pos + 5 + n).get_string_from_utf8(),
 	}
 	return pos + 5 + n
@@ -430,7 +475,10 @@ func _on_world(pkt: PackedByteArray) -> void:
 			pos += Net.SELF_BYTES
 		elif sec == Net.SEC_VITALS:
 			health = pkt.decode_s16(pos)
-			pos += 2
+			tank = pkt[pos + 2]
+			supply = (pkt[pos + 3] & 1) != 0
+			work = pkt[pos + 4]
+			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)
 			pos += 2

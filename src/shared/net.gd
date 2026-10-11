@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 3
+const PROTOCOL := 4
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -34,11 +34,13 @@ const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
 const C_ADMIN := 5                  # u8 command, secret text: test tools of the hosting player (see ADMIN_*)
 const C_RESPAWN := 6                # nothing else: a dead player asks to come back as a new crew member
+const C_USE := 7                    # u8 held: the "use" key went down (1) or up (0)
+const C_SUIT := 8                   # u8 on: turn the suit's oxygen supply on (1) or off (0)
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
 const S_REJECT := 11                # u8 reason
-const S_ROSTER := 12                # u16 count, then roster entries
+const S_ROSTER := 12                # u16 count, then roster entries: u16 id, u8 colour, u8 kind (KIND_*), u8 name length, name
 const S_JOIN := 13                  # one roster entry
 const S_LEAVE := 14                 # u16 id
 const S_WORLD := 15                 # u32 tick, then sections
@@ -53,8 +55,10 @@ const SEC_CHECK := 5                # u32 checksum of the entities this client s
 const SEC_AIR := 6                  # u8 chunk x, u8 chunk y, u16 count, then pairs: u8 cell in the chunk (y*16+x), u8 air
 const SEC_SELF := 7                 # authoritative state of the client's own character (see pack_self)
 const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of all 256 cells of the chunk
-const SEC_VITALS := 9               # s16 health of the client's own character: 100 = unhurt, 0 and below =
-                                    # unconscious, HEALTH_DEAD = dead
+const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
+                                    # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
+                                    # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100)
+const VITALS_BYTES := 5
 
 const FACING_GONE := 255
 const ENT_BYTES := 7
@@ -79,6 +83,14 @@ const COND_DEAD := 2
 const HEALTH_FULL := 100
 const HEALTH_DEAD := -100
 const RESPAWN_TICKS := 100          # a dead player may come back after 5 s
+
+# who a roster entry is
+const KIND_PLAYER := 0
+const KIND_BOT := 1
+const KIND_CORPSE := 2              # a body left behind; nobody controls it
+
+const TANK_FULL := 200              # a full oxygen tank as sent over the network
+const REPAIR_TICKS := 120           # holding "use" on a hole for 6 s mends it
 
 
 static func reject_text(reason: int) -> String:

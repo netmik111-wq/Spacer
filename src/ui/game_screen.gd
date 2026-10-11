@@ -22,11 +22,12 @@ var hosting := false
 var host_port := 0
 var demo_walk := false               # test mode: wander without a keyboard
 var forced_dir := -1                 # test mode: direction dictated by a script (-1 = off)
+var forced_use := false              # test mode: the "use" key held by a script
 
 var _world: WorldView
 var _ui: CanvasLayer
 var _info: Label
-var _hint: Label
+var _keys: Label
 var _debug: Label
 var _monitor: TextureRect
 var _monitor_frames: Array = []       # per health state: Array[AtlasTexture]
@@ -34,6 +35,12 @@ var _alerts := {}                    # lamp name -> {"frames": Array[AtlasTextur
 var _alert_box: VBoxContainer
 var _shade: ColorRect
 var _fate: Label
+var _tank_bar: ColorRect
+var _tank_fill: ColorRect
+var _hint: Label
+var _work_bar: ColorRect
+var _work_fill: ColorRect
+var _use_held := false
 var _monitor_step := 0.08
 var _monitor_time := 0.0
 var _chat_box: VBoxContainer
@@ -79,9 +86,9 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(spacer)
-	_hint = _text(top, 13)
-	_hint.text = "WASD или стрелки: ходить     Enter: чат     Esc: меню     F11: во весь экран"
-	_hint.modulate = Color(1, 1, 1, 0.75)
+	_keys = _text(top, 13)
+	_keys.text = "WASD: ходить    E: действие    Q: подача O2    Enter: чат    Esc: меню    F11: весь экран"
+	_keys.modulate = Color(1, 1, 1, 0.75)
 
 	_debug = _text(root, 13)
 	_debug.position = Vector2(14, 40)
@@ -127,7 +134,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		root.add_child(_alert_box)
 		var lamps: Texture2D = load("res://assets/hud_alerts.png")
 		var described: Dictionary = meta.get("alerts", {})
-		for lamp: String in ["kpa_low1", "kpa_low2", "o2_low"]:
+		for lamp: String in ["kpa_low1", "kpa_low2", "o2_low", "o2_on", "o2_off"]:
 			if not described.has(lamp) or lamps == null:
 				continue
 			var d: Dictionary = described[lamp]
@@ -147,6 +154,45 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 			node.visible = false
 			_alert_box.add_child(node)
 			_alerts[lamp] = {"frames": frames, "seconds": float(d["frame_seconds"]), "node": node}
+
+	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
+	_tank_bar = ColorRect.new()
+	_tank_bar.color = Color(0.13, 0.1, 0.19)
+	_tank_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tank_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_tank_bar.offset_left = -14 - 192 - 10 - 12
+	_tank_bar.offset_right = -14 - 192 - 10
+	_tank_bar.offset_top = -14 - 96
+	_tank_bar.offset_bottom = -14
+	root.add_child(_tank_bar)
+	_tank_fill = ColorRect.new()
+	_tank_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tank_bar.add_child(_tank_fill)
+
+	# what the "use" key would do here, and how far the work has got
+	_hint = _text(root, 16)
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hint.offset_bottom = -92
+	_hint.visible = false
+	_work_bar = ColorRect.new()
+	_work_bar.color = Color(0.08, 0.09, 0.13, 0.9)
+	_work_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_work_bar.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
+	_work_bar.offset_left = -110
+	_work_bar.offset_right = 110
+	_work_bar.offset_top = -84
+	_work_bar.offset_bottom = -70
+	_work_bar.visible = false
+	root.add_child(_work_bar)
+	_work_fill = ColorRect.new()
+	_work_fill.color = Color(0.95, 0.75, 0.3)
+	_work_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_work_fill.position = Vector2(2, 2)
+	_work_fill.size = Vector2(0, 10)
+	_work_bar.add_child(_work_fill)
 
 	# the screen goes dark as our character fades, and says so when it is down
 	_shade = ColorRect.new()
@@ -242,12 +288,6 @@ func _build_pause(root: Control) -> void:
 			client.send_admin(Net.ADMIN_BREACH)
 			_set_pause(false))
 		box.add_child(hole)
-		var mend := Button.new()
-		mend.text = "Заделать все пробоины (тест)"
-		mend.pressed.connect(func() -> void:
-			client.send_admin(Net.ADMIN_SEAL)
-			_set_pause(false))
-		box.add_child(mend)
 	var resume := Button.new()
 	resume.text = "Продолжить"
 	resume.pressed.connect(func() -> void: _set_pause(false))
@@ -338,6 +378,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("debug"):
 		show_debug(not _debug.visible)
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("suit") and not _chat_input.visible and not _pause.visible:
+		client.send_suit(not client.supply)
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("respawn") and not _chat_input.visible:
 		client.send_respawn()
 		get_viewport().set_input_as_handled()
@@ -399,6 +442,20 @@ func _process(delta: float) -> void:
 		want = forced_dir
 	client.want_dir = want
 
+	# the "use" key: tell the server when it goes down or up
+	var use_now := (Input.is_action_pressed("use") and not busy) or forced_use
+	if use_now != _use_held:
+		_use_held = use_now
+		client.send_use(use_now)
+	var target := client.use_target()
+	_hint.visible = target != 0
+	if target == 1:
+		_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
+	elif target == 2:
+		_hint.text = "Баллон полон" if client.tank >= Net.TANK_FULL else ("Заправляю баллон…" if _use_held else "Держите E, чтобы заправить баллон")
+	_work_bar.visible = target == 1 and client.work > 0
+	_work_fill.size.x = 216.0 * client.work / 100.0
+
 	var now_s := Time.get_ticks_msec() / 1000.0
 	for entry: Array in _chat_lines:
 		var age: float = now_s - float(entry[1])
@@ -417,6 +474,13 @@ func _process(delta: float) -> void:
 	_lamp("o2_low", alive and here >= 0 and here < Net.AIR_FULL * BREATH_MIN)
 	_lamp("kpa_low1", alive and here >= Net.AIR_FULL * PRESSURE_MIN and here < Net.AIR_FULL * PRESSURE_WARN)
 	_lamp("kpa_low2", alive and here >= 0 and here < Net.AIR_FULL * PRESSURE_MIN)
+	_lamp("o2_on", alive and client.supply)
+	_lamp("o2_off", alive and not client.supply)
+	_tank_bar.visible = alive
+	var share := float(client.tank) / Net.TANK_FULL
+	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
+	_tank_fill.size = Vector2(8, 92.0 * share)
+	_tank_fill.color = Color(0.25, 0.85, 0.75) if share > 0.5 else (Color(0.95, 0.75, 0.3) if share > 0.2 else Color(0.95, 0.35, 0.3))
 
 	# fading out: the screen darkens below 40 health
 	var dark := clampf((40.0 - client.health) / 40.0, 0.0, 1.0) * 0.5
@@ -433,10 +497,11 @@ func _process(delta: float) -> void:
 	_info_timer -= delta
 	if _info_timer <= 0.0:
 		_info_timer = 0.25
-		_info.text = "На борту: %d     Пинг: %d мс" % [client.roster.size(), int(round(client.rtt_ms))]
+		_info.text = "На борту: %d     Пинг: %d мс" % [client.crew_count(), int(round(client.rtt_ms))]
 		if _debug.visible:
-			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа" % [
+			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,
 				client.checks_ok, client.checks_bad, client.packets_in, client.bytes_in / 1024.0,
 				int(round(_fps_smooth)), client.health,
-				int(round(maxi(client.air_at(client.pred.x, client.pred.y), 0) * Net.KPA_FULL / Net.AIR_FULL))]
+				int(round(maxi(client.air_at(client.pred.x, client.pred.y), 0) * Net.KPA_FULL / Net.AIR_FULL)),
+				client.tank * 100 / Net.TANK_FULL]

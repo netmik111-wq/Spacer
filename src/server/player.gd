@@ -8,6 +8,7 @@ var peer: ENetPacketPeer = null      # null for bots
 var name := ""
 var colour := 0
 var bot := false
+var corpse := false                  # a body left behind: it only lies there
 var st := Mover.State.new()
 
 var inputs: Array = []               # queued input changes, oldest first: [apply tick, direction, seq]
@@ -21,7 +22,12 @@ var rep_look := -1
 
 var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; Net.HEALTH_DEAD = dead
 var cond := 0                        # Net.COND_*
-var health_sent := 9999              # health as last told to the client
+var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
+var supply := false                  # breathing from the tank instead of the air around
+var using := false                   # holds the "use" key
+var work := 0                        # ticks spent on the thing in front of it (mending a hole)
+var work_cell := -1
+var vitals_sent := -1                # health, tank, supply and work as last told to the client, packed
 var died_tick := 0
 
 var self_dirty := true               # own state changed and must be confirmed to the client

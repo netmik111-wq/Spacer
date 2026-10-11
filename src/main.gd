@@ -18,7 +18,10 @@ extends Node
 ## say=TEXT (send a chat line), --debug (show the F3 overlay),
 ## quit_after=SECONDS, shot=FILE.png with shot_after=SECONDS, stats=FILE.json,
 ## breach_after=SECONDS / seal_after=SECONDS (the host's test tools; on a
-## dedicated server breach_after tears a random hole).
+## dedicated server breach_after tears a random hole), suit_after=SECONDS (turn
+## the oxygen supply on), use_after=SECONDS (hold the "use" key from then on),
+## --respawn (come back by itself after dying), goto=X,Y,FACING (walk to a cell
+## along its row, then turn; with goto_after=SECONDS).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -57,6 +60,7 @@ var _pause_shown := false
 var _rehosted := false
 var _breached := false
 var _sealed := false
+var _suited := false
 var _trace: FileAccess = null
 
 
@@ -110,6 +114,7 @@ func _define_inputs() -> void:
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"chat": [KEY_ENTER, KEY_KP_ENTER], "pause": [KEY_ESCAPE],
 		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11], "respawn": [KEY_R],
+		"use": [KEY_E], "suit": [KEY_Q],
 	}
 	for action: String in keys:
 		if not InputMap.has_action(action):
@@ -306,6 +311,22 @@ func _process(_delta: float) -> void:
 			_client.send_admin(Net.ADMIN_BREACH)
 	if _flags.has("respawn") and _client != null and _client.my_cond == Net.COND_DEAD and Engine.get_process_frames() % 30 == 0:
 		_client.send_respawn()               # test clients come back by themselves
+	if _opt.has("goto") and _screen != null and t >= float(_opt.get("goto_after", 0.0)):
+		var want := str(_opt["goto"]).split(",")
+		var me := _client.pred
+		var dir := 0
+		if me.y != int(want[1]):
+			dir = Net.DIR_UP if me.y > int(want[1]) else Net.DIR_DOWN
+		elif me.x != int(want[0]):
+			dir = Net.DIR_LEFT if me.x > int(want[0]) else Net.DIR_RIGHT
+		elif me.facing != int(want[2]):
+			dir = int(want[2])
+		_screen.forced_dir = dir
+	if _opt.has("suit_after") and not _suited and _screen != null and t >= float(_opt["suit_after"]):
+		_suited = true
+		_client.send_suit(true)
+	if _opt.has("use_after") and _screen != null:
+		_screen.forced_use = t >= float(_opt["use_after"])
 	if _opt.has("seal_after") and not _sealed and _screen != null and t >= float(_opt["seal_after"]):
 		_sealed = true
 		_client.send_admin(Net.ADMIN_SEAL)
@@ -365,6 +386,8 @@ func _process(_delta: float) -> void:
 					"ship_checks_bad": _client.ship_checks_bad, "holes": _client.holes.size(),
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
 					"health": _client.health, "cond": _client.my_cond,
+					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
+					"bodies": _client.roster.size() - _client.crew_count(),
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))
 		if _client != null:

@@ -17,6 +17,8 @@ const DECOMPRESSION := 2.0           # health lost per second in a vacuum, on to
 const RECOVERY := 1.0                # health regained per second in good air, while conscious
 const CRIT_RECOVERY := 0.5           # the same while unconscious
 const WAKE_AT := 10.0                # an unconscious person comes round at this much health
+const TANK_SECONDS := 120.0          # how long a full suit tank lasts with the supply on
+const REFILL_SECONDS := 3.0          # how long an oxygen station takes to fill an empty tank
 
 
 static func harm(air: float) -> float:
