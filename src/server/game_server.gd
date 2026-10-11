@@ -75,11 +75,12 @@ var _ship_sums_tick := -1
 
 # where the ship is
 var sectors := Sectors.new()
-var sector := 0                        # the sector the ship is in
+var sector := 0                        # the sector the ship is in: its number in the window `sectors` holds
+var space_seed := 0                    # what this game's space is made from
+var been := {}                         # the sectors the ship has visited: Sectors.key -> true
 var jump_to := Net.NO_SECTOR           # the sector it is jumping to, if any
 var jump_tick := 0                     # the tick the jump lands on
 var drive_ready := 0                   # the tick from which the drive can be used again
-var visited := 1                       # sectors the ship has been in, as bits
 var ship_pos := Vector2.ZERO           # where the ship is inside its sector (see Sectors.SPAN)
 var ship_dest := Vector2.ZERO          # where it is heading
 var ship_moving := false
@@ -149,16 +150,17 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		in_chunk.append(d)
 	air.setup(map)
 	_air_sent = air.level.duplicate()
-	sectors.generate(_rng.randi())
-	sector = 0
+	space_seed = _rng.randi()
+	been = {Sectors.key(Vector2i.ZERO): true}
+	sectors.build(space_seed, Vector2i.ZERO, been)
+	sector = sectors.here
 	jump_to = Net.NO_SECTOR
 	jump_tick = 0
 	drive_ready = 0
-	visited = 1
-	ship_pos = sectors.entry[0]
+	ship_pos = sectors.entry[sector]
 	ship_dest = ship_pos
 	ship_moving = false
-	in_reach = sectors.within_reach(0, ship_pos)
+	in_reach = sectors.within_reach(sector, ship_pos)
 	broken.clear()
 	director.setup(self)
 	_rng.randomize()
@@ -392,9 +394,7 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	roster.encode_u16(1, count)
 	peer.send(0, roster, ENetPacketPeer.FLAG_RELIABLE)
 
-	var chart := PackedByteArray([Net.S_SECTORS])
-	chart.append_array(sectors.pack())
-	peer.send(0, chart, ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, _sectors_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
@@ -941,15 +941,20 @@ func break_console() -> bool:
 	return true
 
 
+func _sectors_packet() -> PackedByteArray:
+	var out := PackedByteArray([Net.S_SECTORS])
+	out.append_array(sectors.pack())
+	return out
+
+
 func _nav_packet() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(15)
+	out.resize(11)
 	out.encode_u8(0, Net.S_NAV)
 	out.encode_u8(1, sector)
 	out.encode_u8(2, jump_to)
 	out.encode_u32(3, jump_tick)
 	out.encode_u32(7, drive_ready)
-	out.encode_u32(11, visited)
 	return out
 
 
@@ -979,13 +984,18 @@ func start_jump(target: int, by: String) -> void:
 func _update_jump() -> void:
 	if jump_to == Net.NO_SECTOR or tick < jump_tick:
 		return
-	sector = jump_to
+	# The ship is somewhere else now: the chart is drawn anew around the new
+	# sector, which is how space goes on for ever without being kept anywhere.
+	var arrived: Vector2i = sectors.cell[jump_to]
 	jump_to = Net.NO_SECTOR
 	drive_ready = tick + Net.DRIVE_REST_TICKS
-	if (visited & (1 << sector)) == 0:
+	if not been.has(Sectors.key(arrived)):
 		credits += Net.EXPLORE_REWARD
 		_ship_says("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)
-	visited |= 1 << sector
+	been[Sectors.key(arrived)] = true
+	sectors.build(space_seed, arrived, been)
+	sector = sectors.here
+	_to_all(_sectors_packet())
 	ship_pos = sectors.entry[sector]
 	ship_dest = ship_pos
 	ship_moving = false

@@ -454,9 +454,11 @@ func _update_console() -> void:
 		_console_text.text = "Корабль в секторе %s.\nДвигатель перезаряжается: ещё %d с." % [client.sectors.describe(client.sector), int(ceil(wait))]
 	else:
 		_console_text.text = "Корабль в секторе %s.\nДвигатель готов. Куда прыгаем?" % client.sectors.describe(client.sector)
+	_console_text.text += "\nДо начала пути отсюда прыжков: %d. Карта показывает только окрестности корабля." % client.sectors.far_from_start(client.sector)
 	# one button per sector within reach; rebuilt when the ship has moved
-	if _jump_buttons_for != client.sector * 2:
-		_jump_buttons_for = client.sector * 2
+	var place_key := Sectors.key(client.sectors.cell[client.sector]) * 2    # the buttons belong to this place in space
+	if _jump_buttons_for != place_key:
+		_jump_buttons_for = place_key
 		for old in _jump_box.get_children():
 			old.queue_free()
 		for id in client.sectors.neighbours(client.sector):
@@ -494,8 +496,8 @@ func _update_helm() -> void:
 		_:
 			lines.append("В этом секторе идти некуда: вокруг пусто.")
 	_console_text.text = "\n".join(lines)
-	if _jump_buttons_for != here * 2 + 1:
-		_jump_buttons_for = here * 2 + 1
+	if _jump_buttons_for != Sectors.key(sectors.cell[here]) * 2 + 1:
+		_jump_buttons_for = Sectors.key(sectors.cell[here]) * 2 + 1
 		for old in _jump_box.get_children():
 			old.queue_free()
 		var halt := Button.new()
@@ -652,13 +654,15 @@ func _draw_chart() -> void:
 	for id in sectors.count:
 		var at: Vector2 = place.call(id)
 		var known := client.knows_sector(id)
-		var colour: Color = colours[sectors.kind[id]] if known else Color(0.3, 0.36, 0.34)
-		_chart.draw_circle(at, 7.0, colour)
+		if not known:
+			_chart.draw_circle(at, 3.0, Color(0.3, 0.36, 0.34))     # something is there; nobody knows what
+			continue
+		_chart.draw_circle(at, 7.0, colours[sectors.kind[id]])
+		if sectors.visited[id] == 1:
+			_chart.draw_circle(at, 2.5, Color(0.04, 0.08, 0.07))    # been there
 		if id == client.sector:
 			_chart.draw_arc(at, 12.0, 0.0, TAU, 32, Color.WHITE, 2.0)
-		var caption := sectors.names[id] if known else "не разведан"
-		_chart.draw_string(font, at + Vector2(-70, 24), caption, HORIZONTAL_ALIGNMENT_CENTER, 140, 12,
-			Color(0.85, 0.95, 0.88) if known else Color(0.45, 0.5, 0.48))
+		_chart.draw_string(font, at + Vector2(-70, 24), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, Color(0.85, 0.95, 0.88))
 	# legend
 	var x := 8.0
 	for k in Sectors.KIND_NAMES.size():

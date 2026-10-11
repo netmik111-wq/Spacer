@@ -64,7 +64,6 @@ var sector := 0                      # the sector the ship is in
 var jump_to := Net.NO_SECTOR         # the sector it is jumping to, if any
 var jump_tick := 0                   # the server tick the jump lands on
 var drive_ready := 0                 # the server tick from which the drive can be used again
-var visited := 1                     # sectors the ship has been in, as bits
 var ship_from := Vector2.ZERO        # where the ship was inside its sector on tick `ship_tick`
 var ship_dest := Vector2.ZERO        # where it is heading
 var ship_moving := false
@@ -126,6 +125,7 @@ var _ahead_slot := -1
 var _have_self := false
 var _have_auth := false
 var _nav_known := false
+var _ship_cell := Vector2i.ZERO      # where in space the ship was when we last heard
 var _inputs: Array = []              # input changes not yet confirmed: [seq, apply tick, dir, applied]
 var _seq := 0
 var _sent_dir := 0
@@ -197,7 +197,6 @@ func close() -> void:
 	work = 0
 	sector = 0
 	jump_to = Net.NO_SECTOR
-	visited = 1
 	_nav_known = false
 	ship_moving = false
 	broken.clear()
@@ -283,7 +282,7 @@ func server_now() -> float:
 
 func knows_sector(id: int) -> bool:
 	## The crew knows what is in a sector it has been to or can reach in one jump.
-	return (visited & (1 << id)) != 0 or sectors.linked(sector, id)
+	return sectors.visited[id] == 1 or sectors.linked(sector, id)
 
 
 func send_suit(on: bool) -> void:
@@ -648,15 +647,16 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_SECTORS:
 			sectors.unpack(pkt, 1)
 		Net.S_NAV:
-			var was := sector if _nav_known else int(pkt[1])
-			_nav_known = true
+			# (the window of space is sent before this whenever the ship has arrived somewhere)
 			sector = pkt[1]
 			jump_to = pkt[2]
 			jump_tick = pkt.decode_u32(3)
 			drive_ready = pkt.decode_u32(7)
-			visited = pkt.decode_u32(11)
-			if sector != was and phase == PLAYING:
+			var now_at: Vector2i = sectors.cell[sector] if sector < sectors.count else Vector2i.ZERO
+			if _nav_known and now_at != _ship_cell and phase == PLAYING:
 				arrived.emit()
+			_nav_known = true
+			_ship_cell = now_at
 		Net.S_HELM:
 			ship_from = Vector2(pkt.decode_s16(1), pkt.decode_s16(3)) / 10.0
 			ship_moving = pkt[5] != 0

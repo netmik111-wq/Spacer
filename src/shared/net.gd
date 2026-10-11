@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 12
+const PROTOCOL := 13
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -58,9 +58,10 @@ const S_JOIN := 13                  # one roster entry
 const S_LEAVE := 14                 # u16 id
 const S_WORLD := 15                 # u32 tick, then sections
 const S_CHAT := 16                  # u16 from id, u16 length, text
-const S_SECTORS := 17               # the chart of sectors (see Sectors.pack)
+const S_SECTORS := 17               # the part of space around the ship (see Sectors.pack); sent anew on every arrival
 const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is jumping to (NO_SECTOR = none),
-                                    # u32 tick the jump lands on, u32 tick the drive is ready from, u32 visited sectors (bits)
+                                    # both as numbers in the window last sent; u32 tick the jump lands on,
+                                    # u32 tick the drive is ready from
 
 # --- sections inside S_WORLD ---
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)

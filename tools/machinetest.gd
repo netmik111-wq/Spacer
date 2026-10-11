@@ -350,9 +350,11 @@ func _initialize() -> void:
 	server.sectors.kind[here] = Sectors.EMPTY
 	server.sectors.reach[here] = 0
 	_run(2)
+	target = server.sectors.neighbours(server.sector)[0]
+	var target_cell: Vector2i = server.sectors.cell[target]
 	server.start_jump(target, "Проверка")
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.sector == target and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
+	_expect(server.sectors.cell[server.sector] == target_cell and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
 
 	print("searching and hauling")
 	air.refill()
