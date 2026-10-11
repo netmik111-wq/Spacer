@@ -26,6 +26,9 @@ const METEOR_VOLLEY := 2
 const CONSOLE_FAULT := 3
 const ENGINE_FAULT := 4
 const AIR_PLANT_FAULT := 5
+const DOOR_JAM := 6
+const SHUTTER_FAULT := 7
+const POWER_GLITCH := 8
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -38,6 +41,12 @@ const EVENTS: Array[Dictionary] = [
 	{"id": ENGINE_FAULT, "name": "Отказ двигателя", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
 	{"id": AIR_PLANT_FAULT, "name": "Отказ воздушной установки", "size": MEDIUM,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+	{"id": DOOR_JAM, "name": "Заклинившая дверь", "size": SMALL,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 4},
+	{"id": SHUTTER_FAULT, "name": "Отказ аварийного шлюза", "size": SMALL,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
+	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
 ]
 
@@ -135,6 +144,12 @@ func _run(event_id: int) -> void:
 			server.break_engine()
 		AIR_PLANT_FAULT:
 			server.break_air_plant()
+		DOOR_JAM:
+			server.jam_door()
+		SHUTTER_FAULT:
+			server.fault_shutter()
+		POWER_GLITCH:
+			server.power_glitch()
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -158,6 +173,12 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 			return server.can_break("engine")
 		AIR_PLANT_FAULT:
 			return server.can_break("air_plant")
+		DOOR_JAM:
+			return server.can_break("door")
+		SHUTTER_FAULT:
+			return server.can_break("shutter")
+		POWER_GLITCH:
+			return server.can_break("power")
 	return true
 
 

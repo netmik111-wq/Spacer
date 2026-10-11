@@ -6,6 +6,8 @@ extends SceneTree
 ## brings it all back. The air plant fills its own compartment and nothing else
 ## while the doors are shut. Emergency shutters drop on a pressure difference,
 ## can be forced by hand, and need power.
+## Doors can jam open, shutters can fail, and the power can drop out for a
+## few seconds: the director's smaller troubles.
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
@@ -182,10 +184,85 @@ func _initialize() -> void:
 	_run(5 * Net.TICK_HZ)
 	_expect(_sealed().has(door_down), "and one that is down stays down while there is no power")
 
+	_mend_all()
+	_run(Net.TICK_HZ)
+
+	print("a door jammed open")
+	_expect(server.director.fire(Director.DOOR_JAM), "the director can jam a door")
+	var stuck := -1
+	for d in server.doors.jammed.size():
+		if server.doors.jammed[d] == 1:
+			stuck = d
+	_run(Doors.HOLD_TICKS + 3 * Net.TICK_HZ)
+	_expect(stuck >= 0 and not server.doors.is_shut(stuck), "it stands open and does not shut by itself")
+	p.st.place(map.doors[stuck].x, map.doors[stuck].y)       # stand next to it, on whichever side has floor
+	var beside := map.door_sides[stuck * 2] if map.door_sides[stuck * 2] >= 0 else map.door_sides[stuck * 2 + 1]
+	p.st.place(beside % map.width, beside / map.width)
+	p.st.facing = _towards(beside, map.doors[stuck])
+	p.using = true
+	_run(Net.REPAIR_TICKS + 2)
+	p.using = false
+	_run(Net.TICK_HZ)
+	_expect(server.doors.jammed[stuck] == 0 and server.doors.is_shut(stuck), "mended, it shuts again")
+
+	print("a faulty shutter")
+	# one that has dropped for no reason: it stays down although the pressure is even
+	server.doors.faulty[door_down] = 1
+	server.doors.locked[door_down] = 1
+	_run(5 * Net.TICK_HZ)
+	_expect(server.doors.is_sealed(door_down), "a faulty shutter that has dropped stays down in even pressure")
+	p.st.place(7, 4)
+	p.st.facing = Net.DIR_UP
+	p.using = true
+	_run(Net.REPAIR_TICKS + 2)
+	p.using = false
+	_run(Net.TICK_HZ)
+	_expect(server.doors.faulty[door_down] == 0 and server.doors.locked[door_down] == 0, "mended, it lifts by itself")
+	# one that will not drop: a breach on the other side leaves the door unguarded
+	server.doors.faulty[door_down] = 1
+	server.breach(hole)
+	_run(10 * Net.TICK_HZ)
+	_expect(server.doors.locked[door_down] == 0 and server.doors.locked[door_side] == 1, "a faulty shutter does not drop at a breach; its neighbour does")
+	p.tank = 1.0
+	p.supply = true
+	p.using = true
+	_run(Net.REPAIR_TICKS + 2)
+	p.using = false
+	_run(Net.TICK_HZ)
+	_expect(server.doors.locked[door_down] == 1, "mended, it drops as it should")
+	_expect(server.director.fire(Director.SHUTTER_FAULT) and server._count(server.doors.faulty) == 1, "the director can make a shutter fail")
+	server.seal_all()
+	air.refill()
+	for d in server.doors.faulty.size():
+		server.doors.faulty[d] = 0
+	_run(2 * Net.TICK_HZ)
+	p.supply = false
+
+	print("a passing power failure")
+	_face(p, map.helm.keys()[0])
+	server._helm_asked(p, true, Vector2(150, 150))
+	_expect(server.director.fire(Director.POWER_GLITCH) and not server.powered(), "the director can cut the power for a moment")
+	_expect(server.broken.is_empty() and not server.engine_down(), "nothing is broken by it")
+	_expect(not server.ship_moving and server.doors.manual, "the ship stops and doors go manual, as with the engine out")
+	_run(16 * Net.TICK_HZ)
+	_expect(server.powered() and not server.doors.manual, "the power comes back by itself within 15 s")
+	server._helm_asked(p, true, Vector2(150, 150))
+	_expect(server.ship_moving, "and the helm works again")
+
 	server.stop()
 	server.free()
 	print("MACHINETEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
 	quit(1 if failed > 0 else 0)
+
+
+func _towards(from_cell: int, to: Vector2i) -> int:
+	## The way to face from a cell to look at the cell next to it.
+	var w := server.map.width
+	var fx := from_cell % w
+	var fy := from_cell / w
+	if to.x != fx:
+		return Net.DIR_RIGHT if to.x > fx else Net.DIR_LEFT
+	return Net.DIR_DOWN if to.y > fy else Net.DIR_UP
 
 
 func _mend_all() -> void:

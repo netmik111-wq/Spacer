@@ -352,10 +352,7 @@ func _update_console() -> void:
 	var now := client.server_now()
 	var jumping := client.jump_to != Net.NO_SECTOR
 	var wait := (client.drive_ready - now) / Net.TICK_HZ
-	var no_engine := client.engine_down()
-	if no_engine:
-		_console_text.text = "Корабль в секторе %s.\nДвигатель не работает: прыжок невозможен. Его чинят на нижней палубе." % client.sectors.describe(client.sector)
-	elif jumping:
+	if jumping:
 		_console_text.text = "Корабль в секторе %s.\nКурс задан: %s. Прыжок через %d с." % [
 			client.sectors.describe(client.sector), client.sectors.describe(client.jump_to),
 			maxi(int(ceil((client.jump_tick - now) / Net.TICK_HZ)), 0)]
@@ -377,7 +374,7 @@ func _update_console() -> void:
 		_chart.queue_redraw()
 	for go in _jump_box.get_children():
 		if go is Button:
-			(go as Button).disabled = jumping or wait > 0.0 or no_engine
+			(go as Button).disabled = jumping or wait > 0.0
 	if jumping:
 		_chart.queue_redraw()
 
@@ -388,9 +385,7 @@ func _update_helm() -> void:
 	var here := client.sector
 	var at := client.ship_pos()
 	var lines := PackedStringArray()
-	if client.engine_down():
-		lines.append("Двигатель не работает: корабль стоит. Его чинят на нижней палубе.")
-	elif client.ship_under_way():
+	if client.ship_under_way():
 		lines.append("Корабль идёт заданным курсом, осталось %d." % int(ceil(at.distance_to(client.ship_dest))))
 	else:
 		lines.append("Корабль стоит. Щёлкните по карте, чтобы задать курс.")
@@ -735,16 +730,17 @@ func _process(delta: float) -> void:
 	var target := client.use_target()
 	_hint.visible = target != 0 and not _console.visible
 	var no_power := not client.powered()
+	var why := "двигатель не работает" if client.engine_down() else "сбой питания"
 	if target == 1:
 		_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
 	elif target == 2:
 		if no_power:
-			_hint.text = "Кислородная стойка обесточена: двигатель не работает"
+			_hint.text = "Кислородная стойка обесточена: %s" % why
 		else:
 			_hint.text = "Баллон полон" if client.tank >= Net.TANK_FULL else ("Заправляю баллон…" if _use_held else "Держите E, чтобы заправить баллон")
 	elif target == 3 or target == 4:
 		if no_power:
-			_hint.text = "Пульт обесточен: двигатель не работает"
+			_hint.text = "Пульт обесточен: %s" % why
 		else:
 			_hint.text = "E: карта сектора" if target == 3 else "E: управление кораблём"
 	elif target == 5:
@@ -765,7 +761,16 @@ func _process(delta: float) -> void:
 			var kpa := int(round(int(gap[0]) * Net.KPA_FULL / Net.AIR_FULL))
 			var where := "" if int(gap[1]) == 0 else (", за ним давление ниже" if int(gap[1]) < 0 else ", за ним давление выше")
 			_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
-	_work_bar.visible = (target == 1 or target == 5 or target == 9) and client.work > 0
+	elif target == 10:
+		_hint.text = "Чиню дверь…" if (_use_held and client.work > 0) else "Дверь заклинило открытой. Держите E, чтобы починить"
+	elif target == 11:
+		if _use_held and client.work > 0:
+			_hint.text = "Чиню аварийный шлюз…"
+		elif client.doors.is_sealed(client.map.door_of[client.use_cell()]):
+			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить"
+		else:
+			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить"
+	_work_bar.visible = (target == 1 or target == 5 or target >= 9) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
 	_work_bar.offset_left = shift - 110.0

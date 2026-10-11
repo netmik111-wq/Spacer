@@ -60,7 +60,7 @@ var doors := Doors.new()
 var air := Air.new()
 var _door_hold := PackedInt32Array()   # per door: it will not close before this tick
 var _door_sent := PackedInt32Array()   # per door: the state clients were last told
-var _lock_sent := PackedByteArray()    # per door: whether clients were told its emergency shutter is down
+var _flags_sent := PackedByteArray()   # per door: its troubles as clients were last told (see Doors.flags)
 var _forced_until := PackedInt32Array()  # per door: its shutter was forced up and stays up until this tick
 var _doors_in: Array = []              # per chunk: the doors in it
 var _door_change: Array = []           # per chunk: door records changed this tick
@@ -82,6 +82,8 @@ var ship_dest := Vector2.ZERO          # where it is heading
 var ship_moving := false
 var in_reach := false                  # inside the sector's meteor stream, or docked at its station or trader
 var broken := {}                       # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
+var _power_out_until := 0              # a passing power failure lasts until this tick
+var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
 
 # counters for the status line
@@ -123,7 +125,9 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_door_hold.resize(map.doors.size())
 	_door_hold.fill(0)
 	_door_sent = doors.ready.duplicate()
-	_lock_sent = doors.locked.duplicate()
+	_flags_sent = doors.locked.duplicate()
+	_power_out_until = 0
+	_power_told = true
 	_forced_until.resize(map.doors.size())
 	_forced_until.fill(0)
 	for d in map.doors.size():
@@ -369,6 +373,7 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, PackedByteArray([Net.S_POWER, 1 if _power_told else 0]), ENetPacketPeer.FLAG_RELIABLE)
 
 	_announce_join(p, peer)
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
@@ -623,16 +628,92 @@ func powered() -> bool:
 	## The engine is what powers the ship. Without it every system stands still
 	## (none of them breaks): the bridge consoles, the air plant, the oxygen
 	## stations, the emergency shutters; doors have to be pushed open by hand.
-	return not engine_down()
+	## The power can also fail for a few seconds by itself and come back.
+	return not engine_down() and tick >= _power_out_until
 
 
 func _power_changed() -> void:
-	## Call after the engine breaks or is mended.
-	if doors.manual == (not powered()):
+	## Looks whether the power has gone or come back since clients were last told,
+	## and does what goes with it. Called every tick and after anything that changes it.
+	var on := powered()
+	if on == _power_told:
 		return
-	doors.manual = not powered()
-	if powered():
+	_power_told = on
+	doors.manual = not on
+	_to_all(PackedByteArray([Net.S_POWER, 1 if on else 0]))
+	if on:
 		_ship_says("Питание восстановлено: системы корабля снова работают.")
+		return
+	# without power the ship stops where it is and a jump being charged is lost
+	if ship_moving:
+		ship_moving = false
+		ship_dest = ship_pos
+		_to_all(_helm_packet())
+	if jump_to != Net.NO_SECTOR:
+		jump_to = Net.NO_SECTOR
+		_tell_nav()
+		_ship_says("Прыжок сорван.")
+
+
+func power_glitch() -> bool:
+	## The power fails for a few seconds and comes back by itself.
+	if not powered():
+		return false
+	_power_out_until = tick + _rng.randi_range(8, 15) * Net.TICK_HZ
+	_ship_says("Сбой питания: все системы стоят.")
+	_power_changed()
+	return true
+
+
+func _door_free(d: int) -> bool:
+	## Nobody stands in this doorway.
+	for p: Player in players:
+		if p != null and map.door_at(p.st.x, p.st.y) == d:
+			return false
+	return true
+
+
+func _count(flags: PackedByteArray) -> int:
+	var n := 0
+	for v in flags:
+		n += v
+	return n
+
+
+func jam_door() -> bool:
+	## A door slides open and sticks there: air passes freely until somebody mends it.
+	if not can_break("door"):
+		return false
+	var choice := PackedInt32Array()
+	for d in doors.ready.size():
+		if doors.jammed[d] == 0 and doors.faulty[d] == 0:
+			choice.append(d)
+	var d := choice[_rng.randi_range(0, choice.size() - 1)]
+	doors.jammed[d] = 1
+	doors.locked[d] = 0
+	if doors.ready[d] == Doors.CLOSED:
+		doors.ready[d] = tick
+	air.wake()
+	_ship_says("Одну из дверей заклинило в открытом положении.")
+	return true
+
+
+func fault_shutter() -> bool:
+	## An emergency shutter stops working by itself. Half the time it also
+	## drops for no reason; otherwise it will simply not be there when needed.
+	if not can_break("shutter"):
+		return false
+	var choice := PackedInt32Array()
+	for d in doors.ready.size():
+		if doors.jammed[d] == 0 and doors.faulty[d] == 0:
+			choice.append(d)
+	var d := choice[_rng.randi_range(0, choice.size() - 1)]
+	doors.faulty[d] = 1
+	if _rng.randf() < 0.5 and _door_free(d):
+		doors.locked[d] = 1
+		_door_hold[d] = mini(_door_hold[d], tick)
+	_ship_says("Неисправность аварийного шлюза на одной из дверей.")
+	return true
 
 
 func _any_broken(cells: Dictionary) -> bool:
@@ -643,8 +724,9 @@ func _any_broken(cells: Dictionary) -> bool:
 
 
 func can_break(what: String) -> bool:
-	## Things that stand between the crew and an escape break one at a time:
-	## while a bridge console is out, the engine holds, and the other way round.
+	## Can this kind of trouble happen now? Things that stand between the crew
+	## and an escape break one at a time: while a bridge console is out, the
+	## engine holds, and the other way round. Doors go wrong two at a time at most.
 	var way_out_hurt := _any_broken(map.chart) or _any_broken(map.helm) or _any_broken(map.engine)
 	match what:
 		"console":
@@ -653,6 +735,12 @@ func can_break(what: String) -> bool:
 			return not way_out_hurt and not map.engine.is_empty()
 		"air_plant":
 			return not map.air_plant.is_empty() and not _any_broken(map.air_plant)
+		"door":
+			return _count(doors.jammed) < 2 and _count(doors.jammed) + _count(doors.faulty) < doors.ready.size()
+		"shutter":
+			return _count(doors.faulty) < 2 and _count(doors.jammed) + _count(doors.faulty) < doors.ready.size()
+		"power":
+			return powered()
 	return false
 
 
@@ -664,7 +752,6 @@ func break_engine() -> bool:
 	broken[cell] = true
 	_to_all(_devices_packet())
 	_ship_says("Отказ двигателя: корабль обесточен, все системы стоят, двери открываются только вручную. Двигатель на нижней палубе.")
-	_engine_stopped()
 	_power_changed()
 	return true
 
@@ -680,18 +767,7 @@ func break_air_plant() -> bool:
 	return true
 
 
-func _engine_stopped() -> void:
-	## Without the engine the ship stops where it is and a jump being charged is lost.
-	if not engine_down():
-		return
-	if ship_moving:
-		ship_moving = false
-		ship_dest = ship_pos
-		_to_all(_helm_packet())
-	if jump_to != Net.NO_SECTOR:
-		jump_to = Net.NO_SECTOR
-		_tell_nav()
-		_ship_says("Прыжок сорван.")
+
 
 
 func _feed_air() -> void:
@@ -887,6 +963,7 @@ func _tick() -> void:
 		_update_work(p)
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
 			_record(p)
+	_power_changed()
 	_update_doors()
 	_update_jump()
 	_update_ship()
@@ -933,8 +1010,9 @@ func _update_vitals(p: Player) -> void:
 
 
 func _update_work(p: Player) -> void:
-	## Holding "use" on what the character faces: a hole or a broken machine is
-	## mended, an emergency shutter is forced up, an oxygen station fills the tank.
+	## Holding "use" on what the character faces: a hole, a broken machine or a
+	## door that has gone wrong is mended, an emergency shutter is forced up, an
+	## oxygen station fills the tank.
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
 		return
@@ -951,6 +1029,15 @@ func _update_work(p: Player) -> void:
 			_to_all(_devices_packet())
 			_ship_says("%s заканчивает ремонт: %s снова работает." % [p.name, map.device_name(cell)])
 			_power_changed()
+	elif door >= 0 and doors.jammed[door] == 1:
+		if _work_done(p, cell, Net.REPAIR_TICKS):
+			doors.jammed[door] = 0
+			_door_hold[door] = tick          # it may shut again as soon as the doorway is clear
+			_ship_says("%s чинит заклинившую дверь." % p.name)
+	elif door >= 0 and doors.faulty[door] == 1:
+		if _work_done(p, cell, Net.REPAIR_TICKS):
+			doors.faulty[door] = 0           # from here on the pressure decides again
+			_ship_says("%s чинит аварийный шлюз." % p.name)
 	elif door >= 0 and doors.is_sealed(door):
 		if _work_done(p, cell, Net.FORCE_TICKS):
 			doors.locked[door] = 0
@@ -983,7 +1070,8 @@ func _usable_ahead(p: Player) -> bool:
 		return false
 	var door := map.door_of[cell]
 	return air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell) \
-		or map.chart.has(cell) or map.helm.has(cell) or (door >= 0 and doors.is_sealed(door))
+		or map.chart.has(cell) or map.helm.has(cell) \
+		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 
 func _climb(p: Player) -> bool:
@@ -1027,13 +1115,13 @@ func _update_shutters() -> void:
 	## Emergency shutters: every door has one. It drops by itself when the
 	## pressure on the two sides of the door differs too much, and lifts when
 	## the difference is gone. It needs power: without it nothing drops and
-	## nothing lifts.
+	## nothing lifts. A faulty one does neither, and a jammed door has nothing to shut.
 	if not powered():
 		return
 	for d in doors.ready.size():
 		var a := map.door_sides[d * 2]
 		var b := map.door_sides[d * 2 + 1]
-		if a < 0 or b < 0:
+		if a < 0 or b < 0 or doors.faulty[d] == 1 or doors.jammed[d] == 1:
 			continue
 		var gap := absf(air.air[a] - air.air[b])
 		if doors.locked[d] == 1:
@@ -1056,13 +1144,13 @@ func _update_doors() -> void:
 			if d >= 0 and _door_hold[d] < tick + Net.MOVE_TICKS + 2:
 				_door_hold[d] = tick + Net.MOVE_TICKS + 2
 	for d in doors.ready.size():
-		if doors.ready[d] != Doors.CLOSED and tick >= doors.ready[d] and tick >= _door_hold[d]:
+		if doors.ready[d] != Doors.CLOSED and tick >= doors.ready[d] and tick >= _door_hold[d] and doors.jammed[d] == 0:
 			doors.ready[d] = Doors.CLOSED
-		if doors.ready[d] != _door_sent[d] or doors.locked[d] != _lock_sent[d]:
+		if doors.ready[d] != _door_sent[d] or doors.flags(d) != _flags_sent[d]:
 			if doors.ready[d] != _door_sent[d]:
 				air.wake()
 			_door_sent[d] = doors.ready[d]
-			_lock_sent[d] = doors.locked[d]
+			_flags_sent[d] = doors.flags(d)
 			var buf: PackedByteArray = _door_change[_chunk_of(map.doors[d].x, map.doors[d].y)]
 			_put_door(buf, d)
 			_ship_sums_tick = -1
@@ -1073,7 +1161,7 @@ func _put_door(buf: PackedByteArray, d: int) -> void:
 	buf.resize(o + Net.DOOR_BYTES)
 	buf.encode_u16(o, d)
 	buf.encode_s32(o + 2, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d])
-	buf.encode_u8(o + 6, doors.locked[d])
+	buf.encode_u8(o + 6, doors.flags(d))
 
 
 func _collect_air() -> void:
@@ -1100,7 +1188,7 @@ func _ensure_ship_sums() -> void:
 	_ship_sums.fill(0)
 	for d in doors.ready.size():
 		var at: Vector2i = map.doors[d]
-		_ship_sums[_chunk_of(at.x, at.y)] += Net.door_hash(d, -1 if _door_sent[d] == Doors.CLOSED else _door_sent[d], _lock_sent[d])
+		_ship_sums[_chunk_of(at.x, at.y)] += Net.door_hash(d, -1 if _door_sent[d] == Doors.CLOSED else _door_sent[d], _flags_sent[d])
 	for cell: int in air.holes.keys():
 		_ship_sums[_chunk_of(cell % map.width, cell / map.width)] += Net.hull_hash(cell % map.width, cell / map.width)
 	var w := map.width

@@ -14,6 +14,11 @@ extends RefCounted
 ##    differs too much the server drops it (`locked`), and walking into the
 ##    door does nothing until the difference is gone or somebody forces it;
 ##  - without power (`manual`) a door is pushed open by hand, which is slow.
+## Two more things can go wrong with a door; the server decides them and they
+## reach clients with the rest:
+##  - a door can jam open (`jammed`): it stays open until somebody mends it;
+##  - its shutter can fail (`faulty`): it stays as it is, up or down, whatever
+##    the pressure does, until somebody mends it.
 ##
 ## Closing is decided by the server alone (it knows who stands where) and
 ## reaches clients as an ordinary change.
@@ -27,6 +32,8 @@ const HOLD_TICKS := 40               # stays open at least 2 s after it was last
 
 var ready := PackedInt32Array()      # per door: the tick it is passable from, or CLOSED
 var locked := PackedByteArray()      # per door: 1 = its emergency shutter is down
+var jammed := PackedByteArray()      # per door: 1 = stuck open
+var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no longer works by itself
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -36,6 +43,10 @@ func setup(count: int) -> void:
 	ready.fill(CLOSED)
 	locked.resize(count)
 	locked.fill(0)
+	jammed.resize(count)
+	jammed.fill(0)
+	faulty.resize(count)
+	faulty.fill(0)
 	manual = false
 	bumped.clear()
 
@@ -43,8 +54,21 @@ func setup(count: int) -> void:
 func copy_from(o: RefCounted) -> void:
 	ready = o.ready.duplicate()
 	locked = o.locked.duplicate()
+	jammed = o.jammed.duplicate()
+	faulty = o.faulty.duplicate()
 	manual = o.manual
 	bumped.clear()
+
+
+func flags(door: int) -> int:
+	## The door's troubles as one byte, the way they travel over the network.
+	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2)
+
+
+func set_flags(door: int, value: int) -> void:
+	locked[door] = value & 1
+	jammed[door] = (value >> 1) & 1
+	faulty[door] = (value >> 2) & 1
 
 
 func open_ticks() -> int:

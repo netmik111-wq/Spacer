@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 9
+const PROTOCOL := 10
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -58,7 +58,8 @@ const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is 
 # --- sections inside S_WORLD ---
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
 const SEC_DOOR := 2                 # u16 count, then 7-byte records: u16 door, s32 tick it is passable from (-1 = shut),
-                                    # u8 flags (bit 0: its emergency shutter is down)
+                                    # u8 flags (bit 0: its emergency shutter is down, bit 1: the door is
+                                    # jammed open, bit 2: the shutter is faulty; see Doors.flags)
 const SEC_HULL := 3                 # u16 count, then 5-byte records: s16 x, s16 y, u8 state (1 = breached, 0 = whole)
 const SEC_VIEW := 4                 # u8 chunk x, u8 chunk row inside the deck: the centre of what this client is
                                     # shown. It is shown those chunks on every deck (rows count through all decks
@@ -82,6 +83,8 @@ const S_HELM := 19                  # the ship inside its sector: s16 x*10, s16 
                                     # u8 under way, u8 destination x, u8 destination y, u32 tick
 const S_DEVICES := 20               # u8 count, then per thing out of order (a bridge console, the engine,
                                     # the air plant): u16 cell
+
+const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
 
 const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked (tests)
 const ADMIN_SEAL := 2               # close every hole (tests)

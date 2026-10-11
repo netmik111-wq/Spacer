@@ -249,7 +249,7 @@ func _update_ship(delta: float) -> void:
 				_hole_views.erase(cell)
 		for deck in _decks:
 			deck.fx.queue_redraw()
-	elif not client.holes.is_empty() or not client.broken.is_empty() or not map.engine.is_empty() or not map.air_plant.is_empty():
+	else:
 		for deck in _decks:
 			deck.fx.queue_redraw()           # air streaming out, sparks and the machines are animated
 
@@ -297,10 +297,29 @@ func _draw_fx(d: int) -> void:
 	var lit := client.powered()
 	for door in map.doors.size():
 		var cell_at: Vector2i = map.doors[door]
-		if map.deck_of(cell_at.y) != d or not client.doors.is_sealed(door):
+		if map.deck_of(cell_at.y) != d:
 			continue
 		var corner := Vector2(cell_at.x, map.local_y(cell_at.y)) * _tile
 		var band := map.door_kind[door] == ShipMap.DOOR_BAND
+		var sealed := client.doors.is_sealed(door)
+		var faulty := client.doors.faulty[door] == 1
+		if client.doors.jammed[door] == 1:
+			# stuck open: its works throw sparks on both sides of the opening
+			var beat := int(now * 9.0) + door * 5
+			for side in 2:
+				if (beat + side) % 3 == 0:
+					continue
+				var from := corner + (Vector2(9 if side == 0 else 24, 10 + (beat * 5) % 14) if band else Vector2(13 + (beat * 5) % 6, 3 if side == 0 else 24))
+				var to := from + Vector2(((beat * 13) % 7) - 3, ((beat * 11) % 7) - 3)
+				pen.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
+				pen.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
+		if faulty and not sealed and lit and fposmod(now + door * 0.37, 1.0) < 0.5:
+			# a shutter that will not drop: a warning lamp blinks on the door frame
+			var lamp_at := corner + (Vector2(15, 4) if band else Vector2(8, 26))
+			pen.draw_rect(Rect2(lamp_at - Vector2(1, 1), Vector2(5, 5)), Color(0.05, 0.05, 0.08))
+			pen.draw_rect(Rect2(lamp_at, Vector2(3, 3)), Color(1.0, 0.55, 0.1))
+		if not sealed:
+			continue
 		var plate := Rect2(corner + Vector2(8, 9), Vector2(20, 14)) if band else Rect2(corner + Vector2(12, 3), Vector2(8, 21))
 		pen.draw_rect(plate, Color(0.16, 0.15, 0.2))
 		for row in int(plate.size.y):                     # warning stripes, slanted
@@ -320,6 +339,9 @@ func _draw_fx(d: int) -> void:
 			var lamp := Color(0.25, 0.9, 0.4) if level >= Net.AIR_FULL * 0.76 else (Color(0.98, 0.8, 0.2) if level >= Net.AIR_FULL * 0.2 else Color(1.0, 0.25, 0.2))
 			if not lit:
 				lamp = Color(0.3, 0.31, 0.36)
+			elif faulty:
+				# a faulty shutter does not know the pressure: both lamps blink amber
+				lamp = Color(1.0, 0.55, 0.1) if fposmod(now + door * 0.37, 1.0) < 0.5 else Color(0.3, 0.31, 0.36)
 			var spot: Vector2
 			if band:
 				spot = corner + Vector2(15, 4 if side == 0 else 25)

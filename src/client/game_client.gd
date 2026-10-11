@@ -70,6 +70,7 @@ var ship_dest := Vector2.ZERO        # where it is heading
 var ship_moving := false
 var ship_tick := 0
 var broken := {}                     # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
+var _power := true                   # the ship has power (see powered)
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -186,6 +187,7 @@ func close() -> void:
 	_nav_known = false
 	ship_moving = false
 	broken.clear()
+	_power = true
 	bytes_in = 0
 	packets_in = 0
 
@@ -276,7 +278,8 @@ func use_target() -> int:
 	## 5 = something out of order that can be mended (a console, the engine, the air plant),
 	## 6 = a ladder down, 7 = a ladder up (the character stands on it),
 	## 8 = the engine or the air plant in working order: nothing to do, but it says so,
-	## 9 = a door whose emergency shutter is down and can be forced.
+	## 9 = a door whose emergency shutter is down and can be forced,
+	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -293,8 +296,14 @@ func use_target() -> int:
 			return 4
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
-		if map.door_of[cell] >= 0 and doors.is_sealed(map.door_of[cell]):
-			return 9
+		var door := map.door_of[cell]
+		if door >= 0:
+			if doors.jammed[door] == 1:
+				return 10
+			if doors.faulty[door] == 1:
+				return 11
+			if doors.is_sealed(door):
+				return 9
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
@@ -302,8 +311,8 @@ func use_target() -> int:
 
 
 func powered() -> bool:
-	## The ship has power while its engine runs (the same rule as GameServer.powered).
-	return not engine_down()
+	## The ship has power: the server says so (the engine may be out, or the power may have failed for a moment).
+	return _power
 
 
 func shutter_gap(door: int) -> Array:
@@ -568,10 +577,12 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in pkt[1]:
 				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
 			ship_changes += 1
+		Net.S_POWER:
+			_power = pkt[1] != 0
+			ship_changes += 1
 			# without power doors open by hand: that is part of the walking rule we predict
-			if doors.manual != (not powered()):
-				doors.manual = not powered()
-				_rebuild_prediction()
+			doors.manual = not _power
+			_rebuild_prediction()
 		Net.S_CHAT:
 			var n := pkt.decode_u16(3)
 			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())
@@ -642,7 +653,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			for i in count:
 				var ready := pkt.decode_s32(pos + 2)
 				doors.ready[pkt.decode_u16(pos)] = Doors.CLOSED if ready < 0 else ready
-				doors.locked[pkt.decode_u16(pos)] = pkt[pos + 6] & 1
+				doors.set_flags(pkt.decode_u16(pos), pkt[pos + 6])
 				pos += Net.DOOR_BYTES
 			doors_moved = true
 			ship_changes += 1
@@ -718,7 +729,7 @@ func _ship_sum() -> int:
 	for d in doors.ready.size():
 		var at: Vector2i = map.doors[d]
 		if not _outside_view(at.x, at.y):
-			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d], doors.locked[d])
+			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d], doors.flags(d))
 	for cell: int in holes.keys():
 		sum += Net.hull_hash(cell % map.width, cell / map.width)
 	for deck in map.deck_count:
