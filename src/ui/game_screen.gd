@@ -481,7 +481,11 @@ func _update_helm() -> void:
 	var here := client.sector
 	var at := client.ship_pos()
 	var lines := PackedStringArray()
-	if client.ship_under_way():
+	var leaving := client.jump_to != Net.NO_SECTOR
+	if leaving:
+		# the ship is going into the jump: there is no course inside the sector any more
+		lines.append("Корабль уходит в прыжок%s. Курс внутри сектора не действует." % (" и идёт по инерции" if client.ship_under_way() else ""))
+	elif client.ship_under_way():
 		lines.append("Корабль идёт заданным курсом, осталось %d." % int(ceil(at.distance_to(client.ship_dest))))
 	else:
 		lines.append("Корабль стоит. Щёлкните по карте, чтобы задать курс.")
@@ -505,6 +509,9 @@ func _update_helm() -> void:
 		halt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		halt.pressed.connect(func() -> void: client.send_helm(false))
 		_jump_box.add_child(halt)
+	for b in _jump_box.get_children():
+		if b is Button:
+			(b as Button).disabled = leaving
 	_chart.queue_redraw()
 
 
@@ -590,7 +597,7 @@ func _on_chart_input(event: InputEvent) -> void:
 		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 		var area := _helm_area()
-		if area.has_point(click.position):
+		if area.has_point(click.position) and client.jump_to == Net.NO_SECTOR:
 			client.send_helm(true, (click.position - area.position) / area.size * Sectors.SPAN)
 
 
@@ -620,7 +627,7 @@ func _draw_helm() -> void:
 			_chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else "торговец",
 				HORIZONTAL_ALIGNMENT_CENTER, 140, 12, colour)
 	var ship := area.position + client.ship_pos() * scale
-	if client.ship_under_way():
+	if client.ship_under_way() and client.jump_to == Net.NO_SECTOR:
 		var dest := area.position + client.ship_dest * scale
 		_chart.draw_line(ship, dest, Color(1, 1, 1, 0.55), 1.0)
 		_chart.draw_line(dest + Vector2(-5, -5), dest + Vector2(5, 5), Color.WHITE, 1.0)

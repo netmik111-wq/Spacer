@@ -90,6 +90,25 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	# a ship under way when the jump is set coasts straight on, whatever point it was making for
+	var from: Vector2 = server.ship_pos
+	server.ship_dest = from + Vector2(20, 0)
+	server.ship_moving = true
+	server.start_jump(server.sectors.neighbours(server.sector)[0], "Проверка")
+	_expect(server.ship_moving and server.ship_dest == Vector2(Sectors.SPAN, from.y), "set for a jump, a moving ship coasts on to the edge of the sector instead of its old course")
+	for t in Net.JUMP_TICKS - 2:
+		server._tick()
+	var went: float = server.ship_pos.x - from.x
+	_expect(absf(went - Sectors.SHIP_SPEED * (Net.JUMP_TICKS - 2) / Net.TICK_HZ) < 0.2 and server.ship_pos.y == from.y,
+		"and keeps its speed and heading until the jump (%.1f units in %.0f s)" % [went, (Net.JUMP_TICKS - 2) / float(Net.TICK_HZ)])
+	for t in 4:
+		server._tick()
+	_expect(not server.ship_moving and server.ship_pos == server.sectors.entry[server.sector], "it comes out of the jump standing still at its place of arrival")
+	server.been = {Sectors.key(server.sectors.cell[server.sector]): true}    # the walk below starts from here
+	server.sectors.build(server.space_seed, server.sectors.cell[server.sector], server.been)
+	server.credits = Net.START_CREDITS
+	for t in Net.DRIVE_REST_TICKS:
+		server._tick()
 	var start_cell: Vector2i = server.sectors.cell[server.sector]
 	var credits := server.credits
 	var fresh := 0

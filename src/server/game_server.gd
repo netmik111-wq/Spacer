@@ -979,6 +979,21 @@ func start_jump(target: int, by: String) -> void:
 	jump_tick = tick + Net.JUMP_TICKS
 	_tell_nav()
 	_ship_says("%s задаёт курс: %s. Прыжок через %d секунд." % [by, sectors.describe(target), Net.JUMP_TICKS / Net.TICK_HZ])
+	if ship_moving and not ship_pos.is_equal_approx(ship_dest):
+		# The ship is leaving for the jump: the course it was on no longer counts.
+		# It coasts straight on, on its inertia, until the jump takes it.
+		var way := (ship_dest - ship_pos).normalized()
+		var room := 1000.0                   # how far it can go that way before the edge of the sector
+		if way.x > 0.0:
+			room = minf(room, (Sectors.SPAN - ship_pos.x) / way.x)
+		elif way.x < 0.0:
+			room = minf(room, -ship_pos.x / way.x)
+		if way.y > 0.0:
+			room = minf(room, (Sectors.SPAN - ship_pos.y) / way.y)
+		elif way.y < 0.0:
+			room = minf(room, -ship_pos.y / way.y)
+		ship_dest = (ship_pos + way * room).clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)).round()
+		_to_all(_helm_packet())
 
 
 func _update_jump() -> void:
