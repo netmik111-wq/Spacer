@@ -74,6 +74,14 @@ func set_hole(cell: int, on: bool) -> bool:
 	return true
 
 
+func refill() -> void:
+	## Normal pressure everywhere (a supply station tops the ship up). Holes go on leaking.
+	for i in _cells:
+		air[i] = 1.0
+		level[i] = Net.AIR_FULL
+	settled = false
+
+
 func wake() -> void:
 	## Something changed (a door moved): look again.
 	settled = false

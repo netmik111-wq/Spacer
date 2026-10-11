@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 4
+const PROTOCOL := 5
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -32,10 +32,11 @@ const C_HELLO := 1                  # u16 protocol, u8 name length, name
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
-const C_ADMIN := 5                  # u8 command, secret text: test tools of the hosting player (see ADMIN_*)
+const C_ADMIN := 5                  # u8 command, u8 argument, secret text: the hosting player's tools (see ADMIN_*)
 const C_RESPAWN := 6                # nothing else: a dead player asks to come back as a new crew member
 const C_USE := 7                    # u8 held: the "use" key went down (1) or up (0)
 const C_SUIT := 8                   # u8 on: turn the suit's oxygen supply on (1) or off (0)
+const C_JUMP := 9                   # u8 sector: start a jump there (the player must stand at the sector console)
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
@@ -45,6 +46,9 @@ const S_JOIN := 13                  # one roster entry
 const S_LEAVE := 14                 # u16 id
 const S_WORLD := 15                 # u32 tick, then sections
 const S_CHAT := 16                  # u16 from id, u16 length, text
+const S_SECTORS := 17               # the chart of sectors (see Sectors.pack)
+const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is jumping to (NO_SECTOR = none),
+                                    # u32 tick the jump lands on, u32 tick the drive is ready from, u32 visited sectors (bits)
 
 # --- sections inside S_WORLD ---
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
@@ -66,8 +70,14 @@ const SELF_BYTES := 17
 const DOOR_BYTES := 6
 const HULL_BYTES := 5
 
-const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked
-const ADMIN_SEAL := 2               # close every hole (until repairs exist in the game)
+const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked (tests)
+const ADMIN_SEAL := 2               # close every hole (tests)
+const ADMIN_EVENT := 3              # make the director fire the event whose id is the argument
+const ADMIN_AUTO := 4               # argument 1: the director runs events by itself; 0: only by hand
+
+const NO_SECTOR := 255
+const JUMP_TICKS := 160             # a jump takes 8 s to charge
+const DRIVE_REST_TICKS := 300       # and the drive needs 15 s after landing
 const SYSTEM_ID := 65535            # "from" of chat lines written by the ship itself
 
 const REJECT_VERSION := 1

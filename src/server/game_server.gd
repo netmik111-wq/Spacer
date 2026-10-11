@@ -16,6 +16,8 @@ const Doors := preload("res://src/shared/doors.gd")
 const Player := preload("res://src/server/player.gd")
 const Air := preload("res://src/server/air.gd")
 const Vitals := preload("res://src/server/vitals.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
+const Director := preload("res://src/server/director.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -64,6 +66,15 @@ var _air_sent := PackedByteArray()     # per cell: the air level clients were la
 var _ship_sums := PackedInt64Array()   # per chunk: checksum of doors, hull and air as clients know them
 var _ship_sums_tick := -1
 
+# where the ship is
+var sectors := Sectors.new()
+var sector := 0                        # the sector the ship is in
+var jump_to := Net.NO_SECTOR           # the sector it is jumping to, if any
+var jump_tick := 0                     # the tick the jump lands on
+var drive_ready := 0                   # the tick from which the drive can be used again
+var visited := 1                       # sectors the ship has been in, as bits
+var director := Director.new()
+
 # counters for the status line
 var packets_in := 0
 var late_inputs := 0
@@ -106,6 +117,13 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		in_chunk.append(d)
 	air.setup(map)
 	_air_sent = air.level.duplicate()
+	sectors.generate(_rng.randi())
+	sector = 0
+	jump_to = Net.NO_SECTOR
+	jump_tick = 0
+	drive_ready = 0
+	visited = 1
+	director.setup(self)
 	_rng.randomize()
 	tick = 0
 	_acc = 0.0
@@ -248,8 +266,11 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
 			_respawn(p)
+	elif kind == Net.C_JUMP:
+		if pkt.size() > 1:
+			_jump_asked(p, pkt[1])
 	elif kind == Net.C_ADMIN:
-		if pkt.size() > 2 and shutdown_token != "" and pkt.slice(2).get_string_from_utf8() == shutdown_token:
+		if pkt.size() > 3 and shutdown_token != "" and pkt.slice(3).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
 				# the wall the player faces, if it can be breached; otherwise the nearest that can
 				var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
@@ -257,6 +278,11 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 					breach_near(p.st.x, p.st.y)
 			elif pkt[1] == Net.ADMIN_SEAL:
 				seal_all()
+			elif pkt[1] == Net.ADMIN_EVENT:
+				director.fire(pkt[2])
+			elif pkt[1] == Net.ADMIN_AUTO:
+				director.auto = pkt[2] != 0
+				_ship_says("Ивентер: события идут сами." if director.auto else "Ивентер: события только вручную.")
 
 
 func _reject(peer: ENetPacketPeer, reason: int) -> void:
@@ -305,6 +331,11 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			count += 1
 	roster.encode_u16(1, count)
 	peer.send(0, roster, ENetPacketPeer.FLAG_RELIABLE)
+
+	var chart := PackedByteArray([Net.S_SECTORS])
+	chart.append_array(sectors.pack())
+	peer.send(0, chart, ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
 	_announce_join(p, peer)
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
@@ -496,6 +527,71 @@ func _ship_says(text: String) -> void:
 	log_line.emit("[корабль] %s" % text)
 
 
+# ---------------------------------------------------------------- sectors
+
+func sector_kind() -> int:
+	return sectors.kind[sector]
+
+
+func _nav_packet() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(15)
+	out.encode_u8(0, Net.S_NAV)
+	out.encode_u8(1, sector)
+	out.encode_u8(2, jump_to)
+	out.encode_u32(3, jump_tick)
+	out.encode_u32(7, drive_ready)
+	out.encode_u32(11, visited)
+	return out
+
+
+func _tell_nav() -> void:
+	var msg := _nav_packet()
+	for q: Player in players:
+		if q != null and q.peer != null:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func _jump_asked(p: Player, target: int) -> void:
+	## A player at the sector console asks for a jump.
+	if p.cond != Net.COND_OK or jump_to != Net.NO_SECTOR or tick < drive_ready:
+		return
+	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	if ahead < 0 or not map.chart.has(ahead):
+		return                      # not standing at the console
+	if target >= sectors.count or not sectors.linked(sector, target):
+		return
+	start_jump(target, p.name)
+
+
+func start_jump(target: int, by: String) -> void:
+	jump_to = target
+	jump_tick = tick + Net.JUMP_TICKS
+	_tell_nav()
+	_ship_says("%s задаёт курс: %s. Прыжок через %d секунд." % [by, sectors.describe(target), Net.JUMP_TICKS / Net.TICK_HZ])
+
+
+func _update_jump() -> void:
+	if jump_to == Net.NO_SECTOR or tick < jump_tick:
+		return
+	sector = jump_to
+	jump_to = Net.NO_SECTOR
+	drive_ready = tick + Net.DRIVE_REST_TICKS
+	visited |= 1 << sector
+	_tell_nav()
+	match sector_kind():
+		Sectors.METEORS:
+			_ship_says("Сектор %s. Берегите обшивку." % sectors.describe(sector))
+		Sectors.TRADER:
+			_ship_says("Сектор %s. Торговец на связи, но торговать пока нечем." % sectors.describe(sector))
+		Sectors.STATION:
+			air.refill()
+			_ship_says("Сектор %s. Воздух в отсеках восполнен." % sectors.describe(sector))
+		_:
+			_ship_says("Сектор %s." % sectors.describe(sector))
+	director.entered_sector()
+
+
 # ------------------------------------------------------------------- hull
 
 func breach(cell: int) -> bool:
@@ -571,6 +667,8 @@ func _tick() -> void:
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
 			_record(p)
 	_update_doors()
+	_update_jump()
+	director.tick()
 	if tick % Net.AIR_EVERY == 0:
 		air.step(doors, tick)
 	if tick % Net.AIR_SEND_EVERY == 0:

@@ -10,7 +10,7 @@ N=${1:-4}; SECS=${2:-20}; DELAY=${3:--1}; JIT=${4:-0}; LOSS=${5:-0}; STALL=${6:-
 GODOT=${GODOT:-godot}; PORT=${PORT:-24700}; OUT=${OUT:-/tmp/nettest}; BREACH=${BREACH:-6}
 BARG=""; [ "$BREACH" != "0" ] && BARG="breach_after=$BREACH"
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
-"$GODOT" --headless --path . -- --server port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
+"$GODOT" --headless --path . -- --server --no-events port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
 CPORT=$PORT; PP=""
 if [ "$DELAY" -ge 0 ]; then CPORT=$((PORT + 1)); "$LAGPROXY" $CPORT $PORT $DELAY $JIT $LOSS $STALL $EVERY 2> "$OUT/proxy.log" & PP=$!; fi
 sleep 1.5

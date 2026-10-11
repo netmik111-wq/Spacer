@@ -7,6 +7,8 @@ signal exit_requested
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
+const Director := preload("res://src/server/director.gd")   # only for the list of events in the host's menu
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -41,6 +43,15 @@ var _hint: Label
 var _work_bar: ColorRect
 var _work_fill: ColorRect
 var _use_held := false
+var _console: PanelContainer         # the screen of a bridge console, shown over the game
+var _console_kind := 0               # 3 = sector console, 4 = ship's controls (as GameClient.use_target)
+var _console_title: Label
+var _console_text: Label
+var _chart: Control
+var _jump_box: GridContainer
+var _jump_buttons_for := -1          # what the jump buttons were last built for
+var _jump_label: Label
+var _flash: ColorRect
 var _monitor_step := 0.08
 var _monitor_time := 0.0
 var _chat_box: VBoxContainer
@@ -231,7 +242,23 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_chat_input.text_submitted.connect(_on_chat_submitted)
 	root.add_child(_chat_input)
 
+	_build_console(root)
 	_build_pause(root)
+
+	# a jump: the countdown, and a white flash on landing
+	_jump_label = _text(root, 18)
+	_jump_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_jump_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_jump_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_jump_label.offset_top = 56
+	_jump_label.modulate = Color(0.7, 0.9, 1.0)
+	_jump_label.visible = false
+	_flash = ColorRect.new()
+	_flash.color = Color(0.85, 0.93, 1.0, 0.0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_flash)
+	client.arrived.connect(func() -> void: _flash.color.a = 0.9)
 	_rng.randomize()
 	_say("[color=#9aa3b5]Вы на борту. Нажмите Enter, чтобы написать в чат.[/color]")
 
@@ -244,6 +271,135 @@ func _text(parent: Control, font_size: int) -> Label:
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
+
+
+func _build_console(root: Control) -> void:
+	_console = PanelContainer.new()
+	_console.visible = false
+	_console.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_console.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_console.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.09, 0.08, 0.97)
+	style.border_color = Color(0.3, 0.75, 0.45)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(18)
+	_console.add_theme_stylebox_override("panel", style)
+	root.add_child(_console)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	_console.add_child(box)
+	_console_title = Label.new()
+	_console_title.add_theme_font_size_override("font_size", 20)
+	_console_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(_console_title)
+	_chart = Control.new()
+	_chart.custom_minimum_size = Vector2(640, 300)
+	_chart.draw.connect(_draw_chart)
+	box.add_child(_chart)
+	_console_text = Label.new()
+	_console_text.add_theme_font_size_override("font_size", 14)
+	_console_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_console_text.custom_minimum_size = Vector2(640, 0)
+	box.add_child(_console_text)
+	_jump_box = GridContainer.new()
+	_jump_box.columns = 2
+	_jump_box.add_theme_constant_override("h_separation", 8)
+	_jump_box.add_theme_constant_override("v_separation", 6)
+	box.add_child(_jump_box)
+	var shut := Button.new()
+	shut.text = "Отойти от пульта (E или Esc)"
+	shut.pressed.connect(func() -> void: _open_console(0))
+	box.add_child(shut)
+
+
+func _open_console(kind: int) -> void:
+	_console_kind = kind
+	_console.visible = kind != 0
+	if kind == 0:
+		return
+	_close_chat()
+	_chart.visible = kind == 3
+	_jump_box.visible = kind == 3
+	_jump_buttons_for = -1
+	if kind == 3:
+		_console_title.text = "Карта сектора"
+	else:
+		_console_title.text = "Управление кораблём"
+		_console_text.text = "Пульт исправен. Манёвры внутри сектора пока не подключены: отсюда кораблём будут управлять, когда появится от чего уходить и куда."
+
+
+func _update_console() -> void:
+	if not _console.visible:
+		return
+	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind:
+		_open_console(0)             # knocked out, or pushed away from the console
+		return
+	if _console_kind != 3:
+		return
+	var now := client.server_now()
+	var jumping := client.jump_to != Net.NO_SECTOR
+	var wait := (client.drive_ready - now) / Net.TICK_HZ
+	if jumping:
+		_console_text.text = "Корабль в секторе %s.\nКурс задан: %s. Прыжок через %d с." % [
+			client.sectors.describe(client.sector), client.sectors.describe(client.jump_to),
+			maxi(int(ceil((client.jump_tick - now) / Net.TICK_HZ)), 0)]
+	elif wait > 0.0:
+		_console_text.text = "Корабль в секторе %s.\nДвигатель перезаряжается: ещё %d с." % [client.sectors.describe(client.sector), int(ceil(wait))]
+	else:
+		_console_text.text = "Корабль в секторе %s.\nДвигатель готов. Куда прыгаем?" % client.sectors.describe(client.sector)
+	# one button per sector within reach; rebuilt when the ship has moved
+	if _jump_buttons_for != client.sector:
+		_jump_buttons_for = client.sector
+		for old in _jump_box.get_children():
+			old.queue_free()
+		for id in client.sectors.neighbours(client.sector):
+			var go := Button.new()
+			go.text = "Прыжок: %s" % client.sectors.describe(id)
+			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			go.pressed.connect(client.send_jump.bind(id))
+			_jump_box.add_child(go)
+		_chart.queue_redraw()
+	for go in _jump_box.get_children():
+		if go is Button:
+			(go as Button).disabled = jumping or wait > 0.0
+	if jumping:
+		_chart.queue_redraw()
+
+
+func _draw_chart() -> void:
+	## The chart of sectors: where the ship is, where it can jump, what is known about the rest.
+	var sectors := client.sectors
+	if sectors.count == 0:
+		return
+	var area := Rect2(Vector2(30, 22), _chart.size - Vector2(60, 50))
+	var place := func(id: int) -> Vector2:
+		return area.position + Vector2(sectors.pos[id].x / 100.0, sectors.pos[id].y / 60.0) * area.size
+	_chart.draw_rect(Rect2(Vector2.ZERO, _chart.size), Color(0.02, 0.05, 0.04))
+	for l: Array in sectors.links:
+		var near: bool = int(l[0]) == client.sector or int(l[1]) == client.sector
+		_chart.draw_line(place.call(int(l[0])), place.call(int(l[1])), Color(0.3, 0.8, 0.5, 0.75 if near else 0.22), 2.0 if near else 1.0)
+	if client.jump_to != Net.NO_SECTOR:
+		_chart.draw_line(place.call(client.sector), place.call(client.jump_to), Color(1, 1, 1, 0.9), 3.0)
+	var font := ThemeDB.fallback_font
+	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8)]
+	for id in sectors.count:
+		var at: Vector2 = place.call(id)
+		var known := client.knows_sector(id)
+		var colour: Color = colours[sectors.kind[id]] if known else Color(0.3, 0.36, 0.34)
+		_chart.draw_circle(at, 7.0, colour)
+		if id == client.sector:
+			_chart.draw_arc(at, 12.0, 0.0, TAU, 32, Color.WHITE, 2.0)
+		var caption := sectors.names[id] if known else "не разведан"
+		_chart.draw_string(font, at + Vector2(-70, 24), caption, HORIZONTAL_ALIGNMENT_CENTER, 140, 12,
+			Color(0.85, 0.95, 0.88) if known else Color(0.45, 0.5, 0.48))
+	# legend
+	var x := 8.0
+	for k in Sectors.KIND_NAMES.size():
+		_chart.draw_circle(Vector2(x + 5, _chart.size.y - 10), 5.0, colours[k])
+		_chart.draw_string(font, Vector2(x + 14, _chart.size.y - 6), Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.8, 0.74))
+		x += 26.0 + font.get_string_size(Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 
 
 func _build_pause(root: Control) -> void:
@@ -281,13 +437,19 @@ func _build_pause(root: Control) -> void:
 		info.text = "Вы создали эту игру. Другие игроки в вашей сети подключаются по адресу: %s (порт %d).\nДля игры через интернет порт %d (UDP) нужно открыть на роутере." % [where, host_port, host_port]
 		box.add_child(info)
 	if client.admin_token != "":
-		# until the game makes and mends holes by itself, the host can do it by hand
-		var hole := Button.new()
-		hole.text = "Пробить обшивку рядом (тест)"
-		hole.pressed.connect(func() -> void:
-			client.send_admin(Net.ADMIN_BREACH)
-			_set_pause(false))
-		box.add_child(hole)
+		# the host is the game master: the director can be left to itself or driven by hand
+		var auto := CheckBox.new()
+		auto.text = "Ивентер ведёт события сам"
+		auto.button_pressed = true
+		auto.toggled.connect(func(on: bool) -> void: client.send_admin(Net.ADMIN_AUTO, 1 if on else 0))
+		box.add_child(auto)
+		for e: Dictionary in Director.EVENTS:
+			var fire := Button.new()
+			fire.text = "Событие: %s (%s)" % [e["name"], Director.SIZE_NAMES[int(e["size"])]]
+			fire.pressed.connect(func() -> void:
+				client.send_admin(Net.ADMIN_EVENT, int(e["id"]))
+				_set_pause(false))
+			box.add_child(fire)
 	var resume := Button.new()
 	resume.text = "Продолжить"
 	resume.pressed.connect(func() -> void: _set_pause(false))
@@ -302,6 +464,12 @@ func show_debug(on: bool) -> void:
 	_debug.visible = on
 	_world.show_ghost = on
 	_info_timer = 0.0
+
+
+func open_console_here() -> void:
+	## Test helper: open the console our character faces, as the "use" key would.
+	if client.use_target() >= 3:
+		_open_console(client.use_target())
 
 
 func show_pause(on: bool) -> void:
@@ -369,8 +537,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		if _chat_input.visible:
 			_close_chat()
+		elif _console.visible:
+			_open_console(0)
 		else:
 			_set_pause(not _pause.visible)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or client.use_target() >= 3):
+		# a bridge console: the key opens its screen, and closes it again
+		_open_console(0 if _console.visible else client.use_target())
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("chat") and not _pause.visible and not _chat_input.visible:
 		_open_chat()
@@ -423,7 +597,8 @@ func _process(delta: float) -> void:
 	if client == null:
 		return
 	# which way to walk: the most recently pressed of the held direction keys
-	var busy := _chat_input.visible or _pause.visible
+	var busy := _chat_input.visible or _pause.visible or _console.visible
+	_update_console()
 	for m: Array in MOVES:
 		var dir: int = m[1]
 		var down := Input.is_action_pressed(m[0]) and not busy
@@ -448,11 +623,15 @@ func _process(delta: float) -> void:
 		_use_held = use_now
 		client.send_use(use_now)
 	var target := client.use_target()
-	_hint.visible = target != 0
+	_hint.visible = target != 0 and not _console.visible
 	if target == 1:
 		_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
 	elif target == 2:
 		_hint.text = "Баллон полон" if client.tank >= Net.TANK_FULL else ("Заправляю баллон…" if _use_held else "Держите E, чтобы заправить баллон")
+	elif target == 3:
+		_hint.text = "E: карта сектора"
+	elif target == 4:
+		_hint.text = "E: управление кораблём"
 	_work_bar.visible = target == 1 and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 
@@ -493,11 +672,19 @@ func _process(delta: float) -> void:
 	_fate.visible = client.my_cond != Net.COND_OK
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
 
+	# the jump
+	_jump_label.visible = client.jump_to != Net.NO_SECTOR and not _console.visible
+	if _jump_label.visible:
+		_jump_label.text = "Прыжок через %d с: %s" % [
+			maxi(int(ceil((client.jump_tick - client.server_now()) / Net.TICK_HZ)), 0), client.sectors.describe(client.jump_to)]
+	_flash.color.a = maxf(_flash.color.a - delta * 1.6, 0.0)
+
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
 	_info_timer -= delta
 	if _info_timer <= 0.0:
 		_info_timer = 0.25
-		_info.text = "На борту: %d     Пинг: %d мс" % [client.crew_count(), int(round(client.rtt_ms))]
+		_info.text = "На борту: %d     Пинг: %d мс     Сектор: %s" % [client.crew_count(), int(round(client.rtt_ms)),
+			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]
 		if _debug.visible:
 			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,

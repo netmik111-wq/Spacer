@@ -17,11 +17,13 @@ signal lost(reason: String)          # dropped while playing
 signal roster_changed
 signal chat(from_id: int, text: String)
 signal notice(text: String)
+signal arrived                       # the ship has just landed in another sector
 
 const Net := preload("res://src/shared/net.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Mover := preload("res://src/shared/mover.gd")
 const Doors := preload("res://src/shared/doors.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
@@ -55,6 +57,14 @@ var doors := Doors.new()
 var air := PackedByteArray()         # per cell: 0..Net.AIR_FULL (cells outside our view keep their last value)
 var holes := {}                      # breached hull cell -> true
 var ship_changes := 0                # goes up whenever doors, hull or air change: views redraw on it
+
+# where the ship is
+var sectors := Sectors.new()
+var sector := 0                      # the sector the ship is in
+var jump_to := Net.NO_SECTOR         # the sector it is jumping to, if any
+var jump_tick := 0                   # the server tick the jump lands on
+var drive_ready := 0                 # the server tick from which the drive can be used again
+var visited := 1                     # sectors the ship has been in, as bits
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -99,6 +109,7 @@ var _ahead_slot := -1
 
 var _have_self := false
 var _have_auth := false
+var _nav_known := false
 var _inputs: Array = []              # input changes not yet confirmed: [seq, apply tick, dir, applied]
 var _seq := 0
 var _sent_dir := 0
@@ -164,6 +175,10 @@ func close() -> void:
 	tank = Net.TANK_FULL
 	supply = false
 	work = 0
+	sector = 0
+	jump_to = Net.NO_SECTOR
+	visited = 1
+	_nav_known = false
 	bytes_in = 0
 	packets_in = 0
 
@@ -204,6 +219,22 @@ func send_use(held: bool) -> void:
 		_peer.send(0, PackedByteArray([Net.C_USE, 1 if held else 0]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_jump(target: int) -> void:
+	## Asks for a jump. The server agrees only while our character stands at the sector console.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_JUMP, target]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func server_now() -> float:
+	## Our best guess of the server's tick right now.
+	return now_ticks() + _recv_offset
+
+
+func knows_sector(id: int) -> bool:
+	## The crew knows what is in a sector it has been to or can reach in one jump.
+	return (visited & (1 << id)) != 0 or sectors.linked(sector, id)
+
+
 func send_suit(on: bool) -> void:
 	## Turns the suit's oxygen supply on or off.
 	if phase == PLAYING:
@@ -211,7 +242,8 @@ func send_suit(on: bool) -> void:
 
 
 func use_target() -> int:
-	## What our character would use right now: 0 = nothing, 1 = a hole to mend, 2 = an oxygen station.
+	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
+	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -221,6 +253,10 @@ func use_target() -> int:
 		return 1
 	if map.oxygen.has(cell):
 		return 2
+	if map.chart.has(cell):
+		return 3
+	if map.helm.has(cell):
+		return 4
 	return 0
 
 
@@ -243,11 +279,11 @@ func send_respawn() -> void:
 		_peer.send(0, PackedByteArray([Net.C_RESPAWN]), ENetPacketPeer.FLAG_RELIABLE)
 
 
-func send_admin(command: int) -> void:
+func send_admin(command: int, argument: int = 0) -> void:
 	## The hosting player's test tools (Net.ADMIN_*). The server ignores them without the right token.
 	if phase != PLAYING or admin_token.is_empty():
 		return
-	var msg := PackedByteArray([Net.C_ADMIN, command])
+	var msg := PackedByteArray([Net.C_ADMIN, command, argument])
 	msg.append_array(admin_token.to_utf8_buffer())
 	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
@@ -415,6 +451,18 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			roster.erase(gone)
 			ents.erase(gone)
 			roster_changed.emit()
+		Net.S_SECTORS:
+			sectors.unpack(pkt, 1)
+		Net.S_NAV:
+			var was := sector if _nav_known else int(pkt[1])
+			_nav_known = true
+			sector = pkt[1]
+			jump_to = pkt[2]
+			jump_tick = pkt.decode_u32(3)
+			drive_ready = pkt.decode_u32(7)
+			visited = pkt.decode_u32(11)
+			if sector != was and phase == PLAYING:
+				arrived.emit()
 		Net.S_CHAT:
 			var n := pkt.decode_u16(3)
 			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())

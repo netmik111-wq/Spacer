@@ -21,7 +21,10 @@ extends Node
 ## dedicated server breach_after tears a random hole), suit_after=SECONDS (turn
 ## the oxygen supply on), use_after=SECONDS (hold the "use" key from then on),
 ## --respawn (come back by itself after dying), goto=X,Y,FACING (walk to a cell
-## along its row, then turn; with goto_after=SECONDS).
+## along its row, then turn; with goto_after=SECONDS), jump_after=SECONDS (ask
+## for a jump to the first sector in reach), event_after=SECONDS with event=ID
+## (the host fires a director event), console_after=SECONDS (open the console
+## the character faces), --no-events (dedicated server: the director stays quiet).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -61,6 +64,10 @@ var _rehosted := false
 var _breached := false
 var _sealed := false
 var _suited := false
+var _jumped := false
+var _evented := false
+var _consoled := false
+var _goto_at := 0
 var _trace: FileAccess = null
 
 
@@ -81,6 +88,7 @@ func _ready() -> void:
 		add_child(_server)
 		_server.log_line.connect(func(text: String) -> void: print(text))
 		_server.shutdown_token = str(_opt.get("token", ""))
+		_server.director.auto = not _flags.has("no-events")
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
 		var problem := _server.start(port, "ship01", bots)
 		if problem != "":
@@ -312,16 +320,34 @@ func _process(_delta: float) -> void:
 	if _flags.has("respawn") and _client != null and _client.my_cond == Net.COND_DEAD and Engine.get_process_frames() % 30 == 0:
 		_client.send_respawn()               # test clients come back by themselves
 	if _opt.has("goto") and _screen != null and t >= float(_opt.get("goto_after", 0.0)):
-		var want := str(_opt["goto"]).split(",")
+		# "7,4,0;7,1,0;13,1,1": cells to walk to in turn (first along the column, then
+		# along the row), each with the way to face on arrival (0 = any)
+		var stops := str(_opt["goto"]).split(";")
 		var me := _client.pred
 		var dir := 0
-		if me.y != int(want[1]):
-			dir = Net.DIR_UP if me.y > int(want[1]) else Net.DIR_DOWN
-		elif me.x != int(want[0]):
-			dir = Net.DIR_LEFT if me.x > int(want[0]) else Net.DIR_RIGHT
-		elif me.facing != int(want[2]):
-			dir = int(want[2])
+		while _goto_at < stops.size():
+			var want := stops[_goto_at].split(",")
+			if me.y != int(want[1]):
+				dir = Net.DIR_UP if me.y > int(want[1]) else Net.DIR_DOWN
+			elif me.x != int(want[0]):
+				dir = Net.DIR_LEFT if me.x > int(want[0]) else Net.DIR_RIGHT
+			elif int(want[2]) != 0 and me.facing != int(want[2]):
+				dir = int(want[2])
+			if dir != 0:
+				break
+			_goto_at += 1
 		_screen.forced_dir = dir
+	if _opt.has("jump_after") and not _jumped and _screen != null and t >= float(_opt["jump_after"]):
+		_jumped = true
+		var reach := _client.sectors.neighbours(_client.sector)
+		if not reach.is_empty():
+			_client.send_jump(reach[0])
+	if _opt.has("event_after") and not _evented and _screen != null and t >= float(_opt["event_after"]):
+		_evented = true
+		_client.send_admin(Net.ADMIN_EVENT, int(_opt.get("event", 1)))
+	if _opt.has("console_after") and not _consoled and _screen != null and t >= float(_opt["console_after"]):
+		_consoled = true
+		_screen.open_console_here()
 	if _opt.has("suit_after") and not _suited and _screen != null and t >= float(_opt["suit_after"]):
 		_suited = true
 		_client.send_suit(true)
@@ -387,6 +413,7 @@ func _process(_delta: float) -> void:
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
 					"health": _client.health, "cond": _client.my_cond,
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
+					"sector": _client.sector, "visited": _client.visited, "sectors": _client.sectors.count,
 					"bodies": _client.roster.size() - _client.crew_count(),
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))

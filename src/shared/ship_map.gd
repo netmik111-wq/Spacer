@@ -20,6 +20,8 @@ var door_of := PackedInt32Array()    # door number per cell, -1 = no door there
 var hull := PackedInt32Array()       # cells of the outer shell that can be breached: wall or window
                                      # with a walkable cell on one side and space on another
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
+var helm := {}                       # wall cells with the ship's controls (the panel with orange lights)
+var chart := {}                      # wall cells with the sector console (the green screen)
 
 var tile_size := 32
 var atlas_columns := 8
@@ -83,10 +85,17 @@ func load_from(name: String) -> String:
 	crc = (h * 31 + width) & 0x7FFFFFFF
 
 	oxygen = {}
-	var station: int = tile_ids.get("console_2", -1)
+	helm = {}
+	chart = {}
 	for i in cells.size():
-		if cells[i] == station and station >= 0:
+		if cells[i] < 0:
+			continue
+		if cells[i] == tile_ids.get("console_2", -1):
 			oxygen[i] = true
+		elif cells[i] == tile_ids.get("console_3", -1):
+			helm[i] = true
+		elif cells[i] == tile_ids.get("console_1", -1):
+			chart[i] = true
 
 	hull = PackedInt32Array()
 	for y in height:
