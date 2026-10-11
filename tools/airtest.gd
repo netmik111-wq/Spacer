@@ -21,8 +21,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	var rooms := _rooms()
-	print("map %s: %d walkable cells, %d doors, %d hull cells that can be breached, %d compartments" % [
-		map.map_name, _count_walkable(), map.doors.size(), map.hull.size(), rooms.size()])
+	print("map %s: %d decks, %d walkable cells, %d doors, %d hull cells that can be breached, %d compartments" % [
+		map.map_name, map.deck_count, _count_walkable(), map.doors.size(), map.hull.size(), rooms.size()])
+	_check_decks()
 
 	# 1. nothing happens by itself
 	var air := Air.new()
@@ -107,6 +108,65 @@ func _initialize() -> void:
 	quit(1 if failed > 0 else 0)
 
 
+func _check_decks() -> void:
+	## What joins the decks must make sense: air passes down only through a
+	## catwalk or a hatch onto a floor, never through glass; a ladder leads to
+	## the same place on the next deck and back.
+	var passes := 0
+	var glass := 0
+	var ladders := 0
+	var ok := true
+	for i in map.cells.size():
+		if map.cells[i] < 0:
+			continue
+		var kind := map.tile_kinds[map.cells[i]]
+		if kind == "glass":
+			glass += 1
+			ok = ok and map.see_through[i] == 1 and map.air_down[i] < 0
+		if map.air_down[i] >= 0:
+			passes += 1
+			var under := map.air_down[i]
+			ok = ok and under == i + map.deck_stride * map.width and map.walk[under] == 1 and map.air_up[under] == i \
+				and map.see_through[i] == 1
+		if map.climb[i] >= 0:
+			ladders += 1
+			var to := map.climb[i]
+			ok = ok and map.climb[to] == i and to % map.width == i % map.width and absi(map.deck_of_cell(to) - map.deck_of_cell(i)) == 1
+	print("  between decks: air passes through %d cells, %d glass cells are sealed, %d ladder ends" % [passes, glass, ladders])
+	_expect(ok, "catwalks, glass and ladders join the decks the way they should")
+	if map.deck_count < 2 or passes == 0:
+		return
+	# a hole on one deck drains the cell above or below a catwalk too, with every door shut
+	var air := Air.new()
+	var doors := Doors.new()
+	air.setup(map)
+	doors.setup(map.doors.size())
+	var top := -1
+	var hole := -1
+	var rooms := _rooms()
+	for i in map.cells.size():
+		var low := map.air_down[i]
+		if low < 0 or hole >= 0:
+			continue
+		for cell in map.hull:                # a wall of the lower compartment that can be breached
+			if map.deck_of_cell(cell) == map.deck_of_cell(low):
+				var r := _room_next_to(cell, rooms)
+				if r >= 0 and (rooms[r] as Array).has(low):
+					top = i
+					hole = cell
+					break
+	if hole < 0:
+		print("  (no outer wall next to a compartment under a catwalk: nothing to breach)")
+		return
+	air.set_hole(hole, true)
+	var n := 0
+	while n < 6000 and not air.settled:
+		n += 1
+		air.step(doors, n)
+	_expect(air.air[top] < 0.02, "a breach under a catwalk empties the deck above it as well (%.0f%% left after %.0f s)" % [
+		air.air[top] * 100.0, n * Net.AIR_EVERY / float(Net.TICK_HZ)])
+
+
 func _expect(ok: bool, what: String) -> void:
 	print("  %s  %s" % ["ok  " if ok else "FAIL", what])
 	if not ok:
@@ -145,6 +205,10 @@ func _rooms() -> Array:
 			for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
 				var n := (y + o.y) * map.width + x + o.x
 				if map.walkable(x + o.x, y + o.y) and map.door_of[n] < 0 and not seen.has(n):
+					seen[n] = true
+					todo.append(n)
+			for n: int in [map.air_up[c], map.air_down[c]]:      # through a catwalk or a hatch
+				if n >= 0 and not seen.has(n):
 					seen[n] = true
 					todo.append(n)
 		out.append(group)

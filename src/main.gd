@@ -21,7 +21,10 @@ extends Node
 ## dedicated server breach_after tears a random hole), suit_after=SECONDS (turn
 ## the oxygen supply on), use_after=SECONDS (hold the "use" key from then on),
 ## --respawn (come back by itself after dying), goto=X,Y,FACING (walk to a cell
-## along its row, then turn; with goto_after=SECONDS), jump_after=SECONDS (ask
+## along its row, then turn; with goto_after=SECONDS; several cells go in turn,
+## split by ";"; Y counts through all decks, so the second deck starts at 16),
+## climb_at=N (press "use" once on reaching the N-th goto cell, counted from 1:
+## that takes a ladder), jump_after=SECONDS (ask
 ## for a jump to the first sector in reach), event_after=SECONDS with event=ID
 ## (the host fires a director event), console_after=SECONDS (open the console
 ## the character faces), --no-events (dedicated server: the director stays quiet),
@@ -75,6 +78,7 @@ var _consoled := false
 var _helmed := false
 var _warped := false
 var _helm_broken := false
+var _climbed := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -347,6 +351,10 @@ func _process(_delta: float) -> void:
 				break
 			_goto_at += 1
 		_screen.forced_dir = dir
+		if _opt.has("climb_at") and not _climbed and _goto_at >= int(_opt["climb_at"]) and _client.use_target() >= 6:
+			_climbed = true
+			_client.send_use(true)
+			_client.send_use(false)
 	if _opt.has("jump_after") and not _jumped and _screen != null and t >= float(_opt["jump_after"]):
 		_jumped = true
 		var reach := _client.sectors.neighbours(_client.sector)
@@ -444,6 +452,7 @@ func _process(_delta: float) -> void:
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
 					"health": _client.health, "cond": _client.my_cond,
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
+					"deck": _client.my_deck(),
 					"sector": _client.sector, "visited": _client.visited, "sectors": _client.sectors.count,
 					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),
 					"sector_kind": _client.sectors.kind[_client.sector] if _client.sectors.count > 0 else -1,

@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 6
+const PROTOCOL := 7
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -34,7 +34,10 @@ const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
 const C_ADMIN := 5                  # u8 command, u8 argument, secret text: the hosting player's tools (see ADMIN_*)
 const C_RESPAWN := 6                # nothing else: a dead player asks to come back as a new crew member
-const C_USE := 7                    # u8 held: the "use" key went down (1) or up (0)
+const C_USE := 7                    # u8 held, u32 tick: the "use" key went down (1) or up (0) on that tick of
+                                    # the client's predicted clock. Pressing it on a ladder climbs; the tick lets
+                                    # the server judge that where the client saw its character, not where the
+                                    # character was when the packet arrived.
 const C_SUIT := 8                   # u8 on: turn the suit's oxygen supply on (1) or off (0)
 const C_JUMP := 9                   # u8 sector: start a jump there (the player must stand at the sector console)
 const C_HELM := 10                  # u8 go (1 = set course, 0 = stop), u8 x, u8 y: steer inside the sector
@@ -56,7 +59,9 @@ const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is 
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
 const SEC_DOOR := 2                 # u16 count, then 6-byte records: u16 door, s32 tick it is passable from (-1 = shut)
 const SEC_HULL := 3                 # u16 count, then 5-byte records: s16 x, s16 y, u8 state (1 = breached, 0 = whole)
-const SEC_VIEW := 4                 # u8 chunk x, u8 chunk y: the centre of what this client is shown
+const SEC_VIEW := 4                 # u8 chunk x, u8 chunk row inside the deck: the centre of what this client is
+                                    # shown. It is shown those chunks on every deck (rows count through all decks
+                                    # everywhere else: see ShipMap).
 const SEC_CHECK := 5                # u32 checksum of the entities this client should know, u32 of doors, hull and air
 const SEC_AIR := 6                  # u8 chunk x, u8 chunk y, u16 count, then pairs: u8 cell in the chunk (y*16+x), u8 air
 const SEC_SELF := 7                 # authoritative state of the client's own character (see pack_self)

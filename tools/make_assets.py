@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Builds the game's art and map files from the reference images in art_src/.
 
-  art_src/map_mockup.png  -> assets/tiles.png + assets/tiles.json   (36 unique 32x32 tiles cut from the mockup)
-  maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically)
+  art_src/map_mockup.png  -> assets/tiles.png + assets/tiles.json   (32x32 tiles cut from the mockup, plus
+                                                                     see-through floors drawn in code)
+  maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically;
+                                                                     one drawing per deck)
   (generated in code)     -> assets/chars.png                       (placeholder crew, 4 directions)
   art_src/hud.dmi         -> assets/hud_monitor.png                 (heartbeat monitor animation)
 
@@ -29,7 +31,12 @@ T = 32
 MOCK_SCALE, MOCK_OX, MOCK_OY = 2, 5, 5
 
 # name -> (column, row) in the mockup grid, plus what the tile is for the game.
-#   kind: "wall" blocks movement, "floor"/"door" can be walked on.
+#   kind: "wall" blocks movement, everything else can be walked on:
+#     "floor", "door";
+#     "glass"   a glass floor: the deck below shows through, air does not pass;
+#     "grate"   a catwalk: the deck below shows through and shares its air;
+#     "hatch"   a hole in the floor with a ladder down: shows and shares air like a grate;
+#     "ladder"  the foot of that ladder on the deck below.
 TILES = [
     ("wall_h", (1, 0), "wall"),
     ("wall_tl", (0, 0), "wall"),
@@ -66,6 +73,13 @@ TILES = [
     ("airlock_closed", None, "door"),
     ("airlock_half", None, "door"),
 ]
+# See-through floors and ladders are made from every floor piece, so the edge
+# of a room looks the same whatever its floor is made of.
+FLOOR_PIECES = ["floor_l_t", "floor_m_t", "floor_r_t", "floor_l_b", "floor_m_b", "floor_r_b", "floor_n"]
+COVERS = ["glass", "grate", "hatch", "ladder"]
+for _cover in COVERS:
+    for _piece in FLOOR_PIECES:
+        TILES.append((_cover + _piece[5:], None, _cover))
 ATLAS_COLS = 8
 
 
@@ -143,6 +157,68 @@ def make_airlock_closed(mock, gap=0.0):
     return out
 
 
+FRAME_D = (36, 38, 50, 255)
+FRAME_L = (150, 156, 168, 255)
+RAIL = (176, 182, 194, 255)
+RAIL_D = (96, 100, 114, 255)
+HAZARD = (226, 176, 44, 255)
+
+
+def make_cover(floor, cover):
+    """A floor piece with its middle replaced: glass, a grating, an open hatch
+    with a ladder going down, or the foot of that ladder. The first three are
+    see-through: what is not drawn here shows the deck below."""
+    out = floor.copy()
+    o = out.load()
+    x0, x1, y0, y1 = 4, 27, 4, 27                  # the panel inside the piece's rim
+
+    def ladder(top, bottom):
+        for y in range(top, bottom + 1):
+            o[11, y] = RAIL; o[12, y] = RAIL_D
+            o[19, y] = RAIL; o[20, y] = RAIL_D
+        for y in range(top + 2, bottom, 4):
+            for x in range(13, 19):
+                o[x, y] = RAIL
+                o[x, y + 1] = RAIL_D
+
+    if cover == "ladder":
+        for x in range(x0 + 2, x1 - 1):            # a painted outline on the floor around the ladder
+            if (x // 3) % 2 == 0:
+                o[x, y0 + 1] = HAZARD
+                o[x, y1 - 1] = HAZARD
+        for y in range(y0 + 2, y1 - 1):
+            if (y // 3) % 2 == 0:
+                o[x0 + 1, y] = HAZARD
+                o[x1 - 1, y] = HAZARD
+        ladder(y0 + 3, y1 - 3)
+        return out
+    for y in range(y0, y1 + 1):
+        for x in range(x0, x1 + 1):
+            edge = min(x - x0, x1 - x, y - y0, y1 - y)
+            if edge == 0:
+                o[x, y] = FRAME_D
+            elif cover == "hatch":
+                if edge <= 2:
+                    o[x, y] = HAZARD if ((x + y) // 3) % 2 == 0 else FRAME_D
+                else:
+                    o[x, y] = (6, 7, 12, 110)      # the shaft: a dark opening
+            elif edge == 1:
+                o[x, y] = FRAME_L
+            elif cover == "glass":
+                o[x, y] = (120, 190, 235, 44)
+                if (x + y) in (26, 27, 34):        # reflections across the pane
+                    o[x, y] = (215, 240, 255, 120)
+            else:                                  # grate: bars every fourth pixel
+                bar_x, bar_y = (x - x0) % 4 == 1, (y - y0) % 4 == 1
+                if bar_x or bar_y:
+                    o[x, y] = RAIL_D if (bar_x and bar_y) else (118, 123, 138, 255)
+                else:
+                    o[x, y] = (8, 9, 14, 60)
+    if cover == "hatch":
+        ladder(y0 + 3, y1 - 5)
+    return out
+
+
 def build_tiles():
     mock = load_mockup()
     rows = (len(TILES) + ATLAS_COLS - 1) // ATLAS_COLS
@@ -156,7 +232,10 @@ def build_tiles():
         "airlock_half": lambda: make_airlock_closed(mock, 0.5),
     }
     for i, (name, src, kind) in enumerate(TILES):
-        im = drawn[name]() if name in drawn else cut(mock, *src)
+        if kind in COVERS:
+            im = make_cover(images["floor" + name[len(kind):]], kind)
+        else:
+            im = drawn[name]() if name in drawn else cut(mock, *src)
         images[name] = im
         atlas.paste(im, ((i % ATLAS_COLS) * T, (i // ATLAS_COLS) * T))
         meta["tiles"].append({"id": i, "name": name, "kind": kind})
@@ -170,26 +249,41 @@ def build_tiles():
 #
 # ASCII map legend:
 #   ' '  space outside the ship        '.'  floor            's'  floor + spawn point
+#   'g'  glass floor (the deck below shows through; air does not pass)
+#   'c'  catwalk: a grating (the deck below shows through and shares its air)
+#   'H'  ladder between decks: the same cell on two decks, one above the other
 #   '#'  wall (piece chosen from its neighbours)
 #   'D'  door in a horizontal wall      'A'  airlock in a vertical wall
 #   'W'  window    '<' '>'  wide window (left, right half)
 #   '1'..'5'  wall with a console on it
 #
-# The tile art is made for decks two tiles tall separated by horizontal wall
+#
+# A ship with several decks is drawn deck by deck, the top one first. Each
+# deck starts with a line "= its name"; all are laid over one another from
+# the same corner. In the .json the decks sit in one grid, one below the
+# other, `deck_stride` rows apart (a multiple of 16, with at least one empty
+# row between decks), so a cell is still just x and y everywhere in the game.
+#
+# The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
 BAND_CHARS = set("#DW<>12345")
-FLOOR_CHARS = set(".s")
+FLOOR_CHARS = set(".sgcH")
+COVER_OF = {"g": "glass", "c": "grate"}
 
 
 class MapError(Exception):
     pass
 
 
-def resolve_map(name, lines, ids):
-    h = len(lines)
-    w = max(len(l) for l in lines)
-    g = [l.ljust(w) for l in lines]
+def resolve_map(name, lines, ids, w, h, above, below):
+    """One deck. `above` and `below` are the drawings of the decks next to it (or None)."""
+    g = [l.ljust(w) for l in lines] + [" " * w] * (h - len(lines))
+
+    def other(deck, x, y):
+        if deck is None or y >= len(deck) or x >= len(deck[y]):
+            return " "
+        return deck[y][x]
 
     def at(x, y):
         return g[y][x] if 0 <= x < w and 0 <= y < h else " "
@@ -221,6 +315,16 @@ def resolve_map(name, lines, ids):
                     piece = "floor_n"
                 else:
                     piece = "floor_%s_%s" % ("l" if not left else ("r" if not right else "m"), row)
+                cover = COVER_OF.get(c)
+                if c == "c" and other(below, x, y) not in FLOOR_CHARS:
+                    raise MapError(f"{name}: catwalk at {x},{y} has no floor on the deck below (its air would have nowhere to go)")
+                if c == "H":
+                    down, up = other(below, x, y) == "H", other(above, x, y) == "H"
+                    if not down and not up:
+                        raise MapError(f"{name}: ladder at {x},{y} needs an 'H' in the same cell of the deck above or below")
+                    cover = "hatch" if down else "ladder"
+                if cover:
+                    piece = cover + piece[5:]
             elif c == "A":
                 if not (n and s) or e or wst:
                     raise MapError(f"{name}: airlock at {x},{y} must sit inside a vertical wall")
@@ -274,9 +378,46 @@ def resolve_map(name, lines, ids):
             else:
                 raise MapError(f"{name}: unknown character '{c}' at {x},{y}")
             cells[y * w + x] = ids[piece]
+    return cells, spawns, doors
+
+
+def read_decks(name, lines):
+    """Splits a drawing into decks: [(deck name, lines)], top deck first."""
+    decks = []
+    for l in lines:
+        if l.startswith("="):
+            decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
+        elif decks:
+            decks[-1][1].append(l)
+        elif l.strip():
+            decks.append(("Палуба", [l]))
+    for _, rows in decks:
+        while rows and not rows[-1].strip():
+            rows.pop()
+    if not decks or not all(rows for _, rows in decks):
+        raise MapError(f"{name}: an empty deck")
+    return decks
+
+
+def resolve_ship(name, lines, ids):
+    decks = read_decks(name, lines)
+    w = max(len(l) for _, rows in decks for l in rows)
+    h = max(len(rows) for _, rows in decks)
+    stride = ((h + 1 + 15) // 16) * 16
+    total = stride * (len(decks) - 1) + h
+    cells = [-1] * (w * total)
+    spawns, doors = [], []
+    for d, (_, rows) in enumerate(decks):
+        above = decks[d - 1][1] if d > 0 else None
+        below = decks[d + 1][1] if d + 1 < len(decks) else None
+        deck_cells, deck_spawns, deck_doors = resolve_map("%s, deck %d" % (name, d + 1), rows, ids, w, h, above, below)
+        cells[d * stride * w:d * stride * w + w * h] = deck_cells
+        spawns += [[x, y + d * stride] for x, y in deck_spawns]
+        doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
     if not spawns:
         raise MapError(f"{name}: no spawn points ('s')")
-    return {"name": name, "width": w, "height": h, "cells": cells, "spawns": spawns, "doors": doors}
+    return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
+            "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors}
 
 
 def build_maps(images, ids):
@@ -287,21 +428,21 @@ def build_maps(images, ids):
         name = fn[:-4]
         with open(os.path.join(MAPS, fn), encoding="utf-8") as f:
             lines = [l.rstrip("\n") for l in f if not l.startswith(";")]
-        while lines and not lines[-1].strip():
-            lines.pop()
-        m = resolve_map(name, lines, ids)
+        m = resolve_ship(name, lines, ids)
         with open(os.path.join(MAPS, name + ".json"), "w", encoding="utf-8") as f:
             json.dump(m, f, separators=(",", ":"))
-        # preview picture for a quick look
-        prev = Image.new("RGBA", (m["width"] * T, m["height"] * T), (12, 12, 20, 255))
+        # preview picture for a quick look: the decks one under another, the top one first
+        n_decks, dh, stride = len(m["decks"]), m["deck_height"], m["deck_stride"]
+        prev = Image.new("RGBA", (m["width"] * T, (n_decks * (dh + 1) - 1) * T), (12, 12, 20, 255))
         for i, t in enumerate(m["cells"]):
             if t >= 0:
-                prev.alpha_composite(images[names[t]], ((i % m["width"]) * T, (i // m["width"]) * T))
+                x, y = i % m["width"], i // m["width"]
+                prev.alpha_composite(images[names[t]], (x * T, (y % stride + (y // stride) * (dh + 1)) * T))
         os.makedirs(os.path.join(ROOT, "tools", "preview"), exist_ok=True)
         prev.resize((prev.width * 2, prev.height * 2), Image.NEAREST).save(
             os.path.join(ROOT, "tools", "preview", name + ".png"))
         walk = sum(1 for t in m["cells"] if t >= 0 and TILES[t][2] != "wall")
-        print(f"map {name}: {m['width']}x{m['height']}, walkable tiles {walk}, spawns {len(m['spawns'])}")
+        print(f"map {name}: {m['width']}x{dh}, decks {n_decks}, walkable tiles {walk}, spawns {len(m['spawns'])}")
 
 
 # ------------------------------------------------------------ characters

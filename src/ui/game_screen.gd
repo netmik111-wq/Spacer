@@ -697,6 +697,9 @@ func _process(delta: float) -> void:
 		if now >= _demo_until:
 			_demo_dir = _rng.randi_range(1, 4) if _rng.randf() < 0.85 else 0
 			_demo_until = now + _rng.randf_range(0.15, 1.2)
+			if client.use_target() >= 6 and _rng.randf() < 0.5:
+				client.send_use(true)        # happened to stop on a ladder: take it
+				client.send_use(false)
 		want = _demo_dir
 	if forced_dir >= 0:
 		want = forced_dir
@@ -719,6 +722,9 @@ func _process(delta: float) -> void:
 		_hint.text = "E: управление кораблём"
 	elif target == 5:
 		_hint.text = "Чиню пульт…" if (_use_held and client.work > 0) else "Пульт не работает. Держите E, чтобы починить"
+	elif target == 6 or target == 7:
+		var to := client.my_deck() + (1 if target == 6 else -1)
+		_hint.text = "E: %s по лестнице (%s)" % ["спуститься" if target == 6 else "подняться", client.map.deck_names[to].to_lower()]
 	_work_bar.visible = (target == 1 or target == 5) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 
@@ -772,6 +778,8 @@ func _process(delta: float) -> void:
 		_info_timer = 0.25
 		_info.text = "На борту: %d     Пинг: %d мс     Сектор: %s" % [client.crew_count(), int(round(client.rtt_ms)),
 			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]
+		if client.map.deck_count > 1:
+			_info.text += "     %s" % client.map.deck_names[client.my_deck()]
 		if _debug.visible:
 			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,

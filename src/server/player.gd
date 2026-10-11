@@ -14,7 +14,7 @@ var st := Mover.State.new()
 var inputs: Array = []               # queued input changes, oldest first: [apply tick, direction, seq]
 var last_seq := 0                    # last input change applied, echoed back to the client
 
-var view_cx := -100                  # chunk this client's view is centred on
+var view_cx := -100                  # chunk this client's view is centred on (the row is counted inside its deck)
 var view_cy := -100
 var rep_x := -9999                   # position and facing as last sent to clients
 var rep_y := -9999
@@ -29,6 +29,8 @@ var work := 0                        # ticks spent on the thing in front of it (
 var work_cell := -1
 var vitals_sent := -1                # health, tank, supply and work as last told to the client, packed
 var died_tick := 0
+var climbs := 0                      # times it has gone up or down a ladder (for tests)
+var climb_tick := -1                 # a press of "use" waiting for its tick, in case it is on a ladder (-1 = none)
 
 var self_dirty := true               # own state changed and must be confirmed to the client
 var last_self_tick := -1000

@@ -4,7 +4,8 @@ extends RefCounted
 ## Every walkable cell holds an amount of air, 1.0 being normal pressure.
 ## Each step, air moves between neighbouring cells towards the lower pressure.
 ## A shut door lets nothing through. A hole in the hull drains the cells next
-## to it into space.
+## to it into space. Between decks air passes where the floor is a catwalk or
+## an open hatch, and nowhere else: glass is sealed.
 ##
 ## The loop visits every walkable cell. That is fine for a small ship; for big
 ## maps see research/README.md (only the cells where something happens need
@@ -15,6 +16,8 @@ const Doors := preload("res://src/shared/doors.gd")
 const Net := preload("res://src/shared/net.gd")
 
 const FLOW := 0.2                    # share of a pressure difference that crosses between two cells per step (below 0.25, or it oscillates)
+const FLOW_DECK := 0.1               # the same between a cell and the one above or below it. Smaller, so that
+                                     # a cell with five or six neighbours still cannot give away more than it has.
 const LEAK := 0.12                   # share of a cell's air lost per step through each hole next to it
 const REST := 0.00002                # below this much change per step the air is considered settled
 
@@ -26,7 +29,7 @@ var settled := false                 # nothing is moving: steps are skipped unti
 
 var _next := PackedFloat32Array()
 var _cells := PackedInt32Array()     # the walkable cells
-var _near := PackedInt32Array()      # 4 neighbours of each cell (-1 = none)
+var _near := PackedInt32Array()      # 6 neighbours of each cell: 4 on its deck, the one above, the one below (-1 = none)
 var _leaks := PackedByteArray()      # holes next to each cell
 
 
@@ -36,7 +39,7 @@ func setup(p_map: ShipMap) -> void:
 	air.resize(n)
 	_next.resize(n)
 	level.resize(n)
-	_near.resize(n * 4)
+	_near.resize(n * 6)
 	_near.fill(-1)
 	_leaks.resize(n)
 	_cells.clear()
@@ -49,10 +52,12 @@ func setup(p_map: ShipMap) -> void:
 			_cells.append(i)
 			air[i] = 1.0
 			level[i] = Net.AIR_FULL
-			if map.walkable(x - 1, y): _near[i * 4] = i - 1
-			if map.walkable(x + 1, y): _near[i * 4 + 1] = i + 1
-			if map.walkable(x, y - 1): _near[i * 4 + 2] = i - map.width
-			if map.walkable(x, y + 1): _near[i * 4 + 3] = i + map.width
+			if map.walkable(x - 1, y): _near[i * 6] = i - 1
+			if map.walkable(x + 1, y): _near[i * 6 + 1] = i + 1
+			if map.walkable(x, y - 1): _near[i * 6 + 2] = i - map.width
+			if map.walkable(x, y + 1): _near[i * 6 + 3] = i + map.width
+			_near[i * 6 + 4] = map.air_up[i]
+			_near[i * 6 + 5] = map.air_down[i]
 	settled = true
 
 
@@ -106,16 +111,16 @@ func step(doors: Doors, tick: int) -> void:
 			_next[i] = a                 # a shut door keeps what is in its own cell
 			continue
 		var gain := 0.0
-		var base := i * 4
-		for k in 4:
+		var base := i * 6
+		for k in 6:
 			var j := _near[base + k]
 			if j < 0:
 				continue
 			var dj := door_of[j]
 			if dj >= 0 and not doors.passable(dj, tick):
 				continue
-			gain += air[j] - a
-		var v := a + FLOW * gain
+			gain += (air[j] - a) * (FLOW if k < 4 else FLOW_DECK)
+		var v := a + gain
 		if _leaks[i] > 0:
 			v -= LEAK * _leaks[i] * a
 		if v < 0.0:

@@ -35,6 +35,7 @@ print(f"predicted steps: {steps}, corrected by the server: {mis} ({100.0 * mis /
 print(f"state checks: {sum(r['checks_ok'] for r in ok)} ok, {sum(r['checks_bad'] for r in ok)} bad "
       f"(of the bad ones, doors/hull/air: {sum(r['ship_checks_bad'] for r in ok)}); holes seen by clients: {sorted(set(r['holes'] for r in ok))}")
 print(f"health of the clients at the end: {sorted(r['health'] for r in ok)}; down or dead: {sum(1 for r in ok if r['cond'] != 0)}")
+print(f"clients on each deck at the end (0 = top): {sorted(r.get('deck', 0) for r in ok)}")
 print(f"ended where the server says: {sum(1 for r in ok if (r['pred_x'], r['pred_y']) == (r['auth_x'], r['auth_y']))}/{len(ok)}")
 print(f"ping seen by clients: {min(r['rtt_ms'] for r in ok):.0f}..{max(r['rtt_ms'] for r in ok):.0f} ms; errors in logs: {errs}")
 PY

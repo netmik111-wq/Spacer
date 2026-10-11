@@ -166,6 +166,146 @@
    "id": 32,
    "name": "airlock_half",
    "kind": "door"
+  },
+  {
+   "id": 33,
+   "name": "glass_l_t",
+   "kind": "glass"
+  },
+  {
+   "id": 34,
+   "name": "glass_m_t",
+   "kind": "glass"
+  },
+  {
+   "id": 35,
+   "name": "glass_r_t",
+   "kind": "glass"
+  },
+  {
+   "id": 36,
+   "name": "glass_l_b",
+   "kind": "glass"
+  },
+  {
+   "id": 37,
+   "name": "glass_m_b",
+   "kind": "glass"
+  },
+  {
+   "id": 38,
+   "name": "glass_r_b",
+   "kind": "glass"
+  },
+  {
+   "id": 39,
+   "name": "glass_n",
+   "kind": "glass"
+  },
+  {
+   "id": 40,
+   "name": "grate_l_t",
+   "kind": "grate"
+  },
+  {
+   "id": 41,
+   "name": "grate_m_t",
+   "kind": "grate"
+  },
+  {
+   "id": 42,
+   "name": "grate_r_t",
+   "kind": "grate"
+  },
+  {
+   "id": 43,
+   "name": "grate_l_b",
+   "kind": "grate"
+  },
+  {
+   "id": 44,
+   "name": "grate_m_b",
+   "kind": "grate"
+  },
+  {
+   "id": 45,
+   "name": "grate_r_b",
+   "kind": "grate"
+  },
+  {
+   "id": 46,
+   "name": "grate_n",
+   "kind": "grate"
+  },
+  {
+   "id": 47,
+   "name": "hatch_l_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 48,
+   "name": "hatch_m_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 49,
+   "name": "hatch_r_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 50,
+   "name": "hatch_l_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 51,
+   "name": "hatch_m_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 52,
+   "name": "hatch_r_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 53,
+   "name": "hatch_n",
+   "kind": "hatch"
+  },
+  {
+   "id": 54,
+   "name": "ladder_l_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 55,
+   "name": "ladder_m_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 56,
+   "name": "ladder_r_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 57,
+   "name": "ladder_l_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 58,
+   "name": "ladder_m_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 59,
+   "name": "ladder_r_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 60,
+   "name": "ladder_n",
+   "kind": "ladder"
   }
  ]
 }

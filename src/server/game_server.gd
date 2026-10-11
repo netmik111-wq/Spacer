@@ -46,8 +46,9 @@ var _free: Array[int] = []
 var _corpses: Array[int] = []       # slots of the bodies left behind, oldest first
 var _rng := RandomNumberGenerator.new()
 
-var _cw := 1                        # chunks across / down
-var _ch := 1
+var _cw := 1                        # chunks across
+var _ch := 1                        # chunk rows of one deck
+var _deck_rows := 1                 # chunk rows from one deck to the next
 var _change: Array = []             # per chunk: entity records changed this tick
 var _full: Array = []               # per chunk: every entity in it (built on demand)
 var _sums := PackedInt64Array()
@@ -98,21 +99,23 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	port = p_port
 	_cw = map.chunks_wide()
 	_ch = map.chunks_high()
+	_deck_rows = map.deck_stride >> Net.CHUNK_SHIFT
+	var chunks := _cw * map.chunk_rows()
 	_change.clear()
 	_full.clear()
 	_door_change.clear()
 	_hull_change.clear()
 	_air_change.clear()
 	_doors_in.clear()
-	for c in _cw * _ch:
+	for c in chunks:
 		_change.append(PackedByteArray())
 		_full.append(PackedByteArray())
 		_door_change.append(PackedByteArray())
 		_hull_change.append(PackedByteArray())
 		_air_change.append(PackedByteArray())
 		_doors_in.append(PackedInt32Array())
-	_sums.resize(_cw * _ch)
-	_ship_sums.resize(_cw * _ch)
+	_sums.resize(chunks)
+	_ship_sums.resize(chunks)
 	doors.setup(map.doors.size())
 	_door_hold.resize(map.doors.size())
 	_door_hold.fill(0)
@@ -269,7 +272,16 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		if shutdown_token != "" and pkt.slice(1).get_string_from_utf8() == shutdown_token:
 			shutdown_requested.emit()
 	elif kind == Net.C_USE:
-		p.using = pkt.size() > 1 and pkt[1] != 0
+		var held := pkt.size() > 1 and pkt[1] != 0
+		if held and not p.using:
+			# a press may take a ladder: on the tick the client pressed it, which is
+			# usually a little ahead of us
+			var at := pkt.decode_u32(2) if pkt.size() >= 6 else tick
+			p.climb_tick = clampi(at, tick, tick + MAX_INPUT_LEAD)
+			if p.climb_tick == tick:
+				p.climb_tick = -1
+				_climb(p)
+		p.using = held
 	elif kind == Net.C_SUIT:
 		if p.cond == Net.COND_OK and pkt.size() > 1:
 			p.supply = pkt[1] != 0 and p.tank > 0.0
@@ -710,11 +722,11 @@ func breach(cell: int) -> bool:
 
 
 func breach_near(x: int, y: int) -> bool:
-	## A hole in the whole hull cell closest to the given place.
+	## A hole in the whole hull cell closest to the given place, on the same deck.
 	var best := -1
 	var best_d := 1 << 30
 	for cell in map.hull:
-		if air.holes.has(cell):
+		if air.holes.has(cell) or map.deck_of_cell(cell) != map.deck_of(y):
 			continue
 		var d := absi(cell % map.width - x) + absi(cell / map.width - y)
 		if d < best_d or (d == best_d and _rng.randf() < 0.5):
@@ -768,6 +780,9 @@ func _tick() -> void:
 			_bot_think(p)
 		if Mover.step(p.st, map, doors, tick):
 			p.self_dirty = true
+		if p.climb_tick >= 0 and tick >= p.climb_tick:
+			p.climb_tick = -1
+			_climb(p)
 		_update_vitals(p)
 		_update_work(p)
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
@@ -846,6 +861,30 @@ func _update_work(p: Player) -> void:
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
 	else:
 		p.work = 0
+
+
+func _usable_ahead(p: Player) -> bool:
+	## Is there something in front of the character that the "use" key works on?
+	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	return cell >= 0 and (air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell)
+		or map.chart.has(cell) or map.helm.has(cell))
+
+
+func _climb(p: Player) -> bool:
+	## The "use" key was pressed. On a ladder, with nothing else to use in front,
+	## the character goes to the other deck.
+	if p.cond != Net.COND_OK or p.corpse:
+		return false
+	var to := map.climb[p.st.y * map.width + p.st.x]
+	if to < 0 or _usable_ahead(p):
+		return false
+	# Only the place changes: a key the player holds goes on being held, so the
+	# client's replay of its unconfirmed inputs still matches.
+	p.st.place(to % map.width, to / map.width)
+	p.self_dirty = true
+	p.climbs += 1
+	_record(p)
+	return true
 
 
 func _respawn(p: Player) -> void:
@@ -979,6 +1018,9 @@ func _bot_think(p: Player) -> void:
 		st.dir = Net.DIR_NONE
 	if tick < p.bot_until and not blocked:
 		return
+	if map.climb[st.y * map.width + st.x] >= 0 and _rng.randf() < 0.3 and _climb(p):
+		p.bot_until = tick + _rng.randi_range(4, 12)
+		return
 	if _rng.randf() < 0.2 and not blocked:
 		st.dir = Net.DIR_NONE
 		p.bot_until = tick + _rng.randi_range(10, 40)
@@ -1067,9 +1109,12 @@ func _send_world() -> void:
 	for p: Player in players:
 		if p == null or p.peer == null:
 			continue
+		# The view is centred on a chunk of the character's deck, and takes in the
+		# same chunks of every other deck: what is seen through a glass floor is
+		# straight below, and a change of deck brings nothing new into view.
 		var st := p.st
 		var cx := st.x >> Net.CHUNK_SHIFT
-		var cy := st.y >> Net.CHUNK_SHIFT
+		var cy := map.local_y(st.y) >> Net.CHUNK_SHIFT
 		var old_cx := p.view_cx
 		var old_cy := p.view_cy
 		var view_moved := cx != old_cx or cy != old_cy
@@ -1090,37 +1135,39 @@ func _send_world() -> void:
 			_ensure_ship_sums()
 		var sum := 0
 		var ship_sum := 0
-		for yy in range(maxi(cy - 1, 0), mini(cy + 2, _ch)):
-			for xx in range(maxi(cx - 1, 0), mini(cx + 2, _cw)):
-				var c := yy * _cw + xx
-				if view_moved and (absi(xx - old_cx) > 1 or absi(yy - old_cy) > 1):
-					# this chunk just came into view: send everything in it
-					var everything: PackedByteArray = _full[c]
-					if not everything.is_empty():
-						_append_ents(out, everything)
-					_append_ship_full(out, c, xx, yy)
-				else:
-					var changes: PackedByteArray = _change[c]
-					if not changes.is_empty():
-						_append_ents(out, changes)
-					var door_changes: PackedByteArray = _door_change[c]
-					if not door_changes.is_empty():
-						_append_records(out, Net.SEC_DOOR, door_changes, Net.DOOR_BYTES)
-					var hull_changes: PackedByteArray = _hull_change[c]
-					if not hull_changes.is_empty():
-						_append_records(out, Net.SEC_HULL, hull_changes, Net.HULL_BYTES)
-					var air_changes: PackedByteArray = _air_change[c]
-					if not air_changes.is_empty():
-						var oa := out.size()
-						out.resize(oa + 5)
-						out.encode_u8(oa, Net.SEC_AIR)
-						out.encode_u8(oa + 1, xx)
-						out.encode_u8(oa + 2, yy)
-						out.encode_u16(oa + 3, air_changes.size() / 2)
-						out.append_array(air_changes)
-				if check:
-					sum += _sums[c]
-					ship_sum += _ship_sums[c]
+		for deck in map.deck_count:
+			for yy in range(maxi(cy - 1, 0), mini(cy + 2, _ch)):
+				var row := deck * _deck_rows + yy          # the chunk row in the whole grid
+				for xx in range(maxi(cx - 1, 0), mini(cx + 2, _cw)):
+					var c := row * _cw + xx
+					if view_moved and (absi(xx - old_cx) > 1 or absi(yy - old_cy) > 1):
+						# this chunk just came into view: send everything in it
+						var everything: PackedByteArray = _full[c]
+						if not everything.is_empty():
+							_append_ents(out, everything)
+						_append_ship_full(out, c, xx, row)
+					else:
+						var changes: PackedByteArray = _change[c]
+						if not changes.is_empty():
+							_append_ents(out, changes)
+						var door_changes: PackedByteArray = _door_change[c]
+						if not door_changes.is_empty():
+							_append_records(out, Net.SEC_DOOR, door_changes, Net.DOOR_BYTES)
+						var hull_changes: PackedByteArray = _hull_change[c]
+						if not hull_changes.is_empty():
+							_append_records(out, Net.SEC_HULL, hull_changes, Net.HULL_BYTES)
+						var air_changes: PackedByteArray = _air_change[c]
+						if not air_changes.is_empty():
+							var oa := out.size()
+							out.resize(oa + 5)
+							out.encode_u8(oa, Net.SEC_AIR)
+							out.encode_u8(oa + 1, xx)
+							out.encode_u8(oa + 2, row)
+							out.encode_u16(oa + 3, air_changes.size() / 2)
+							out.append_array(air_changes)
+					if check:
+						sum += _sums[c]
+						ship_sum += _ship_sums[c]
 		var health_now := roundi(p.health)
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / Net.REPAIR_TICKS

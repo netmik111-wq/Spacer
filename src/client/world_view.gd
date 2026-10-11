@@ -1,6 +1,12 @@
 extends Node2D
 ## Draws the ship and everyone on it, and keeps the camera on our character.
 ## It only reads from the GameClient; it never changes game state.
+##
+## Every deck is drawn in the same place on the screen. The deck our
+## character is on is drawn in full; the decks under it are drawn first and
+## darker, so they show wherever the floor above is glass, a catwalk or a
+## hatch; of the deck above only its see-through floors are hinted, with
+## whoever stands on them.
 
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
@@ -13,18 +19,34 @@ const FEET_Y := 29                   # where the feet rest inside a tile, in pix
 # column of the first frame for each facing in assets/chars.png (down, up, left, right)
 const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
 
+const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
+const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
+const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
+
+
+class DeckView:
+	var group: Node2D                # everything of this deck
+	var layer: TileMapLayer          # its tiles
+	var holes: Node2D                # breaches in its hull
+	var fx: Node2D                   # air streaming out, sparks
+	var chars: Node2D                # the characters on it
+	var ceiling: TileMapLayer        # its see-through floors alone: what is seen of it from the deck below
+
+
 var client: GameClient
 var show_names := true
 var show_ghost := false              # debug: draw where the server says our character is
 
 var _tile := 32
-var _layer: TileMapLayer
-var _chars: Node2D
+var _decks: Array[DeckView] = []
+var _deck_shown := -1                # the deck the picture was last arranged for
+var _stride := 16                    # rows from one deck to the next in the map's grid
 var _camera: Camera2D
 var _chars_tex: Texture2D
 var _breach_tex: Texture2D
 var _views := {}                     # id -> Sprite2D
 var _labels := {}                    # id -> Label
+var _seen := {}                      # id -> can it be seen from our deck (a name is hidden with its owner)
 var _label_layer: CanvasLayer
 var _ghost: Sprite2D
 var _stars := PackedVector2Array()
@@ -38,9 +60,7 @@ var _door_tiles: Array = []          # per door kind: tile ids for [shut, half o
 var _door_shown := PackedInt32Array()  # per door: which of those is on screen
 var _door_was_open := PackedByteArray()
 var _door_closing := PackedFloat32Array()   # per door: seconds left of the closing frame
-var _holes: Node2D
 var _hole_views := {}                # hull cell -> Sprite2D
-var _air_view: Node2D
 var _ship_seen := -1                 # client.ship_changes when the hull and air were last redrawn
 
 
@@ -48,7 +68,10 @@ func setup(p_client: GameClient) -> void:
 	client = p_client
 	var map := client.map
 	_tile = map.tile_size
+	_stride = map.deck_stride
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_chars_tex = load("res://assets/chars.png")
+	_breach_tex = load("res://assets/breach.png")
 
 	var tiles := TileSet.new()
 	tiles.tile_size = Vector2i(_tile, _tile)
@@ -59,14 +82,46 @@ func setup(p_client: GameClient) -> void:
 	_source_id = source_id
 	for i in map.tile_kinds.size():
 		atlas.create_tile(Vector2i(i % map.atlas_columns, i / map.atlas_columns))
-	_layer = TileMapLayer.new()
-	_layer.tile_set = tiles
-	add_child(_layer)
-	for y in map.height:
-		for x in map.width:
-			var id := map.cells[y * map.width + x]
-			if id >= 0:
-				_layer.set_cell(Vector2i(x, y), source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+
+	for d in map.deck_count:
+		var deck := DeckView.new()
+		deck.group = Node2D.new()
+		add_child(deck.group)
+		deck.layer = TileMapLayer.new()
+		deck.layer.tile_set = tiles
+		deck.group.add_child(deck.layer)
+		deck.ceiling = TileMapLayer.new()
+		deck.ceiling.tile_set = tiles
+		deck.ceiling.modulate = CEILING_TINT
+		deck.ceiling.visible = false
+		for y in map.deck_height:
+			for x in map.width:
+				var cell := (d * _stride + y) * map.width + x
+				var id := map.cells[cell]
+				if id < 0:
+					continue
+				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
+				deck.layer.set_cell(Vector2i(x, y), source_id, in_atlas)
+				if map.see_through[cell] == 1:
+					deck.ceiling.set_cell(Vector2i(x, y), source_id, in_atlas)
+		deck.holes = Node2D.new()
+		deck.group.add_child(deck.holes)
+		deck.fx = Node2D.new()
+		deck.fx.draw.connect(_draw_fx.bind(d))
+		deck.group.add_child(deck.fx)
+		deck.chars = Node2D.new()
+		deck.chars.y_sort_enabled = true
+		deck.group.add_child(deck.chars)
+		_decks.append(deck)
+		# The see-through floors of the deck above are hinted on this deck's own
+		# floor, under its characters, so they do not veil whoever walks here.
+		if d > 0:
+			deck.group.add_child(_decks[d - 1].ceiling)
+			deck.group.move_child(_decks[d - 1].ceiling, 1)
+
+	var last := _decks[_decks.size() - 1]
+	last.group.add_child(last.ceiling)       # nothing is below the lowest deck to see it from; kept only so it is freed
+	last.ceiling.visible = false
 
 	# doors are redrawn as they open and close
 	_door_tiles = [
@@ -78,18 +133,6 @@ func setup(p_client: GameClient) -> void:
 	_door_was_open.resize(map.doors.size())
 	_door_closing.resize(map.doors.size())
 
-	_holes = Node2D.new()
-	add_child(_holes)
-	_air_view = Node2D.new()
-	_air_view.draw.connect(_draw_air)
-	add_child(_air_view)
-
-	_chars = Node2D.new()
-	_chars.y_sort_enabled = true
-	add_child(_chars)
-	_chars_tex = load("res://assets/chars.png")
-	_breach_tex = load("res://assets/breach.png")
-
 	_ghost = Sprite2D.new()
 	_ghost.texture = _chars_tex
 	_ghost.region_enabled = true
@@ -97,6 +140,7 @@ func setup(p_client: GameClient) -> void:
 	_ghost.offset = Vector2(-CHAR_W / 2.0, -CHAR_H)
 	_ghost.modulate = Color(1, 1, 1, 0.35)
 	_ghost.visible = false
+	_ghost.z_index = map.deck_count + 2
 	add_child(_ghost)
 
 	_camera = Camera2D.new()
@@ -111,12 +155,13 @@ func setup(p_client: GameClient) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20261010
 	var w := map.width * _tile
-	var h := map.height * _tile
+	var h := map.deck_height * _tile
 	_star_origin = Vector2(-700.0, -500.0)
 	_star_field = Vector2(w + 1400.0, h + 1000.0)
 	for i in 420:
 		_stars.append(Vector2(rng.randf_range(-700.0, w + 700.0), rng.randf_range(-500.0, h + 500.0)).floor())
 		_star_sizes.append(2 if rng.randf() < 0.12 else 1)
+	_arrange(0)
 	queue_redraw()
 
 
@@ -129,7 +174,30 @@ func _draw() -> void:
 		draw_rect(Rect2(at.floor(), Vector2(s, s)), c)
 
 
+func _arrange(shown: int) -> void:
+	## Sets what is drawn of every deck when our character is on deck `shown`.
+	_deck_shown = shown
+	for d in _decks.size():
+		var deck := _decks[d]
+		var above := d < shown
+		deck.group.visible = d >= shown - 1          # two decks up nothing can be seen
+		# the deeper a deck, the earlier it is drawn; never below zero, where the stars are
+		deck.group.z_index = _decks.size() + 1 if above else _decks.size() - 1 - d
+		deck.group.modulate = BELOW_TINT if d > shown else Color.WHITE
+		deck.layer.visible = not above
+		deck.holes.visible = not above
+		deck.fx.visible = not above
+		deck.chars.modulate = ABOVE_TINT if above else Color.WHITE
+		deck.ceiling.visible = d == shown - 1
+
+
+func _on_deck(cell: int) -> Vector2:
+	## A cell of the map's grid as a place on its own deck, in tiles.
+	return Vector2(cell % client.map.width, (cell / client.map.width) % _stride)
+
+
 func _feet(pos_tiles: Vector2) -> Vector2:
+	## Where the feet of a character at this place of its deck are, in pixels.
 	return Vector2(pos_tiles.x * _tile + _tile * 0.5, pos_tiles.y * _tile + FEET_Y)
 
 
@@ -161,7 +229,9 @@ func _update_ship(delta: float) -> void:
 		if frame != _door_shown[d]:
 			_door_shown[d] = frame
 			var id: int = _door_tiles[map.door_kind[d]][frame]
-			_layer.set_cell(map.doors[d], _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+			var at: Vector2i = map.doors[d]
+			_decks[map.deck_of(at.y)].layer.set_cell(Vector2i(at.x, map.local_y(at.y)), _source_id,
+				Vector2i(id % map.atlas_columns, id / map.atlas_columns))
 	# holes in the hull
 	if client.ship_changes != _ship_seen:
 		_ship_seen = client.ship_changes
@@ -170,44 +240,52 @@ func _update_ship(delta: float) -> void:
 				var hole := Sprite2D.new()
 				hole.texture = _breach_tex
 				hole.centered = false
-				hole.position = Vector2(cell % map.width, cell / map.width) * _tile
-				_holes.add_child(hole)
+				hole.position = _on_deck(cell) * _tile
+				_decks[map.deck_of_cell(cell)].holes.add_child(hole)
 				_hole_views[cell] = hole
 		for cell: int in _hole_views.keys():
 			if not client.holes.has(cell):
 				(_hole_views[cell] as Sprite2D).queue_free()
 				_hole_views.erase(cell)
-		_air_view.queue_redraw()
+		for deck in _decks:
+			deck.fx.queue_redraw()
 	elif not client.holes.is_empty() or not client.broken.is_empty():
-		_air_view.queue_redraw()             # air streaming out and sparking consoles are animated
+		for deck in _decks:
+			deck.fx.queue_redraw()           # air streaming out and sparking consoles are animated
 
 
-func _draw_air() -> void:
-	## Next to a hole, streaks show the air rushing out.
+func _draw_fx(d: int) -> void:
+	## The moving details of one deck. Next to a hole, streaks show the air rushing out.
 	## Thin air itself is deliberately not drawn: a compartment without air looks
 	## like any other, and only the pressure gauge tells (the author's decision).
 	var map := client.map
+	var pen := _decks[d].fx
 	var now := Time.get_ticks_msec() / 1000.0
 	# a console that is out of order: its screen is dark and it throws sparks
 	for cell: int in client.broken.keys():
-		var corner := Vector2(cell % map.width, cell / map.width) * _tile
-		_air_view.draw_rect(Rect2(corner + Vector2(7, 9), Vector2(18, 13)), Color(0.02, 0.02, 0.04, 0.82))
+		if map.deck_of_cell(cell) != d:
+			continue
+		var corner := _on_deck(cell) * _tile
+		pen.draw_rect(Rect2(corner + Vector2(7, 9), Vector2(18, 13)), Color(0.02, 0.02, 0.04, 0.82))
 		var beat := int(now * 9.0) + cell
 		if beat % 3 != 0:
 			var from := corner + Vector2(10 + (beat * 7) % 12, 12 + (beat * 5) % 8)
 			var to := from + Vector2(((beat * 13) % 9) - 4, ((beat * 11) % 9) - 2)
-			_air_view.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
-			_air_view.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
+			pen.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
+			pen.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
 	for cell: int in client.holes.keys():
+		if map.deck_of_cell(cell) != d:
+			continue
 		var hx := cell % map.width
-		var hy := cell / map.width
-		var hole_at := Vector2(hx + 0.5, hy + 0.5) * _tile
+		var hy := cell / map.width           # in the map's grid: that is where the air is looked up
+		var ly := map.local_y(hy)            # on its deck: that is where it is drawn
+		var hole_at := Vector2(hx + 0.5, ly + 0.5) * _tile
 		for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
 			var a := client.air_at(hx + o.x, hy + o.y)
 			if a <= 2:
 				continue
 			var strength := float(a) / Net.AIR_FULL
-			var from_cell := Vector2(hx + o.x + 0.5, hy + o.y + 0.5) * _tile
+			var from_cell := Vector2(hx + o.x + 0.5, ly + o.y + 0.5) * _tile
 			for k in 6:
 				# each streak starts at its own spot around the cell and flies into the hole
 				var seed_a := float((cell * 31 + k * 17) % 97) / 97.0
@@ -216,15 +294,19 @@ func _draw_air() -> void:
 				var phase := fposmod(now * (1.4 + seed_b) + seed_a, 1.0)
 				var head := start.lerp(hole_at, phase)
 				var tail := start.lerp(hole_at, maxf(phase - 0.16, 0.0))
-				_air_view.draw_line(tail, head, Color(0.86, 0.92, 1.0, 0.55 * strength * (1.0 - phase * 0.5)), 1.0)
+				pen.draw_line(tail, head, Color(0.86, 0.92, 1.0, 0.55 * strength * (1.0 - phase * 0.5)), 1.0)
 
 
 func _process(delta: float) -> void:
 	if client == null or client.phase != GameClient.PLAYING:
 		return
+	var map := client.map
 	var zoom := clampf(floorf(get_viewport_rect().size.y / 230.0), 2.0, 6.0)
 	_camera.zoom = Vector2(zoom, zoom)
 	_update_ship(delta)
+	var my_deck := client.my_deck()
+	if my_deck != _deck_shown:
+		_arrange(my_deck)
 	var shift := -client.ship_pos() * STAR_PIXELS_PER_UNIT
 	if not shift.is_equal_approx(_star_shift):
 		_star_shift = shift
@@ -242,7 +324,6 @@ func _process(delta: float) -> void:
 			sprite.region_enabled = true
 			sprite.centered = false
 			sprite.offset = Vector2(-CHAR_W / 2.0, -CHAR_H)
-			_chars.add_child(sprite)
 			_views[id] = sprite
 			var label := Label.new()
 			label.add_theme_font_size_override("font_size", 13)
@@ -254,6 +335,21 @@ func _process(delta: float) -> void:
 			_labels[id] = label
 		var pos: Vector2 = s[0]
 		var cond: int = s[4]
+		# which deck it is on, and where on that deck
+		var its_deck := clampi(int(floorf((pos.y + 0.5) / _stride)), 0, _decks.size() - 1)
+		pos.y -= its_deck * _stride
+		var home := _decks[its_deck].chars
+		if sprite.get_parent() != home:
+			if sprite.get_parent() != null:
+				sprite.get_parent().remove_child(sprite)
+			home.add_child(sprite)
+		# Through a floor: below us everybody is drawn and the floor above them
+		# hides what it should; above us only those on a see-through floor show.
+		var cell_x := clampi(roundi(pos.x), 0, map.width - 1)
+		var cell_y := its_deck * _stride + clampi(roundi(pos.y), 0, map.deck_height - 1)
+		var seen := client.seen_from(my_deck, cell_x, cell_y)
+		_seen[id] = seen
+		sprite.visible = its_deck > my_deck or seen
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id))
 		if cond == Net.COND_OK:
@@ -270,12 +366,13 @@ func _process(delta: float) -> void:
 			(_labels[id] as Label).queue_free()
 			_views.erase(id)
 			_labels.erase(id)
+			_seen.erase(id)
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
 	var focus := me.position - Vector2(0, 14) if me != null else Vector2.ZERO
 	var half := get_viewport_rect().size / zoom * 0.5
-	var map_size := Vector2(client.map.width, client.map.height) * _tile
+	var map_size := Vector2(map.width, map.deck_height) * _tile
 	var margin := 48.0
 	if map_size.x + margin * 2.0 <= half.x * 2.0:
 		focus.x = map_size.x * 0.5
@@ -295,8 +392,9 @@ func _process(delta: float) -> void:
 	var screen_centre := get_viewport_rect().size * 0.5
 	for id: int in _labels.keys():
 		var label: Label = _labels[id]
-		label.visible = show_names
-		if show_names:
+		# a name does not give away somebody the floor hides
+		label.visible = show_names and bool(_seen.get(id, false))
+		if label.visible:
 			var sprite: Sprite2D = _views[id]
 			label.text = client.player_name(id)
 			var lying: bool = sprite.rotation != 0.0
@@ -308,13 +406,15 @@ func _process(delta: float) -> void:
 				label.modulate = Color(0.72, 0.76, 0.86)
 			else:
 				label.modulate = Color(1, 1, 1)
+			if sprite.get_parent() != _decks[my_deck].chars:
+				label.modulate.a = 0.55          # on another deck
 			var above := Vector2(22, 7 - 20) if lying else Vector2(0, 6 - CHAR_H)
 			var top := (sprite.position + above - _camera.position) * zoom + screen_centre
 			label.position = (top - Vector2(label.size.x * 0.5, label.size.y)).round()
 
 	# debug: the server's idea of where we are
 	var mine: GameClient.Ent = client.ents.get(client.my_id)
-	_ghost.visible = show_ghost and mine != null
+	_ghost.visible = show_ghost and mine != null and map.deck_of(mine.y) == my_deck
 	if _ghost.visible:
-		_ghost.position = _feet(Vector2(mine.x, mine.y))
+		_ghost.position = _feet(Vector2(mine.x, map.local_y(mine.y)))
 		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), client.player_colour(client.my_id))

@@ -1,11 +1,23 @@
-; First test ship: three decks. Legend is in tools/make_assets.py.
+; Test ship: two decks, the top one first. Legend is in tools/make_assets.py.
+= Верхняя палуба
     #<>4W2#3W1<>#    
-    #.....A.....#    
-    #.....#.....#    
+    #.....A...gg#    
+    #.....#...gg#    
 ##W###5D#2##<>####W##
-#...A...sssss...A...#
-#...#...sssss...#...#
+#...A.ccsssssgg.A...#
+#...#Hccsssssgg.#...#
 ##W####4#####D2###W##
     #.....A.....#    
+    #H....#.....#    
+    ##<>#W#W#<>##    
+= Нижняя палуба
+    ##W##2####W##    
+    #.....A.....#    
     #.....#.....#    
+##W####D#####D####W##
+#...A...........A...#
+#...#H..........#...#
+##W####D##########W##
+    #.....A.....#    
+    #H....#.....#    
     ##<>#W#W#<>##    

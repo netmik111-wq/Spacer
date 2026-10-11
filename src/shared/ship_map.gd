@@ -2,13 +2,23 @@ extends RefCounted
 ## A ship layout: which tile is drawn in every cell and where characters can
 ## walk. Loaded from maps/<name>.json, which tools/make_assets.py builds from
 ## the ASCII drawing next to it. The server and the client load the same file.
+##
+## A ship may have several decks. They all sit in the one grid, one below the
+## other: deck 0 is the top deck and starts at row 0, deck 1 is under it and
+## starts at row `deck_stride`, and so on. So a cell is x and y everywhere,
+## and the row alone says which deck it is on. Between decks there is always
+## at least one empty row, so nothing on one deck touches another in the grid.
 
 const DOOR_BAND := 0                 # a door in a horizontal wall ('D' in the drawing)
 const DOOR_AIRLOCK := 1              # an airlock in a vertical wall ('A')
 
 var map_name := ""
 var width := 0
-var height := 0
+var height := 0                      # rows of the whole grid, all decks together
+var deck_height := 0                 # rows of one deck
+var deck_stride := 16                # rows from one deck to the next (a multiple of 16)
+var deck_count := 1
+var deck_names := PackedStringArray()
 var cells := PackedInt32Array()      # tile id per cell, -1 = empty space
 var walk := PackedByteArray()        # 1 = can be walked on (doors count: they open)
 var spawns: Array[Vector2i] = []
@@ -22,6 +32,11 @@ var hull := PackedInt32Array()       # cells of the outer shell that can be brea
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
 var helm := {}                       # wall cells with the ship's controls (the panel with orange lights)
 var chart := {}                      # wall cells with the sector console (the green screen)
+var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
+var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
+                                     # a hatch), or -1
+var air_up := PackedInt32Array()     # the same, the other way
+var climb := PackedInt32Array()      # per cell: where the ladder here leads (a cell on another deck), or -1
 
 var tile_size := 32
 var atlas_columns := 8
@@ -49,6 +64,14 @@ func load_from(name: String) -> String:
 	map_name = name
 	width = int(data["width"])
 	height = int(data["height"])
+	deck_height = int(data.get("deck_height", height))
+	deck_stride = int(data.get("deck_stride", ((height + 16) >> 4) << 4))
+	deck_names = PackedStringArray()
+	for n: Variant in data.get("decks", ["Палуба"]):
+		deck_names.append(str(n))
+	deck_count = deck_names.size()
+	if deck_stride % 16 != 0 or deck_stride <= deck_height or height != deck_stride * (deck_count - 1) + deck_height:
+		return "Карта «%s»: палубы уложены неверно." % name
 	cells = PackedInt32Array()
 	walk = PackedByteArray()
 	cells.resize(width * height)
@@ -82,7 +105,7 @@ func load_from(name: String) -> String:
 		doors.append(at)
 		door_kind.append(DOOR_AIRLOCK if str(d[2]) == "A" else DOOR_BAND)
 		h = (h * 31 + at.x * 131 + at.y + 5) & 0x7FFFFFFF
-	crc = (h * 31 + width) & 0x7FFFFFFF
+	crc = ((h * 31 + width) * 31 + deck_stride * 7 + deck_count) & 0x7FFFFFFF
 
 	oxygen = {}
 	helm = {}
@@ -96,6 +119,34 @@ func load_from(name: String) -> String:
 			helm[i] = true
 		elif cells[i] == tile_ids.get("console_1", -1):
 			chart[i] = true
+
+	# what joins the decks: see-through floors, shared air, ladders
+	var n_cells := width * height
+	see_through = PackedByteArray()
+	see_through.resize(n_cells)
+	air_down = PackedInt32Array()
+	air_down.resize(n_cells)
+	air_down.fill(-1)
+	air_up = air_down.duplicate()
+	climb = air_down.duplicate()
+	for i in n_cells:
+		if cells[i] < 0:
+			continue
+		var kind := tile_kinds[cells[i]]
+		if kind != "glass" and kind != "grate" and kind != "hatch":
+			continue
+		see_through[i] = 1
+		var under := i + deck_stride * width
+		if kind == "glass" or under >= n_cells or walk[under] == 0:
+			continue
+		if door_of[under] >= 0:
+			return "Карта «%s»: под мостками или люком стоит дверь." % name
+		air_down[i] = under
+		air_up[under] = i
+		if kind == "hatch":
+			climb[i] = under
+			if climb[under] < 0:
+				climb[under] = i             # (a shaft through three decks would need a choice of direction)
 
 	hull = PackedInt32Array()
 	for y in height:
@@ -133,9 +184,29 @@ func cell_ahead(x: int, y: int, facing: int) -> int:
 	return ty * width + tx
 
 
+func deck_of(y: int) -> int:
+	## Which deck a row of the grid belongs to (0 = the top deck).
+	return y / deck_stride
+
+
+func deck_of_cell(cell: int) -> int:
+	return (cell / width) / deck_stride
+
+
+func local_y(y: int) -> int:
+	## The row inside its own deck.
+	return y % deck_stride
+
+
 func chunks_wide() -> int:
 	return (width + 15) >> 4
 
 
 func chunks_high() -> int:
+	## Chunk rows of one deck.
+	return (deck_height + 15) >> 4
+
+
+func chunk_rows() -> int:
+	## Chunk rows of the whole grid.
 	return (height + 15) >> 4

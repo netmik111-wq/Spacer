@@ -101,7 +101,7 @@ var _host: ENetConnection = null
 var _peer: ENetPacketPeer = null
 var _name := ""
 var _t_connect := 0
-var _view_cx := -100
+var _view_cx := -100                 # the chunk our view is centred on; the row is counted inside its deck
 var _view_cy := -100
 
 var _have_clock := false
@@ -223,7 +223,10 @@ func stop_server_and_close(token: String) -> void:
 func send_use(held: bool) -> void:
 	## The "use" key went down or up. The server decides what it does (see GameServer._update_work).
 	if phase == PLAYING:
-		_peer.send(0, PackedByteArray([Net.C_USE, 1 if held else 0]), ENetPacketPeer.FLAG_RELIABLE)
+		_simulate_to_now()
+		var msg := PackedByteArray([Net.C_USE, 1 if held else 0, 0, 0, 0, 0])
+		msg.encode_u32(2, maxi(pred_tick, 0))    # the tick we see our character on (see Net.C_USE)
+		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_jump(target: int) -> void:
@@ -270,23 +273,44 @@ func send_suit(on: bool) -> void:
 func use_target() -> int:
 	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
 	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
-	## 5 = a bridge console that is out of order and can be mended.
+	## 5 = a bridge console that is out of order and can be mended,
+	## 6 = a ladder down, 7 = a ladder up (the character stands on it).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
-	if cell < 0:
-		return 0
-	if holes.has(cell):
-		return 1
-	if map.oxygen.has(cell):
-		return 2
-	if broken.has(cell):
-		return 5
-	if map.chart.has(cell):
-		return 3
-	if map.helm.has(cell):
-		return 4
+	if cell >= 0:
+		if holes.has(cell):
+			return 1
+		if map.oxygen.has(cell):
+			return 2
+		if broken.has(cell):
+			return 5
+		if map.chart.has(cell):
+			return 3
+		if map.helm.has(cell):
+			return 4
+	var here := pred.y * map.width + pred.x
+	if map.climb[here] >= 0:
+		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func my_deck() -> int:
+	## The deck our character is on (0 = the top one).
+	return map.deck_of(pred.y) if _have_self else 0
+
+
+func seen_from(deck: int, x: int, y: int) -> bool:
+	## Can something at this cell be seen from that deck? Always on the deck
+	## itself; one deck down or up only through a see-through floor.
+	var its := map.deck_of(y)
+	if its == deck:
+		return true
+	if its == deck + 1:
+		return map.see_through[(y - map.deck_stride) * map.width + x] == 1
+	if its == deck - 1:
+		return map.see_through[y * map.width + x] == 1
+	return false
 
 
 func crew_count() -> int:
@@ -650,19 +674,22 @@ func _ship_sum() -> int:
 			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d])
 	for cell: int in holes.keys():
 		sum += Net.hull_hash(cell % map.width, cell / map.width)
-	for cy in range(maxi(_view_cy - 1, 0), mini(_view_cy + 2, map.chunks_high())):
-		for cx in range(maxi(_view_cx - 1, 0), mini(_view_cx + 2, map.chunks_wide())):
-			for y in range(cy * 16, mini(cy * 16 + 16, map.height)):
-				var row := y * map.width
-				for x in range(cx * 16, mini(cx * 16 + 16, map.width)):
-					var a := air[row + x]
-					if a != 0:
-						sum += Net.air_hash(x, y, a)
+	for deck in map.deck_count:
+		for cy in range(maxi(_view_cy - 1, 0), mini(_view_cy + 2, map.chunks_high())):
+			var y0 := deck * map.deck_stride + cy * 16
+			for cx in range(maxi(_view_cx - 1, 0), mini(_view_cx + 2, map.chunks_wide())):
+				for y in range(y0, mini(y0 + 16, map.height)):
+					var row := y * map.width
+					for x in range(cx * 16, mini(cx * 16 + 16, map.width)):
+						var a := air[row + x]
+						if a != 0:
+							sum += Net.air_hash(x, y, a)
 	return sum
 
 
 func _outside_view(x: int, y: int) -> bool:
-	return absi((x >> Net.CHUNK_SHIFT) - _view_cx) > 1 or absi((y >> Net.CHUNK_SHIFT) - _view_cy) > 1
+	## We are shown the chunks around us on our own deck and the same chunks of every other deck.
+	return absi((x >> Net.CHUNK_SHIFT) - _view_cx) > 1 or absi((map.local_y(y) >> Net.CHUNK_SHIFT) - _view_cy) > 1
 
 
 func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
@@ -808,8 +835,8 @@ func _rebuild_prediction() -> void:
 		return
 	if st.same_as(pred):
 		return
-	if st.x != pred.x or st.y != pred.y:
-		mispredicts += 1
+	if (st.x != pred.x or st.y != pred.y) and map.deck_of(st.y) == map.deck_of(pred.y):
+		mispredicts += 1                 # (a change of deck is never predicted: it is not a mistake)
 	var tnow := pred_time()
 	var before := Mover.visual_pos(pred, tnow) + _corr
 	pred.copy_from(st)
