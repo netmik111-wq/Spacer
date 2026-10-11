@@ -18,14 +18,17 @@ class State:
 	var fx := 0                # tile the last step started from (for drawing the slide)
 	var fy := 0
 	var down := false          # unconscious or dead: cannot walk
+	var slow := false          # hauling somebody (or being hauled): a step takes Net.DRAG_TICKS
+	var span := 4              # how many ticks the last step takes (for drawing the slide)
 
 	func copy_from(o: State) -> void:
 		x = o.x; y = o.y; cd = o.cd; facing = o.facing; dir = o.dir
 		move_tick = o.move_tick; fx = o.fx; fy = o.fy; down = o.down
+		slow = o.slow; span = o.span
 
 	func same_as(o: State) -> bool:
 		return x == o.x and y == o.y and cd == o.cd and facing == o.facing \
-			and dir == o.dir and move_tick == o.move_tick and down == o.down
+			and dir == o.dir and move_tick == o.move_tick and down == o.down and slow == o.slow
 
 	func place(px: int, py: int) -> void:
 		x = px; y = py; fx = px; fy = py; cd = 0; move_tick = -1000
@@ -52,16 +55,17 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	st.fy = st.y
 	st.x = nx
 	st.y = ny
-	st.cd = Net.MOVE_TICKS
+	st.span = Net.DRAG_TICKS if st.slow else Net.MOVE_TICKS
+	st.cd = st.span
 	st.move_tick = tick
 	return true
 
 
 ## Where the character is drawn at (fractional) tick `t`, in tile units.
 static func visual_pos(st: State, t: float) -> Vector2:
-	var k := clampf((t - float(st.move_tick)) / float(Net.MOVE_TICKS), 0.0, 1.0)
+	var k := clampf((t - float(st.move_tick)) / float(st.span), 0.0, 1.0)
 	return Vector2(lerpf(float(st.fx), float(st.x), k), lerpf(float(st.fy), float(st.y), k))
 
 
 static func is_sliding(st: State, t: float) -> bool:
-	return t - float(st.move_tick) < float(Net.MOVE_TICKS)
+	return t - float(st.move_tick) < float(st.span)

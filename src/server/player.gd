@@ -2,6 +2,7 @@ extends RefCounted
 ## Everything the server keeps about one character: a connected player or a bot.
 
 const Mover := preload("res://src/shared/mover.gd")
+const Net := preload("res://src/shared/net.gd")
 
 var slot := 0
 var peer: ENetPacketPeer = null      # null for bots
@@ -26,8 +27,15 @@ var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; 
 var cond := 0                        # Net.COND_*
 var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
 var supply := false                  # breathing from the tank instead of the air around
-var patches := 0                     # hull patches carried
-var parts := 0                       # spare parts carried
+var slots := PackedByteArray()       # what it carries: one item per slot (Net.ITEM_*), Net.SLOTS of them
+var slots_sent := PackedByteArray()  # the same as last told to its client
+var dragging := -1                   # the slot of the lying character it hauls along (-1 = nobody)
+var dragged_by := -1                 # the slot of whoever hauls it
+var searching := -1                  # the slot of the lying character whose pockets it is going through
+var search_sent := PackedByteArray() # those pockets as last told to its client
+var want_kind := 0                   # a press of "search" or "drag" waiting for its tick (0 = none)
+var want_id := 0
+var want_tick := 0
 var using := false                   # holds the "use" key
 var work := 0                        # ticks spent on the thing in front of it (mending a hole)
 var work_cell := -1
@@ -42,3 +50,30 @@ var last_self_tick := -1000
 var last_packet_tick := -1000
 var chat_times: Array[int] = []
 var bot_until := 0
+
+
+func _init() -> void:
+	slots.resize(Net.SLOTS)
+
+
+func count(item: int) -> int:
+	## How many of that thing it carries.
+	return slots.count(item)
+
+
+func add(item: int) -> bool:
+	## Puts a thing into the first free slot. False if there is none.
+	var at := slots.find(Net.ITEM_NONE)
+	if at < 0:
+		return false
+	slots[at] = item
+	return true
+
+
+func remove(item: int) -> bool:
+	## Takes one such thing out. False if it carries none.
+	var at := slots.find(item)
+	if at < 0:
+		return false
+	slots[at] = Net.ITEM_NONE
+	return true

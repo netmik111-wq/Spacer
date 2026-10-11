@@ -3,12 +3,13 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 11
+const PROTOCOL := 12
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
 const TICK_SEC := 1.0 / TICK_HZ
 const MOVE_TICKS := 4               # one tile step lasts 4 ticks = 0.2 s (5 tiles per second)
+const DRAG_TICKS := 8               # and twice as long while hauling somebody
 const CHUNK_SHIFT := 4              # the world is replicated in 16x16-tile chunks
 const AIR_EVERY := 2                # the air is recalculated every 2nd tick (10 times a second)
 const AIR_SEND_EVERY := 4           # and its changes are sent every 4th tick (5 times a second)
@@ -42,6 +43,10 @@ const C_SUIT := 8                   # u8 on: turn the suit's oxygen supply on (1
 const C_JUMP := 9                   # u8 sector: start a jump there (the player must stand at the sector console)
 const C_HELM := 10                  # u8 go (1 = set course, 0 = stop), u8 x, u8 y: steer inside the sector
                                     # (the player must stand at the ship's controls)
+const C_SEARCH := 12                # u16 id (NOBODY = stop), u32 tick: go through the pockets of somebody lying next to us
+const C_DRAG := 13                  # u16 id (NOBODY = let go), u32 tick: take hold of somebody lying next to us
+                                    # (both carry the tick of the client's predicted clock, like C_USE)
+const C_LOOT := 14                  # u8 theirs (1 = take from them, 0 = give them ours), u8 slot: while searching
 const C_STORE := 11                 # u8 action (STORE_*): take from the supply locker, put back, or buy from
                                     # a trader (the player must stand at the locker)
 
@@ -73,8 +78,15 @@ const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of al
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
                                     # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100),
-                                    # u8 patches carried, u8 spare parts carried
-const VITALS_BYTES := 7
+                                    # then SLOTS bytes: what it carries, one item per slot (ITEM_*)
+const SLOTS := 6                    # how many things a character can carry
+const VITALS_BYTES := 5 + SLOTS
+
+# things that can be carried
+const ITEM_NONE := 0
+const ITEM_PATCH := 1               # closes a hole in the hull
+const ITEM_PART := 2                # a spare part: mends a machine or a door quickly
+const NOBODY := 65535               # "no character" where an id is expected
 
 const FACING_GONE := 255
 const ENT_BYTES := 7
@@ -89,6 +101,8 @@ const S_DEVICES := 20               # u8 count, then per thing out of order (a b
 
 const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
 
+const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
+                                    # SLOTS bytes: what they carry
 const S_STORE := 22                 # the ship's supplies: u16 patches, u16 spare parts, u16 air for the air
                                     # plant in tenths of a cell's worth, u16 credits
 
@@ -102,8 +116,6 @@ const STORE_BUY_AIR := 6
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a
 # spare part, or three times as long without one.
-const CARRY_PATCHES := 3            # how much one crew member can carry
-const CARRY_PARTS := 2
 const START_PATCHES := 8            # what the ship sets out with
 const START_PARTS := 5
 const START_CREDITS := 30
@@ -170,9 +182,18 @@ static func ent_hash(id: int, x: int, y: int, look: int) -> int:
 	return id * 31 + x * 17 + y * 13 + look * 7 + 1
 
 
-## Facing and condition packed into the one byte sent for a character.
-static func pack_look(facing: int, cond: int) -> int:
-	return facing | (cond << 4)
+## Facing, condition and "moves slowly" (hauling somebody, or being hauled)
+## packed into the one byte sent for a character. The top bit is used only in
+## SEC_SELF: the step in progress is a slow one.
+const LOOK_SLOW := 64
+const LOOK_LONG_STEP := 128
+
+static func pack_look(facing: int, cond: int, slow: bool = false) -> int:
+	return facing | (cond << 4) | (LOOK_SLOW if slow else 0)
+
+
+static func look_slow(look: int) -> bool:
+	return (look & LOOK_SLOW) != 0
 
 
 static func look_facing(look: int) -> int:

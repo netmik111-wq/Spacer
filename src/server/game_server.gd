@@ -29,6 +29,9 @@ const CHAT_BURST := 5               # messages allowed per CHAT_WINDOW_MS
 const CHAT_WINDOW_MS := 5000
 const BOT_RESPAWN_TICKS := 300      # a dead bot is replaced after 15 s
 const MAX_CORPSES := 30             # the oldest body is cleared away when there are more
+const HAND_SEARCH := 1              # what a press of "search" or "drag" asks for (Player.want_kind)
+const HAND_DRAG := 2
+const HAND_WAIT_TICKS := 10         # a drag asked for in mid-step waits this long for the step to end
 
 var port := Net.DEFAULT_PORT
 var max_players := 32
@@ -318,6 +321,12 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_STORE:
 		if pkt.size() > 1:
 			_store_asked(p, pkt[1])
+	elif kind == Net.C_SEARCH or kind == Net.C_DRAG:
+		if pkt.size() >= 7:
+			_hands_asked(p, HAND_SEARCH if kind == Net.C_SEARCH else HAND_DRAG, pkt.decode_u16(1), pkt.decode_u32(3))
+	elif kind == Net.C_LOOT:
+		if pkt.size() > 2:
+			_loot_asked(p, pkt[1] != 0, pkt[2])
 	elif kind == Net.C_ADMIN:
 		if pkt.size() > 3 and shutdown_token != "" and pkt.slice(3).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
@@ -356,8 +365,8 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		return
 	var p := _new_player(_unique_name(_clean(pkt.slice(4, 4 + n).get_string_from_utf8(), Net.MAX_NAME, "Игрок")))
 	p.peer = peer
-	p.patches = 1                        # a newcomer has a little on them; the rest is in the locker
-	p.parts = 1
+	p.add(Net.ITEM_PATCH)                # a newcomer has a little on them; the rest is in the locker
+	p.add(Net.ITEM_PART)
 	_pending.erase(peer)
 	_slot_of[peer] = p.slot
 
@@ -480,6 +489,10 @@ func _drop(peer: ENetPacketPeer) -> void:
 
 func _remove(p: Player) -> void:
 	## Takes a character out of the world altogether.
+	if p.dragging >= 0:
+		_let_go(p)
+	if p.dragged_by >= 0 and players[p.dragged_by] != null:
+		_let_go(players[p.dragged_by])
 	_record(p, true)
 	players[p.slot] = null
 	_free.append(p.slot)
@@ -506,7 +519,9 @@ func _becomes_corpse(c: Player) -> void:
 
 
 func _leave_body(p: Player) -> void:
-	## The character is about to be given a new body: its old one stays where it lies.
+	## The character is about to be given a new body: its old one stays where it
+	## lies, with everything it carried. Whoever was hauling or searching the
+	## dead character goes on with the body.
 	var c := _alloc(p.name)
 	c.colour = p.colour
 	c.st.copy_from(p.st)
@@ -514,6 +529,18 @@ func _leave_body(p: Player) -> void:
 	c.st.down = true
 	c.cond = Net.COND_DEAD
 	c.health = Net.HEALTH_DEAD
+	c.slots = p.slots.duplicate()
+	for q: Player in players:
+		if q == null:
+			continue
+		if q.dragging == p.slot:
+			q.dragging = c.slot
+			c.dragged_by = q.slot
+		if q.searching == p.slot:
+			q.searching = c.slot
+			q.search_sent = PackedByteArray()
+	p.dragged_by = -1
+	p.st.slow = false
 	_becomes_corpse(c)
 	_record(c)
 
@@ -824,11 +851,11 @@ func can_trade() -> bool:
 
 
 func patches_aboard() -> int:
-	## Every patch the crew could still use: in the locker and in pockets.
+	## Every patch the crew could still use: in the locker, in pockets and on bodies.
 	var n := store_patches
 	for p: Player in players:
-		if p != null and not p.corpse and p.cond != Net.COND_DEAD:
-			n += p.patches
+		if p != null:
+			n += p.count(Net.ITEM_PATCH)
 	return n
 
 
@@ -841,18 +868,16 @@ func _store_asked(p: Player, action: int) -> void:
 		return
 	match action:
 		Net.STORE_TAKE_PATCH:
-			if store_patches > 0 and p.patches < Net.CARRY_PATCHES:
+			if store_patches > 0 and p.add(Net.ITEM_PATCH):
 				store_patches -= 1
-				p.patches += 1
 		Net.STORE_TAKE_PART:
-			if store_parts > 0 and p.parts < Net.CARRY_PARTS:
+			if store_parts > 0 and p.add(Net.ITEM_PART):
 				store_parts -= 1
-				p.parts += 1
 		Net.STORE_PUT_BACK:
-			store_patches += p.patches
-			store_parts += p.parts
-			p.patches = 0
-			p.parts = 0
+			while p.remove(Net.ITEM_PATCH):
+				store_patches += 1
+			while p.remove(Net.ITEM_PART):
+				store_parts += 1
 		Net.STORE_BUY_PATCH:
 			if can_trade() and credits >= Net.PRICE_PATCH:
 				credits -= Net.PRICE_PATCH
@@ -1047,14 +1072,19 @@ func _tick() -> void:
 			p.self_dirty = true
 		if p.bot:
 			_bot_think(p)
+		var was_x := p.st.x
+		var was_y := p.st.y
 		if Mover.step(p.st, map, doors, tick):
 			p.self_dirty = true
+			if p.dragging >= 0:
+				_haul(p, was_x, was_y)
 		if p.climb_tick >= 0 and tick >= p.climb_tick:
 			p.climb_tick = -1
 			_climb(p)
 		_update_vitals(p)
+		_update_hands(p)
 		_update_work(p)
-		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
+		if p.st.x != p.rep_x or p.st.y != p.rep_y or _look(p) != p.rep_look:
 			_record(p)
 	_power_changed()
 	_tell_store()
@@ -1113,31 +1143,31 @@ func _update_work(p: Player) -> void:
 	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
 	var door := map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
-	var mend_ticks := Net.REPAIR_TICKS if p.parts > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER
+	var mend_ticks := Net.REPAIR_TICKS if p.count(Net.ITEM_PART) > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER
 	if cell >= 0 and air.holes.has(cell):
-		if p.patches <= 0:
+		if p.count(Net.ITEM_PATCH) == 0:
 			p.work = 0                       # nothing to close it with
 		elif _work_done(p, cell, Net.REPAIR_TICKS):
-			p.patches -= 1
+			p.remove(Net.ITEM_PATCH)
 			air.set_hole(cell, false)
 			_hull_record(cell, 0)
 			_ship_says("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
 	elif cell >= 0 and broken.has(cell):
 		if _work_done(p, cell, mend_ticks):
-			p.parts = maxi(p.parts - 1, 0)
+			p.remove(Net.ITEM_PART)
 			broken.erase(cell)
 			_to_all(_devices_packet())
 			_ship_says("%s заканчивает ремонт: %s снова работает." % [p.name, map.device_name(cell)])
 			_power_changed()
 	elif door >= 0 and doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
-			p.parts = maxi(p.parts - 1, 0)
+			p.remove(Net.ITEM_PART)
 			doors.jammed[door] = 0
 			_door_hold[door] = tick          # it may shut again as soon as the doorway is clear
 			_ship_says("%s чинит заклинившую дверь." % p.name)
 	elif door >= 0 and doors.faulty[door] == 1:
 		if _work_done(p, cell, mend_ticks):
-			p.parts = maxi(p.parts - 1, 0)
+			p.remove(Net.ITEM_PART)
 			doors.faulty[door] = 0           # from here on the pressure decides again
 			_ship_says("%s чинит аварийный шлюз." % p.name)
 	elif door >= 0 and doors.is_sealed(door):
@@ -1178,7 +1208,7 @@ func _usable_ahead(p: Player) -> bool:
 
 func _climb(p: Player) -> bool:
 	## The "use" key was pressed. On a ladder, with nothing else to use in front,
-	## the character goes to the other deck.
+	## the character goes to the other deck, and takes along whoever it hauls.
 	if p.cond != Net.COND_OK or p.corpse:
 		return false
 	var to := map.climb[p.st.y * map.width + p.st.x]
@@ -1190,7 +1220,139 @@ func _climb(p: Player) -> bool:
 	p.self_dirty = true
 	p.climbs += 1
 	_record(p)
+	if p.dragging >= 0:
+		var body: Player = players[p.dragging]
+		body.st.place(p.st.x, p.st.y)
+		body.self_dirty = true
+		_record(body)
 	return true
+
+
+# ------------------------------------------------- searching and hauling
+
+func _look(p: Player) -> int:
+	## Facing, condition and "moves slowly" as one byte (see Net.pack_look).
+	return Net.pack_look(p.st.facing, p.cond, p.st.slow)
+
+
+func _can_reach(p: Player, id: int) -> bool:
+	## Can this character lay hands on that one: it is on its feet, the other is
+	## lying (unconscious or dead), and they are in the same cell or next to each other.
+	if p.cond != Net.COND_OK or id < 0 or id >= players.size() or id == p.slot:
+		return false
+	var other: Player = players[id]
+	return other != null and other.cond != Net.COND_OK \
+		and absi(other.st.x - p.st.x) + absi(other.st.y - p.st.y) <= 1
+
+
+func _hands_asked(p: Player, kind: int, id: int, at: int) -> void:
+	## A press of "search" or "drag". Like a press on a ladder, it is judged on
+	## the tick the client pressed it, where the client saw its character stand.
+	p.want_kind = kind
+	p.want_id = id
+	p.want_tick = clampi(at, tick, tick + MAX_INPUT_LEAD)
+	if p.want_tick == tick:
+		_do_hands(p)
+
+
+func _do_hands(p: Player) -> void:
+	var id := p.want_id
+	if p.want_kind == HAND_SEARCH:
+		p.want_kind = 0
+		if id == Net.NOBODY:
+			_stop_search(p)
+		elif _can_reach(p, id):
+			p.searching = id
+			p.search_sent = PackedByteArray()        # so that the pockets are sent at once
+	elif p.want_kind == HAND_DRAG:
+		if id == Net.NOBODY:
+			p.want_kind = 0
+			_let_go(p)
+			return
+		if p.st.cd > 0 and tick < p.want_tick + HAND_WAIT_TICKS:
+			return                                   # in mid-step: take hold when the step is done
+		p.want_kind = 0
+		if p.dragging < 0 and p.st.cd == 0 and _can_reach(p, id) and players[id].dragged_by < 0:
+			var body: Player = players[id]
+			p.dragging = id
+			body.dragged_by = p.slot
+			p.st.slow = true
+			body.st.slow = true
+			p.self_dirty = true
+			_record(p)
+			_record(body)
+
+
+func _let_go(p: Player) -> void:
+	## Stops hauling.
+	if p.dragging < 0:
+		return
+	var body: Player = players[p.dragging] if p.dragging < players.size() else null
+	if body != null and body.dragged_by == p.slot:
+		body.dragged_by = -1
+		body.st.slow = false
+		_record(body)
+	p.dragging = -1
+	p.st.slow = false
+	p.self_dirty = true
+	_record(p)
+
+
+func _stop_search(p: Player) -> void:
+	if p.searching < 0:
+		return
+	p.searching = -1
+	if p.peer != null:
+		var msg := PackedByteArray([Net.S_SEARCH, 0xFF, 0xFF])
+		msg.resize(3 + Net.SLOTS)
+		p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func _haul(p: Player, to_x: int, to_y: int) -> void:
+	## The character has just stepped away from that cell: whoever it hauls slides into it.
+	var body: Player = players[p.dragging]
+	if body == null:
+		return
+	body.st.fx = body.st.x
+	body.st.fy = body.st.y
+	body.st.x = to_x
+	body.st.y = to_y
+	body.st.move_tick = tick
+	body.st.span = p.st.span
+	body.self_dirty = true
+	_record(body)
+
+
+func _update_hands(p: Player) -> void:
+	## Keeps hauling and searching honest: both end when either side is no
+	## longer in a state for it, or they are no longer together.
+	if p.want_kind != 0 and tick >= p.want_tick:
+		_do_hands(p)
+	if p.dragging >= 0 and not _can_reach(p, p.dragging):
+		_let_go(p)
+	if p.searching >= 0:
+		if not _can_reach(p, p.searching):
+			_stop_search(p)
+		else:
+			var other: Player = players[p.searching]
+			if other.slots != p.search_sent:
+				p.search_sent = other.slots.duplicate()
+				if p.peer != null:
+					var msg := PackedByteArray([Net.S_SEARCH, p.searching & 0xFF, p.searching >> 8])
+					msg.append_array(other.slots)
+					p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func _loot_asked(p: Player, theirs: bool, index: int) -> void:
+	## While searching: take the thing in one of their slots, or give them one of ours.
+	if p.searching < 0 or index >= Net.SLOTS or not _can_reach(p, p.searching):
+		return
+	var other: Player = players[p.searching]
+	var from := other if theirs else p
+	var to := p if theirs else other
+	var item := from.slots[index]
+	if item != Net.ITEM_NONE and to.add(item):
+		from.slots[index] = Net.ITEM_NONE
 
 
 func _respawn(p: Player) -> void:
@@ -1200,8 +1362,7 @@ func _respawn(p: Player) -> void:
 	p.supply = false
 	p.using = false
 	p.work = 0
-	p.patches = 0                        # what the dead one carried stays with the body
-	p.parts = 0
+	p.slots.fill(Net.ITEM_NONE)          # what the dead one carried stays with the body (see _leave_body)
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
@@ -1398,7 +1559,7 @@ func _put_record(buf: PackedByteArray, slot: int, x: int, y: int, facing: int) -
 
 func _record(p: Player, gone: bool = false) -> void:
 	## Notes that a character changed, for everyone who can see where it is or was.
-	var facing := Net.FACING_GONE if gone else Net.pack_look(p.st.facing, p.cond)
+	var facing := Net.FACING_GONE if gone else _look(p)
 	var now_chunk := _chunk_of(p.st.x, p.st.y)
 	var buf: PackedByteArray = _change[now_chunk]
 	_put_record(buf, p.slot, p.st.x, p.st.y, facing)
@@ -1418,7 +1579,7 @@ func _record(p: Player, gone: bool = false) -> void:
 		_put_record(left_buf, p.slot, p.st.x, p.st.y, facing)
 	p.rep_x = p.st.x
 	p.rep_y = p.st.y
-	p.rep_look = Net.pack_look(p.st.facing, p.cond)
+	p.rep_look = _look(p)
 
 
 func _ensure_full() -> void:
@@ -1433,7 +1594,7 @@ func _ensure_full() -> void:
 			continue
 		var c := _chunk_of(p.st.x, p.st.y)
 		var buf: PackedByteArray = _full[c]
-		var look := Net.pack_look(p.st.facing, p.cond)
+		var look := _look(p)
 		_put_record(buf, p.slot, p.st.x, p.st.y, look)
 		_sums[c] += Net.ent_hash(p.slot, p.st.x, p.st.y, look)
 
@@ -1512,9 +1673,10 @@ func _send_world() -> void:
 		var health_now := roundi(p.health)
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / maxi(p.work_total, 1)
-		var vitals := ((((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)) << 8) | (p.patches << 4) | p.parts
-		if vitals != p.vitals_sent:
+		var vitals := ((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)
+		if vitals != p.vitals_sent or p.slots != p.slots_sent:
 			p.vitals_sent = vitals
+			p.slots_sent = p.slots.duplicate()
 			var ov := out.size()
 			out.resize(ov + 1 + Net.VITALS_BYTES)
 			out.encode_u8(ov, Net.SEC_VITALS)
@@ -1522,8 +1684,8 @@ func _send_world() -> void:
 			out.encode_u8(ov + 3, tank_now)
 			out.encode_u8(ov + 4, 1 if p.supply else 0)
 			out.encode_u8(ov + 5, work_now)
-			out.encode_u8(ov + 6, p.patches)
-			out.encode_u8(ov + 7, p.parts)
+			for k in Net.SLOTS:
+				out.encode_u8(ov + 6 + k, p.slots[k])
 		if p.self_dirty or tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)
@@ -1531,7 +1693,7 @@ func _send_world() -> void:
 			out.encode_s16(o + 1, st.x)
 			out.encode_s16(o + 3, st.y)
 			out.encode_u8(o + 5, st.cd)
-			out.encode_u8(o + 6, Net.pack_look(st.facing, p.cond))
+			out.encode_u8(o + 6, _look(p) | (Net.LOOK_LONG_STEP if st.span > Net.MOVE_TICKS else 0))
 			out.encode_u8(o + 7, st.dir)
 			out.encode_u16(o + 8, p.last_seq)
 			out.encode_s32(o + 10, st.move_tick)

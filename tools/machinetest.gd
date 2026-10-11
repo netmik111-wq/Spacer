@@ -36,8 +36,7 @@ func _initialize() -> void:
 	var engine: int = map.engine.keys()[0]
 	var plant: int = map.air_plant.keys()[0]
 	var p := server._new_player("Проверка")
-	p.patches = 50                       # the first tester never runs short; supplies are tried at the end
-	p.parts = 50
+	_give(p, 3, 3)                       # the first tester is restocked before every part; supplies are tried at the end
 
 	print("the engine")
 	_face(p, map.helm.keys()[0])
@@ -54,6 +53,7 @@ func _initialize() -> void:
 	_expect(not server.break_console(), "a bridge console does not break while the engine is out")
 
 	print("no power: every system stands still, none is broken")
+	_give(p, 3, 3)
 	_expect(server.broken.size() == 1, "only the engine itself is out of order")
 	var air := server.air
 	var out_cell: int = map.air_plant[plant]
@@ -72,6 +72,7 @@ func _initialize() -> void:
 	_expect(slow >= Doors.MANUAL_OPEN_TICKS and slow < Doors.MANUAL_OPEN_TICKS + 12, "a door is pushed open by hand: %.1f s to get through" % (slow / float(Net.TICK_HZ)))
 
 	print("mending the engine brings everything back")
+	_give(p, 3, 3)
 	_face(p, engine)
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
@@ -96,6 +97,7 @@ func _initialize() -> void:
 	_mend_all()
 
 	print("the air plant")
+	_give(p, 3, 3)
 	p.tank = 1.0
 	p.supply = true                      # the tester breathes from its tank: the ship is about to be emptied
 	for i in air._cells:
@@ -135,6 +137,7 @@ func _initialize() -> void:
 	p.supply = false
 
 	print("emergency shutters")
+	_give(p, 3, 3)
 	_expect(_sealed().is_empty(), "with the same pressure everywhere no shutter is down")
 	# a hole in the room in the top left corner of the top deck: its two doors are 7,3 and 10,1
 	var hole := -1
@@ -193,6 +196,7 @@ func _initialize() -> void:
 	_run(Net.TICK_HZ)
 
 	print("a door jammed open")
+	_give(p, 3, 3)
 	_expect(server.director.fire(Director.DOOR_JAM), "the director can jam a door")
 	var stuck := -1
 	for d in server.doors.jammed.size():
@@ -211,6 +215,7 @@ func _initialize() -> void:
 	_expect(server.doors.jammed[stuck] == 0 and server.doors.is_shut(stuck), "mended, it shuts again")
 
 	print("a faulty shutter")
+	_give(p, 3, 3)
 	# one that has dropped for no reason: it stays down although the pressure is even
 	server.doors.faulty[door_down] = 1
 	server.doors.locked[door_down] = 1
@@ -244,6 +249,7 @@ func _initialize() -> void:
 	p.supply = false
 
 	print("a passing power failure")
+	_give(p, 3, 3)
 	_face(p, map.helm.keys()[0])
 	server._helm_asked(p, true, Vector2(150, 150))
 	_expect(server.director.fire(Director.POWER_GLITCH) and not server.powered(), "the director can cut the power for a moment")
@@ -256,22 +262,25 @@ func _initialize() -> void:
 
 	print("supplies")
 	var q := server._new_player("Кладовщик")
-	_expect(q.patches == 0 and q.parts == 0 and map.locker.size() == 1, "the ship has a supply locker")
+	_expect(q.count(Net.ITEM_PATCH) == 0 and q.count(Net.ITEM_PART) == 0 and map.locker.size() == 1, "the ship has a supply locker")
 	var had_patches := server.store_patches
 	var had_parts := server.store_parts
 	server._store_asked(q, Net.STORE_TAKE_PATCH)
-	_expect(q.patches == 0, "nothing can be taken from across the ship")
+	_expect(q.count(Net.ITEM_PATCH) == 0, "nothing can be taken from across the ship")
 	_face(q, map.locker.keys()[0])
-	for i in 5:
+	for i in 2:
 		server._store_asked(q, Net.STORE_TAKE_PATCH)
 		server._store_asked(q, Net.STORE_TAKE_PART)
-	_expect(q.patches == Net.CARRY_PATCHES and q.parts == Net.CARRY_PARTS, "at the locker a crew member takes what they can carry: %d patches, %d parts" % [q.patches, q.parts])
-	_expect(server.store_patches == had_patches - q.patches and server.store_parts == had_parts - q.parts, "and the locker has that much less")
+	_expect(q.count(Net.ITEM_PATCH) == 2 and q.count(Net.ITEM_PART) == 2, "at the locker a crew member takes patches and parts into their slots")
+	for i in 5:
+		server._store_asked(q, Net.STORE_TAKE_PATCH)
+	_expect(q.count(Net.ITEM_NONE) == 0 and q.count(Net.ITEM_PATCH) == Net.SLOTS - 2, "but no more than there are slots for (%d)" % Net.SLOTS)
+	_expect(server.store_patches == had_patches - q.count(Net.ITEM_PATCH) and server.store_parts == had_parts - 2, "and the locker has that much less")
 	server._store_asked(q, Net.STORE_PUT_BACK)
-	_expect(q.patches == 0 and q.parts == 0 and server.store_patches == had_patches and server.store_parts == had_parts, "everything can be put back")
+	_expect(q.count(Net.ITEM_NONE) == Net.SLOTS and server.store_patches == had_patches and server.store_parts == had_parts, "everything can be put back")
 
 	# a hole needs a patch
-	p.patches = 0
+	_give(p, 0, 0)
 	server.breach(hole)
 	p.tank = 1.0
 	p.supply = true
@@ -281,9 +290,9 @@ func _initialize() -> void:
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
 	_expect(server.air.holes.has(hole), "without a patch a hole cannot be mended")
-	p.patches = 1
+	_give(p, 1, 0)
 	_run(Net.REPAIR_TICKS + 5)
-	_expect(not server.air.holes.has(hole) and p.patches == 0, "with one it can, and the patch is used up")
+	_expect(not server.air.holes.has(hole) and p.count(Net.ITEM_PATCH) == 0, "with one it can, and the patch is used up")
 	p.using = false
 	p.supply = false
 	air.refill()
@@ -291,7 +300,7 @@ func _initialize() -> void:
 
 	# a machine without a spare part: slower, but possible
 	server.break_air_plant()
-	p.parts = 0
+	_give(p, 0, 0)
 	_face(p, plant)
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
@@ -299,10 +308,10 @@ func _initialize() -> void:
 	_run(Net.REPAIR_TICKS * (Net.NO_PART_SLOWER - 1))
 	_expect(server.broken.is_empty(), "but it is done in %d times as long" % Net.NO_PART_SLOWER)
 	server.break_air_plant()
-	p.parts = 2
+	_give(p, 0, 2)
 	_run(Net.REPAIR_TICKS + 5)
 	p.using = false
-	_expect(server.broken.is_empty() and p.parts == 1, "with a spare part it is quick, and the part is used up")
+	_expect(server.broken.is_empty() and p.count(Net.ITEM_PART) == 1, "with a spare part it is quick, and the part is used up")
 
 	# the air plant has only so much air to give
 	server.store_air = 0.5
@@ -345,6 +354,87 @@ func _initialize() -> void:
 	_run(Net.JUMP_TICKS + 2)
 	_expect(server.sector == target and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
 
+	print("searching and hauling")
+	air.refill()
+	for tester: RefCounted in [p, q]:
+		tester.supply = false
+		tester.health = 100.0
+	_run(2)
+	p.st.place(8, 4)
+	p.st.facing = Net.DIR_RIGHT
+	p.st.dir = Net.DIR_NONE
+	q.st.place(9, 4)
+	_give(p, 0, 0)
+	_give(q, 2, 1)
+	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	_run(1)
+	_expect(p.searching < 0, "somebody on their feet cannot be searched")
+	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	_run(1)
+	_expect(p.dragging < 0, "nor hauled")
+	q.health = -40.0                     # unconscious now
+	_run(2)
+	_expect(q.cond == Net.COND_CRIT, "(the other tester is unconscious)")
+	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	_run(1)
+	_expect(p.searching == q.slot, "somebody unconscious next to us can be searched")
+	server._loot_asked(p, true, q.slots.find(Net.ITEM_PART))
+	_expect(p.count(Net.ITEM_PART) == 1 and q.count(Net.ITEM_PART) == 0, "a thing is taken from their slot into ours")
+	server._loot_asked(p, false, p.slots.find(Net.ITEM_PART))
+	_expect(p.count(Net.ITEM_PART) == 0 and q.count(Net.ITEM_PART) == 1, "and can be put back")
+	p.st.place(6, 4)
+	_run(1)
+	_expect(p.searching < 0, "the search ends when we are no longer next to them")
+	server._loot_asked(p, true, 0)
+	_expect(p.count(Net.ITEM_PATCH) == 0, "and nothing can be taken from a distance")
+
+	p.st.place(8, 4)
+	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	_run(1)
+	_expect(p.dragging == q.slot and q.dragged_by == p.slot, "somebody unconscious next to us can be taken hold of")
+	p.st.dir = Net.DIR_LEFT
+	_run(Net.DRAG_TICKS * 2)
+	_expect(p.st.x == 6 and q.st.x == 7 and q.st.y == 4, "hauling: twice as slow, and they follow one cell behind (we are at %d, they at %d)" % [p.st.x, q.st.x])
+	p.st.dir = Net.DIR_NONE
+	_run(Net.DRAG_TICKS)
+	# down the ladder at 5,5 with them
+	p.st.dir = Net.DIR_LEFT
+	_run(Net.DRAG_TICKS)
+	p.st.dir = Net.DIR_DOWN
+	_run(Net.DRAG_TICKS)
+	p.st.dir = Net.DIR_NONE
+	_run(Net.DRAG_TICKS)
+	_expect(p.st.x == 5 and p.st.y == 5 and p.dragging == q.slot, "(we are on the ladder with them in tow)")
+	server._climb(p)
+	_expect(map.deck_of(p.st.y) == 1 and q.st.x == p.st.x and q.st.y == p.st.y, "they come down a ladder with us")
+	server._hands_asked(p, GameServer.HAND_DRAG, Net.NOBODY, server.tick)
+	_run(1)
+	_expect(p.dragging < 0 and q.dragged_by < 0 and not p.st.slow, "letting go frees both")
+	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	_run(1)
+	q.health = 60.0                      # they come round
+	_run(2)
+	_expect(q.cond == Net.COND_OK and p.dragging < 0, "somebody who comes round is let go of")
+
+	# the dead keep what they carried, and their body can be searched and hauled
+	q.health = -150.0
+	_run(2)
+	_expect(q.cond == Net.COND_DEAD, "(the other tester is dead)")
+	p.st.place(q.st.x, q.st.y)
+	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	_run(1)
+	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	_run(1)
+	var carried := q.count(Net.ITEM_PATCH)
+	server._respawn(q)
+	var body: RefCounted = server.players[p.dragging] if p.dragging >= 0 else null
+	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_NONE) == Net.SLOTS, "the one who comes back has empty slots")
+	_expect(body != null and body.corpse and body.count(Net.ITEM_PATCH) == carried and carried > 0, "the body keeps what they carried (%d patches)" % carried)
+	_expect(p.searching == body.slot if body != null else false, "and whoever was hauling and searching goes on with the body")
+	server._loot_asked(p, true, body.slots.find(Net.ITEM_PATCH))
+	_expect(p.count(Net.ITEM_PATCH) == 1, "a body can be robbed")
+
 	server.stop()
 	server.free()
 	print("MACHINETEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
@@ -359,6 +449,15 @@ func _towards(from_cell: int, to: Vector2i) -> int:
 	if to.x != fx:
 		return Net.DIR_RIGHT if to.x > fx else Net.DIR_LEFT
 	return Net.DIR_DOWN if to.y > fy else Net.DIR_UP
+
+
+func _give(who: RefCounted, patches: int, parts: int) -> void:
+	## Sets what a tester carries.
+	who.slots.fill(Net.ITEM_NONE)
+	for i in patches:
+		who.add(Net.ITEM_PATCH)
+	for i in parts:
+		who.add(Net.ITEM_PART)
 
 
 func _mend_all() -> void:

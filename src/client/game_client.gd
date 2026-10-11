@@ -41,7 +41,7 @@ class Ent:
 	var facing := 2
 	var cond := 0                    # Net.COND_*
 	var look := 2                    # facing and condition as the server packs them (for the checksum)
-	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing]
+	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing, ticks it takes]
 
 
 var phase := IDLE
@@ -70,8 +70,12 @@ var ship_dest := Vector2.ZERO        # where it is heading
 var ship_moving := false
 var ship_tick := 0
 var broken := {}                     # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
-var patches := 0                     # hull patches our character carries
-var parts := 0                       # spare parts it carries
+var slots := PackedByteArray()       # what our character carries: one item per slot (Net.ITEM_*)
+var patches := 0                     # of that, hull patches
+var parts := 0                       # and spare parts
+var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
+var search_slots := PackedByteArray()  # what they carry
+var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store_patches := 0               # the ship's supplies in the locker
 var store_parts := 0
 var store_air := 0.0                 # air left for the air plant, in cells' worth
@@ -129,6 +133,10 @@ var _last_apply := 0
 var _corr := Vector2.ZERO            # leftover of a correction, eased out so the sprite does not jump
 var _repeat_msg := PackedByteArray() # the newest input change, repeated in case the first copy is lost
 var _repeat_left := 0
+var _haul_from := Vector2.ZERO       # the one we haul is drawn sliding between these two cells, in step with
+var _haul_to := Vector2.ZERO         # our own predicted character rather than a moment behind it
+var _haul_seen := -1                 # our step (its start tick) that slide belongs to
+var _haul_id := -1                   # who it was worked out for
 
 
 func connect_to(address: String, port: int, player_name: String) -> String:
@@ -196,6 +204,10 @@ func close() -> void:
 	_power = true
 	patches = 0
 	parts = 0
+	slots = PackedByteArray()
+	slots.resize(Net.SLOTS)
+	search_id = -1
+	drag_id = -1
 	bytes_in = 0
 	packets_in = 0
 
@@ -288,7 +300,7 @@ func use_target() -> int:
 	## 8 = the engine or the air plant in working order: nothing to do, but it says so,
 	## 9 = a door whose emergency shutter is down and can be forced,
 	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended),
-	## 12 = the supply locker.
+	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -315,10 +327,64 @@ func use_target() -> int:
 				return 11
 			if doors.is_sealed(door):
 				return 9
+	if lying_near() >= 0:
+		return 13
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func lying_near() -> int:
+	## The id of somebody lying (unconscious or dead) in the cell our character
+	## faces, or failing that in its own cell; -1 if there is nobody.
+	if phase != PLAYING or my_cond != Net.COND_OK:
+		return -1
+	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing)
+	var best := -1
+	var best_here := -1
+	for e: Ent in ents.values():
+		if e.id == my_id or e.cond == Net.COND_OK:
+			continue
+		var cell := e.y * map.width + e.x
+		if cell == ahead and (best < 0 or e.id < best):
+			best = e.id
+		elif e.x == pred.x and e.y == pred.y and (best_here < 0 or e.id < best_here):
+			best_here = e.id
+	return best if best >= 0 else best_here
+
+
+func dragging() -> bool:
+	## Our character is hauling somebody along (the server says so).
+	return _have_self and pred.slow and my_cond == Net.COND_OK
+
+
+func _send_hands(kind: int, id: int) -> void:
+	_simulate_to_now()
+	var msg := PackedByteArray([kind, 0, 0, 0, 0, 0, 0])
+	msg.encode_u16(1, id)
+	msg.encode_u32(3, maxi(pred_tick, 0))        # the tick we see our character on (see Net.C_USE)
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_search(id: int) -> void:
+	## Starts going through the pockets of somebody lying next to us (Net.NOBODY: stops).
+	if phase == PLAYING:
+		_send_hands(Net.C_SEARCH, id)
+
+
+func send_drag(id: int) -> void:
+	## Takes hold of somebody lying next to us (Net.NOBODY: lets go).
+	if phase == PLAYING:
+		if id != Net.NOBODY:
+			drag_id = id
+		_send_hands(Net.C_DRAG, id)
+
+
+func send_loot(theirs: bool, index: int) -> void:
+	## While searching: takes the thing in one of their slots, or gives them one of ours.
+	if phase == PLAYING and search_id >= 0:
+		_peer.send(0, PackedByteArray([Net.C_LOOT, 1 if theirs else 0, index]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_store(action: int) -> void:
@@ -601,6 +667,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in pkt[1]:
 				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
 			ship_changes += 1
+		Net.S_SEARCH:
+			var who := pkt.decode_u16(1)
+			search_id = -1 if who == Net.NOBODY else who
+			search_slots = pkt.slice(3, 3 + Net.SLOTS)
 		Net.S_STORE:
 			store_patches = pkt.decode_u16(1)
 			store_parts = pkt.decode_u16(3)
@@ -675,8 +745,9 @@ func _on_world(pkt: PackedByteArray) -> void:
 			tank = pkt[pos + 2]
 			supply = (pkt[pos + 3] & 1) != 0
 			work = pkt[pos + 4]
-			patches = pkt[pos + 5]
-			parts = pkt[pos + 6]
+			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
+			patches = slots.count(Net.ITEM_PATCH)
+			parts = slots.count(Net.ITEM_PART)
 			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)
@@ -801,7 +872,8 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
 	e.cond = Net.look_cond(look)
 	if e.x != x or e.y != y:
 		if absi(e.x - x) + absi(e.y - y) == 1:
-			e.steps.append([s_tick, e.x, e.y, x, y, facing])
+			# somebody hauling, or being hauled, takes longer over a step
+			e.steps.append([s_tick, e.x, e.y, x, y, facing, Net.DRAG_TICKS if Net.look_slow(look) else Net.MOVE_TICKS])
 			if e.steps.size() > 8:
 				e.steps.pop_front()
 		else:
@@ -877,6 +949,8 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.facing = Net.look_facing(pkt[o + 5])
 	my_cond = Net.look_cond(pkt[o + 5])
 	_auth.down = my_cond != Net.COND_OK
+	_auth.slow = Net.look_slow(pkt[o + 5])
+	_auth.span = Net.DRAG_TICKS if (pkt[o + 5] & Net.LOOK_LONG_STEP) != 0 else Net.MOVE_TICKS
 	_auth.dir = pkt[o + 6]
 	var ack := pkt.decode_u16(o + 7)
 	_auth.move_tick = pkt.decode_s32(o + 9)
@@ -924,8 +998,8 @@ func _rebuild_prediction() -> void:
 		return
 	if st.same_as(pred):
 		return
-	if (st.x != pred.x or st.y != pred.y) and map.deck_of(st.y) == map.deck_of(pred.y):
-		mispredicts += 1                 # (a change of deck is never predicted: it is not a mistake)
+	if (st.x != pred.x or st.y != pred.y) and map.deck_of(st.y) == map.deck_of(pred.y) and not st.down:
+		mispredicts += 1                 # (a change of deck is never predicted, nor is being hauled: not mistakes)
 	var tnow := pred_time()
 	var before := Mover.visual_pos(pred, tnow) + _corr
 	pred.copy_from(st)
@@ -947,12 +1021,32 @@ func sample(id: int) -> Array:
 	var e: Ent = ents.get(id)
 	if e == null:
 		return []
+	if id == drag_id and predict and dragging():
+		# Whoever we haul moves into the cell we have just left, as we leave it.
+		# The server's word on that arrives late; our own steps we know at once.
+		_simulate_to_now()
+		if _haul_id != id:
+			_haul_id = id
+			_haul_to = Vector2(e.x, e.y)
+			_haul_from = _haul_to
+			_haul_seen = pred.move_tick
+		elif _haul_seen != pred.move_tick:
+			_haul_seen = pred.move_tick
+			_haul_from = _haul_to
+			_haul_to = Vector2(pred.fx, pred.fy)
+		var t := pred_time()
+		var k := clampf((t - float(pred.move_tick)) / float(pred.span), 0.0, 1.0)
+		if _haul_from.distance_to(_haul_to) > 1.5:
+			k = 1.0                          # a ladder, or a correction: no slide across the ship
+		return [_haul_from.lerp(_haul_to, k), e.facing, false, pred.move_tick, e.cond]
+	if id == _haul_id:
+		_haul_id = -1
 	var rt := render_tick()
 	var last := e.steps.size() - 1
 	for i in range(last, -1, -1):
 		var s: Array = e.steps[i]
 		if rt >= float(s[0]):
-			var k := (rt - float(s[0])) / float(Net.MOVE_TICKS)
+			var k := (rt - float(s[0])) / float(s[6])
 			if k < 1.0:
 				return [Vector2(lerpf(s[1], s[3], k), lerpf(s[2], s[4], k)), s[5], true, s[0], e.cond]
 			return [Vector2(s[3], s[4]), e.facing if i == last else int(s[5]), false, s[0], e.cond]

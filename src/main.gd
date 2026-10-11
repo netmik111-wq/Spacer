@@ -35,6 +35,11 @@ extends Node
 ## the server's messages), door_trouble_after=SECONDS with door_trouble=jam|down|up
 ## (the door the character faces jams open, or its shutter fails down or up),
 ## dock_after=SECONDS (the ship is put right at the sector's station or trader).
+## drag_after=SECONDS (take hold of whoever lies next to the character),
+## search_after=SECONDS (go through their pockets), loot_after=SECONDS (take
+## the first thing found there), faint_after=SECONDS with --inproc (the other
+## characters aboard fall unconscious, one of them right in front of ours, for
+## trying the three above).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -83,6 +88,10 @@ var _helm_broken := false
 var _climbed := false
 var _door_troubled := false
 var _docked := false
+var _dragged := false
+var _searched := false
+var _looted := false
+var _fainted := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -138,7 +147,7 @@ func _define_inputs() -> void:
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"chat": [KEY_ENTER, KEY_KP_ENTER], "pause": [KEY_ESCAPE],
 		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11], "respawn": [KEY_R],
-		"use": [KEY_E], "suit": [KEY_Q],
+		"use": [KEY_E], "suit": [KEY_Q], "drag": [KEY_F],
 	}
 	for action: String in keys:
 		if not InputMap.has_action(action):
@@ -391,6 +400,35 @@ func _process(_delta: float) -> void:
 		_helm_broken = true
 		_server.broken[_server.map.helm.keys()[0]] = true
 		_server._to_all(_server._devices_packet())
+	if _opt.has("faint_after") and not _fainted and _server != null and _screen != null and t >= float(_opt["faint_after"]):
+		_fainted = true
+		var me = _server.players[_client.my_id]
+		var ahead: int = _server.map.cell_ahead(me.st.x, me.st.y, me.st.facing)
+		var placed := false
+		for q in _server.players:
+			if q != null and q.slot != _client.my_id and not q.corpse:
+				q.health = -30.0             # unconscious, and a good while from coming round
+				q.cond = Net.COND_CRIT
+				q.st.down = true
+				q.st.dir = Net.DIR_NONE
+				q.add(Net.ITEM_PATCH)
+				if not placed and ahead >= 0 and _server.map.walk[ahead] == 1:
+					placed = true            # the first of them is laid right in front of us
+					q.st.place(ahead % _server.map.width, ahead / _server.map.width)
+	if _opt.has("drag_after") and not _dragged and _screen != null and t >= float(_opt["drag_after"]):
+		_dragged = true
+		if _client.lying_near() >= 0:
+			_client.send_drag(_client.lying_near())
+	if _opt.has("search_after") and not _searched and _screen != null and t >= float(_opt["search_after"]):
+		_searched = true
+		if _client.lying_near() >= 0:
+			_client.send_search(_client.lying_near())
+	if _opt.has("loot_after") and not _looted and _screen != null and t >= float(_opt["loot_after"]):
+		_looted = true
+		for i in _client.search_slots.size():
+			if _client.search_slots[i] != Net.ITEM_NONE:
+				_client.send_loot(true, i)
+				break
 	if _opt.has("dock_after") and not _docked and _server != null and _screen != null and t >= float(_opt["dock_after"]):
 		_docked = true
 		_server.ship_pos = _server.sectors.spot[_server.sector]
@@ -476,7 +514,8 @@ func _process(_delta: float) -> void:
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
 					"health": _client.health, "cond": _client.my_cond,
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
-					"deck": _client.my_deck(),
+					"deck": _client.my_deck(), "patches": _client.patches, "parts": _client.parts,
+					"dragging": _client.dragging(), "searching": _client.search_id,
 					"sector": _client.sector, "visited": _client.visited, "sectors": _client.sectors.count,
 					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),
 					"sector_kind": _client.sectors.kind[_client.sector] if _client.sectors.count > 0 else -1,

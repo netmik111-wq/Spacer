@@ -12,6 +12,10 @@ const Director := preload("res://src/server/director.gd")   # only for the list 
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
+const SLOT_PX := 34.0                # a slot of the inventory on screen
+const SLOT_GAP := 4.0
+const BIG_SLOT_PX := 60.0            # and in the search panel
+const BIG_SLOT_GAP := 8.0
 const HINT_LEFT := 550.0             # the hint line keeps clear of the chat (this far from the left edge)
 const HINT_RIGHT := 250.0            # and of the instruments (this far from the right edge)
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
@@ -55,7 +59,8 @@ var _jump_box: GridContainer
 var _jump_buttons_for := -1          # what the jump buttons were last built for
 var _console_shut: Button
 var _store_buttons := {}             # the supply locker's buttons: Net.STORE_* -> Button
-var _pockets: Label                  # what our character carries
+var _slots_view: Control             # what our character carries, slot by slot
+var _slots_shown := PackedByteArray()
 var _jump_label: Label
 var _flash: ColorRect
 var _monitor_step := 0.08
@@ -104,7 +109,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(spacer)
 	_keys = _text(top, 13)
-	_keys.text = "WASD: ходить    E: действие    Q: подача O2    Enter: чат    Esc: меню    F11: весь экран"
+	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню    F11: весь экран"
 	_keys.modulate = Color(1, 1, 1, 0.75)
 
 	_debug = _text(root, 13)
@@ -172,15 +177,17 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 			_alert_box.add_child(node)
 			_alerts[lamp] = {"frames": frames, "seconds": float(d["frame_seconds"]), "node": node}
 
-	# what our character carries, to the left of the instruments
-	_pockets = _text(root, 13)
-	_pockets.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_pockets.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_pockets.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_pockets.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_pockets.offset_right = -14 - 192 - 10 - 12 - 10
-	_pockets.offset_bottom = -14
-	_pockets.modulate = Color(1, 1, 1, 0.85)
+	# what our character carries, slot by slot, to the left of the instruments
+	_slots_view = Control.new()
+	_slots_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slots_view.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	var slots_wide := Net.SLOTS * SLOT_PX + (Net.SLOTS - 1) * SLOT_GAP
+	_slots_view.offset_right = -14 - 192 - 10 - 12 - 12
+	_slots_view.offset_left = _slots_view.offset_right - slots_wide
+	_slots_view.offset_bottom = -14
+	_slots_view.offset_top = -14 - SLOT_PX
+	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, SLOT_PX, SLOT_GAP))
+	root.add_child(_slots_view)
 
 	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
 	_tank_bar = ColorRect.new()
@@ -347,6 +354,9 @@ func _opens_panel(target: int) -> bool:
 
 
 func _open_console(kind: int) -> void:
+	if _console_kind == 13 and kind != 13 and client.search_id >= 0:
+		client.send_search(Net.NOBODY)       # we step back from the one we were searching
+		client.search_id = -1
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
@@ -357,7 +367,7 @@ func _open_console(kind: int) -> void:
 	_chart.visible = kind != 12
 	_jump_box.visible = true
 	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else "Шкаф снабжения")
-	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else "Отойти от пульта (E или Esc)"
+	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")
 
 
 func _update_store() -> void:
@@ -366,8 +376,9 @@ func _update_store() -> void:
 	var lines := PackedStringArray()
 	lines.append("В шкафу: заплаток %d, запчастей %d. Воздух для установки: %d из %d. Кредиты: %d." % [
 		client.store_patches, client.store_parts, int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
-	lines.append("У вас с собой: заплаток %d из %d, запчастей %d из %d." % [
-		client.patches, Net.CARRY_PATCHES, client.parts, Net.CARRY_PARTS])
+	var free := client.slots.count(Net.ITEM_NONE)
+	lines.append("У вас с собой: заплаток %d, запчастей %d. Свободных слотов: %d из %d." % [
+		client.patches, client.parts, free, Net.SLOTS])
 	lines.append("Заплатка нужна, чтобы заделать пробоину. Запчасть ускоряет ремонт машин и дверей: без неё он идёт втрое дольше.")
 	if trading:
 		lines.append("Торговец на связи.")
@@ -399,9 +410,9 @@ func _update_store() -> void:
 		var b: Button = _store_buttons[action]
 		match action:
 			Net.STORE_TAKE_PATCH:
-				b.disabled = client.store_patches <= 0 or client.patches >= Net.CARRY_PATCHES
+				b.disabled = client.store_patches <= 0 or free == 0
 			Net.STORE_TAKE_PART:
-				b.disabled = client.store_parts <= 0 or client.parts >= Net.CARRY_PARTS
+				b.disabled = client.store_parts <= 0 or free == 0
 			Net.STORE_PUT_BACK:
 				b.disabled = client.patches + client.parts == 0
 			Net.STORE_BUY_PATCH:
@@ -413,7 +424,15 @@ func _update_store() -> void:
 
 
 func _update_console() -> void:
+	if client.search_id >= 0 and _console_kind != 13:
+		_open_console(13)                    # the server let us search somebody: show their pockets
 	if not _console.visible:
+		return
+	if _console_kind == 13:
+		if client.search_id < 0 or client.my_cond != Net.COND_OK:
+			_open_console(0)                 # they came round, we were pulled apart, or we went down
+		else:
+			_update_search()
 		return
 	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind or not _opens_panel(_console_kind):
 		_open_console(0)             # knocked out, pushed away from the console, or the power went
@@ -487,6 +506,65 @@ func _update_helm() -> void:
 	_chart.queue_redraw()
 
 
+func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, px: float, gap: float) -> void:
+	## A row of inventory slots with what is in them.
+	for i in slots.size():
+		var cell := Rect2(origin + Vector2(i * (px + gap), 0), Vector2(px, px))
+		canvas.draw_rect(cell, Color(0.07, 0.08, 0.12, 0.88))
+		canvas.draw_rect(cell, Color(0.42, 0.46, 0.56, 0.9), false, 1.0)
+		_draw_item(canvas, cell, slots[i])
+
+
+func _draw_item(canvas: Control, cell: Rect2, item: int) -> void:
+	var u := cell.size.x / 17.0          # the pictures are laid out on a 17 by 17 grid
+	var at := cell.position
+	if item == Net.ITEM_PATCH:
+		# a plate of hull metal with a rivet in each corner
+		canvas.draw_rect(Rect2(at + Vector2(3, 3) * u, Vector2(11, 11) * u), Color(0.2, 0.21, 0.27))
+		canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(9, 9) * u), Color(0.72, 0.75, 0.8))
+		canvas.draw_rect(Rect2(at + Vector2(4, 11) * u, Vector2(9, 2) * u), Color(0.52, 0.55, 0.62))
+		for corner: Vector2 in [Vector2(5, 5), Vector2(11, 5), Vector2(5, 11), Vector2(11, 11)]:
+			canvas.draw_rect(Rect2(at + corner * u, Vector2(u, u)), Color(0.25, 0.26, 0.33))
+	elif item == Net.ITEM_PART:
+		# a cog
+		var mid := at + Vector2(8.5, 8.5) * u
+		for k in 8:
+			var out := Vector2.RIGHT.rotated(k * TAU / 8.0) * 5.2 * u
+			canvas.draw_rect(Rect2(mid + out - Vector2(1.2, 1.2) * u, Vector2(2.4, 2.4) * u), Color(0.9, 0.55, 0.15))
+		canvas.draw_circle(mid, 4.4 * u, Color(0.95, 0.65, 0.2))
+		canvas.draw_circle(mid, 1.8 * u, Color(0.16, 0.14, 0.18))
+
+
+func _search_row(mine: bool) -> Vector2:
+	## Where a row of slots starts in the search panel: theirs above, ours below.
+	var wide := Net.SLOTS * BIG_SLOT_PX + (Net.SLOTS - 1) * BIG_SLOT_GAP
+	return Vector2((_chart.size.x - wide) * 0.5, 190.0 if mine else 60.0)
+
+
+func _draw_search() -> void:
+	var font := ThemeDB.fallback_font
+	_chart.draw_rect(Rect2(Vector2.ZERO, _chart.size), Color(0.02, 0.05, 0.04))
+	var theirs := _search_row(false)
+	var ours := _search_row(true)
+	_chart.draw_string(font, theirs + Vector2(0, -12), "У лежащего:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
+	_draw_slots(_chart, theirs, client.search_slots, BIG_SLOT_PX, BIG_SLOT_GAP)
+	_chart.draw_string(font, ours + Vector2(0, -12), "У вас:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
+	_draw_slots(_chart, ours, client.slots, BIG_SLOT_PX, BIG_SLOT_GAP)
+
+
+func _update_search() -> void:
+	## Going through somebody's pockets: their slots and ours; a click moves a thing across.
+	var who := client.player_name(client.search_id)
+	var dead := client.ents.has(client.search_id) and (client.ents[client.search_id] as GameClient.Ent).cond == Net.COND_DEAD
+	_console_title.text = "Обыск: %s (%s)" % [who, "тело" if dead else "без сознания"]
+	_console_text.text = "Щёлкните по вещи лежащего, чтобы забрать её. Щёлкните по своей, чтобы положить ему."
+	if _jump_buttons_for != 13000:
+		_jump_buttons_for = 13000
+		for old in _jump_box.get_children():
+			old.queue_free()
+	_chart.queue_redraw()
+
+
 func _helm_area() -> Rect2:
 	## The square of the chart control that stands for the sector.
 	var side := minf(_chart.size.x, _chart.size.y) - 12.0
@@ -494,9 +572,20 @@ func _helm_area() -> Rect2:
 
 
 func _on_chart_input(event: InputEvent) -> void:
-	if _console_kind != 4 or not (event is InputEventMouseButton):
+	if not (event is InputEventMouseButton):
 		return
 	var click := event as InputEventMouseButton
+	if _console_kind == 13:
+		if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+			for mine: bool in [false, true]:
+				var from := click.position - _search_row(mine)
+				var index := int(floorf(from.x / (BIG_SLOT_PX + BIG_SLOT_GAP)))
+				if from.y >= 0.0 and from.y < BIG_SLOT_PX and index >= 0 and index < Net.SLOTS \
+						and from.x - index * (BIG_SLOT_PX + BIG_SLOT_GAP) < BIG_SLOT_PX:
+					client.send_loot(not mine, index)
+		return
+	if _console_kind != 4:
+		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 		var area := _helm_area()
 		if area.has_point(click.position):
@@ -542,6 +631,9 @@ func _draw_chart() -> void:
 	## The chart of sectors: where the ship is, where it can jump, what is known about the rest.
 	if _console_kind == 4:
 		_draw_helm()
+		return
+	if _console_kind == 13:
+		_draw_search()
 		return
 	var sectors := client.sectors
 	if sectors.count == 0:
@@ -641,7 +733,9 @@ func show_debug(on: bool) -> void:
 
 func open_console_here() -> void:
 	## Test helper: open the console our character faces, as the "use" key would.
-	if _opens_panel(client.use_target()):
+	if client.use_target() == 13:
+		client.send_search(client.lying_near())
+	elif _opens_panel(client.use_target()):
 		_open_console(client.use_target())
 
 
@@ -719,9 +813,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_set_pause(not _pause.visible)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or _opens_panel(client.use_target())):
-		# a bridge console: the key opens its screen, and closes it again
-		_open_console(0 if _console.visible else client.use_target())
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or _opens_panel(client.use_target()) or client.use_target() == 13):
+		# a bridge console, the locker, somebody lying: the key opens a screen, and closes it again
+		if _console.visible:
+			_open_console(0)
+		elif client.use_target() == 13:
+			client.send_search(client.lying_near())      # the screen opens when the server agrees
+		else:
+			_open_console(client.use_target())
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("drag") and not _chat_input.visible and not _pause.visible and not _console.visible:
+		if client.dragging():
+			client.send_drag(Net.NOBODY)
+		elif client.lying_near() >= 0:
+			client.send_drag(client.lying_near())
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("chat") and not _pause.visible and not _chat_input.visible:
 		_open_chat()
@@ -803,7 +908,11 @@ func _process(delta: float) -> void:
 		_use_held = use_now
 		client.send_use(use_now)
 	var target := client.use_target()
-	_hint.visible = target != 0 and not _console.visible
+	var hauling := client.dragging()
+	_hint.visible = (target != 0 or hauling) and not _console.visible
+	if hauling and (target == 0 or target == 13):
+		_hint.text = "Вы тащите: %s.  F: отпустить" % client.player_name(client.drag_id)
+		target = -1                          # (the hint is set; none of the cases below applies)
 	var no_power := not client.powered()
 	var why := "двигатель не работает" if client.engine_down() else "сбой питания"
 	var no_part := "" if client.parts > 0 else " (без запчасти втрое дольше)"
@@ -833,6 +942,10 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения"
+	elif target == 13:
+		var lying := client.lying_near()
+		var is_dead := client.ents.has(lying) and (client.ents[lying] as GameClient.Ent).cond == Net.COND_DEAD
+		_hint.text = "%s: %s.  E: обыскать    F: тащить" % [client.player_name(lying), "тело" if is_dead else "без сознания"]
 	elif target == 6 or target == 7:
 		var to := client.my_deck() + (1 if target == 6 else -1)
 		_hint.text = "E: %s по лестнице (%s)" % ["спуститься" if target == 6 else "подняться", client.map.deck_names[to].to_lower()]
@@ -882,8 +995,10 @@ func _process(delta: float) -> void:
 	_lamp("o2_on", alive and client.supply)
 	_lamp("o2_off", alive and not client.supply)
 	_tank_bar.visible = alive
-	_pockets.visible = alive
-	_pockets.text = "Заплатки: %d\nЗапчасти: %d" % [client.patches, client.parts]
+	_slots_view.visible = alive
+	if client.slots != _slots_shown:
+		_slots_shown = client.slots.duplicate()
+		_slots_view.queue_redraw()
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)
