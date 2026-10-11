@@ -24,7 +24,12 @@ extends Node
 ## along its row, then turn; with goto_after=SECONDS), jump_after=SECONDS (ask
 ## for a jump to the first sector in reach), event_after=SECONDS with event=ID
 ## (the host fires a director event), console_after=SECONDS (open the console
-## the character faces), --no-events (dedicated server: the director stays quiet).
+## the character faces), --no-events (dedicated server: the director stays quiet),
+## helm_after=SECONDS with helm=X,Y (set a course inside the sector; helm=out
+## steers straight out of a meteor stream, helm=spot to the station or trader).
+## With --inproc only: warp_after=SECONDS with warp_kind=KIND (jump to a sector
+## of that kind, whatever the routes), break_helm_after=SECONDS, --log (print
+## the server's messages).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -67,6 +72,9 @@ var _suited := false
 var _jumped := false
 var _evented := false
 var _consoled := false
+var _helmed := false
+var _warped := false
+var _helm_broken := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -207,6 +215,8 @@ func _host_inside(port: int) -> void:
 	_server = GameServer.new()
 	add_child(_server)
 	_server.shutdown_token = _server_token
+	if _flags.has("log"):
+		_server.log_line.connect(func(text: String) -> void: print(text))
 	var problem := _server.start(port, "ship01", _host_bots)
 	if problem != "":
 		_stop_server()
@@ -348,6 +358,27 @@ func _process(_delta: float) -> void:
 	if _opt.has("console_after") and not _consoled and _screen != null and t >= float(_opt["console_after"]):
 		_consoled = true
 		_screen.open_console_here()
+	if _opt.has("helm_after") and not _helmed and _screen != null and t >= float(_opt["helm_after"]):
+		_helmed = true
+		var where := str(_opt.get("helm", "100,100"))
+		var sectors := _client.sectors
+		var spot: Vector2 = sectors.spot[_client.sector]
+		if where == "out":
+			_client.send_helm(true, spot + (_client.ship_pos() - spot).normalized() * (sectors.reach[_client.sector] + 12.0))
+		elif where == "spot":
+			_client.send_helm(true, spot)
+		else:
+			_client.send_helm(true, Vector2(float(where.split(",")[0]), float(where.split(",")[1])))
+	if _opt.has("warp_after") and not _warped and _server != null and _screen != null and t >= float(_opt["warp_after"]):
+		_warped = true
+		for i in _server.sectors.count:
+			if _server.sectors.kind[i] == int(_opt.get("warp_kind", 1)):
+				_server.start_jump(i, "Тест")
+				break
+	if _opt.has("break_helm_after") and not _helm_broken and _server != null and _screen != null and t >= float(_opt["break_helm_after"]):
+		_helm_broken = true
+		_server.broken[_server.map.helm.keys()[0]] = true
+		_server._to_all(_server._devices_packet())
 	if _opt.has("suit_after") and not _suited and _screen != null and t >= float(_opt["suit_after"]):
 		_suited = true
 		_client.send_suit(true)
@@ -414,6 +445,8 @@ func _process(_delta: float) -> void:
 					"health": _client.health, "cond": _client.my_cond,
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
 					"sector": _client.sector, "visited": _client.visited, "sectors": _client.sectors.count,
+					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),
+					"sector_kind": _client.sectors.kind[_client.sector] if _client.sectors.count > 0 else -1,
 					"bodies": _client.roster.size() - _client.crew_count(),
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))

@@ -297,6 +297,7 @@ func _build_console(root: Control) -> void:
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
+	_chart.gui_input.connect(_on_chart_input)
 	box.add_child(_chart)
 	_console_text = Label.new()
 	_console_text.add_theme_font_size_override("font_size", 14)
@@ -320,14 +321,10 @@ func _open_console(kind: int) -> void:
 	if kind == 0:
 		return
 	_close_chat()
-	_chart.visible = kind == 3
-	_jump_box.visible = kind == 3
 	_jump_buttons_for = -1
-	if kind == 3:
-		_console_title.text = "Карта сектора"
-	else:
-		_console_title.text = "Управление кораблём"
-		_console_text.text = "Пульт исправен. Манёвры внутри сектора пока не подключены: отсюда кораблём будут управлять, когда появится от чего уходить и куда."
+	_chart.visible = true
+	_jump_box.visible = true
+	_console_title.text = "Карта сектора" if kind == 3 else "Управление кораблём"
 
 
 func _update_console() -> void:
@@ -336,7 +333,8 @@ func _update_console() -> void:
 	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind:
 		_open_console(0)             # knocked out, or pushed away from the console
 		return
-	if _console_kind != 3:
+	if _console_kind == 4:
+		_update_helm()
 		return
 	var now := client.server_now()
 	var jumping := client.jump_to != Net.NO_SECTOR
@@ -350,8 +348,8 @@ func _update_console() -> void:
 	else:
 		_console_text.text = "Корабль в секторе %s.\nДвигатель готов. Куда прыгаем?" % client.sectors.describe(client.sector)
 	# one button per sector within reach; rebuilt when the ship has moved
-	if _jump_buttons_for != client.sector:
-		_jump_buttons_for = client.sector
+	if _jump_buttons_for != client.sector * 2:
+		_jump_buttons_for = client.sector * 2
 		for old in _jump_box.get_children():
 			old.queue_free()
 		for id in client.sectors.neighbours(client.sector):
@@ -368,8 +366,95 @@ func _update_console() -> void:
 		_chart.queue_redraw()
 
 
+func _update_helm() -> void:
+	## The ship's controls: where the ship is inside the sector and where it is heading.
+	var sectors := client.sectors
+	var here := client.sector
+	var at := client.ship_pos()
+	var lines := PackedStringArray()
+	if client.ship_under_way():
+		lines.append("Корабль идёт заданным курсом, осталось %d." % int(ceil(at.distance_to(client.ship_dest))))
+	else:
+		lines.append("Корабль стоит. Щёлкните по карте, чтобы задать курс.")
+	match sectors.kind[here]:
+		Sectors.METEORS:
+			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
+			lines.append("Корабль внутри метеорного потока, до края %d." % int(ceil(edge)) if edge >= 0.0 else "Корабль вне метеорного потока.")
+		Sectors.STATION, Sectors.TRADER:
+			var what := "станции" if sectors.kind[here] == Sectors.STATION else "торговца"
+			var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
+			lines.append("До %s %d." % [what, int(ceil(gap))] if gap > 0.0 else "Корабль у %s." % what)
+		_:
+			lines.append("В этом секторе идти некуда: вокруг пусто.")
+	_console_text.text = "\n".join(lines)
+	if _jump_buttons_for != here * 2 + 1:
+		_jump_buttons_for = here * 2 + 1
+		for old in _jump_box.get_children():
+			old.queue_free()
+		var halt := Button.new()
+		halt.text = "Остановить корабль"
+		halt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		halt.pressed.connect(func() -> void: client.send_helm(false))
+		_jump_box.add_child(halt)
+	_chart.queue_redraw()
+
+
+func _helm_area() -> Rect2:
+	## The square of the chart control that stands for the sector.
+	var side := minf(_chart.size.x, _chart.size.y) - 12.0
+	return Rect2((_chart.size - Vector2(side, side)) * 0.5, Vector2(side, side))
+
+
+func _on_chart_input(event: InputEvent) -> void:
+	if _console_kind != 4 or not (event is InputEventMouseButton):
+		return
+	var click := event as InputEventMouseButton
+	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
+		var area := _helm_area()
+		if area.has_point(click.position):
+			client.send_helm(true, (click.position - area.position) / area.size * Sectors.SPAN)
+
+
+func _draw_helm() -> void:
+	var sectors := client.sectors
+	var here := client.sector
+	var area := _helm_area()
+	var scale := area.size.x / Sectors.SPAN
+	var font := ThemeDB.fallback_font
+	_chart.draw_rect(Rect2(Vector2.ZERO, _chart.size), Color(0.02, 0.05, 0.04))
+	_chart.draw_rect(area, Color(0.03, 0.08, 0.07))
+	for i in range(1, 4):
+		var k := area.size.x * i / 4.0
+		_chart.draw_line(area.position + Vector2(k, 0), area.position + Vector2(k, area.size.y), Color(0.3, 0.8, 0.5, 0.12))
+		_chart.draw_line(area.position + Vector2(0, k), area.position + Vector2(area.size.x, k), Color(0.3, 0.8, 0.5, 0.12))
+	_chart.draw_rect(area, Color(0.3, 0.75, 0.45, 0.6), false, 1.0)
+	var spot := area.position + sectors.spot[here] * scale
+	match sectors.kind[here]:
+		Sectors.METEORS:
+			_chart.draw_circle(spot, sectors.reach[here] * scale, Color(1.0, 0.55, 0.2, 0.2))
+			_chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 48, Color(1.0, 0.6, 0.25, 0.8), 1.0)
+			_chart.draw_string(font, spot + Vector2(-70, 4), "метеорный поток", HORIZONTAL_ALIGNMENT_CENTER, 140, 12, Color(1.0, 0.75, 0.5))
+		Sectors.STATION, Sectors.TRADER:
+			var colour := Color(0.3, 0.85, 0.8) if sectors.kind[here] == Sectors.STATION else Color(0.95, 0.85, 0.35)
+			_chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(colour, 0.6), 1.0)
+			_chart.draw_rect(Rect2(spot - Vector2(4, 4), Vector2(8, 8)), colour)
+			_chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else "торговец",
+				HORIZONTAL_ALIGNMENT_CENTER, 140, 12, colour)
+	var ship := area.position + client.ship_pos() * scale
+	if client.ship_under_way():
+		var dest := area.position + client.ship_dest * scale
+		_chart.draw_line(ship, dest, Color(1, 1, 1, 0.55), 1.0)
+		_chart.draw_line(dest + Vector2(-5, -5), dest + Vector2(5, 5), Color.WHITE, 1.0)
+		_chart.draw_line(dest + Vector2(-5, 5), dest + Vector2(5, -5), Color.WHITE, 1.0)
+	_chart.draw_circle(ship, 5.0, Color.WHITE)
+	_chart.draw_arc(ship, 9.0, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 1.0)
+
+
 func _draw_chart() -> void:
 	## The chart of sectors: where the ship is, where it can jump, what is known about the rest.
+	if _console_kind == 4:
+		_draw_helm()
+		return
 	var sectors := client.sectors
 	if sectors.count == 0:
 		return
@@ -468,7 +553,7 @@ func show_debug(on: bool) -> void:
 
 func open_console_here() -> void:
 	## Test helper: open the console our character faces, as the "use" key would.
-	if client.use_target() >= 3:
+	if client.use_target() == 3 or client.use_target() == 4:
 		_open_console(client.use_target())
 
 
@@ -542,7 +627,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_set_pause(not _pause.visible)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or client.use_target() >= 3):
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or client.use_target() == 3 or client.use_target() == 4):
 		# a bridge console: the key opens its screen, and closes it again
 		_open_console(0 if _console.visible else client.use_target())
 		get_viewport().set_input_as_handled()
@@ -632,7 +717,9 @@ func _process(delta: float) -> void:
 		_hint.text = "E: карта сектора"
 	elif target == 4:
 		_hint.text = "E: управление кораблём"
-	_work_bar.visible = target == 1 and client.work > 0
+	elif target == 5:
+		_hint.text = "Чиню пульт…" if (_use_held and client.work > 0) else "Пульт не работает. Держите E, чтобы починить"
+	_work_bar.visible = (target == 1 or target == 5) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 
 	var now_s := Time.get_ticks_msec() / 1000.0

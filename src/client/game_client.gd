@@ -65,6 +65,11 @@ var jump_to := Net.NO_SECTOR         # the sector it is jumping to, if any
 var jump_tick := 0                   # the server tick the jump lands on
 var drive_ready := 0                 # the server tick from which the drive can be used again
 var visited := 1                     # sectors the ship has been in, as bits
+var ship_from := Vector2.ZERO        # where the ship was inside its sector on tick `ship_tick`
+var ship_dest := Vector2.ZERO        # where it is heading
+var ship_moving := false
+var ship_tick := 0
+var broken := {}                     # bridge consoles out of order: wall cell -> true
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -179,6 +184,8 @@ func close() -> void:
 	jump_to = Net.NO_SECTOR
 	visited = 1
 	_nav_known = false
+	ship_moving = false
+	broken.clear()
 	bytes_in = 0
 	packets_in = 0
 
@@ -225,6 +232,25 @@ func send_jump(target: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_JUMP, target]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_helm(go: bool, to: Vector2 = Vector2.ZERO) -> void:
+	## Sets a course inside the sector or stops the ship. The server agrees
+	## only while our character stands at the ship's controls.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_HELM, 1 if go else 0, clampi(roundi(to.x), 0, 200), clampi(roundi(to.y), 0, 200)]),
+			ENetPacketPeer.FLAG_RELIABLE)
+
+
+func ship_pos() -> Vector2:
+	## Where the ship is inside its sector right now: it moves in a straight line at a fixed speed.
+	if not ship_moving:
+		return ship_from
+	return ship_from.move_toward(ship_dest, Sectors.SHIP_SPEED * maxf(server_now() - ship_tick, 0.0) / Net.TICK_HZ)
+
+
+func ship_under_way() -> bool:
+	return ship_moving and not ship_pos().is_equal_approx(ship_dest)
+
+
 func server_now() -> float:
 	## Our best guess of the server's tick right now.
 	return now_ticks() + _recv_offset
@@ -243,7 +269,8 @@ func send_suit(on: bool) -> void:
 
 func use_target() -> int:
 	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
-	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls.
+	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
+	## 5 = a bridge console that is out of order and can be mended.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -253,6 +280,8 @@ func use_target() -> int:
 		return 1
 	if map.oxygen.has(cell):
 		return 2
+	if broken.has(cell):
+		return 5
 	if map.chart.has(cell):
 		return 3
 	if map.helm.has(cell):
@@ -463,6 +492,16 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			visited = pkt.decode_u32(11)
 			if sector != was and phase == PLAYING:
 				arrived.emit()
+		Net.S_HELM:
+			ship_from = Vector2(pkt.decode_s16(1), pkt.decode_s16(3)) / 10.0
+			ship_moving = pkt[5] != 0
+			ship_dest = Vector2(pkt[6], pkt[7])
+			ship_tick = pkt.decode_u32(8)
+		Net.S_DEVICES:
+			broken.clear()
+			for i in pkt[1]:
+				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
+			ship_changes += 1
 		Net.S_CHAT:
 			var n := pkt.decode_u16(3)
 			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())

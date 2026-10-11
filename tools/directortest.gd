@@ -39,6 +39,7 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 			here = i
 	server.sectors.kind[here] = kind
 	server.sector = here
+	server.ship_pos = server.sectors.entry[here]      # in a meteor stream that is inside the stream
 	server.director.entered_sector()
 	var minutes := 30
 	var most_holes := 0

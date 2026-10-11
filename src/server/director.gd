@@ -23,6 +23,7 @@ const SIZE_NAMES: Array[String] = ["мелкое", "среднее", "больш
 
 const MICROMETEORITE := 1
 const METEOR_VOLLEY := 2
+const CONSOLE_FAULT := 3
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -30,6 +31,8 @@ const EVENTS: Array[Dictionary] = [
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 10},
 	{"id": METEOR_VOLLEY, "name": "Метеорный залп", "size": MEDIUM,
 		"where": [Sectors.METEORS], "weight": 4},
+	{"id": CONSOLE_FAULT, "name": "Замыкание пульта", "size": MEDIUM,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -39,7 +42,8 @@ const PACE := {
 	Sectors.TRADER: [180.0, 360.0],
 }
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
-const SETTLE_SECONDS := 25.0         # quiet after arriving in a sector
+const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector
+const STREAM_GRACE_SECONDS := 8.0    # quiet after flying into or out of a meteor stream
 
 var server: Node                     # the GameServer: the director reads it and calls its methods
 var auto := true                     # false: only events fired by hand happen
@@ -60,6 +64,11 @@ func entered_sector() -> void:
 	## The ship has just arrived somewhere: give the crew a breather, then start this sector's pace.
 	_queue.clear()
 	_schedule(SETTLE_SECONDS)
+
+
+func surroundings_changed() -> void:
+	## The ship has flown into or out of something inside the sector: the pace changes with it.
+	_schedule(STREAM_GRACE_SECONDS)
 
 
 func tick() -> void:
@@ -94,7 +103,7 @@ func assess() -> Dictionary:
 			crew += 1
 			if p.cond == Net.COND_OK:
 				crew_up += 1
-	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.sector_kind()}
+	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind()}
 
 
 func fire(event_id: int) -> bool:
@@ -113,6 +122,8 @@ func _run(event_id: int) -> void:
 	match event_id:
 		MICROMETEORITE:
 			_do("hole")
+		CONSOLE_FAULT:
+			server.break_console()
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -126,7 +137,7 @@ func _do(what: String) -> void:
 
 
 func _pick() -> Dictionary:
-	var here: int = server.sector_kind()
+	var here: int = server.danger_kind()
 	var total := 0
 	for e: Dictionary in EVENTS:
 		if (e["where"] as Array).has(here):
@@ -145,7 +156,7 @@ func _pick() -> Dictionary:
 func _schedule(at_least: float) -> void:
 	## Sets when the next automatic event may come: this sector's pace, sooner
 	## with a bigger crew, never sooner than `at_least` seconds.
-	var here: int = server.sector_kind()
+	var here: int = server.danger_kind()
 	var wait := 600.0
 	if PACE.has(here):
 		var span: Array = PACE[here]

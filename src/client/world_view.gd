@@ -29,6 +29,10 @@ var _label_layer: CanvasLayer
 var _ghost: Sprite2D
 var _stars := PackedVector2Array()
 var _star_sizes := PackedByteArray()
+var _star_origin := Vector2.ZERO     # corner and size of the patch of sky the stars are scattered over
+var _star_field := Vector2.ONE
+var _star_shift := Vector2.ZERO      # how far the sky has slid: follows the ship's place in its sector
+const STAR_PIXELS_PER_UNIT := 9.0
 var _source_id := 0
 var _door_tiles: Array = []          # per door kind: tile ids for [shut, half open, open]
 var _door_shown := PackedInt32Array()  # per door: which of those is on screen
@@ -108,6 +112,8 @@ func setup(p_client: GameClient) -> void:
 	rng.seed = 20261010
 	var w := map.width * _tile
 	var h := map.height * _tile
+	_star_origin = Vector2(-700.0, -500.0)
+	_star_field = Vector2(w + 1400.0, h + 1000.0)
 	for i in 420:
 		_stars.append(Vector2(rng.randf_range(-700.0, w + 700.0), rng.randf_range(-500.0, h + 500.0)).floor())
 		_star_sizes.append(2 if rng.randf() < 0.12 else 1)
@@ -115,10 +121,12 @@ func setup(p_client: GameClient) -> void:
 
 
 func _draw() -> void:
+	# the stars slide past as the ship moves inside its sector, and wrap around
 	for i in _stars.size():
 		var s := float(_star_sizes[i])
 		var c := Color(0.75, 0.8, 1.0, 0.9) if s > 1.0 else Color(0.6, 0.65, 0.8, 0.55)
-		draw_rect(Rect2(_stars[i], Vector2(s, s)), c)
+		var at := (_stars[i] - _star_origin + _star_shift * (1.6 if s > 1.0 else 1.0)).posmodv(_star_field) + _star_origin
+		draw_rect(Rect2(at.floor(), Vector2(s, s)), c)
 
 
 func _feet(pos_tiles: Vector2) -> Vector2:
@@ -170,8 +178,8 @@ func _update_ship(delta: float) -> void:
 				(_hole_views[cell] as Sprite2D).queue_free()
 				_hole_views.erase(cell)
 		_air_view.queue_redraw()
-	elif not client.holes.is_empty():
-		_air_view.queue_redraw()             # air streaming out is animated
+	elif not client.holes.is_empty() or not client.broken.is_empty():
+		_air_view.queue_redraw()             # air streaming out and sparking consoles are animated
 
 
 func _draw_air() -> void:
@@ -180,6 +188,16 @@ func _draw_air() -> void:
 	## like any other, and only the pressure gauge tells (the author's decision).
 	var map := client.map
 	var now := Time.get_ticks_msec() / 1000.0
+	# a console that is out of order: its screen is dark and it throws sparks
+	for cell: int in client.broken.keys():
+		var corner := Vector2(cell % map.width, cell / map.width) * _tile
+		_air_view.draw_rect(Rect2(corner + Vector2(7, 9), Vector2(18, 13)), Color(0.02, 0.02, 0.04, 0.82))
+		var beat := int(now * 9.0) + cell
+		if beat % 3 != 0:
+			var from := corner + Vector2(10 + (beat * 7) % 12, 12 + (beat * 5) % 8)
+			var to := from + Vector2(((beat * 13) % 9) - 4, ((beat * 11) % 9) - 2)
+			_air_view.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
+			_air_view.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
 	for cell: int in client.holes.keys():
 		var hx := cell % map.width
 		var hy := cell / map.width
@@ -207,6 +225,10 @@ func _process(delta: float) -> void:
 	var zoom := clampf(floorf(get_viewport_rect().size.y / 230.0), 2.0, 6.0)
 	_camera.zoom = Vector2(zoom, zoom)
 	_update_ship(delta)
+	var shift := -client.ship_pos() * STAR_PIXELS_PER_UNIT
+	if not shift.is_equal_approx(_star_shift):
+		_star_shift = shift
+		queue_redraw()
 
 	# characters
 	for id: int in client.ents.keys():

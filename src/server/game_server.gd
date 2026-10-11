@@ -73,6 +73,11 @@ var jump_to := Net.NO_SECTOR           # the sector it is jumping to, if any
 var jump_tick := 0                     # the tick the jump lands on
 var drive_ready := 0                   # the tick from which the drive can be used again
 var visited := 1                       # sectors the ship has been in, as bits
+var ship_pos := Vector2.ZERO           # where the ship is inside its sector (see Sectors.SPAN)
+var ship_dest := Vector2.ZERO          # where it is heading
+var ship_moving := false
+var in_reach := false                  # inside the sector's meteor stream, or docked at its station or trader
+var broken := {}                       # bridge consoles out of order: wall cell -> true
 var director := Director.new()
 
 # counters for the status line
@@ -123,6 +128,11 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	jump_tick = 0
 	drive_ready = 0
 	visited = 1
+	ship_pos = sectors.entry[0]
+	ship_dest = ship_pos
+	ship_moving = false
+	in_reach = sectors.within_reach(0, ship_pos)
+	broken.clear()
 	director.setup(self)
 	_rng.randomize()
 	tick = 0
@@ -269,6 +279,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_JUMP:
 		if pkt.size() > 1:
 			_jump_asked(p, pkt[1])
+	elif kind == Net.C_HELM:
+		if pkt.size() > 3:
+			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
 	elif kind == Net.C_ADMIN:
 		if pkt.size() > 3 and shutdown_token != "" and pkt.slice(3).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
@@ -336,6 +349,8 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	chart.append_array(sectors.pack())
 	peer.send(0, chart, ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
 	_announce_join(p, peer)
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
@@ -533,6 +548,96 @@ func sector_kind() -> int:
 	return sectors.kind[sector]
 
 
+func danger_kind() -> int:
+	## What the director should treat the ship's surroundings as: a meteor
+	## stream is only dangerous while the ship is inside it.
+	if sector_kind() == Sectors.METEORS and not in_reach:
+		return Sectors.EMPTY
+	return sector_kind()
+
+
+func _to_all(msg: PackedByteArray) -> void:
+	for q: Player in players:
+		if q != null and q.peer != null:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func _helm_packet() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(12)
+	out.encode_u8(0, Net.S_HELM)
+	out.encode_s16(1, roundi(ship_pos.x * 10.0))
+	out.encode_s16(3, roundi(ship_pos.y * 10.0))
+	out.encode_u8(5, 1 if ship_moving else 0)
+	out.encode_u8(6, roundi(ship_dest.x))
+	out.encode_u8(7, roundi(ship_dest.y))
+	out.encode_u32(8, tick)
+	return out
+
+
+func _devices_packet() -> PackedByteArray:
+	var out := PackedByteArray([Net.S_DEVICES, broken.size()])
+	for cell: int in broken.keys():
+		out.append(cell & 0xFF)
+		out.append(cell >> 8)
+	return out
+
+
+func _at_console(p: Player, cells: Dictionary) -> bool:
+	## Does this player stand facing a working console of that kind?
+	if p.cond != Net.COND_OK:
+		return false
+	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	return ahead >= 0 and cells.has(ahead) and not broken.has(ahead)
+
+
+func _helm_asked(p: Player, go: bool, to: Vector2) -> void:
+	## A player at the ship's controls sets a course inside the sector, or stops the ship.
+	if not _at_console(p, map.helm) or jump_to != Net.NO_SECTOR:
+		return
+	ship_moving = go
+	ship_dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else ship_pos
+	_to_all(_helm_packet())
+
+
+func _update_ship() -> void:
+	if ship_moving:
+		ship_pos = ship_pos.move_toward(ship_dest, Sectors.SHIP_SPEED * Net.TICK_SEC)
+		if ship_pos.is_equal_approx(ship_dest):
+			ship_moving = false
+			_to_all(_helm_packet())
+	var now_in := sectors.within_reach(sector, ship_pos)
+	if now_in == in_reach:
+		return
+	in_reach = now_in
+	match sector_kind():
+		Sectors.METEORS:
+			_ship_says("Корабль вошёл в метеорный поток." if now_in else "Корабль вышел из метеорного потока.")
+			director.surroundings_changed()
+		Sectors.STATION:
+			if now_in:
+				air.refill()
+				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках восполнен.")
+		Sectors.TRADER:
+			if now_in:
+				_ship_says("Торговец на связи, но торговать пока нечем.")
+
+
+func break_console() -> bool:
+	## A bridge console goes out of order. One at a time: while one is broken,
+	## the other stays whole, so the crew always has one way out left.
+	if not broken.is_empty():
+		return false
+	var all: Array = map.chart.keys() + map.helm.keys()
+	if all.is_empty():
+		return false
+	var cell: int = all[_rng.randi_range(0, all.size() - 1)]
+	broken[cell] = true
+	_to_all(_devices_packet())
+	_ship_says("Замыкание на мостике: %s не работает." % ("карта сектора" if map.chart.has(cell) else "управление кораблём"))
+	return true
+
+
 func _nav_packet() -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(15)
@@ -554,11 +659,8 @@ func _tell_nav() -> void:
 
 func _jump_asked(p: Player, target: int) -> void:
 	## A player at the sector console asks for a jump.
-	if p.cond != Net.COND_OK or jump_to != Net.NO_SECTOR or tick < drive_ready:
+	if not _at_console(p, map.chart) or jump_to != Net.NO_SECTOR or tick < drive_ready:
 		return
-	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
-	if ahead < 0 or not map.chart.has(ahead):
-		return                      # not standing at the console
 	if target >= sectors.count or not sectors.linked(sector, target):
 		return
 	start_jump(target, p.name)
@@ -578,15 +680,19 @@ func _update_jump() -> void:
 	jump_to = Net.NO_SECTOR
 	drive_ready = tick + Net.DRIVE_REST_TICKS
 	visited |= 1 << sector
+	ship_pos = sectors.entry[sector]
+	ship_dest = ship_pos
+	ship_moving = false
+	in_reach = sectors.within_reach(sector, ship_pos)
 	_tell_nav()
+	_to_all(_helm_packet())
 	match sector_kind():
 		Sectors.METEORS:
-			_ship_says("Сектор %s. Берегите обшивку." % sectors.describe(sector))
+			_ship_says("Сектор %s. Корабль внутри потока: уйти можно своим ходом с пульта управления или прыжком." % sectors.describe(sector))
 		Sectors.TRADER:
-			_ship_says("Сектор %s. Торговец на связи, но торговать пока нечем." % sectors.describe(sector))
+			_ship_says("Сектор %s. Торговец где-то рядом: подойдите к нему." % sectors.describe(sector))
 		Sectors.STATION:
-			air.refill()
-			_ship_says("Сектор %s. Воздух в отсеках восполнен." % sectors.describe(sector))
+			_ship_says("Сектор %s. Подойдите к станции, чтобы восполнить воздух." % sectors.describe(sector))
 		_:
 			_ship_says("Сектор %s." % sectors.describe(sector))
 	director.entered_sector()
@@ -668,6 +774,7 @@ func _tick() -> void:
 			_record(p)
 	_update_doors()
 	_update_jump()
+	_update_ship()
 	director.tick()
 	if tick % Net.AIR_EVERY == 0:
 		air.step(doors, tick)
@@ -724,6 +831,16 @@ func _update_work(p: Player) -> void:
 			air.set_hole(cell, false)
 			_hull_record(cell, 0)
 			_ship_says("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
+	elif cell >= 0 and broken.has(cell):
+		if p.work_cell != cell:
+			p.work_cell = cell
+			p.work = 0
+		p.work += 1
+		if p.work >= Net.REPAIR_TICKS:
+			p.work = 0
+			broken.erase(cell)
+			_to_all(_devices_packet())
+			_ship_says("%s чинит пульт: %s снова работает." % [p.name, "карта сектора" if map.chart.has(cell) else "управление кораблём"])
 	elif cell >= 0 and map.oxygen.has(cell):
 		p.work = 0
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
