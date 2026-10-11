@@ -5,6 +5,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const Doors := preload("res://src/shared/doors.gd")
 
 
 class State:
@@ -30,7 +31,8 @@ class State:
 
 
 ## Advances one character by one tick. Returns true if a step started.
-static func step(st: State, map: ShipMap, tick: int) -> bool:
+## Walking into a shut door pushes it open and waits in front of it.
+static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
 	if st.cd > 0 or st.dir == 0:
@@ -40,6 +42,11 @@ static func step(st: State, map: ShipMap, tick: int) -> bool:
 	var ny: int = st.y + Net.DY[st.dir]
 	if not map.walkable(nx, ny):
 		return false
+	var door := map.door_at(nx, ny)
+	if door >= 0:
+		doors.bump(door, tick)
+		if not doors.passable(door, tick):
+			return false
 	st.fx = st.x
 	st.fy = st.y
 	st.x = nx

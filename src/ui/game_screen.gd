@@ -28,6 +28,7 @@ var _monitor: TextureRect
 var _monitor_frames: Array[AtlasTexture] = []
 var _monitor_step := 0.08
 var _monitor_time := 0.0
+var _pressure: Label
 var _chat_box: VBoxContainer
 var _chat_lines: Array = []          # [RichTextLabel, time it was added]
 var _chat_input: LineEdit
@@ -103,6 +104,15 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		_monitor.offset_bottom = -14
 		root.add_child(_monitor)
 
+	# air pressure where our character stands
+	_pressure = _text(root, 15)
+	_pressure.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_pressure.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pressure.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_pressure.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_pressure.offset_right = -14
+	_pressure.offset_bottom = -118
+
 	_chat_box = VBoxContainer.new()
 	_chat_box.alignment = BoxContainer.ALIGNMENT_END
 	_chat_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -175,6 +185,20 @@ func _build_pause(root: Control) -> void:
 		var where := ", ".join(addresses) if not addresses.is_empty() else "не найден"
 		info.text = "Вы создали эту игру. Другие игроки в вашей сети подключаются по адресу: %s (порт %d).\nДля игры через интернет порт %d (UDP) нужно открыть на роутере." % [where, host_port, host_port]
 		box.add_child(info)
+	if client.admin_token != "":
+		# until the game makes and mends holes by itself, the host can do it by hand
+		var hole := Button.new()
+		hole.text = "Пробить обшивку рядом (тест)"
+		hole.pressed.connect(func() -> void:
+			client.send_admin(Net.ADMIN_BREACH)
+			_set_pause(false))
+		box.add_child(hole)
+		var mend := Button.new()
+		mend.text = "Заделать все пробоины (тест)"
+		mend.pressed.connect(func() -> void:
+			client.send_admin(Net.ADMIN_SEAL)
+			_set_pause(false))
+		box.add_child(mend)
 	var resume := Button.new()
 	resume.text = "Продолжить"
 	resume.pressed.connect(func() -> void: _set_pause(false))
@@ -237,6 +261,9 @@ func _say(bbcode: String) -> void:
 
 
 func _on_chat(from_id: int, text: String) -> void:
+	if from_id == Net.SYSTEM_ID:
+		_say("[color=#ffb14a][b]Корабль:[/b] %s[/color]" % _escape(text))
+		return
 	var colour := NAME_COLOURS[client.player_colour(from_id) % NAME_COLOURS.size()]
 	_say("[color=#%s][b]%s:[/b][/color] %s" % [colour, _escape(client.player_name(from_id)), _escape(text)])
 
@@ -306,6 +333,19 @@ func _process(delta: float) -> void:
 	if _monitor != null and not _monitor_frames.is_empty():
 		_monitor_time += delta
 		_monitor.texture = _monitor_frames[int(_monitor_time / _monitor_step) % _monitor_frames.size()]
+
+	var here := client.air_at(client.pred.x, client.pred.y)
+	if here >= 0:
+		var kpa := int(round(here * Net.KPA_FULL / Net.AIR_FULL))
+		if here >= Net.AIR_FULL * 0.75:
+			_pressure.text = "Давление: %d кПа" % kpa
+			_pressure.modulate = Color(0.75, 0.95, 0.8)
+		elif here >= Net.AIR_FULL * 0.3:
+			_pressure.text = "Давление падает: %d кПа" % kpa
+			_pressure.modulate = Color(1.0, 0.85, 0.35)
+		else:
+			_pressure.text = "Воздуха почти нет: %d кПа" % kpa
+			_pressure.modulate = Color(1.0, 0.42, 0.36)
 
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
 	_info_timer -= delta

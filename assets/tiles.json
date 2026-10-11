@@ -151,6 +151,21 @@
    "id": 29,
    "name": "floor_n",
    "kind": "floor"
+  },
+  {
+   "id": 30,
+   "name": "door_half",
+   "kind": "door"
+  },
+  {
+   "id": 31,
+   "name": "airlock_closed",
+   "kind": "door"
+  },
+  {
+   "id": 32,
+   "name": "airlock_half",
+   "kind": "door"
   }
  ]
 }

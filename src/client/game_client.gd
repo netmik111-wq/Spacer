@@ -21,6 +21,7 @@ signal notice(text: String)
 const Net := preload("res://src/shared/net.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Mover := preload("res://src/shared/mover.gd")
+const Doors := preload("res://src/shared/doors.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
@@ -45,6 +46,13 @@ var map := ShipMap.new()
 var roster := {}                     # id -> {"name": String, "colour": int, "bot": bool}
 var ents := {}                       # id -> Ent, exactly as the server reported
 var predict := true                  # predict our own character (false = wait for the server)
+var admin_token := ""                # set when this game started the server: unlocks the host's test tools
+
+# the ship itself, as the server last described it
+var doors := Doors.new()
+var air := PackedByteArray()         # per cell: 0..Net.AIR_FULL (cells outside our view keep their last value)
+var holes := {}                      # breached hull cell -> true
+var ship_changes := 0                # goes up whenever doors, hull or air change: views redraw on it
 var want_dir := 0                    # direction the player holds right now; set by the game screen
 
 # for the debug overlay
@@ -54,11 +62,16 @@ var mispredicts := 0
 var steps_predicted := 0
 var checks_ok := 0
 var checks_bad := 0
+var ship_checks_bad := 0             # of those, the ones where doors, hull or air disagreed
 var bytes_in := 0
 var packets_in := 0
 
 var pred := Mover.State.new()        # our own character, predicted
 var pred_tick := 0                   # last tick simulated for it
+var pred_doors := Doors.new()        # the doors as our own predicted walking leaves them
+
+var _auth := Mover.State.new()       # the server's last word on our character...
+var _auth_tick := 0                  # ...and the tick it was true on
 
 var _host: ENetConnection = null
 var _peer: ENetPacketPeer = null
@@ -76,6 +89,7 @@ var _ahead_best := PackedFloat64Array()   # freshest clock reading in each of th
 var _ahead_slot := -1
 
 var _have_self := false
+var _have_auth := false
 var _inputs: Array = []              # input changes not yet confirmed: [seq, apply tick, dir, applied]
 var _seq := 0
 var _sent_dir := 0
@@ -121,6 +135,7 @@ func close() -> void:
 	_ahead_best.clear()
 	_ahead_slot = -1
 	_have_self = false
+	_have_auth = false
 	_view_cx = -100
 	_view_cy = -100
 	_sent_dir = 0
@@ -132,6 +147,9 @@ func close() -> void:
 	steps_predicted = 0
 	checks_ok = 0
 	checks_bad = 0
+	ship_checks_bad = 0
+	holes.clear()
+	admin_token = ""
 	bytes_in = 0
 	packets_in = 0
 
@@ -164,6 +182,32 @@ func stop_server_and_close(token: String) -> void:
 			_host.service(0)
 			OS.delay_msec(5)
 	close()
+
+
+func send_admin(command: int) -> void:
+	## The hosting player's test tools (Net.ADMIN_*). The server ignores them without the right token.
+	if phase != PLAYING or admin_token.is_empty():
+		return
+	var msg := PackedByteArray([Net.C_ADMIN, command])
+	msg.append_array(admin_token.to_utf8_buffer())
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func air_at(x: int, y: int) -> int:
+	## Air in a cell, 0..Net.AIR_FULL; -1 where nobody can stand.
+	if not map.walkable(x, y):
+		return -1
+	return air[y * map.width + x]
+
+
+func door_open_amount(door: int) -> float:
+	## 0 = shut, 1 = open, in between while it slides. Our own pushes show at once.
+	var table := pred_doors if (predict and _have_self) else doors
+	var ready := table.ready[door]
+	if ready == Doors.CLOSED:
+		return 0.0
+	var t := pred_time() if (predict and _have_self) else now_ticks() + _recv_offset
+	return clampf(1.0 - (float(ready) - t) / float(Doors.OPEN_TICKS), 0.0, 1.0)
 
 
 func player_name(id: int) -> String:
@@ -340,6 +384,11 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 		close()
 		failed.emit(problem)
 		return
+	doors.setup(map.doors.size())
+	pred_doors.setup(map.doors.size())
+	air.resize(map.width * map.height)
+	air.fill(0)
+	holes.clear()
 	phase = PLAYING
 	joined.emit()
 
@@ -350,6 +399,8 @@ func _on_world(pkt: PackedByteArray) -> void:
 	_update_clock(s_tick)
 	var size := pkt.size()
 	var pos := 5
+	var doors_moved := false
+	var reconciled := false
 	while pos < size:
 		var sec := pkt[pos]
 		pos += 1
@@ -361,7 +412,51 @@ func _on_world(pkt: PackedByteArray) -> void:
 				pos += Net.ENT_BYTES
 		elif sec == Net.SEC_SELF:
 			_reconcile(s_tick, pkt, pos)
+			reconciled = true
 			pos += Net.SELF_BYTES
+		elif sec == Net.SEC_DOOR:
+			var count := pkt.decode_u16(pos)
+			pos += 2
+			for i in count:
+				var ready := pkt.decode_s32(pos + 2)
+				doors.ready[pkt.decode_u16(pos)] = Doors.CLOSED if ready < 0 else ready
+				pos += Net.DOOR_BYTES
+			doors_moved = true
+			ship_changes += 1
+		elif sec == Net.SEC_HULL:
+			var count := pkt.decode_u16(pos)
+			pos += 2
+			for i in count:
+				var cell := pkt.decode_s16(pos + 2) * map.width + pkt.decode_s16(pos)
+				if pkt[pos + 4] != 0:
+					holes[cell] = true
+				else:
+					holes.erase(cell)
+				pos += Net.HULL_BYTES
+			ship_changes += 1
+		elif sec == Net.SEC_AIR:
+			var x0 := pkt[pos] * 16
+			var y0 := pkt[pos + 1] * 16
+			var count := pkt.decode_u16(pos + 2)
+			pos += 4
+			for i in count:
+				var local := pkt[pos]
+				air[(y0 + (local >> 4)) * map.width + x0 + (local & 15)] = pkt[pos + 1]
+				pos += 2
+			ship_changes += 1
+		elif sec == Net.SEC_AIR_FULL:
+			var x0 := pkt[pos] * 16
+			var y0 := pkt[pos + 1] * 16
+			pos += 2
+			for ly in 16:
+				if y0 + ly >= map.height:
+					break
+				for lx in 16:
+					if x0 + lx >= map.width:
+						break
+					air[(y0 + ly) * map.width + x0 + lx] = pkt[pos + ly * 16 + lx]
+			pos += 256
+			ship_changes += 1
 		elif sec == Net.SEC_VIEW:
 			_view_cx = pkt[pos]
 			_view_cy = pkt[pos + 1]
@@ -370,19 +465,48 @@ func _on_world(pkt: PackedByteArray) -> void:
 				var e: Ent = ents[id]
 				if _outside_view(e.x, e.y):
 					ents.erase(id)
+			for cell: int in holes.keys():
+				if _outside_view(cell % map.width, cell / map.width):
+					holes.erase(cell)
 		elif sec == Net.SEC_CHECK:
 			var want := pkt.decode_u32(pos)
-			pos += 4
+			var want_ship := pkt.decode_u32(pos + 4)
+			pos += 8
 			var sum := 0
 			for e: Ent in ents.values():
 				sum += Net.ent_hash(e.id, e.x, e.y, e.facing)
-			if (sum & 0xFFFFFFFF) == want:
+			var ship_ok := (_ship_sum() & 0xFFFFFFFF) == want_ship
+			if (sum & 0xFFFFFFFF) == want and ship_ok:
 				checks_ok += 1
 			else:
 				checks_bad += 1
+				if not ship_ok:
+					ship_checks_bad += 1
 		else:
 			push_warning("Непонятный раздел %d в пакете сервера." % sec)
 			return
+	if doors_moved and not reconciled:
+		_rebuild_prediction()     # a door somebody else moved may change where our own walking ends up
+
+
+func _ship_sum() -> int:
+	## Checksum of the doors, holes and air in the chunks we are shown (see Net.*_hash).
+	var sum := 0
+	for d in doors.ready.size():
+		var at: Vector2i = map.doors[d]
+		if not _outside_view(at.x, at.y):
+			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d])
+	for cell: int in holes.keys():
+		sum += Net.hull_hash(cell % map.width, cell / map.width)
+	for cy in range(maxi(_view_cy - 1, 0), mini(_view_cy + 2, map.chunks_high())):
+		for cx in range(maxi(_view_cx - 1, 0), mini(_view_cx + 2, map.chunks_wide())):
+			for y in range(cy * 16, mini(cy * 16 + 16, map.height)):
+				var row := y * map.width
+				for x in range(cx * 16, mini(cx * 16 + 16, map.width)):
+					var a := air[row + x]
+					if a != 0:
+						sum += Net.air_hash(x, y, a)
+	return sum
 
 
 func _outside_view(x: int, y: int) -> bool:
@@ -467,38 +591,56 @@ func _simulate_to_now() -> void:
 			if not inp[3] and int(inp[1]) <= pred_tick:
 				pred.dir = inp[2]
 				inp[3] = true
-		if Mover.step(pred, map, pred_tick):
+		if Mover.step(pred, map, pred_doors, pred_tick):
 			steps_predicted += 1
+	pred_doors.bumped.clear()
 
 
 func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
-	## The server's word on our own character at tick `s_tick`. Rebuild the
-	## prediction from it: start from that state and replay the input changes
-	## the server has not confirmed yet.
-	var st := Mover.State.new()
-	st.x = pkt.decode_s16(o)
-	st.y = pkt.decode_s16(o + 2)
-	st.cd = pkt[o + 4]
-	st.facing = pkt[o + 5]
-	st.dir = pkt[o + 6]
+	## The server's word on our own character at tick `s_tick`.
+	_auth.x = pkt.decode_s16(o)
+	_auth.y = pkt.decode_s16(o + 2)
+	_auth.cd = pkt[o + 4]
+	_auth.facing = pkt[o + 5]
+	_auth.dir = pkt[o + 6]
 	var ack := pkt.decode_u16(o + 7)
-	st.move_tick = pkt.decode_s32(o + 9)
-	st.fx = pkt.decode_s16(o + 13)
-	st.fy = pkt.decode_s16(o + 15)
+	_auth.move_tick = pkt.decode_s32(o + 9)
+	_auth.fx = pkt.decode_s16(o + 13)
+	_auth.fy = pkt.decode_s16(o + 15)
+	_auth_tick = s_tick
 	for i in _inputs.size():
 		if (int(_inputs[i][0]) & 0xFFFF) == ack:
 			_inputs = _inputs.slice(i + 1)
 			break
-	if pred_tick < s_tick:
-		pred_tick = s_tick           # our predicted clock was behind the server
-	var t := s_tick
+	_have_auth = true
+	_rebuild_prediction()
+
+
+func _rebuild_prediction() -> void:
+	## Rebuilds the prediction from the server's last word: start from that
+	## state and the doors as the server describes them, and replay the input
+	## changes the server has not confirmed yet.
+	## (A door the server has shut since is treated as shut for the whole
+	## replay. That is safe while doors stay open longer than the replayed
+	## stretch: see Doors.HOLD_TICKS.)
+	if not _have_auth:
+		return
+	var st := Mover.State.new()
+	st.copy_from(_auth)
+	var table := Doors.new()
+	table.copy_from(doors)
+	if pred_tick < _auth_tick:
+		pred_tick = _auth_tick       # our predicted clock was behind the server
+	var t := _auth_tick
 	var k := 0
 	while t < pred_tick:
 		t += 1
 		while k < _inputs.size() and int(_inputs[k][1]) <= t:
 			st.dir = _inputs[k][2]
 			k += 1
-		Mover.step(st, map, t)
+		Mover.step(st, map, table, t)
+	table.bumped.clear()
+	pred_doors = table
 	for i in _inputs.size():
 		_inputs[i][3] = i < k
 	if not _have_self:

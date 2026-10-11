@@ -4,6 +4,7 @@ extends Node2D
 
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
@@ -21,12 +22,22 @@ var _layer: TileMapLayer
 var _chars: Node2D
 var _camera: Camera2D
 var _chars_tex: Texture2D
+var _breach_tex: Texture2D
 var _views := {}                     # id -> Sprite2D
 var _labels := {}                    # id -> Label
 var _label_layer: CanvasLayer
 var _ghost: Sprite2D
 var _stars := PackedVector2Array()
 var _star_sizes := PackedByteArray()
+var _source_id := 0
+var _door_tiles: Array = []          # per door kind: tile ids for [shut, half open, open]
+var _door_shown := PackedInt32Array()  # per door: which of those is on screen
+var _door_was_open := PackedByteArray()
+var _door_closing := PackedFloat32Array()   # per door: seconds left of the closing frame
+var _holes: Node2D
+var _hole_views := {}                # hull cell -> Sprite2D
+var _air_view: Node2D
+var _ship_seen := -1                 # client.ship_changes when the hull and air were last redrawn
 
 
 func setup(p_client: GameClient) -> void:
@@ -41,6 +52,7 @@ func setup(p_client: GameClient) -> void:
 	atlas.texture = load("res://assets/tiles.png")
 	atlas.texture_region_size = Vector2i(_tile, _tile)
 	var source_id := tiles.add_source(atlas)
+	_source_id = source_id
 	for i in map.tile_kinds.size():
 		atlas.create_tile(Vector2i(i % map.atlas_columns, i / map.atlas_columns))
 	_layer = TileMapLayer.new()
@@ -52,10 +64,27 @@ func setup(p_client: GameClient) -> void:
 			if id >= 0:
 				_layer.set_cell(Vector2i(x, y), source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
 
+	# doors are redrawn as they open and close
+	_door_tiles = [
+		[map.tile_ids["door"], map.tile_ids["door_half"], map.tile_ids["door_open"]],
+		[map.tile_ids["airlock_closed"], map.tile_ids["airlock_half"], map.tile_ids["airlock"]],
+	]
+	_door_shown.resize(map.doors.size())
+	_door_shown.fill(-1)
+	_door_was_open.resize(map.doors.size())
+	_door_closing.resize(map.doors.size())
+
+	_holes = Node2D.new()
+	add_child(_holes)
+	_air_view = Node2D.new()
+	_air_view.draw.connect(_draw_air)
+	add_child(_air_view)
+
 	_chars = Node2D.new()
 	_chars.y_sort_enabled = true
 	add_child(_chars)
 	_chars_tex = load("res://assets/chars.png")
+	_breach_tex = load("res://assets/breach.png")
 
 	_ghost = Sprite2D.new()
 	_ghost.texture = _chars_tex
@@ -108,11 +137,81 @@ func _cell(column: int, colour: int) -> Rect2:
 	return Rect2(column * (CHAR_W + 2 * CHAR_PAD) + CHAR_PAD, colour * (CHAR_H + 2 * CHAR_PAD) + CHAR_PAD, CHAR_W, CHAR_H)
 
 
-func _process(_delta: float) -> void:
+func _update_ship(delta: float) -> void:
+	var map := client.map
+	# doors: shut, sliding or open
+	for d in map.doors.size():
+		var amount := client.door_open_amount(d)
+		var frame := 0 if amount <= 0.0 else (2 if amount >= 1.0 else 1)
+		if frame == 0 and _door_was_open[d] == 1:
+			_door_closing[d] = 0.12          # show the half-open frame for a moment on the way shut
+		_door_was_open[d] = 1 if frame == 2 else 0
+		if _door_closing[d] > 0.0:
+			_door_closing[d] -= delta
+			if frame == 0:
+				frame = 1
+		if frame != _door_shown[d]:
+			_door_shown[d] = frame
+			var id: int = _door_tiles[map.door_kind[d]][frame]
+			_layer.set_cell(map.doors[d], _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+	# holes in the hull
+	if client.ship_changes != _ship_seen:
+		_ship_seen = client.ship_changes
+		for cell: int in client.holes.keys():
+			if not _hole_views.has(cell):
+				var hole := Sprite2D.new()
+				hole.texture = _breach_tex
+				hole.centered = false
+				hole.position = Vector2(cell % map.width, cell / map.width) * _tile
+				_holes.add_child(hole)
+				_hole_views[cell] = hole
+		for cell: int in _hole_views.keys():
+			if not client.holes.has(cell):
+				(_hole_views[cell] as Sprite2D).queue_free()
+				_hole_views.erase(cell)
+		_air_view.queue_redraw()
+	elif not client.holes.is_empty():
+		_air_view.queue_redraw()             # air streaming out is animated
+
+
+func _draw_air() -> void:
+	## Thin air darkens a cell; next to a hole, streaks show the air rushing out.
+	var map := client.map
+	for y in map.height:
+		for x in map.width:
+			var a := client.air_at(x, y)
+			if a < 0 or a >= Net.AIR_FULL - 2:
+				continue
+			var thin := 1.0 - float(a) / Net.AIR_FULL
+			_air_view.draw_rect(Rect2(x * _tile, y * _tile, _tile, _tile), Color(0.03, 0.05, 0.16, 0.62 * pow(thin, 0.8)))
+	var now := Time.get_ticks_msec() / 1000.0
+	for cell: int in client.holes.keys():
+		var hx := cell % map.width
+		var hy := cell / map.width
+		var hole_at := Vector2(hx + 0.5, hy + 0.5) * _tile
+		for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var a := client.air_at(hx + o.x, hy + o.y)
+			if a <= 2:
+				continue
+			var strength := float(a) / Net.AIR_FULL
+			var from_cell := Vector2(hx + o.x + 0.5, hy + o.y + 0.5) * _tile
+			for k in 6:
+				# each streak starts at its own spot around the cell and flies into the hole
+				var seed_a := float((cell * 31 + k * 17) % 97) / 97.0
+				var seed_b := float((cell * 13 + k * 29) % 89) / 89.0
+				var start := from_cell + Vector2(seed_a - 0.5, seed_b - 0.5) * _tile * 1.6 + Vector2(o) * _tile * 0.5
+				var phase := fposmod(now * (1.4 + seed_b) + seed_a, 1.0)
+				var head := start.lerp(hole_at, phase)
+				var tail := start.lerp(hole_at, maxf(phase - 0.16, 0.0))
+				_air_view.draw_line(tail, head, Color(0.86, 0.92, 1.0, 0.55 * strength * (1.0 - phase * 0.5)), 1.0)
+
+
+func _process(delta: float) -> void:
 	if client == null or client.phase != GameClient.PLAYING:
 		return
 	var zoom := clampf(floorf(get_viewport_rect().size.y / 230.0), 2.0, 6.0)
 	_camera.zoom = Vector2(zoom, zoom)
+	_update_ship(delta)
 
 	# characters
 	for id: int in client.ents.keys():

@@ -16,7 +16,9 @@ extends Node
 ## Test helpers: --demo (walk around without a keyboard), demo_until=SECONDS,
 ## path=DIR:SECONDS,... (scripted walk), trace=FILE (positions every frame),
 ## say=TEXT (send a chat line), --debug (show the F3 overlay),
-## quit_after=SECONDS, shot=FILE.png with shot_after=SECONDS, stats=FILE.json.
+## quit_after=SECONDS, shot=FILE.png with shot_after=SECONDS, stats=FILE.json,
+## breach_after=SECONDS / seal_after=SECONDS (the host's test tools; on a
+## dedicated server breach_after tears a random hole).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -53,6 +55,8 @@ var _said := false
 var _debug_shown := false
 var _pause_shown := false
 var _rehosted := false
+var _breached := false
+var _sealed := false
 var _trace: FileAccess = null
 
 
@@ -158,7 +162,6 @@ func _start_server_process(port: int, bots: int) -> bool:
 	## Runs the server as a second copy of the game without a window. A server
 	## inside the game would freeze for everybody whenever this window is
 	## dragged, resized or otherwise held up; a separate process does not care.
-	_server_token = "%08x%08x" % [randi(), randi()]
 	var args := PackedStringArray(["--headless"])
 	if OS.has_feature("editor"):         # started from the editor: the program is Godot itself
 		args.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://")]))
@@ -174,6 +177,7 @@ func _host_game(player: String, port: int, bots: int) -> void:
 	_hosting = true
 	_host_name = player
 	_host_bots = bots
+	_server_token = "%08x%08x" % [randi(), randi()]   # lets this game, and nobody else, command the server
 	if not _flags.has("inproc") and _start_server_process(port, bots):
 		_host_tries = 3
 		if _connect(player, "127.0.0.1", port):
@@ -189,6 +193,7 @@ func _host_inside(port: int) -> void:
 	_show_menu("")
 	_server = GameServer.new()
 	add_child(_server)
+	_server.shutdown_token = _server_token
 	var problem := _server.start(port, "ship01", _host_bots)
 	if problem != "":
 		_stop_server()
@@ -222,6 +227,8 @@ func _on_joined() -> void:
 	_screen.demo_walk = _flags.has("demo")
 	if _opt.has("predict"):
 		_client.predict = str(_opt["predict"]) != "0"
+	if _hosting:
+		_client.admin_token = _server_token
 	_screen.setup(_client, _hosting, _pending_port)
 	_screen.exit_requested.connect(_leave)
 
@@ -290,6 +297,16 @@ func _process(_delta: float) -> void:
 		else:
 			_show_menu("Сервер остановился.", true)
 	# test helpers; unused in normal play
+	if _opt.has("breach_after") and not _breached and t >= float(_opt["breach_after"]):
+		if _flags.has("server") and _server != null:
+			_breached = true
+			_server.breach_random()
+		elif _screen != null:
+			_breached = true
+			_client.send_admin(Net.ADMIN_BREACH)
+	if _opt.has("seal_after") and not _sealed and _screen != null and t >= float(_opt["seal_after"]):
+		_sealed = true
+		_client.send_admin(Net.ADMIN_SEAL)
 	if _opt.has("path") and _screen != null:
 		# "4:1.5,0:0.5,3:1.5" = hold right 1.5 s, stand 0.5 s, hold left 1.5 s (after joining)
 		if _path_t0 < 0.0:
@@ -343,6 +360,8 @@ func _process(_delta: float) -> void:
 					"checks_bad": _client.checks_bad, "packets_in": _client.packets_in,
 					"bytes_in": _client.bytes_in, "pred_x": _client.pred.x, "pred_y": _client.pred.y,
 					"steps_predicted": _client.steps_predicted,
+					"ship_checks_bad": _client.ship_checks_bad, "holes": _client.holes.size(),
+					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))
 		if _client != null:

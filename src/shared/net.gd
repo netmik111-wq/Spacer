@@ -3,13 +3,17 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 1
+const PROTOCOL := 2
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
 const TICK_SEC := 1.0 / TICK_HZ
 const MOVE_TICKS := 4               # one tile step lasts 4 ticks = 0.2 s (5 tiles per second)
 const CHUNK_SHIFT := 4              # the world is replicated in 16x16-tile chunks
+const AIR_EVERY := 2                # the air is recalculated every 2nd tick (10 times a second)
+const AIR_SEND_EVERY := 4           # and its changes are sent every 4th tick (5 times a second)
+const AIR_FULL := 200               # air in a cell as sent over the network: 200 = normal pressure, 0 = vacuum
+const KPA_FULL := 101.0             # normal pressure in kilopascals, for display
 
 const MAX_NAME := 16
 const MAX_CHAT := 160
@@ -28,6 +32,7 @@ const C_HELLO := 1                  # u16 protocol, u8 name length, name
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
+const C_ADMIN := 5                  # u8 command, secret text: test tools of the hosting player (see ADMIN_*)
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
@@ -40,13 +45,23 @@ const S_CHAT := 16                  # u16 from id, u16 length, text
 
 # --- sections inside S_WORLD ---
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 facing (255 = gone)
+const SEC_DOOR := 2                 # u16 count, then 6-byte records: u16 door, s32 tick it is passable from (-1 = shut)
+const SEC_HULL := 3                 # u16 count, then 5-byte records: s16 x, s16 y, u8 state (1 = breached, 0 = whole)
 const SEC_VIEW := 4                 # u8 chunk x, u8 chunk y: the centre of what this client is shown
-const SEC_CHECK := 5                # u32 checksum of the entities this client should know
+const SEC_CHECK := 5                # u32 checksum of the entities this client should know, u32 of doors, hull and air
+const SEC_AIR := 6                  # u8 chunk x, u8 chunk y, u16 count, then pairs: u8 cell in the chunk (y*16+x), u8 air
 const SEC_SELF := 7                 # authoritative state of the client's own character (see pack_self)
+const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of all 256 cells of the chunk
 
 const FACING_GONE := 255
 const ENT_BYTES := 7
 const SELF_BYTES := 17
+const DOOR_BYTES := 6
+const HULL_BYTES := 5
+
+const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked
+const ADMIN_SEAL := 2               # close every hole (until repairs exist in the game)
+const SYSTEM_ID := 65535            # "from" of chat lines written by the ship itself
 
 const REJECT_VERSION := 1
 const REJECT_FULL := 2
@@ -70,3 +85,16 @@ static func reject_text(reason: int) -> String:
 ## set of entities. Must stay identical on both sides.
 static func ent_hash(id: int, x: int, y: int, facing: int) -> int:
 	return id * 31 + x * 17 + y * 13 + facing * 7 + 1
+
+
+## The same for the ship itself: doors, holes in the hull and air.
+static func door_hash(door: int, ready: int) -> int:
+	return (door + 1) * 131 + (ready & 0xFFFF) * 7 + 3
+
+
+static func hull_hash(x: int, y: int) -> int:
+	return x * 29 + y * 37 + 11
+
+
+static func air_hash(x: int, y: int, air: int) -> int:
+	return air * ((x & 15) + (y & 15) * 16 + 1)

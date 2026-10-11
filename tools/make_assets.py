@@ -61,6 +61,10 @@ TILES = [
     ("floor_m_b", (4, 2), "floor"),
     ("floor_r_b", (7, 2), "floor"),
     ("floor_n", (1, 1), "floor"),
+    # door states drawn in code (new tiles go at the end: maps store tile numbers)
+    ("door_half", None, "door"),
+    ("airlock_closed", None, "door"),
+    ("airlock_half", None, "door"),
 ]
 ATLAS_COLS = 8
 
@@ -75,9 +79,10 @@ def cut(mock, col, row):
     return mock.crop((x, y, x + T, y + T))
 
 
-def make_door_open(mock):
+def make_door_open(mock, gap=1.0):
     """An open doorway drawn from the closed door: the leaves are slid into the
-    frame and the opening shows the dark floor of the airlock tile."""
+    frame and the opening shows the dark floor of the airlock tile.
+    gap=0.5 gives the half-open frame shown while the door moves."""
     door = cut(mock, 6, 3)
     airlock = cut(mock, 2, 4)
     px = door.load()
@@ -87,18 +92,54 @@ def make_door_open(mock):
     o = out.load()
     # opening: between the teal strip / left post and the right post, below the lintel
     x0, x1, y0, y1 = 8, 27, 7, 31
+    if gap < 1.0:
+        mid = (x0 + x1) // 2
+        half = int((x1 - x0) * gap / 2)
+        x0, x1 = mid - half, mid + half + 1
     for y in range(y0, y1 + 1):
         for x in range(x0, x1 + 1):
             o[x, y] = floor_col
-    # a thin sliver of each leaf stays visible at the sides
-    for y in range(y0, y1 + 1):
-        o[x0, y] = px[x0, y]
-        o[x0 + 1, y] = px[x0 + 1, y]
-        o[x1, y] = px[x1, y]
-        o[x1 - 1, y] = px[x1 - 1, y]
+    if gap >= 1.0:
+        # a thin sliver of each leaf stays visible at the sides
+        for y in range(y0, y1 + 1):
+            o[x0, y] = px[x0, y]
+            o[x0 + 1, y] = px[x0 + 1, y]
+            o[x1, y] = px[x1, y]
+            o[x1 - 1, y] = px[x1 - 1, y]
+    else:
+        for y in range(y0, y1 + 1):       # dark edges of the two leaves
+            o[x0, y] = (36, 38, 50, 255)
+            o[x1, y] = (36, 38, 50, 255)
     # floor seam across the threshold
     for x in range(x0 + 2, x1 - 1):
         o[x, 19] = edge_col
+    return out
+
+
+def make_airlock_closed(mock, gap=0.0):
+    """The airlock tile from the mockup shows an open passage through a vertical
+    wall. Closed, a bulkhead in the door's colours fills the passage; it parts
+    in the middle (gap=0.5 is the half-open frame)."""
+    out = cut(mock, 2, 4).copy()
+    o = out.load()
+    plate, plate_d, teal, teal_l, dark = (154, 158, 170, 255), (112, 116, 130, 255), (10, 158, 143, 255), (38, 196, 178, 255), (36, 38, 50, 255)
+    x0, x1, y0, y1 = 12, 19, 1, 25                 # the passage between the frame posts
+    mid = (y0 + y1) // 2
+    open_half = int((y1 - y0) * gap / 2)
+    for y in range(y0, y1 + 1):
+        if abs(y - mid) < open_half:
+            continue                                # the gap between the two leaves
+        for x in range(x0, x1 + 1):
+            c = plate
+            if x in (x0, x1) or y in (y0, y1):
+                c = dark
+            elif abs(y - mid) == open_half or (gap == 0.0 and y == mid):
+                c = dark                            # the seam where the leaves meet
+            elif y in (y0 + 2, y0 + 3, y1 - 2, y1 - 3):
+                c = teal_l if y in (y0 + 2, y1 - 3) else teal
+            elif x == x1 - 1:
+                c = plate_d
+            o[x, y] = c
     return out
 
 
@@ -108,8 +149,14 @@ def build_tiles():
     atlas = Image.new("RGBA", (ATLAS_COLS * T, rows * T), (0, 0, 0, 0))
     meta = {"tile_size": T, "columns": ATLAS_COLS, "tiles": []}
     images = {}
+    drawn = {
+        "door_open": lambda: make_door_open(mock),
+        "door_half": lambda: make_door_open(mock, 0.5),
+        "airlock_closed": lambda: make_airlock_closed(mock),
+        "airlock_half": lambda: make_airlock_closed(mock, 0.5),
+    }
     for i, (name, src, kind) in enumerate(TILES):
-        im = make_door_open(mock) if name == "door_open" else cut(mock, *src)
+        im = drawn[name]() if name in drawn else cut(mock, *src)
         images[name] = im
         atlas.paste(im, ((i % ATLAS_COLS) * T, (i // ATLAS_COLS) * T))
         meta["tiles"].append({"id": i, "name": name, "kind": kind})
@@ -152,6 +199,7 @@ def resolve_map(name, lines, ids):
 
     cells = [-1] * (w * h)
     spawns = []
+    doors = []                                   # [x, y, "D" or "A"]
     for y in range(h):
         for x in range(w):
             c = at(x, y)
@@ -179,6 +227,7 @@ def resolve_map(name, lines, ids):
                 if at(x, y - 1) == "A" or at(x, y + 1) == "A":
                     raise MapError(f"{name}: airlock at {x},{y} touches another airlock")
                 piece = "airlock"
+                doors.append([x, y, "A"])
             elif c in BAND_CHARS:
                 horizontal = e or wst
                 if not horizontal:
@@ -210,6 +259,8 @@ def resolve_map(name, lines, ids):
                         if c == "<" and at(x + 1, y) != ">" or c == ">" and at(x - 1, y) != "<":
                             raise MapError(f"{name}: wide window at {x},{y} needs both halves '<>'")
                         piece = special[c]
+                        if c == "D":
+                            doors.append([x, y, "D"])
                     elif e and wst:
                         piece = "wall_cross" if (n and s) else ("wall_tdown" if s else "wall_h")
                     elif e and not wst:
@@ -225,7 +276,7 @@ def resolve_map(name, lines, ids):
             cells[y * w + x] = ids[piece]
     if not spawns:
         raise MapError(f"{name}: no spawn points ('s')")
-    return {"name": name, "width": w, "height": h, "cells": cells, "spawns": spawns}
+    return {"name": name, "width": w, "height": h, "cells": cells, "spawns": spawns, "doors": doors}
 
 
 def build_maps(images, ids):
@@ -454,6 +505,44 @@ def build_hud():
     print(f"hud: monitor {n} frames of {fw}x{fh}, {delay / 10.0:.2f} s per frame ({len(states)} states in the .dmi)")
 
 
+# ---------------------------------------------------------------- effects
+
+def build_fx():
+    """A hull breach, drawn over the wall or window tile it tore through: a
+    ragged hole with space behind it and bent metal around the edge."""
+    import math
+    import random
+    rng = random.Random(7)
+    im = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    px = im.load()
+    cx, cy = 15.5, 15.5
+    # radius varies with the angle to make the outline ragged
+    spikes = [rng.uniform(0.72, 1.18) for _ in range(14)]
+
+    def radius(a):
+        k = (a % (2 * math.pi)) / (2 * math.pi) * len(spikes)
+        i, f = int(k) % len(spikes), k - int(k)
+        return 10.5 * (spikes[i] * (1 - f) + spikes[(i + 1) % len(spikes)] * f)
+
+    for y in range(T):
+        for x in range(T):
+            dx, dy = x - cx, y - cy
+            d = math.hypot(dx, dy)
+            r = radius(math.atan2(dy, dx))
+            if d < r - 1.6:
+                px[x, y] = (9, 10, 18, 255)            # space
+            elif d < r:
+                px[x, y] = (26, 27, 36, 255)           # the torn edge in shadow
+            elif d < r + 1.2:
+                px[x, y] = (196, 200, 210, 255) if dy < 0 else (70, 72, 86, 255)   # bent rim, lit from above
+            elif d < r + 2.2 and rng.random() < 0.45:
+                px[x, y] = (44, 46, 58, 200)           # scorch marks
+    for sx, sy, c in ((12, 13, (150, 160, 200, 255)), (18, 17, (110, 120, 160, 255)), (15, 10, (90, 100, 140, 255)), (19, 12, (200, 210, 240, 255))):
+        px[sx, sy] = c                                 # a few stars seen through the hole
+    im.save(os.path.join(OUT, "breach.png"))
+    print("fx: assets/breach.png")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(ROOT, "tools", "preview"), exist_ok=True)
@@ -462,6 +551,7 @@ def main():
     build_maps(images, ids)
     build_chars()
     build_hud()
+    build_fx()
 
 
 if __name__ == "__main__":
