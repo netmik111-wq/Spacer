@@ -26,6 +26,8 @@ var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; 
 var cond := 0                        # Net.COND_*
 var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
 var supply := false                  # breathing from the tank instead of the air around
+var patches := 0                     # hull patches carried
+var parts := 0                       # spare parts carried
 var using := false                   # holds the "use" key
 var work := 0                        # ticks spent on the thing in front of it (mending a hole)
 var work_cell := -1

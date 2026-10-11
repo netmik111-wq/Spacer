@@ -36,6 +36,7 @@ var helm := {}                       # wall cells with the ship's controls (the 
 var chart := {}                      # wall cells with the sector console (the green screen)
 var engine := {}                     # wall cells with the engine: it drives the ship and its jumps
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
+var locker := {}                     # wall cells with the supply locker
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -122,9 +123,12 @@ func load_from(name: String) -> String:
 	chart = {}
 	engine = {}
 	air_plant = {}
+	locker = {}
 	for i in cells.size():
 		if cells[i] < 0:
 			continue
+		if cells[i] == tile_ids.get("locker", -1):
+			locker[i] = true
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):

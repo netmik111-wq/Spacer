@@ -281,7 +281,7 @@ func _draw_fx(d: int) -> void:
 			pen.draw_circle(at * _tile + Vector2(16.0, 14.0), 1.5 + beat * 1.5, Color(1, 1, 1, 0.55))
 	# the air plant: while it works, air can be seen coming out of it
 	for cell: int in map.air_plant.keys():
-		if map.deck_of_cell(cell) != d or client.broken.has(cell) or not client.powered():
+		if map.deck_of_cell(cell) != d or client.broken.has(cell) or not client.powered() or client.store_air <= 0.0:
 			continue
 		var out_cell: int = map.air_plant[cell]
 		var way := 1.0 if out_cell > cell else -1.0

@@ -8,12 +8,15 @@ extends SceneTree
 ## can be forced by hand, and need power.
 ## Doors can jam open, shutters can fail, and the power can drop out for a
 ## few seconds: the director's smaller troubles.
+## Supplies: a hole needs a patch, a machine is mended three times as slowly
+## without a spare part, the air plant runs out, a trader sells and a station restocks.
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
 const Director := preload("res://src/server/director.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Net := preload("res://src/shared/net.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 var failed := 0
 var server: GameServer
@@ -33,6 +36,8 @@ func _initialize() -> void:
 	var engine: int = map.engine.keys()[0]
 	var plant: int = map.air_plant.keys()[0]
 	var p := server._new_player("Проверка")
+	p.patches = 50                       # the first tester never runs short; supplies are tried at the end
+	p.parts = 50
 
 	print("the engine")
 	_face(p, map.helm.keys()[0])
@@ -248,6 +253,97 @@ func _initialize() -> void:
 	_expect(server.powered() and not server.doors.manual, "the power comes back by itself within 15 s")
 	server._helm_asked(p, true, Vector2(150, 150))
 	_expect(server.ship_moving, "and the helm works again")
+
+	print("supplies")
+	var q := server._new_player("Кладовщик")
+	_expect(q.patches == 0 and q.parts == 0 and map.locker.size() == 1, "the ship has a supply locker")
+	var had_patches := server.store_patches
+	var had_parts := server.store_parts
+	server._store_asked(q, Net.STORE_TAKE_PATCH)
+	_expect(q.patches == 0, "nothing can be taken from across the ship")
+	_face(q, map.locker.keys()[0])
+	for i in 5:
+		server._store_asked(q, Net.STORE_TAKE_PATCH)
+		server._store_asked(q, Net.STORE_TAKE_PART)
+	_expect(q.patches == Net.CARRY_PATCHES and q.parts == Net.CARRY_PARTS, "at the locker a crew member takes what they can carry: %d patches, %d parts" % [q.patches, q.parts])
+	_expect(server.store_patches == had_patches - q.patches and server.store_parts == had_parts - q.parts, "and the locker has that much less")
+	server._store_asked(q, Net.STORE_PUT_BACK)
+	_expect(q.patches == 0 and q.parts == 0 and server.store_patches == had_patches and server.store_parts == had_parts, "everything can be put back")
+
+	# a hole needs a patch
+	p.patches = 0
+	server.breach(hole)
+	p.tank = 1.0
+	p.supply = true
+	p.st.place(hole % map.width, 1)
+	p.st.facing = Net.DIR_UP
+	p.st.dir = Net.DIR_NONE
+	p.using = true
+	_run(Net.REPAIR_TICKS + 5)
+	_expect(server.air.holes.has(hole), "without a patch a hole cannot be mended")
+	p.patches = 1
+	_run(Net.REPAIR_TICKS + 5)
+	_expect(not server.air.holes.has(hole) and p.patches == 0, "with one it can, and the patch is used up")
+	p.using = false
+	p.supply = false
+	air.refill()
+	_run(2 * Net.TICK_HZ)
+
+	# a machine without a spare part: slower, but possible
+	server.break_air_plant()
+	p.parts = 0
+	_face(p, plant)
+	p.using = true
+	_run(Net.REPAIR_TICKS + 5)
+	_expect(not server.broken.is_empty(), "without a spare part a repair is not done in the usual time")
+	_run(Net.REPAIR_TICKS * (Net.NO_PART_SLOWER - 1))
+	_expect(server.broken.is_empty(), "but it is done in %d times as long" % Net.NO_PART_SLOWER)
+	server.break_air_plant()
+	p.parts = 2
+	_run(Net.REPAIR_TICKS + 5)
+	p.using = false
+	_expect(server.broken.is_empty() and p.parts == 1, "with a spare part it is quick, and the part is used up")
+
+	# the air plant has only so much air to give
+	server.store_air = 0.5
+	for tester: RefCounted in [p, q]:    # both breathe from their tanks while the ship is empty
+		tester.tank = 1.0
+		tester.supply = true
+	for i in air._cells:
+		air.air[i] = 0.0
+	air.wake()
+	_run(20 * Net.TICK_HZ)
+	_expect(server.store_air == 0.0 and absf(air.total() - 0.5) < 0.01, "the air plant stops when its store is empty (gave %.2f)" % air.total())
+	air.refill()
+
+	# a trader sells, a station restocks
+	var here := server.sector
+	server._store_asked(q, Net.STORE_BUY_PATCH)
+	_expect(server.store_patches == had_patches, "nothing can be bought with no trader alongside")
+	server.sectors.kind[here] = Sectors.TRADER
+	server.sectors.spot[here] = server.ship_pos
+	server.sectors.reach[here] = Sectors.DOCK_RANGE
+	_run(2)
+	_expect(server.can_trade(), "docked with a trader, the ship can trade")
+	var money := server.credits
+	server._store_asked(q, Net.STORE_BUY_PATCH)
+	server._store_asked(q, Net.STORE_BUY_PART)
+	server._store_asked(q, Net.STORE_BUY_AIR)
+	_expect(server.store_patches == had_patches + 1 and server.store_parts == had_parts + 1 and server.store_air == Net.AIR_LOT
+		and server.credits == money - Net.PRICE_PATCH - Net.PRICE_PART - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.credits)
+	server.credits = 0
+	server._store_asked(q, Net.STORE_BUY_PATCH)
+	_expect(server.store_patches == had_patches + 1, "and not without credits")
+	server.sectors.kind[here] = Sectors.STATION
+	server.in_reach = false
+	_run(2)
+	_expect(server.store_air == Net.STORE_AIR_FULL, "docking at a supply station restocks the air plant")
+	server.sectors.kind[here] = Sectors.EMPTY
+	server.sectors.reach[here] = 0
+	_run(2)
+	server.start_jump(target, "Проверка")
+	_run(Net.JUMP_TICKS + 2)
+	_expect(server.sector == target and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
 
 	server.stop()
 	server.free()

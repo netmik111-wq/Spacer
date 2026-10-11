@@ -316,6 +316,11 @@
    "id": 62,
    "name": "air_plant",
    "kind": "wall"
+  },
+  {
+   "id": 63,
+   "name": "locker",
+   "kind": "wall"
   }
  ]
 }

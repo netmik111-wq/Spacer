@@ -83,6 +83,7 @@ for _cover in COVERS:
 # machines on a wall, drawn in code
 TILES.append(("engine", None, "wall"))
 TILES.append(("air_plant", None, "wall"))
+TILES.append(("locker", None, "wall"))
 ATLAS_COLS = 8
 
 
@@ -224,7 +225,8 @@ def make_cover(floor, cover):
 
 def make_machine(wall, what):
     """A machine set into a horizontal wall, in the manner of the consoles:
-    the engine (a housing with a glowing core) or the air plant (a vent)."""
+    the engine (a housing with a glowing core), the air plant (a vent) or the
+    supply locker (a cabinet with two doors)."""
     out = wall.copy()
     o = out.load()
     cap, body, mid, dark = (191, 193, 193, 255), (147, 156, 165, 255), (106, 107, 122, 255), (43, 43, 59, 255)
@@ -253,6 +255,17 @@ def make_machine(wall, what):
             o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
         for px in (8, 9, 22, 23):                      # feed pipes down to the deck
             rect(px, 25, px, 29, mid if px in (8, 22) else body)
+    elif what == "locker":
+        rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
+        rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
+        rect(7, 6, 15, 7, (214, 176, 92, 255)); rect(16, 6, 24, 7, (214, 176, 92, 255))
+        rect(7, 22, 24, 23, (128, 98, 44, 255))
+        rect(15, 6, 16, 23, dark)                                                           # the gap between them
+        rect(13, 13, 14, 16, cap); rect(17, 13, 18, 16, cap)                                # handles
+        for x in range(7, 25):                                                              # a marked band
+            if x not in (15, 16):
+                o[x, 10] = dark if (x // 2) % 2 == 0 else HAZARD
+        rect(9, 18, 12, 20, dark); rect(10, 19, 11, 19, (90, 220, 110, 255))                # a small label
     else:
         rect(5, 5, 26, 23, body); rect(5, 5, 26, 6, cap); rect(5, 23, 26, 23, mid)
         rect(7, 8, 24, 18, dark)
@@ -277,6 +290,7 @@ def build_tiles():
         "airlock_half": lambda: make_airlock_closed(mock, 0.5),
         "engine": lambda: make_machine(images["wall_h"], "engine"),
         "air_plant": lambda: make_machine(images["wall_h"], "air_plant"),
+        "locker": lambda: make_machine(images["wall_h"], "locker"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if kind in COVERS:
@@ -304,6 +318,7 @@ def build_tiles():
 #   'W'  window    '<' '>'  wide window (left, right half)
 #   '1'..'5'  wall with a console on it
 #   '6'  wall with the engine in it          '7'  wall with the air plant in it
+#   '8'  wall with the supply locker in it
 #
 #
 # A ship with several decks is drawn deck by deck, the top one first. Each
@@ -315,7 +330,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>1234567")
+BAND_CHARS = set("#DW<>12345678")
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -402,7 +417,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

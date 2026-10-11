@@ -83,7 +83,9 @@ func generate(seed_value: int, how_many: int = 12) -> void:
 				near = j
 		if near >= 0 and neighbours(i).size() < MAX_ROUTES and pos[i].distance_to(pos[near]) < 34.0:
 			_link(i, near)
-	# make sure there is a supply station and a meteor stream somewhere
+	# make sure there is a trader, a supply station and a meteor stream somewhere
+	if not kind.has(TRADER):
+		kind[count - 2] = TRADER
 	if not kind.has(STATION):
 		kind[count - 1] = STATION
 	if not kind.has(METEORS):

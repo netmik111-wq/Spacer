@@ -53,6 +53,9 @@ var _console_text: Label
 var _chart: Control
 var _jump_box: GridContainer
 var _jump_buttons_for := -1          # what the jump buttons were last built for
+var _console_shut: Button
+var _store_buttons := {}             # the supply locker's buttons: Net.STORE_* -> Button
+var _pockets: Label                  # what our character carries
 var _jump_label: Label
 var _flash: ColorRect
 var _monitor_step := 0.08
@@ -168,6 +171,16 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 			node.visible = false
 			_alert_box.add_child(node)
 			_alerts[lamp] = {"frames": frames, "seconds": float(d["frame_seconds"]), "node": node}
+
+	# what our character carries, to the left of the instruments
+	_pockets = _text(root, 13)
+	_pockets.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_pockets.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_pockets.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_pockets.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_pockets.offset_right = -14 - 192 - 10 - 12 - 10
+	_pockets.offset_bottom = -14
+	_pockets.modulate = Color(1, 1, 1, 0.85)
 
 	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
 	_tank_bar = ColorRect.new()
@@ -322,10 +335,15 @@ func _build_console(root: Control) -> void:
 	_jump_box.add_theme_constant_override("h_separation", 8)
 	_jump_box.add_theme_constant_override("v_separation", 6)
 	box.add_child(_jump_box)
-	var shut := Button.new()
-	shut.text = "Отойти от пульта (E или Esc)"
-	shut.pressed.connect(func() -> void: _open_console(0))
-	box.add_child(shut)
+	_console_shut = Button.new()
+	_console_shut.pressed.connect(func() -> void: _open_console(0))
+	box.add_child(_console_shut)
+
+
+func _opens_panel(target: int) -> bool:
+	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
+	## The bridge consoles need power; the supply locker is opened by hand.
+	return target == 12 or ((target == 3 or target == 4) and client.powered())
 
 
 func _open_console(kind: int) -> void:
@@ -335,16 +353,73 @@ func _open_console(kind: int) -> void:
 		return
 	_close_chat()
 	_jump_buttons_for = -1
-	_chart.visible = true
+	_store_buttons.clear()
+	_chart.visible = kind != 12
 	_jump_box.visible = true
-	_console_title.text = "Карта сектора" if kind == 3 else "Управление кораблём"
+	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else "Шкаф снабжения")
+	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else "Отойти от пульта (E или Esc)"
+
+
+func _update_store() -> void:
+	## The supply locker: what the ship has, what we carry, and a trader's prices when one is alongside.
+	var trading := client.can_trade()
+	var lines := PackedStringArray()
+	lines.append("В шкафу: заплаток %d, запчастей %d. Воздух для установки: %d из %d. Кредиты: %d." % [
+		client.store_patches, client.store_parts, int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
+	lines.append("У вас с собой: заплаток %d из %d, запчастей %d из %d." % [
+		client.patches, Net.CARRY_PATCHES, client.parts, Net.CARRY_PARTS])
+	lines.append("Заплатка нужна, чтобы заделать пробоину. Запчасть ускоряет ремонт машин и дверей: без неё он идёт втрое дольше.")
+	if trading:
+		lines.append("Торговец на связи.")
+	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
+		lines.append("Торговец в этом секторе. Чтобы покупать, %s." % ("подойдите к нему" if client.powered() else "нужно питание"))
+	else:
+		lines.append("Докупить запас можно у торговца. Воздух для установки бесплатно пополняет станция снабжения.")
+	_console_text.text = "\n".join(lines)
+	var wanted := 9000 + (1 if trading else 0)
+	if _jump_buttons_for != wanted:
+		_jump_buttons_for = wanted
+		_store_buttons.clear()
+		for old in _jump_box.get_children():
+			old.queue_free()
+		var offers := [[Net.STORE_TAKE_PATCH, "Взять заплатку"], [Net.STORE_TAKE_PART, "Взять запчасть"],
+			[Net.STORE_PUT_BACK, "Положить всё обратно"]]
+		if trading:
+			offers.append([Net.STORE_BUY_PATCH, "Купить заплатку: %d" % Net.PRICE_PATCH])
+			offers.append([Net.STORE_BUY_PART, "Купить запчасть: %d" % Net.PRICE_PART])
+			offers.append([Net.STORE_BUY_AIR, "Купить воздух (%d): %d" % [int(Net.AIR_LOT), Net.PRICE_AIR]])
+		for offer: Array in offers:
+			var b := Button.new()
+			b.text = offer[1]
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.pressed.connect(client.send_store.bind(int(offer[0])))
+			_jump_box.add_child(b)
+			_store_buttons[int(offer[0])] = b
+	for action: int in _store_buttons.keys():
+		var b: Button = _store_buttons[action]
+		match action:
+			Net.STORE_TAKE_PATCH:
+				b.disabled = client.store_patches <= 0 or client.patches >= Net.CARRY_PATCHES
+			Net.STORE_TAKE_PART:
+				b.disabled = client.store_parts <= 0 or client.parts >= Net.CARRY_PARTS
+			Net.STORE_PUT_BACK:
+				b.disabled = client.patches + client.parts == 0
+			Net.STORE_BUY_PATCH:
+				b.disabled = client.credits < Net.PRICE_PATCH
+			Net.STORE_BUY_PART:
+				b.disabled = client.credits < Net.PRICE_PART
+			Net.STORE_BUY_AIR:
+				b.disabled = client.credits < Net.PRICE_AIR or client.store_air >= Net.STORE_AIR_FULL
 
 
 func _update_console() -> void:
 	if not _console.visible:
 		return
-	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind or not client.powered():
+	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind or not _opens_panel(_console_kind):
 		_open_console(0)             # knocked out, pushed away from the console, or the power went
+		return
+	if _console_kind == 12:
+		_update_store()
 		return
 	if _console_kind == 4:
 		_update_helm()
@@ -566,7 +641,7 @@ func show_debug(on: bool) -> void:
 
 func open_console_here() -> void:
 	## Test helper: open the console our character faces, as the "use" key would.
-	if (client.use_target() == 3 or client.use_target() == 4) and client.powered():
+	if _opens_panel(client.use_target()):
 		_open_console(client.use_target())
 
 
@@ -644,7 +719,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_set_pause(not _pause.visible)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or ((client.use_target() == 3 or client.use_target() == 4) and client.powered())):
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or _opens_panel(client.use_target())):
 		# a bridge console: the key opens its screen, and closes it again
 		_open_console(0 if _console.visible else client.use_target())
 		get_viewport().set_input_as_handled()
@@ -731,8 +806,12 @@ func _process(delta: float) -> void:
 	_hint.visible = target != 0 and not _console.visible
 	var no_power := not client.powered()
 	var why := "двигатель не работает" if client.engine_down() else "сбой питания"
+	var no_part := "" if client.parts > 0 else " (без запчасти втрое дольше)"
 	if target == 1:
-		_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
+		if client.patches <= 0:
+			_hint.text = "Нечем заделать пробоину: заплатки в шкафу снабжения на нижней палубе"
+		else:
+			_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
 	elif target == 2:
 		if no_power:
 			_hint.text = "Кислородная стойка обесточена: %s" % why
@@ -745,9 +824,15 @@ func _process(delta: float) -> void:
 			_hint.text = "E: карта сектора" if target == 3 else "E: управление кораблём"
 	elif target == 5:
 		var what := _capital(client.map.device_name(client.use_cell()))
-		_hint.text = "Чиню…" if (_use_held and client.work > 0) else "%s не работает. Держите E, чтобы починить" % what
+		_hint.text = "Чиню…" if (_use_held and client.work > 0) else "%s не работает. Держите E, чтобы починить%s" % [what, no_part]
 	elif target == 8:
-		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), "нет питания" if no_power else "работает"]
+		var state := "нет питания" if no_power else "работает"
+		if client.map.air_plant.has(client.use_cell()) and not no_power:
+			state = "работает, воздуха в запасе %d из %d" % [int(round(client.store_air)), int(Net.STORE_AIR_FULL)] if client.store_air > 0.0 \
+				else "стоит, запас воздуха исчерпан"
+		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
+	elif target == 12:
+		_hint.text = "E: шкаф снабжения"
 	elif target == 6 or target == 7:
 		var to := client.my_deck() + (1 if target == 6 else -1)
 		_hint.text = "E: %s по лестнице (%s)" % ["спуститься" if target == 6 else "подняться", client.map.deck_names[to].to_lower()]
@@ -762,14 +847,14 @@ func _process(delta: float) -> void:
 			var where := "" if int(gap[1]) == 0 else (", за ним давление ниже" if int(gap[1]) < 0 else ", за ним давление выше")
 			_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
 	elif target == 10:
-		_hint.text = "Чиню дверь…" if (_use_held and client.work > 0) else "Дверь заклинило открытой. Держите E, чтобы починить"
+		_hint.text = "Чиню дверь…" if (_use_held and client.work > 0) else "Дверь заклинило открытой. Держите E, чтобы починить%s" % no_part
 	elif target == 11:
 		if _use_held and client.work > 0:
 			_hint.text = "Чиню аварийный шлюз…"
 		elif client.doors.is_sealed(client.map.door_of[client.use_cell()]):
-			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить"
+			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить%s" % no_part
 		else:
-			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить"
+			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить%s" % no_part
 	_work_bar.visible = (target == 1 or target == 5 or target >= 9) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
@@ -797,6 +882,8 @@ func _process(delta: float) -> void:
 	_lamp("o2_on", alive and client.supply)
 	_lamp("o2_off", alive and not client.supply)
 	_tank_bar.visible = alive
+	_pockets.visible = alive
+	_pockets.text = "Заплатки: %d\nЗапчасти: %d" % [client.patches, client.parts]
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)

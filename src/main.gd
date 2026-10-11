@@ -33,7 +33,8 @@ extends Node
 ## With --inproc only: warp_after=SECONDS with warp_kind=KIND (jump to a sector
 ## of that kind, whatever the routes), break_helm_after=SECONDS, --log (print
 ## the server's messages), door_trouble_after=SECONDS with door_trouble=jam|down|up
-## (the door the character faces jams open, or its shutter fails down or up).
+## (the door the character faces jams open, or its shutter fails down or up),
+## dock_after=SECONDS (the ship is put right at the sector's station or trader).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -81,6 +82,7 @@ var _warped := false
 var _helm_broken := false
 var _climbed := false
 var _door_troubled := false
+var _docked := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -389,6 +391,12 @@ func _process(_delta: float) -> void:
 		_helm_broken = true
 		_server.broken[_server.map.helm.keys()[0]] = true
 		_server._to_all(_server._devices_packet())
+	if _opt.has("dock_after") and not _docked and _server != null and _screen != null and t >= float(_opt["dock_after"]):
+		_docked = true
+		_server.ship_pos = _server.sectors.spot[_server.sector]
+		_server.ship_dest = _server.ship_pos
+		_server.ship_moving = false
+		_server._to_all(_server._helm_packet())
 	if _opt.has("door_trouble_after") and not _door_troubled and _server != null and _screen != null and t >= float(_opt["door_trouble_after"]):
 		_door_troubled = true
 		var ahead := _client.use_cell()

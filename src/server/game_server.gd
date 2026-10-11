@@ -82,6 +82,12 @@ var ship_dest := Vector2.ZERO          # where it is heading
 var ship_moving := false
 var in_reach := false                  # inside the sector's meteor stream, or docked at its station or trader
 var broken := {}                       # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
+# the ship's supplies, kept in the supply locker
+var store_patches := 0
+var store_parts := 0
+var store_air := 0.0                   # air the air plant still has to give, in cells' worth
+var credits := 0
+var _store_told := -1                  # the supplies as clients were last told, packed
 var _power_out_until := 0              # a passing power failure lasts until this tick
 var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
@@ -128,6 +134,11 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_flags_sent = doors.locked.duplicate()
 	_power_out_until = 0
 	_power_told = true
+	store_patches = Net.START_PATCHES
+	store_parts = Net.START_PARTS
+	store_air = Net.STORE_AIR_FULL
+	credits = Net.START_CREDITS
+	_store_told = -1
 	_forced_until.resize(map.doors.size())
 	_forced_until.fill(0)
 	for d in map.doors.size():
@@ -304,6 +315,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HELM:
 		if pkt.size() > 3:
 			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
+	elif kind == Net.C_STORE:
+		if pkt.size() > 1:
+			_store_asked(p, pkt[1])
 	elif kind == Net.C_ADMIN:
 		if pkt.size() > 3 and shutdown_token != "" and pkt.slice(3).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
@@ -342,6 +356,8 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		return
 	var p := _new_player(_unique_name(_clean(pkt.slice(4, 4 + n).get_string_from_utf8(), Net.MAX_NAME, "Игрок")))
 	p.peer = peer
+	p.patches = 1                        # a newcomer has a little on them; the rest is in the locker
+	p.parts = 1
 	_pending.erase(peer)
 	_slot_of[peer] = p.slot
 
@@ -374,6 +390,7 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, PackedByteArray([Net.S_POWER, 1 if _power_told else 0]), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, _store_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
 	_announce_join(p, peer)
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
@@ -771,12 +788,84 @@ func break_air_plant() -> bool:
 
 
 func _feed_air() -> void:
-	## Every working air plant blows a little air into the room it faces.
+	## Every working air plant blows a little air into the room it faces, for as
+	## long as the ship has air in store for it.
 	if not powered():
 		return
 	for cell: int in map.air_plant.keys():
-		if not broken.has(cell):
-			air.feed(map.air_plant[cell], Air.PLANT_PER_STEP)
+		if not broken.has(cell) and store_air > 0.0:
+			store_air = maxf(store_air - air.feed(map.air_plant[cell], minf(Air.PLANT_PER_STEP, store_air)), 0.0)
+
+
+# --------------------------------------------------------------- supplies
+
+func _store_packet() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(9)
+	out.encode_u8(0, Net.S_STORE)
+	out.encode_u16(1, store_patches)
+	out.encode_u16(3, store_parts)
+	out.encode_u16(5, roundi(store_air * 10.0))
+	out.encode_u16(7, credits)
+	return out
+
+
+func _tell_store() -> void:
+	## Tells everyone the ship's supplies, if they changed since the last time.
+	var now := ((store_patches * 1000 + store_parts) * 1000 + roundi(store_air)) * 100000 + credits
+	if now != _store_told:
+		_store_told = now
+		_to_all(_store_packet())
+
+
+func can_trade() -> bool:
+	## Docked with a trader, with power for the link.
+	return powered() and sector_kind() == Sectors.TRADER and in_reach
+
+
+func patches_aboard() -> int:
+	## Every patch the crew could still use: in the locker and in pockets.
+	var n := store_patches
+	for p: Player in players:
+		if p != null and not p.corpse and p.cond != Net.COND_DEAD:
+			n += p.patches
+	return n
+
+
+func _store_asked(p: Player, action: int) -> void:
+	## A player at the supply locker takes something, puts it back, or buys from a trader.
+	if p.cond != Net.COND_OK:
+		return
+	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	if ahead < 0 or not map.locker.has(ahead):
+		return
+	match action:
+		Net.STORE_TAKE_PATCH:
+			if store_patches > 0 and p.patches < Net.CARRY_PATCHES:
+				store_patches -= 1
+				p.patches += 1
+		Net.STORE_TAKE_PART:
+			if store_parts > 0 and p.parts < Net.CARRY_PARTS:
+				store_parts -= 1
+				p.parts += 1
+		Net.STORE_PUT_BACK:
+			store_patches += p.patches
+			store_parts += p.parts
+			p.patches = 0
+			p.parts = 0
+		Net.STORE_BUY_PATCH:
+			if can_trade() and credits >= Net.PRICE_PATCH:
+				credits -= Net.PRICE_PATCH
+				store_patches += 1
+		Net.STORE_BUY_PART:
+			if can_trade() and credits >= Net.PRICE_PART:
+				credits -= Net.PRICE_PART
+				store_parts += 1
+		Net.STORE_BUY_AIR:
+			if can_trade() and credits >= Net.PRICE_AIR and store_air < Net.STORE_AIR_FULL:
+				credits -= Net.PRICE_AIR
+				store_air = minf(store_air + Net.AIR_LOT, Net.STORE_AIR_FULL)
+	_tell_store()
 
 
 func _helm_asked(p: Player, go: bool, to: Vector2) -> void:
@@ -805,10 +894,11 @@ func _update_ship() -> void:
 		Sectors.STATION:
 			if now_in:
 				air.refill()
-				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках восполнен.")
+				store_air = Net.STORE_AIR_FULL
+				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены.")
 		Sectors.TRADER:
 			if now_in:
-				_ship_says("Торговец на связи, но торговать пока нечем.")
+				_ship_says("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
 
 
 func break_console() -> bool:
@@ -867,6 +957,9 @@ func _update_jump() -> void:
 	sector = jump_to
 	jump_to = Net.NO_SECTOR
 	drive_ready = tick + Net.DRIVE_REST_TICKS
+	if (visited & (1 << sector)) == 0:
+		credits += Net.EXPLORE_REWARD
+		_ship_says("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)
 	visited |= 1 << sector
 	ship_pos = sectors.entry[sector]
 	ship_dest = ship_pos
@@ -964,6 +1057,7 @@ func _tick() -> void:
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
 			_record(p)
 	_power_changed()
+	_tell_store()
 	_update_doors()
 	_update_jump()
 	_update_ship()
@@ -1018,24 +1112,32 @@ func _update_work(p: Player) -> void:
 		return
 	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
 	var door := map.door_of[cell] if cell >= 0 else -1
+	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
+	var mend_ticks := Net.REPAIR_TICKS if p.parts > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER
 	if cell >= 0 and air.holes.has(cell):
-		if _work_done(p, cell, Net.REPAIR_TICKS):
+		if p.patches <= 0:
+			p.work = 0                       # nothing to close it with
+		elif _work_done(p, cell, Net.REPAIR_TICKS):
+			p.patches -= 1
 			air.set_hole(cell, false)
 			_hull_record(cell, 0)
 			_ship_says("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
 	elif cell >= 0 and broken.has(cell):
-		if _work_done(p, cell, Net.REPAIR_TICKS):
+		if _work_done(p, cell, mend_ticks):
+			p.parts = maxi(p.parts - 1, 0)
 			broken.erase(cell)
 			_to_all(_devices_packet())
 			_ship_says("%s заканчивает ремонт: %s снова работает." % [p.name, map.device_name(cell)])
 			_power_changed()
 	elif door >= 0 and doors.jammed[door] == 1:
-		if _work_done(p, cell, Net.REPAIR_TICKS):
+		if _work_done(p, cell, mend_ticks):
+			p.parts = maxi(p.parts - 1, 0)
 			doors.jammed[door] = 0
 			_door_hold[door] = tick          # it may shut again as soon as the doorway is clear
 			_ship_says("%s чинит заклинившую дверь." % p.name)
 	elif door >= 0 and doors.faulty[door] == 1:
-		if _work_done(p, cell, Net.REPAIR_TICKS):
+		if _work_done(p, cell, mend_ticks):
+			p.parts = maxi(p.parts - 1, 0)
 			doors.faulty[door] = 0           # from here on the pressure decides again
 			_ship_says("%s чинит аварийный шлюз." % p.name)
 	elif door >= 0 and doors.is_sealed(door):
@@ -1070,7 +1172,7 @@ func _usable_ahead(p: Player) -> bool:
 		return false
 	var door := map.door_of[cell]
 	return air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell) \
-		or map.chart.has(cell) or map.helm.has(cell) \
+		or map.chart.has(cell) or map.helm.has(cell) or map.locker.has(cell) \
 		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 
@@ -1098,6 +1200,8 @@ func _respawn(p: Player) -> void:
 	p.supply = false
 	p.using = false
 	p.work = 0
+	p.patches = 0                        # what the dead one carried stays with the body
+	p.parts = 0
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
@@ -1408,7 +1512,7 @@ func _send_world() -> void:
 		var health_now := roundi(p.health)
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / maxi(p.work_total, 1)
-		var vitals := ((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)
+		var vitals := ((((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)) << 8) | (p.patches << 4) | p.parts
 		if vitals != p.vitals_sent:
 			p.vitals_sent = vitals
 			var ov := out.size()
@@ -1418,6 +1522,8 @@ func _send_world() -> void:
 			out.encode_u8(ov + 3, tank_now)
 			out.encode_u8(ov + 4, 1 if p.supply else 0)
 			out.encode_u8(ov + 5, work_now)
+			out.encode_u8(ov + 6, p.patches)
+			out.encode_u8(ov + 7, p.parts)
 		if p.self_dirty or tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)

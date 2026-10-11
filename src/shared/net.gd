@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 10
+const PROTOCOL := 11
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -42,6 +42,8 @@ const C_SUIT := 8                   # u8 on: turn the suit's oxygen supply on (1
 const C_JUMP := 9                   # u8 sector: start a jump there (the player must stand at the sector console)
 const C_HELM := 10                  # u8 go (1 = set course, 0 = stop), u8 x, u8 y: steer inside the sector
                                     # (the player must stand at the ship's controls)
+const C_STORE := 11                 # u8 action (STORE_*): take from the supply locker, put back, or buy from
+                                    # a trader (the player must stand at the locker)
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
@@ -70,8 +72,9 @@ const SEC_SELF := 7                 # authoritative state of the client's own ch
 const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of all 256 cells of the chunk
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
-                                    # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100)
-const VITALS_BYTES := 5
+                                    # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100),
+                                    # u8 patches carried, u8 spare parts carried
+const VITALS_BYTES := 7
 
 const FACING_GONE := 255
 const ENT_BYTES := 7
@@ -85,6 +88,32 @@ const S_DEVICES := 20               # u8 count, then per thing out of order (a b
                                     # the air plant): u16 cell
 
 const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
+
+const S_STORE := 22                 # the ship's supplies: u16 patches, u16 spare parts, u16 air for the air
+                                    # plant in tenths of a cell's worth, u16 credits
+
+# what a player may ask of the supply locker (C_STORE)
+const STORE_TAKE_PATCH := 1
+const STORE_TAKE_PART := 2
+const STORE_PUT_BACK := 3           # everything carried goes back into the locker
+const STORE_BUY_PATCH := 4          # the three below: only while docked with a trader
+const STORE_BUY_PART := 5
+const STORE_BUY_AIR := 6
+
+# supplies. Mending a hole takes a patch; mending a machine or a door takes a
+# spare part, or three times as long without one.
+const CARRY_PATCHES := 3            # how much one crew member can carry
+const CARRY_PARTS := 2
+const START_PATCHES := 8            # what the ship sets out with
+const START_PARTS := 5
+const START_CREDITS := 30
+const STORE_AIR_FULL := 60.0        # air the air plant can give out before it must be restocked, in cells' worth
+const PRICE_PATCH := 5
+const PRICE_PART := 10
+const PRICE_AIR := 5                # for AIR_LOT cells' worth
+const AIR_LOT := 10.0
+const EXPLORE_REWARD := 15          # credits for the first visit to a sector
+const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
 
 const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked (tests)
 const ADMIN_SEAL := 2               # close every hole (tests)

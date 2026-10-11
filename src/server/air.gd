@@ -89,11 +89,15 @@ func refill() -> void:
 	settled = false
 
 
-func feed(cell: int, amount: float) -> void:
+func feed(cell: int, amount: float) -> float:
 	## An air plant blows this much into a cell, up to normal pressure.
-	if air[cell] < 1.0:
-		air[cell] = minf(air[cell] + amount, 1.0)
-		settled = false
+	## Returns how much went in.
+	var room := minf(1.0 - air[cell], amount)
+	if room <= 0.0:
+		return 0.0
+	air[cell] += room
+	settled = false
+	return room
 
 
 func wake() -> void:

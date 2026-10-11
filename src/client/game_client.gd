@@ -70,6 +70,12 @@ var ship_dest := Vector2.ZERO        # where it is heading
 var ship_moving := false
 var ship_tick := 0
 var broken := {}                     # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
+var patches := 0                     # hull patches our character carries
+var parts := 0                       # spare parts it carries
+var store_patches := 0               # the ship's supplies in the locker
+var store_parts := 0
+var store_air := 0.0                 # air left for the air plant, in cells' worth
+var credits := 0
 var _power := true                   # the ship has power (see powered)
 
 # our own character's body
@@ -188,6 +194,8 @@ func close() -> void:
 	ship_moving = false
 	broken.clear()
 	_power = true
+	patches = 0
+	parts = 0
 	bytes_in = 0
 	packets_in = 0
 
@@ -279,7 +287,8 @@ func use_target() -> int:
 	## 6 = a ladder down, 7 = a ladder up (the character stands on it),
 	## 8 = the engine or the air plant in working order: nothing to do, but it says so,
 	## 9 = a door whose emergency shutter is down and can be forced,
-	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended).
+	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended),
+	## 12 = the supply locker.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -296,6 +305,8 @@ func use_target() -> int:
 			return 4
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
+		if map.locker.has(cell):
+			return 12
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.jammed[door] == 1:
@@ -308,6 +319,19 @@ func use_target() -> int:
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func send_store(action: int) -> void:
+	## Asks the supply locker for something (Net.STORE_*). The server agrees
+	## only while our character stands at the locker.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_STORE, action]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func can_trade() -> bool:
+	## Docked with a trader, with power for the link (the same rule as GameServer.can_trade).
+	return powered() and sectors.count > 0 and sectors.kind[sector] == Sectors.TRADER \
+		and sectors.within_reach(sector, ship_pos())
 
 
 func powered() -> bool:
@@ -577,6 +601,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in pkt[1]:
 				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
 			ship_changes += 1
+		Net.S_STORE:
+			store_patches = pkt.decode_u16(1)
+			store_parts = pkt.decode_u16(3)
+			store_air = pkt.decode_u16(5) / 10.0
+			credits = pkt.decode_u16(7)
 		Net.S_POWER:
 			_power = pkt[1] != 0
 			ship_changes += 1
@@ -646,6 +675,8 @@ func _on_world(pkt: PackedByteArray) -> void:
 			tank = pkt[pos + 2]
 			supply = (pkt[pos + 3] & 1) != 0
 			work = pkt[pos + 4]
+			patches = pkt[pos + 5]
+			parts = pkt[pos + 6]
 			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)

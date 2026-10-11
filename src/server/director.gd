@@ -119,7 +119,7 @@ func assess() -> Dictionary:
 			if p.cond == Net.COND_OK:
 				crew_up += 1
 	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind(),
-		"broken": server.broken.size(), "engine_down": server.engine_down()}
+		"broken": server.broken.size(), "engine_down": server.engine_down(), "patches": server.patches_aboard()}
 
 
 func fire(event_id: int) -> bool:
@@ -182,18 +182,28 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 	return true
 
 
+func _weight(e: Dictionary, here: int) -> int:
+	## How often this event is picked here and now; 0 = not at all.
+	if not _can_happen(e, here):
+		return 0
+	var w := int(e["weight"])
+	# a crew with nothing left to close a hole with gets holes three times as rarely
+	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.patches_aboard() == 0:
+		w = maxi(w / 3, 1)
+	return w
+
+
 func _pick() -> Dictionary:
 	var here: int = server.danger_kind()
 	var total := 0
 	for e: Dictionary in EVENTS:
-		if _can_happen(e, here):
-			total += int(e["weight"])
+		total += _weight(e, here)
 	if total == 0:
 		return {}
 	var roll := _rng.randi_range(1, total)
 	for e: Dictionary in EVENTS:
-		if _can_happen(e, here):
-			roll -= int(e["weight"])
+		if _weight(e, here) > 0:
+			roll -= _weight(e, here)
 			if roll <= 0:
 				return e
 	return {}
