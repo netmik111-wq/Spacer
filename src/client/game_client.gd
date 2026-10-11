@@ -26,6 +26,7 @@ const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
 const CLOCK_SNAP := 6.0              # a clock this far off is set at once instead of eased
 const CONNECT_TIMEOUT_MS := 6000
+const INPUT_COPIES := 2              # extra copies of every input change, one per frame
 
 enum { IDLE, CONNECTING, GREETING, PLAYING }
 
@@ -71,6 +72,8 @@ var _recv_offset := 0.0
 var _recv_target := 0.0
 var _pred_offset := 0.0
 var _pred_target := 0.0
+var _ahead_best := PackedFloat64Array()   # freshest clock reading in each of the last few half-seconds
+var _ahead_slot := -1
 
 var _have_self := false
 var _inputs: Array = []              # input changes not yet confirmed: [seq, apply tick, dir, applied]
@@ -78,6 +81,8 @@ var _seq := 0
 var _sent_dir := 0
 var _last_apply := 0
 var _corr := Vector2.ZERO            # leftover of a correction, eased out so the sprite does not jump
+var _repeat_msg := PackedByteArray() # the newest input change, repeated in case the first copy is lost
+var _repeat_left := 0
 
 
 func connect_to(address: String, port: int, player_name: String) -> String:
@@ -113,11 +118,14 @@ func close() -> void:
 	ents.clear()
 	_inputs.clear()
 	_have_clock = false
+	_ahead_best.clear()
+	_ahead_slot = -1
 	_have_self = false
 	_view_cx = -100
 	_view_cy = -100
 	_sent_dir = 0
 	_last_apply = 0
+	_repeat_left = 0
 	_corr = Vector2.ZERO
 	want_dir = 0
 	mispredicts = 0
@@ -140,6 +148,22 @@ func send_chat(text: String) -> void:
 	msg.encode_u16(1, body.size())
 	msg.append_array(body)
 	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func stop_server_and_close(token: String) -> void:
+	## Asks the server to stop (it obeys only the game that started it, see
+	## main.gd), waits a moment for it to hang up on us, then closes.
+	## The wait matters: a goodbye sent right behind the request would make
+	## the server drop the request unread.
+	if _peer != null and _peer.is_active() and not token.is_empty():
+		var msg := PackedByteArray([Net.C_SHUTDOWN])
+		msg.append_array(token.to_utf8_buffer())
+		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+		var deadline := Time.get_ticks_msec() + 500
+		while Time.get_ticks_msec() < deadline and _peer.get_state() == ENetPacketPeer.STATE_CONNECTED:
+			_host.service(0)
+			OS.delay_msec(5)
+	close()
 
 
 func player_name(id: int) -> String:
@@ -173,6 +197,22 @@ func _update_clock(s_tick: int) -> void:
 	rtt_ms = minf(_peer.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME), 400.0)
 	var recv := float(s_tick) - now
 	var ahead := float(s_tick) + rtt_ms * 0.001 * Net.TICK_HZ + PRED_MARGIN - now
+	# A packet that was held up on the way (a resend after a loss, a stalled
+	# link) reads as "the server is further behind" and would slow our clock, so
+	# our inputs would start arriving late. A delay can only make a reading
+	# smaller, never larger, so the largest recent reading is the truthful one.
+	# On an uneven link this also adds headroom by itself: the clock follows the
+	# fastest packets while the inputs travel at the average speed.
+	var slot := Time.get_ticks_msec() / 500
+	if slot != _ahead_slot:
+		_ahead_slot = slot
+		_ahead_best.append(ahead)
+		if _ahead_best.size() > 4:
+			_ahead_best.remove_at(0)
+	else:
+		_ahead_best[_ahead_best.size() - 1] = maxf(_ahead_best[_ahead_best.size() - 1], ahead)
+	for v in _ahead_best:
+		ahead = maxf(ahead, v)
 	if not _have_clock:
 		_have_clock = true
 		_recv_target = recv
@@ -399,6 +439,15 @@ func _advance(delta: float) -> void:
 		msg.encode_u32(3, at)
 		msg.encode_u8(7, want_dir)
 		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+		_host.flush()
+		_repeat_msg = msg
+		_repeat_left = INPUT_COPIES
+	elif _repeat_left > 0:
+		# The same change again, in a packet of its own on the frames that follow.
+		# If the first copy is lost, the server would otherwise learn about it only
+		# after a resend, too late for the tick it was meant for.
+		_repeat_left -= 1
+		_peer.send(1, _repeat_msg, ENetPacketPeer.FLAG_UNSEQUENCED)
 		_host.flush()
 	_simulate_to_now()
 

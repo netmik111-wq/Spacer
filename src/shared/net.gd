@@ -27,6 +27,7 @@ const DY: Array[int] = [0, -1, 1, 0, 0]
 const C_HELLO := 1                  # u16 protocol, u8 name length, name
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
+const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name

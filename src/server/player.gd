@@ -10,7 +10,7 @@ var colour := 0
 var bot := false
 var st := Mover.State.new()
 
-var inputs: Array = []               # queued input changes: [apply tick, direction, seq]
+var inputs: Array = []               # queued input changes, oldest first: [apply tick, direction, seq]
 var last_seq := 0                    # last input change applied, echoed back to the client
 
 var view_cx := -100                  # chunk this client's view is centred on

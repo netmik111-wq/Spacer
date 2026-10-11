@@ -9,7 +9,10 @@ extends Node
 ##   --host              create a game straight away (skips the menu)
 ##   join=ADDRESS        join a game straight away
 ##   name=NAME           player name for --host / join
+##   --inproc           when hosting, run the server inside the game instead of a process of its own
 ## Other keys: F11 toggles full screen.
+## Used by the game itself when it starts a server for a hosted game:
+##   --autoquit (stop once the server has stayed empty), token=TEXT (lets that game stop it).
 ## Test helpers: --demo (walk around without a keyboard), demo_until=SECONDS,
 ## path=DIR:SECONDS,... (scripted walk), trace=FILE (positions every frame),
 ## say=TEXT (send a chat line), --debug (show the F3 overlay),
@@ -27,6 +30,19 @@ var _menu: MainMenu = null
 var _screen: GameScreen = null
 var _pending_port := Net.DEFAULT_PORT
 var _hosting := false
+var _server_pid := -1                # the server started for a hosted game, when it runs as its own process
+var _server_token := ""
+var _server_started := 0.0
+var _host_name := ""
+var _host_tries := 0
+var _host_bots := 0
+var _empty_since := 0.0              # dedicated server with --autoquit: when it last had a player
+var _had_players := false
+
+const FPS_ACTIVE := 60
+const FPS_BACKGROUND := 30
+const EMPTY_QUIT_SEC := 15.0         # a hosted game's server stops this long after the last player left
+const NOBODY_CAME_SEC := 40.0
 
 var _opt := {}
 var _flags := {}
@@ -56,16 +72,20 @@ func _ready() -> void:
 		_server = GameServer.new()
 		add_child(_server)
 		_server.log_line.connect(func(text: String) -> void: print(text))
+		_server.shutdown_token = str(_opt.get("token", ""))
+		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
 		var problem := _server.start(port, "ship01", bots)
 		if problem != "":
 			printerr(problem)
 			get_tree().quit(1)
 		else:
 			print("Остановить сервер: закройте это окно или нажмите Ctrl+C.")
+		_empty_since = _t_start
 		return
 
-	if DisplayServer.get_name() == "headless":
-		Engine.max_fps = 60          # no display to wait for: do not spin the CPU
+	# The picture changes 20 times a second at most, so drawing faster than
+	# 60 frames only heats the graphics card on a fast monitor.
+	Engine.max_fps = FPS_ACTIVE
 	_define_inputs()
 	_client = GameClient.new()
 	add_child(_client)
@@ -111,24 +131,70 @@ func _show_menu(message: String, is_error: bool = false) -> void:
 	_menu.show_status(message, is_error)
 
 
-func _stop_server() -> void:
+func _quit_server() -> void:
+	# dedicated server: stop for good
+	if _server != null:
+		_server.stop()
+	get_tree().quit()
+
+
+func _stop_server(wait_ms: int = 1500) -> void:
 	if _server != null:
 		_server.stop()
 		_server.queue_free()
 		_server = null
+	if _server_pid > 0:
+		# It was asked to stop (see _leave); give it a moment to tell the other
+		# players, then make sure it is gone and the port is free again.
+		var deadline := Time.get_ticks_msec() + wait_ms
+		while OS.is_process_running(_server_pid) and Time.get_ticks_msec() < deadline:
+			OS.delay_msec(20)
+		if OS.is_process_running(_server_pid):
+			OS.kill(_server_pid)
+		_server_pid = -1
+
+
+func _start_server_process(port: int, bots: int) -> bool:
+	## Runs the server as a second copy of the game without a window. A server
+	## inside the game would freeze for everybody whenever this window is
+	## dragged, resized or otherwise held up; a separate process does not care.
+	_server_token = "%08x%08x" % [randi(), randi()]
+	var args := PackedStringArray(["--headless"])
+	if OS.has_feature("editor"):         # started from the editor: the program is Godot itself
+		args.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://")]))
+	args.append_array(PackedStringArray(["--", "--server", "--autoquit",
+		"port=%d" % port, "bots=%d" % bots, "token=%s" % _server_token]))
+	_server_pid = OS.create_process(OS.get_executable_path(), args)
+	_server_started = Time.get_ticks_msec() / 1000.0
+	return _server_pid > 0
 
 
 func _host_game(player: String, port: int, bots: int) -> void:
 	_stop_server()
+	_hosting = true
+	_host_name = player
+	_host_bots = bots
+	if not _flags.has("inproc") and _start_server_process(port, bots):
+		_host_tries = 3
+		if _connect(player, "127.0.0.1", port):
+			_menu.show_status("Запуск сервера…")
+		return
+	_host_inside(port)
+
+
+func _host_inside(port: int) -> void:
+	## The server inside the game itself: the fallback when a separate process
+	## cannot be started. It also reports a busy port in plain words.
+	_stop_server(0)
+	_show_menu("")
 	_server = GameServer.new()
 	add_child(_server)
-	var problem := _server.start(port, "ship01", bots)
+	var problem := _server.start(port, "ship01", _host_bots)
 	if problem != "":
 		_stop_server()
 		_show_menu(problem, true)
 		return
-	_hosting = true
-	_connect(player, "127.0.0.1", port)
+	_connect(_host_name, "127.0.0.1", port)
 
 
 func _join_game(player: String, address: String, port: int) -> void:
@@ -137,15 +203,16 @@ func _join_game(player: String, address: String, port: int) -> void:
 	_connect(player, address, port)
 
 
-func _connect(player: String, address: String, port: int) -> void:
+func _connect(player: String, address: String, port: int) -> bool:
 	_pending_port = port
 	var problem := _client.connect_to(address, port, player)
 	if problem != "":
-		_stop_server()
+		_stop_server(0)
 		_show_menu(problem, true)
-		return
+		return false
 	_menu.set_busy(true)
 	_menu.show_status("Подключение к %s:%d…" % [address, port])
+	return true
 
 
 func _on_joined() -> void:
@@ -160,17 +227,24 @@ func _on_joined() -> void:
 
 
 func _on_failed(reason: String) -> void:
-	_stop_server()
+	if _server_pid > 0:
+		if OS.is_process_running(_server_pid) and _host_tries > 0:
+			_host_tries -= 1             # our own server is still starting up: try again
+			_connect.call_deferred(_host_name, "127.0.0.1", _pending_port)
+		else:
+			_host_inside.call_deferred(_pending_port)   # it never came up: host the old way
+		return
+	_stop_server(0)
 	_show_menu(reason, true)
 
 
 func _on_lost(reason: String) -> void:
-	_stop_server()
+	_stop_server(0)
 	_show_menu(reason, true)
 
 
 func _leave() -> void:
-	_client.close()
+	_client.stop_server_and_close(_server_token if _server_pid > 0 else "")
 	_stop_server()
 	_show_menu("")
 
@@ -178,8 +252,14 @@ func _leave() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST:
 		if _client != null:
-			_client.close()
-		_stop_server()
+			_client.stop_server_and_close(_server_token if _server_pid > 0 else "")
+		_stop_server(600)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if _client != null:
+			Engine.max_fps = FPS_BACKGROUND
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		if _client != null:
+			Engine.max_fps = FPS_ACTIVE
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -189,8 +269,27 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(_delta: float) -> void:
-	# test helpers; unused in normal play
 	var t := Time.get_ticks_msec() / 1000.0 - _t_start
+	if _flags.has("server") and _flags.has("autoquit") and _server != null:
+		# Started by a player's game. If that game dies without saying goodbye,
+		# do not stay behind forever: stop once nobody is left.
+		if _server.player_count() > 0:
+			_had_players = true
+			_empty_since = t + _t_start
+		elif t + _t_start - _empty_since > (EMPTY_QUIT_SEC if _had_players else NOBODY_CAME_SEC):
+			_quit_server()
+			return
+	if _server_pid > 0 and _client != null and _client.phase != GameClient.IDLE and not OS.is_process_running(_server_pid):
+		# our server process is gone: say so at once instead of waiting for a timeout
+		_client.close()
+		_server_pid = -1
+		if Time.get_ticks_msec() / 1000.0 - _server_started < 5.0:
+			# It quit straight after starting: a busy port, or it cannot run this
+			# way on this computer. Host inside the game instead.
+			_host_inside(_pending_port)
+		else:
+			_show_menu("Сервер остановился.", true)
+	# test helpers; unused in normal play
 	if _opt.has("path") and _screen != null:
 		# "4:1.5,0:0.5,3:1.5" = hold right 1.5 s, stand 0.5 s, hold left 1.5 s (after joining)
 		if _path_t0 < 0.0:
@@ -247,6 +346,6 @@ func _process(_delta: float) -> void:
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))
 		if _client != null:
-			_client.close()
+			_client.stop_server_and_close(_server_token if _server_pid > 0 else "")
 		_stop_server()
 		get_tree().quit()

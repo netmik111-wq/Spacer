@@ -7,6 +7,7 @@ extends Node
 ## from inside the game; a hosting player connects to it like anyone else.
 
 signal log_line(text: String)
+signal shutdown_requested            # the hosting player's game asked this server to stop
 
 const Net := preload("res://src/shared/net.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
@@ -27,6 +28,7 @@ var max_players := 32
 var map := ShipMap.new()
 var running := false
 var tick := 0
+var shutdown_token := ""            # only a client that knows this text may stop the server ("" = nobody)
 
 var _host: ENetConnection = null
 var _acc := 0.0
@@ -81,11 +83,22 @@ func stop() -> void:
 	if not running:
 		return
 	running = false
-	for peer: ENetPacketPeer in _slot_of.keys():
-		peer.peer_disconnect_later()
-	for peer: ENetPacketPeer in _pending.keys():
-		peer.peer_disconnect_later()
-	_host.flush()
+	# Tell everyone the server is closing, and stay just long enough for the
+	# goodbyes to go out; otherwise the players would sit in a frozen game until
+	# their connection times out.
+	var leaving: Array = _slot_of.keys() + _pending.keys()
+	for peer: ENetPacketPeer in leaving:
+		peer.peer_disconnect()
+	var deadline := Time.get_ticks_msec() + 250
+	while Time.get_ticks_msec() < deadline:
+		_host.service(0)
+		var waiting := false
+		for peer: ENetPacketPeer in leaving:
+			if peer.get_state() != ENetPacketPeer.STATE_DISCONNECTED:
+				waiting = true
+		if not waiting:
+			break
+		OS.delay_msec(5)
 	_host.destroy()
 	_host = null
 	_slot_of.clear()
@@ -156,20 +169,39 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		if pkt.size() < 8:
 			return
 		var dir := pkt[7]
-		if dir > 4 or p.inputs.size() >= MAX_INPUT_QUEUE:
+		if dir > 4:
+			return
+		# A client sends every input change several times, so that one lost
+		# packet does not hold it up. Keep one copy of each, in order.
+		var seq := pkt.decode_u16(1)
+		var ahead := (seq - p.last_seq) & 0xFFFF
+		if ahead == 0 or ahead >= 0x8000:
+			return                  # already applied, or older than what was applied
+		var at := p.inputs.size()
+		for i in p.inputs.size():
+			var d := (int(p.inputs[i][2]) - seq) & 0xFFFF
+			if d == 0:
+				return              # this copy is already waiting
+			if d < 0x8000:
+				at = i              # the queued one is newer: this one goes before it
+				break
+		if p.inputs.size() >= MAX_INPUT_QUEUE:
 			return
 		var apply := pkt.decode_u32(3)
 		if apply > tick + MAX_INPUT_LEAD:
 			apply = tick + MAX_INPUT_LEAD
 		if apply <= tick:
 			late_inputs += 1        # arrived after the tick it was meant for; applied on the next one
-		p.inputs.append([apply, dir, pkt.decode_u16(1)])
+		p.inputs.insert(at, [apply, dir, seq])
 	elif kind == Net.C_CHAT:
 		if pkt.size() < 3:
 			return
 		var n := pkt.decode_u16(1)
 		if n > 0 and pkt.size() >= 3 + n:
 			_chat(p, pkt.slice(3, 3 + n).get_string_from_utf8())
+	elif kind == Net.C_SHUTDOWN:
+		if shutdown_token != "" and pkt.slice(1).get_string_from_utf8() == shutdown_token:
+			shutdown_requested.emit()
 
 
 func _reject(peer: ENetPacketPeer, reason: int) -> void:

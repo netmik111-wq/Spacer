@@ -2,15 +2,15 @@
 # Network self-test: one dedicated server, N real game clients without a
 # window, each wandering for a while. Optionally through tools/lagproxy,
 # which delays and drops packets like a real internet link.
-# usage: tools/nettest.sh CLIENTS SECONDS [DELAY_MS JITTER_MS LOSS_PERCENT]
+# usage: tools/nettest.sh CLIENTS SECONDS [DELAY_MS JITTER_MS LOSS_PERCENT [STALL_MS STALL_EVERY_MS]]
 #   GODOT=/path/to/godot  LAGPROXY=/path/to/lagproxy
 set -u
-N=${1:-4}; SECS=${2:-20}; DELAY=${3:--1}; JIT=${4:-0}; LOSS=${5:-0}
+N=${1:-4}; SECS=${2:-20}; DELAY=${3:--1}; JIT=${4:-0}; LOSS=${5:-0}; STALL=${6:-0}; EVERY=${7:-1000}
 GODOT=${GODOT:-godot}; PORT=${PORT:-24700}; OUT=${OUT:-/tmp/nettest}
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
 "$GODOT" --headless --path . -- --server port=$PORT bots=2 quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
 CPORT=$PORT; PP=""
-if [ "$DELAY" -ge 0 ]; then CPORT=$((PORT + 1)); "$LAGPROXY" $CPORT $PORT $DELAY $JIT $LOSS 2> "$OUT/proxy.log" & PP=$!; fi
+if [ "$DELAY" -ge 0 ]; then CPORT=$((PORT + 1)); "$LAGPROXY" $CPORT $PORT $DELAY $JIT $LOSS $STALL $EVERY 2> "$OUT/proxy.log" & PP=$!; fi
 sleep 1.5
 for i in $(seq 1 $N); do
   "$GODOT" --headless --path . -- join=127.0.0.1 port=$CPORT name=Тест$i --demo demo_until=$((SECS - 3)) quit_after=$SECS stats="$OUT/c$i.json" > "$OUT/c$i.log" 2>&1 &

@@ -2,7 +2,10 @@
 // every datagram, in each direction, is delayed by `delay ± jitter` ms and
 // dropped with probability `loss`. Each client gets its own socket towards
 // the server, so the server still sees separate peers.
-// usage: lagproxy LISTEN_PORT SERVER_PORT DELAY_MS JITTER_MS LOSS_PERCENT
+// Optionally the link also freezes for STALL_MS once every STALL_EVERY_MS and
+// then delivers everything it held back at once, the way a VPN that relays
+// through TCP behaves.
+// usage: lagproxy LISTEN_PORT SERVER_PORT DELAY_MS JITTER_MS LOSS_PERCENT [STALL_MS STALL_EVERY_MS]
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
 use std::net::{SocketAddr, UdpSocket};
@@ -26,11 +29,18 @@ struct Shared {
     cv: Condvar,
     clients: Mutex<Vec<(SocketAddr, Arc<UdpSocket>)>>,
     seq: AtomicU64, fwd: AtomicU64, dropped: AtomicU64,
+    t0: Instant, stall: f64, stall_every: f64,
 }
 
 fn enqueue(sh: &Shared, rng: &mut Rng, delay: f64, jitter: f64, loss: f64, up: bool, idx: usize, data: &[u8]) {
     if rng.next() < loss { sh.dropped.fetch_add(1, Ordering::Relaxed); return; }
-    let d = (delay + (rng.next() * 2.0 - 1.0) * jitter).max(0.0);
+    let mut d = (delay + (rng.next() * 2.0 - 1.0) * jitter).max(0.0);
+    if sh.stall > 0.0 {
+        // a datagram due while the link is frozen comes out when the freeze ends
+        let due = sh.t0.elapsed().as_secs_f64() * 1000.0 + d;
+        let into = due % sh.stall_every;
+        if into < sh.stall { d += sh.stall - into; }
+    }
     let item = Item { at: Instant::now() + Duration::from_micros((d * 1000.0) as u64), seq: sh.seq.fetch_add(1, Ordering::Relaxed), up, idx, data: data.to_vec() };
     sh.heap.lock().unwrap().push(Reverse(item));
     sh.cv.notify_one();
@@ -43,8 +53,11 @@ fn main() {
     let delay: f64 = a[3].parse().unwrap();
     let jitter: f64 = a[4].parse().unwrap();
     let loss: f64 = a[5].parse::<f64>().unwrap() / 100.0;
+    let stall: f64 = a.get(6).map(|v| v.parse().unwrap()).unwrap_or(0.0);
+    let stall_every: f64 = a.get(7).map(|v| v.parse().unwrap()).unwrap_or(1000.0);
     let front = Arc::new(UdpSocket::bind(("0.0.0.0", listen)).unwrap());
-    let sh = Arc::new(Shared { heap: Mutex::new(BinaryHeap::new()), cv: Condvar::new(), clients: Mutex::new(Vec::new()), seq: AtomicU64::new(0), fwd: AtomicU64::new(0), dropped: AtomicU64::new(0) });
+    let sh = Arc::new(Shared { heap: Mutex::new(BinaryHeap::new()), cv: Condvar::new(), clients: Mutex::new(Vec::new()), seq: AtomicU64::new(0), fwd: AtomicU64::new(0), dropped: AtomicU64::new(0),
+        t0: Instant::now(), stall, stall_every });
 
     // delivery thread
     { let sh = sh.clone(); let front = front.clone();
