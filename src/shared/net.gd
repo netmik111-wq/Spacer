@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 8
+const PROTOCOL := 9
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -57,7 +57,8 @@ const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is 
 
 # --- sections inside S_WORLD ---
 const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
-const SEC_DOOR := 2                 # u16 count, then 6-byte records: u16 door, s32 tick it is passable from (-1 = shut)
+const SEC_DOOR := 2                 # u16 count, then 7-byte records: u16 door, s32 tick it is passable from (-1 = shut),
+                                    # u8 flags (bit 0: its emergency shutter is down)
 const SEC_HULL := 3                 # u16 count, then 5-byte records: s16 x, s16 y, u8 state (1 = breached, 0 = whole)
 const SEC_VIEW := 4                 # u8 chunk x, u8 chunk row inside the deck: the centre of what this client is
                                     # shown. It is shown those chunks on every deck (rows count through all decks
@@ -74,7 +75,7 @@ const VITALS_BYTES := 5
 const FACING_GONE := 255
 const ENT_BYTES := 7
 const SELF_BYTES := 17
-const DOOR_BYTES := 6
+const DOOR_BYTES := 7
 const HULL_BYTES := 5
 
 const S_HELM := 19                  # the ship inside its sector: s16 x*10, s16 y*10 (where it was on that tick),
@@ -113,6 +114,11 @@ const KIND_CORPSE := 2              # a body left behind; nobody controls it
 
 const TANK_FULL := 200              # a full oxygen tank as sent over the network
 const REPAIR_TICKS := 120           # holding "use" on a hole for 6 s mends it
+const FORCE_TICKS := 60             # holding "use" on an emergency shutter for 3 s forces it up
+const FORCED_OPEN_TICKS := 100      # and it stays up for 5 s whatever the pressure
+const SHUTTER_DROP := 0.25          # an emergency shutter drops when the two sides of its door differ by this
+                                    # share of normal pressure, and lifts again below SHUTTER_LIFT
+const SHUTTER_LIFT := 0.10
 
 
 static func reject_text(reason: int) -> String:
@@ -146,8 +152,8 @@ static func look_cond(look: int) -> int:
 
 
 ## The same for the ship itself: doors, holes in the hull and air.
-static func door_hash(door: int, ready: int) -> int:
-	return (door + 1) * 131 + (ready & 0xFFFF) * 7 + 3
+static func door_hash(door: int, ready: int, flags: int) -> int:
+	return (door + 1) * 131 + (ready & 0xFFFF) * 7 + flags * 977 + 3
 
 
 static func hull_hash(x: int, y: int) -> int:

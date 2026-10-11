@@ -281,7 +281,7 @@ func _draw_fx(d: int) -> void:
 			pen.draw_circle(at * _tile + Vector2(16.0, 14.0), 1.5 + beat * 1.5, Color(1, 1, 1, 0.55))
 	# the air plant: while it works, air can be seen coming out of it
 	for cell: int in map.air_plant.keys():
-		if map.deck_of_cell(cell) != d or client.broken.has(cell):
+		if map.deck_of_cell(cell) != d or client.broken.has(cell) or not client.powered():
 			continue
 		var out_cell: int = map.air_plant[cell]
 		var way := 1.0 if out_cell > cell else -1.0
@@ -291,6 +291,42 @@ func _draw_fx(d: int) -> void:
 			var phase := fposmod(now * (0.7 + seed_a * 0.5) + seed_a * 3.0, 1.0)
 			var from := mouth + Vector2((float(k) - 3.0) * 2.6, way * phase * 26.0)
 			pen.draw_line(from, from + Vector2(0.0, way * 4.0), Color(0.75, 0.9, 1.0, 0.5 * (1.0 - phase)), 1.0)
+	# emergency shutters that are down: a striped plate across the doorway and,
+	# on each side of it, a lamp showing the pressure there. This is the one
+	# place the ship shows where the air is (the author asked for exactly that).
+	var lit := client.powered()
+	for door in map.doors.size():
+		var cell_at: Vector2i = map.doors[door]
+		if map.deck_of(cell_at.y) != d or not client.doors.is_sealed(door):
+			continue
+		var corner := Vector2(cell_at.x, map.local_y(cell_at.y)) * _tile
+		var band := map.door_kind[door] == ShipMap.DOOR_BAND
+		var plate := Rect2(corner + Vector2(8, 9), Vector2(20, 14)) if band else Rect2(corner + Vector2(12, 3), Vector2(8, 21))
+		pen.draw_rect(plate, Color(0.16, 0.15, 0.2))
+		for row in int(plate.size.y):                     # warning stripes, slanted
+			var from := -float(row % 6)
+			while from < plate.size.x:
+				var x0 := maxf(from, 0.0)
+				var x1 := minf(from + 3.0, plate.size.x)
+				if x1 > x0:
+					pen.draw_rect(Rect2(plate.position + Vector2(x0, row), Vector2(x1 - x0, 1)), Color(0.93, 0.72, 0.18))
+				from += 6.0
+		pen.draw_rect(plate, Color(0.05, 0.05, 0.08), false, 1.0)
+		for side in 2:
+			var side_cell := map.door_sides[door * 2 + side]
+			if side_cell < 0:
+				continue
+			var level := client.air[side_cell]
+			var lamp := Color(0.25, 0.9, 0.4) if level >= Net.AIR_FULL * 0.76 else (Color(0.98, 0.8, 0.2) if level >= Net.AIR_FULL * 0.2 else Color(1.0, 0.25, 0.2))
+			if not lit:
+				lamp = Color(0.3, 0.31, 0.36)
+			var spot: Vector2
+			if band:
+				spot = corner + Vector2(15, 4 if side == 0 else 25)
+			else:
+				spot = corner + Vector2(8 if side == 0 else 21, 26)
+			pen.draw_rect(Rect2(spot - Vector2(1, 1), Vector2(5, 5)), Color(0.05, 0.05, 0.08))
+			pen.draw_rect(Rect2(spot, Vector2(3, 3)), lamp)
 	# something out of order: its face is dark and it throws sparks
 	for cell: int in client.broken.keys():
 		if map.deck_of_cell(cell) != d:

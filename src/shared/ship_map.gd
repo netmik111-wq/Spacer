@@ -27,6 +27,8 @@ var crc := 0                         # fingerprint of the layout, compared at lo
 var doors: Array[Vector2i] = []      # where each door is; a door is known by its number in this list
 var door_kind := PackedByteArray()   # DOOR_BAND or DOOR_AIRLOCK, per door
 var door_of := PackedInt32Array()    # door number per cell, -1 = no door there
+var door_sides := PackedInt32Array() # per door, two cells: the floor on either side of it (-1 = none).
+                                     # The first is above or to the left, the second below or to the right.
 var hull := PackedInt32Array()       # cells of the outer shell that can be breached: wall or window
                                      # with a walkable cell on one side and space on another
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
@@ -108,6 +110,12 @@ func load_from(name: String) -> String:
 		door_kind.append(DOOR_AIRLOCK if str(d[2]) == "A" else DOOR_BAND)
 		h = (h * 31 + at.x * 131 + at.y + 5) & 0x7FFFFFFF
 	crc = ((h * 31 + width) * 31 + deck_stride * 7 + deck_count) & 0x7FFFFFFF
+	door_sides = PackedInt32Array()
+	for d in doors.size():
+		var at: Vector2i = doors[d]
+		var step := Vector2i(0, 1) if door_kind[d] == DOOR_BAND else Vector2i(1, 0)
+		for side: Vector2i in [at - step, at + step]:
+			door_sides.append(side.y * width + side.x if walkable(side.x, side.y) else -1)
 
 	oxygen = {}
 	helm = {}

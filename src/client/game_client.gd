@@ -275,7 +275,8 @@ func use_target() -> int:
 	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
 	## 5 = something out of order that can be mended (a console, the engine, the air plant),
 	## 6 = a ladder down, 7 = a ladder up (the character stands on it),
-	## 8 = the engine or the air plant in working order: nothing to do, but it says so.
+	## 8 = the engine or the air plant in working order: nothing to do, but it says so,
+	## 9 = a door whose emergency shutter is down and can be forced.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -292,10 +293,33 @@ func use_target() -> int:
 			return 4
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
+		if map.door_of[cell] >= 0 and doors.is_sealed(map.door_of[cell]):
+			return 9
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func powered() -> bool:
+	## The ship has power while its engine runs (the same rule as GameServer.powered).
+	return not engine_down()
+
+
+func shutter_gap(door: int) -> Array:
+	## What the emergency shutter of a door shows: [the pressure difference across
+	## it in network units (0..Net.AIR_FULL), how the far side compares with ours:
+	## -1 = lower there, 1 = higher there, 0 = cannot tell].
+	var a := map.door_sides[door * 2]
+	var b := map.door_sides[door * 2 + 1]
+	if a < 0 or b < 0:
+		return [0, 0]
+	var ours := pred.y * map.width + pred.x
+	var gap: int = absi(air[a] - air[b])
+	if ours != a and ours != b:
+		return [gap, 0]
+	var far := air[b] if ours == a else air[a]
+	return [gap, signi(far - air[ours])]
 
 
 func use_cell() -> int:
@@ -373,7 +397,7 @@ func door_open_amount(door: int) -> float:
 	if ready == Doors.CLOSED:
 		return 0.0
 	var t := pred_time() if (predict and _have_self) else now_ticks() + _recv_offset
-	return clampf(1.0 - (float(ready) - t) / float(Doors.OPEN_TICKS), 0.0, 1.0)
+	return clampf(1.0 - (float(ready) - t) / float(table.open_ticks()), 0.0, 1.0)
 
 
 func player_name(id: int) -> String:
@@ -544,6 +568,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in pkt[1]:
 				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
 			ship_changes += 1
+			# without power doors open by hand: that is part of the walking rule we predict
+			if doors.manual != (not powered()):
+				doors.manual = not powered()
+				_rebuild_prediction()
 		Net.S_CHAT:
 			var n := pkt.decode_u16(3)
 			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())
@@ -614,6 +642,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			for i in count:
 				var ready := pkt.decode_s32(pos + 2)
 				doors.ready[pkt.decode_u16(pos)] = Doors.CLOSED if ready < 0 else ready
+				doors.locked[pkt.decode_u16(pos)] = pkt[pos + 6] & 1
 				pos += Net.DOOR_BYTES
 			doors_moved = true
 			ship_changes += 1
@@ -689,7 +718,7 @@ func _ship_sum() -> int:
 	for d in doors.ready.size():
 		var at: Vector2i = map.doors[d]
 		if not _outside_view(at.x, at.y):
-			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d])
+			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d], doors.locked[d])
 	for cell: int in holes.keys():
 		sum += Net.hull_hash(cell % map.width, cell / map.width)
 	for deck in map.deck_count:

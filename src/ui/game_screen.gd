@@ -12,6 +12,8 @@ const Director := preload("res://src/server/director.gd")   # only for the list 
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
+const HINT_LEFT := 550.0             # the hint line keeps clear of the chat (this far from the left edge)
+const HINT_RIGHT := 250.0            # and of the instruments (this far from the right edge)
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
 # when the lamps light, as shares of normal pressure (the damage itself is the server's: see vitals.gd)
 const BREATH_MIN := 0.76
@@ -36,6 +38,7 @@ var _monitor_frames: Array = []       # per health state: Array[AtlasTexture]
 var _alerts := {}                    # lamp name -> {"frames": Array[AtlasTexture], "seconds": float, "node": TextureRect}
 var _alert_box: VBoxContainer
 var _shade: ColorRect
+var _blackout: ColorRect
 var _fate: Label
 var _tank_bar: ColorRect
 var _tank_fill: ColorRect
@@ -182,10 +185,13 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 
 	# what the "use" key would do here, and how far the work has got
 	_hint = _text(root, 16)
+	# it sits between the chat on the left and the instruments on the right, and wraps there
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
-	_hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hint.offset_left = HINT_LEFT
+	_hint.offset_right = -HINT_RIGHT
 	_hint.offset_bottom = -92
 	_hint.visible = false
 	_work_bar = ColorRect.new()
@@ -205,6 +211,13 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_work_fill.size = Vector2(0, 10)
 	_work_bar.add_child(_work_fill)
 
+	# without power the ship is on emergency lighting: everything but our own instruments dims
+	_blackout = ColorRect.new()
+	_blackout.color = Color(0.03, 0.0, 0.06, 0.0)
+	_blackout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_blackout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_blackout)
+	root.move_child(_blackout, 0)
 	# the screen goes dark as our character fades, and says so when it is down
 	_shade = ColorRect.new()
 	_shade.color = Color(0, 0, 0, 0)
@@ -330,8 +343,8 @@ func _open_console(kind: int) -> void:
 func _update_console() -> void:
 	if not _console.visible:
 		return
-	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind:
-		_open_console(0)             # knocked out, or pushed away from the console
+	if client.my_cond != Net.COND_OK or client.use_target() != _console_kind or not client.powered():
+		_open_console(0)             # knocked out, pushed away from the console, or the power went
 		return
 	if _console_kind == 4:
 		_update_helm()
@@ -558,7 +571,7 @@ func show_debug(on: bool) -> void:
 
 func open_console_here() -> void:
 	## Test helper: open the console our character faces, as the "use" key would.
-	if client.use_target() == 3 or client.use_target() == 4:
+	if (client.use_target() == 3 or client.use_target() == 4) and client.powered():
 		_open_console(client.use_target())
 
 
@@ -636,7 +649,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_set_pause(not _pause.visible)
 		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or client.use_target() == 3 or client.use_target() == 4):
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or ((client.use_target() == 3 or client.use_target() == 4) and client.powered())):
 		# a bridge console: the key opens its screen, and closes it again
 		_open_console(0 if _console.visible else client.use_target())
 		get_viewport().set_input_as_handled()
@@ -721,24 +734,42 @@ func _process(delta: float) -> void:
 		client.send_use(use_now)
 	var target := client.use_target()
 	_hint.visible = target != 0 and not _console.visible
+	var no_power := not client.powered()
 	if target == 1:
 		_hint.text = "Заделываю пробоину…" if (_use_held and client.work > 0) else "Держите E, чтобы заделать пробоину"
 	elif target == 2:
-		_hint.text = "Баллон полон" if client.tank >= Net.TANK_FULL else ("Заправляю баллон…" if _use_held else "Держите E, чтобы заправить баллон")
-	elif target == 3:
-		_hint.text = "E: карта сектора"
-	elif target == 4:
-		_hint.text = "E: управление кораблём"
+		if no_power:
+			_hint.text = "Кислородная стойка обесточена: двигатель не работает"
+		else:
+			_hint.text = "Баллон полон" if client.tank >= Net.TANK_FULL else ("Заправляю баллон…" if _use_held else "Держите E, чтобы заправить баллон")
+	elif target == 3 or target == 4:
+		if no_power:
+			_hint.text = "Пульт обесточен: двигатель не работает"
+		else:
+			_hint.text = "E: карта сектора" if target == 3 else "E: управление кораблём"
 	elif target == 5:
 		var what := _capital(client.map.device_name(client.use_cell()))
 		_hint.text = "Чиню…" if (_use_held and client.work > 0) else "%s не работает. Держите E, чтобы починить" % what
 	elif target == 8:
-		_hint.text = "%s: работает" % _capital(client.map.device_name(client.use_cell()))
+		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), "нет питания" if no_power else "работает"]
 	elif target == 6 or target == 7:
 		var to := client.my_deck() + (1 if target == 6 else -1)
 		_hint.text = "E: %s по лестнице (%s)" % ["спуститься" if target == 6 else "подняться", client.map.deck_names[to].to_lower()]
-	_work_bar.visible = (target == 1 or target == 5) and client.work > 0
+	elif target == 9:
+		if _use_held and client.work > 0:
+			_hint.text = "Поднимаю аварийный шлюз…"
+		elif no_power:
+			_hint.text = "Аварийный шлюз закрыт и обесточен.\nДержите E, чтобы открыть вручную"
+		else:
+			var gap := client.shutter_gap(client.map.door_of[client.use_cell()])
+			var kpa := int(round(int(gap[0]) * Net.KPA_FULL / Net.AIR_FULL))
+			var where := "" if int(gap[1]) == 0 else (", за ним давление ниже" if int(gap[1]) < 0 else ", за ним давление выше")
+			_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
+	_work_bar.visible = (target == 1 or target == 5 or target == 9) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
+	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
+	_work_bar.offset_left = shift - 110.0
+	_work_bar.offset_right = shift + 110.0
 
 	var now_s := Time.get_ticks_msec() / 1000.0
 	for entry: Array in _chat_lines:
@@ -776,6 +807,7 @@ func _process(delta: float) -> void:
 		_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа."
 	_fate.visible = client.my_cond != Net.COND_OK
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
+	_blackout.color.a = lerpf(_blackout.color.a, 0.0 if client.powered() else 0.42, 1.0 - exp(-delta * 6.0))
 
 	# the jump
 	_jump_label.visible = client.jump_to != Net.NO_SECTOR and not _console.visible
