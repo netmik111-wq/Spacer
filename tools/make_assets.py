@@ -80,6 +80,9 @@ COVERS = ["glass", "grate", "hatch", "ladder"]
 for _cover in COVERS:
     for _piece in FLOOR_PIECES:
         TILES.append((_cover + _piece[5:], None, _cover))
+# machines on a wall, drawn in code
+TILES.append(("engine", None, "wall"))
+TILES.append(("air_plant", None, "wall"))
 ATLAS_COLS = 8
 
 
@@ -219,6 +222,48 @@ def make_cover(floor, cover):
     return out
 
 
+def make_machine(wall, what):
+    """A machine set into a horizontal wall, in the manner of the consoles:
+    the engine (a housing with a glowing core) or the air plant (a vent)."""
+    out = wall.copy()
+    o = out.load()
+    cap, body, mid, dark = (191, 193, 193, 255), (147, 156, 165, 255), (106, 107, 122, 255), (43, 43, 59, 255)
+
+    def rect(x0, y0, x1, y1, c):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                o[x, y] = c
+
+    if what == "engine":
+        rect(4, 3, 27, 24, body); rect(4, 3, 27, 4, cap); rect(4, 24, 27, 24, mid)
+        rect(6, 6, 25, 22, dark)
+        # the core behind a round window
+        for y in range(7, 21):
+            for x in range(9, 23):
+                d = ((x - 15.5) ** 2 + (y - 13.5) ** 2) ** 0.5
+                if d < 3.2:
+                    o[x, y] = (190, 250, 255, 255)
+                elif d < 5.2:
+                    o[x, y] = (60, 215, 230, 255)
+                elif d < 6.4:
+                    o[x, y] = (20, 120, 140, 255)
+                elif d < 7.4:
+                    o[x, y] = mid
+        for x in range(6, 26):                         # warning stripes under it
+            o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
+        for px in (8, 9, 22, 23):                      # feed pipes down to the deck
+            rect(px, 25, px, 29, mid if px in (8, 22) else body)
+    else:
+        rect(5, 5, 26, 23, body); rect(5, 5, 26, 6, cap); rect(5, 23, 26, 23, mid)
+        rect(7, 8, 24, 18, dark)
+        for y in range(9, 18, 2):                      # the slats of the vent
+            rect(8, y, 23, y, mid)
+        rect(7, 20, 24, 21, (111, 190, 240, 255))      # the outlet
+        rect(7, 21, 24, 21, (70, 130, 200, 255))
+        rect(22, 6, 23, 6, (90, 220, 110, 255))        # a lamp
+    return out
+
+
 def build_tiles():
     mock = load_mockup()
     rows = (len(TILES) + ATLAS_COLS - 1) // ATLAS_COLS
@@ -230,6 +275,8 @@ def build_tiles():
         "door_half": lambda: make_door_open(mock, 0.5),
         "airlock_closed": lambda: make_airlock_closed(mock),
         "airlock_half": lambda: make_airlock_closed(mock, 0.5),
+        "engine": lambda: make_machine(images["wall_h"], "engine"),
+        "air_plant": lambda: make_machine(images["wall_h"], "air_plant"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if kind in COVERS:
@@ -256,6 +303,7 @@ def build_tiles():
 #   'D'  door in a horizontal wall      'A'  airlock in a vertical wall
 #   'W'  window    '<' '>'  wide window (left, right half)
 #   '1'..'5'  wall with a console on it
+#   '6'  wall with the engine in it          '7'  wall with the air plant in it
 #
 #
 # A ship with several decks is drawn deck by deck, the top one first. Each
@@ -267,7 +315,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>12345")
+BAND_CHARS = set("#DW<>1234567")
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -354,7 +402,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

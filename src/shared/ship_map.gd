@@ -32,6 +32,8 @@ var hull := PackedInt32Array()       # cells of the outer shell that can be brea
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
 var helm := {}                       # wall cells with the ship's controls (the panel with orange lights)
 var chart := {}                      # wall cells with the sector console (the green screen)
+var engine := {}                     # wall cells with the engine: it drives the ship and its jumps
+var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -110,9 +112,21 @@ func load_from(name: String) -> String:
 	oxygen = {}
 	helm = {}
 	chart = {}
+	engine = {}
+	air_plant = {}
 	for i in cells.size():
 		if cells[i] < 0:
 			continue
+		if cells[i] == tile_ids.get("engine", -1):
+			engine[i] = true
+		elif cells[i] == tile_ids.get("air_plant", -1):
+			# it blows into the room it faces: the cell below it, or failing that the one above
+			var x := i % width
+			var y := i / width
+			if walkable(x, y + 1):
+				air_plant[i] = i + width
+			elif walkable(x, y - 1):
+				air_plant[i] = i - width
 		if cells[i] == tile_ids.get("console_2", -1):
 			oxygen[i] = true
 		elif cells[i] == tile_ids.get("console_3", -1):
@@ -182,6 +196,19 @@ func cell_ahead(x: int, y: int, facing: int) -> int:
 	if tx < 0 or ty < 0 or tx >= width or ty >= height:
 		return -1
 	return ty * width + tx
+
+
+func device_name(cell: int) -> String:
+	## What the thing on this wall cell is called, for messages ("" = nothing that can break).
+	if chart.has(cell):
+		return "карта сектора"
+	if helm.has(cell):
+		return "управление кораблём"
+	if engine.has(cell):
+		return "двигатель"
+	if air_plant.has(cell):
+		return "воздушная установка"
+	return ""
 
 
 func deck_of(y: int) -> int:

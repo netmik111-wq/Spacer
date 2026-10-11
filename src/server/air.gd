@@ -19,6 +19,8 @@ const FLOW := 0.2                    # share of a pressure difference that cross
 const FLOW_DECK := 0.1               # the same between a cell and the one above or below it. Smaller, so that
                                      # a cell with five or six neighbours still cannot give away more than it has.
 const LEAK := 0.12                   # share of a cell's air lost per step through each hole next to it
+const PLANT_PER_STEP := 0.012        # air an air plant adds to the cell in front of it per step: one cell's
+                                     # worth in about 8 s, a room of ten cells in a minute and a half
 const REST := 0.00002                # below this much change per step the air is considered settled
 
 var map: ShipMap
@@ -85,6 +87,13 @@ func refill() -> void:
 		air[i] = 1.0
 		level[i] = Net.AIR_FULL
 	settled = false
+
+
+func feed(cell: int, amount: float) -> void:
+	## An air plant blows this much into a cell, up to normal pressure.
+	if air[cell] < 1.0:
+		air[cell] = minf(air[cell] + amount, 1.0)
+		settled = false
 
 
 func wake() -> void:

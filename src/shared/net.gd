@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 7
+const PROTOCOL := 8
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -79,7 +79,8 @@ const HULL_BYTES := 5
 
 const S_HELM := 19                  # the ship inside its sector: s16 x*10, s16 y*10 (where it was on that tick),
                                     # u8 under way, u8 destination x, u8 destination y, u32 tick
-const S_DEVICES := 20               # u8 count, then per broken bridge console: u16 cell
+const S_DEVICES := 20               # u8 count, then per thing out of order (a bridge console, the engine,
+                                    # the air plant): u16 cell
 
 const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked (tests)
 const ADMIN_SEAL := 2               # close every hole (tests)

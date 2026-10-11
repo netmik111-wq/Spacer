@@ -78,7 +78,7 @@ var ship_pos := Vector2.ZERO           # where the ship is inside its sector (se
 var ship_dest := Vector2.ZERO          # where it is heading
 var ship_moving := false
 var in_reach := false                  # inside the sector's meteor stream, or docked at its station or trader
-var broken := {}                       # bridge consoles out of order: wall cell -> true
+var broken := {}                       # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
 var director := Director.new()
 
 # counters for the status line
@@ -603,9 +603,84 @@ func _at_console(p: Player, cells: Dictionary) -> bool:
 	return ahead >= 0 and cells.has(ahead) and not broken.has(ahead)
 
 
+func engine_down() -> bool:
+	## The ship has an engine and it is out of order: no way under its own power, no jump.
+	if map.engine.is_empty():
+		return false
+	for cell: int in map.engine.keys():
+		if not broken.has(cell):
+			return false
+	return true
+
+
+func _any_broken(cells: Dictionary) -> bool:
+	for cell: int in cells.keys():
+		if broken.has(cell):
+			return true
+	return false
+
+
+func can_break(what: String) -> bool:
+	## Things that stand between the crew and an escape break one at a time:
+	## while a bridge console is out, the engine holds, and the other way round.
+	var way_out_hurt := _any_broken(map.chart) or _any_broken(map.helm) or _any_broken(map.engine)
+	match what:
+		"console":
+			return not way_out_hurt and not (map.chart.is_empty() and map.helm.is_empty())
+		"engine":
+			return not way_out_hurt and not map.engine.is_empty()
+		"air_plant":
+			return not map.air_plant.is_empty() and not _any_broken(map.air_plant)
+	return false
+
+
+func break_engine() -> bool:
+	if not can_break("engine"):
+		return false
+	var cells: Array = map.engine.keys()
+	var cell: int = cells[_rng.randi_range(0, cells.size() - 1)]
+	broken[cell] = true
+	_to_all(_devices_packet())
+	_ship_says("Отказ двигателя: корабль не может ни идти, ни прыгать. Двигатель на нижней палубе.")
+	_engine_stopped()
+	return true
+
+
+func break_air_plant() -> bool:
+	if not can_break("air_plant"):
+		return false
+	var cells: Array = map.air_plant.keys()
+	var cell: int = cells[_rng.randi_range(0, cells.size() - 1)]
+	broken[cell] = true
+	_to_all(_devices_packet())
+	_ship_says("Воздушная установка остановилась. Она на нижней палубе.")
+	return true
+
+
+func _engine_stopped() -> void:
+	## Without the engine the ship stops where it is and a jump being charged is lost.
+	if not engine_down():
+		return
+	if ship_moving:
+		ship_moving = false
+		ship_dest = ship_pos
+		_to_all(_helm_packet())
+	if jump_to != Net.NO_SECTOR:
+		jump_to = Net.NO_SECTOR
+		_tell_nav()
+		_ship_says("Прыжок сорван.")
+
+
+func _feed_air() -> void:
+	## Every working air plant blows a little air into the room it faces.
+	for cell: int in map.air_plant.keys():
+		if not broken.has(cell):
+			air.feed(map.air_plant[cell], Air.PLANT_PER_STEP)
+
+
 func _helm_asked(p: Player, go: bool, to: Vector2) -> void:
 	## A player at the ship's controls sets a course inside the sector, or stops the ship.
-	if not _at_console(p, map.helm) or jump_to != Net.NO_SECTOR:
+	if not _at_console(p, map.helm) or jump_to != Net.NO_SECTOR or engine_down():
 		return
 	ship_moving = go
 	ship_dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else ship_pos
@@ -638,7 +713,7 @@ func _update_ship() -> void:
 func break_console() -> bool:
 	## A bridge console goes out of order. One at a time: while one is broken,
 	## the other stays whole, so the crew always has one way out left.
-	if not broken.is_empty():
+	if not can_break("console"):
 		return false
 	var all: Array = map.chart.keys() + map.helm.keys()
 	if all.is_empty():
@@ -646,7 +721,7 @@ func break_console() -> bool:
 	var cell: int = all[_rng.randi_range(0, all.size() - 1)]
 	broken[cell] = true
 	_to_all(_devices_packet())
-	_ship_says("Замыкание на мостике: %s не работает." % ("карта сектора" if map.chart.has(cell) else "управление кораблём"))
+	_ship_says("Замыкание на мостике: %s не работает." % map.device_name(cell))
 	return true
 
 
@@ -671,7 +746,7 @@ func _tell_nav() -> void:
 
 func _jump_asked(p: Player, target: int) -> void:
 	## A player at the sector console asks for a jump.
-	if not _at_console(p, map.chart) or jump_to != Net.NO_SECTOR or tick < drive_ready:
+	if not _at_console(p, map.chart) or jump_to != Net.NO_SECTOR or tick < drive_ready or engine_down():
 		return
 	if target >= sectors.count or not sectors.linked(sector, target):
 		return
@@ -792,6 +867,7 @@ func _tick() -> void:
 	_update_ship()
 	director.tick()
 	if tick % Net.AIR_EVERY == 0:
+		_feed_air()
 		air.step(doors, tick)
 	if tick % Net.AIR_SEND_EVERY == 0:
 		_collect_air()
@@ -855,7 +931,7 @@ func _update_work(p: Player) -> void:
 			p.work = 0
 			broken.erase(cell)
 			_to_all(_devices_packet())
-			_ship_says("%s чинит пульт: %s снова работает." % [p.name, "карта сектора" if map.chart.has(cell) else "управление кораблём"])
+			_ship_says("%s заканчивает ремонт: %s снова работает." % [p.name, map.device_name(cell)])
 	elif cell >= 0 and map.oxygen.has(cell):
 		p.work = 0
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)

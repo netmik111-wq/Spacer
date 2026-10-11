@@ -306,6 +306,16 @@
    "id": 60,
    "name": "ladder_n",
    "kind": "ladder"
+  },
+  {
+   "id": 61,
+   "name": "engine",
+   "kind": "wall"
+  },
+  {
+   "id": 62,
+   "name": "air_plant",
+   "kind": "wall"
   }
  ]
 }

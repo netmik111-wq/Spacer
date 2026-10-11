@@ -69,7 +69,7 @@ var ship_from := Vector2.ZERO        # where the ship was inside its sector on t
 var ship_dest := Vector2.ZERO        # where it is heading
 var ship_moving := false
 var ship_tick := 0
-var broken := {}                     # bridge consoles out of order: wall cell -> true
+var broken := {}                     # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -273,8 +273,9 @@ func send_suit(on: bool) -> void:
 func use_target() -> int:
 	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
 	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
-	## 5 = a bridge console that is out of order and can be mended,
-	## 6 = a ladder down, 7 = a ladder up (the character stands on it).
+	## 5 = something out of order that can be mended (a console, the engine, the air plant),
+	## 6 = a ladder down, 7 = a ladder up (the character stands on it),
+	## 8 = the engine or the air plant in working order: nothing to do, but it says so.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -289,10 +290,27 @@ func use_target() -> int:
 			return 3
 		if map.helm.has(cell):
 			return 4
+		if map.engine.has(cell) or map.air_plant.has(cell):
+			return 8
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func use_cell() -> int:
+	## The cell our character faces, or -1.
+	return map.cell_ahead(pred.x, pred.y, pred.facing) if phase == PLAYING else -1
+
+
+func engine_down() -> bool:
+	## The ship has an engine and it is out of order (the same rule as GameServer.engine_down).
+	if map.engine.is_empty():
+		return false
+	for cell: int in map.engine.keys():
+		if not broken.has(cell):
+			return false
+	return true
 
 
 func my_deck() -> int:

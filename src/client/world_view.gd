@@ -249,9 +249,9 @@ func _update_ship(delta: float) -> void:
 				_hole_views.erase(cell)
 		for deck in _decks:
 			deck.fx.queue_redraw()
-	elif not client.holes.is_empty() or not client.broken.is_empty():
+	elif not client.holes.is_empty() or not client.broken.is_empty() or not map.engine.is_empty() or not map.air_plant.is_empty():
 		for deck in _decks:
-			deck.fx.queue_redraw()           # air streaming out and sparking consoles are animated
+			deck.fx.queue_redraw()           # air streaming out, sparks and the machines are animated
 
 
 func _draw_fx(d: int) -> void:
@@ -261,7 +261,37 @@ func _draw_fx(d: int) -> void:
 	var map := client.map
 	var pen := _decks[d].fx
 	var now := Time.get_ticks_msec() / 1000.0
-	# a console that is out of order: its screen is dark and it throws sparks
+	# the engine: its light falls on the floor in front of it, so its state can be
+	# read from across the room, or from the deck above through a glass floor
+	for cell: int in map.engine.keys():
+		if map.deck_of_cell(cell) != d:
+			continue
+		var ex := cell % map.width
+		var ey := cell / map.width
+		var at := _on_deck(cell)
+		var down := client.broken.has(cell)
+		var beat := 0.8 + 0.2 * sin(now * 3.0) if not down else (1.0 if fposmod(now, 1.2) < 0.6 else 0.3)
+		var light := Color(1.0, 0.16, 0.1) if down else Color(0.15, 0.95, 1.0)
+		for dy in [1, 2]:
+			for dx in [-1, 0, 1]:
+				if map.walkable(ex + dx, ey + dy):
+					var share := (0.5 if dx == 0 else 0.28) * (1.0 if dy == 1 else 0.6)
+					pen.draw_rect(Rect2((at + Vector2(dx, dy)) * _tile, Vector2(_tile, _tile)), Color(light, share * beat))
+		if not down:
+			pen.draw_circle(at * _tile + Vector2(16.0, 14.0), 1.5 + beat * 1.5, Color(1, 1, 1, 0.55))
+	# the air plant: while it works, air can be seen coming out of it
+	for cell: int in map.air_plant.keys():
+		if map.deck_of_cell(cell) != d or client.broken.has(cell):
+			continue
+		var out_cell: int = map.air_plant[cell]
+		var way := 1.0 if out_cell > cell else -1.0
+		var mouth := _on_deck(cell) * _tile + Vector2(16.0, 22.0 if way > 0.0 else 6.0)
+		for k in 7:
+			var seed_a := float((cell * 7 + k * 37) % 53) / 53.0
+			var phase := fposmod(now * (0.7 + seed_a * 0.5) + seed_a * 3.0, 1.0)
+			var from := mouth + Vector2((float(k) - 3.0) * 2.6, way * phase * 26.0)
+			pen.draw_line(from, from + Vector2(0.0, way * 4.0), Color(0.75, 0.9, 1.0, 0.5 * (1.0 - phase)), 1.0)
+	# something out of order: its face is dark and it throws sparks
 	for cell: int in client.broken.keys():
 		if map.deck_of_cell(cell) != d:
 			continue

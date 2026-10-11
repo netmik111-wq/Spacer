@@ -339,7 +339,10 @@ func _update_console() -> void:
 	var now := client.server_now()
 	var jumping := client.jump_to != Net.NO_SECTOR
 	var wait := (client.drive_ready - now) / Net.TICK_HZ
-	if jumping:
+	var no_engine := client.engine_down()
+	if no_engine:
+		_console_text.text = "Корабль в секторе %s.\nДвигатель не работает: прыжок невозможен. Его чинят на нижней палубе." % client.sectors.describe(client.sector)
+	elif jumping:
 		_console_text.text = "Корабль в секторе %s.\nКурс задан: %s. Прыжок через %d с." % [
 			client.sectors.describe(client.sector), client.sectors.describe(client.jump_to),
 			maxi(int(ceil((client.jump_tick - now) / Net.TICK_HZ)), 0)]
@@ -361,7 +364,7 @@ func _update_console() -> void:
 		_chart.queue_redraw()
 	for go in _jump_box.get_children():
 		if go is Button:
-			(go as Button).disabled = jumping or wait > 0.0
+			(go as Button).disabled = jumping or wait > 0.0 or no_engine
 	if jumping:
 		_chart.queue_redraw()
 
@@ -372,7 +375,9 @@ func _update_helm() -> void:
 	var here := client.sector
 	var at := client.ship_pos()
 	var lines := PackedStringArray()
-	if client.ship_under_way():
+	if client.engine_down():
+		lines.append("Двигатель не работает: корабль стоит. Его чинят на нижней палубе.")
+	elif client.ship_under_way():
 		lines.append("Корабль идёт заданным курсом, осталось %d." % int(ceil(at.distance_to(client.ship_dest))))
 	else:
 		lines.append("Корабль стоит. Щёлкните по карте, чтобы задать курс.")
@@ -614,6 +619,10 @@ func _on_notice(text: String) -> void:
 	_say("[color=#9aa3b5]%s[/color]" % _escape(text))
 
 
+func _capital(text: String) -> String:
+	return text.left(1).to_upper() + text.substr(1)
+
+
 func _escape(text: String) -> String:
 	return text.replace("[", "[lb]")
 
@@ -721,7 +730,10 @@ func _process(delta: float) -> void:
 	elif target == 4:
 		_hint.text = "E: управление кораблём"
 	elif target == 5:
-		_hint.text = "Чиню пульт…" if (_use_held and client.work > 0) else "Пульт не работает. Держите E, чтобы починить"
+		var what := _capital(client.map.device_name(client.use_cell()))
+		_hint.text = "Чиню…" if (_use_held and client.work > 0) else "%s не работает. Держите E, чтобы починить" % what
+	elif target == 8:
+		_hint.text = "%s: работает" % _capital(client.map.device_name(client.use_cell()))
 	elif target == 6 or target == 7:
 		var to := client.my_deck() + (1 if target == 6 else -1)
 		_hint.text = "E: %s по лестнице (%s)" % ["спуститься" if target == 6 else "подняться", client.map.deck_names[to].to_lower()]

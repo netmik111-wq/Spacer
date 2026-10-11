@@ -3,7 +3,7 @@ extends RefCounted
 ##
 ## It is the seed of what docs/VISION.md describes: a master that runs events
 ## by hand or by itself, looks at the ship and its crew, and keeps the players
-## from being bored. For now it knows two events and looks at very little, but
+## from being bored. For now it knows a handful of events and looks at very little, but
 ## the parts are in place: a catalogue of events by size, an automatic pace
 ## that depends on the sector, the crew and the trouble the ship is already
 ## in, and a way to fire any event by hand.
@@ -24,6 +24,8 @@ const SIZE_NAMES: Array[String] = ["мелкое", "среднее", "больш
 const MICROMETEORITE := 1
 const METEOR_VOLLEY := 2
 const CONSOLE_FAULT := 3
+const ENGINE_FAULT := 4
+const AIR_PLANT_FAULT := 5
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -33,6 +35,10 @@ const EVENTS: Array[Dictionary] = [
 		"where": [Sectors.METEORS], "weight": 4},
 	{"id": CONSOLE_FAULT, "name": "Замыкание пульта", "size": MEDIUM,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
+	{"id": ENGINE_FAULT, "name": "Отказ двигателя", "size": BIG,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+	{"id": AIR_PLANT_FAULT, "name": "Отказ воздушной установки", "size": MEDIUM,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -103,7 +109,8 @@ func assess() -> Dictionary:
 			crew += 1
 			if p.cond == Net.COND_OK:
 				crew_up += 1
-	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind()}
+	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind(),
+		"broken": server.broken.size(), "engine_down": server.engine_down()}
 
 
 func fire(event_id: int) -> bool:
@@ -124,6 +131,10 @@ func _run(event_id: int) -> void:
 			_do("hole")
 		CONSOLE_FAULT:
 			server.break_console()
+		ENGINE_FAULT:
+			server.break_engine()
+		AIR_PLANT_FAULT:
+			server.break_air_plant()
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -136,17 +147,31 @@ func _do(what: String) -> void:
 		server.breach_random()
 
 
+func _can_happen(e: Dictionary, here: int) -> bool:
+	## Fits this place, and would change something: a thing already broken does not break again.
+	if not (e["where"] as Array).has(here):
+		return false
+	match int(e["id"]):
+		CONSOLE_FAULT:
+			return server.can_break("console")
+		ENGINE_FAULT:
+			return server.can_break("engine")
+		AIR_PLANT_FAULT:
+			return server.can_break("air_plant")
+	return true
+
+
 func _pick() -> Dictionary:
 	var here: int = server.danger_kind()
 	var total := 0
 	for e: Dictionary in EVENTS:
-		if (e["where"] as Array).has(here):
+		if _can_happen(e, here):
 			total += int(e["weight"])
 	if total == 0:
 		return {}
 	var roll := _rng.randi_range(1, total)
 	for e: Dictionary in EVENTS:
-		if (e["where"] as Array).has(here):
+		if _can_happen(e, here):
 			roll -= int(e["weight"])
 			if roll <= 0:
 				return e
