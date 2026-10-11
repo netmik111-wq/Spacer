@@ -17,14 +17,15 @@ class State:
 	var move_tick := -1000     # tick on which the last step started
 	var fx := 0                # tile the last step started from (for drawing the slide)
 	var fy := 0
+	var down := false          # unconscious or dead: cannot walk
 
 	func copy_from(o: State) -> void:
 		x = o.x; y = o.y; cd = o.cd; facing = o.facing; dir = o.dir
-		move_tick = o.move_tick; fx = o.fx; fy = o.fy
+		move_tick = o.move_tick; fx = o.fx; fy = o.fy; down = o.down
 
 	func same_as(o: State) -> bool:
 		return x == o.x and y == o.y and cd == o.cd and facing == o.facing \
-			and dir == o.dir and move_tick == o.move_tick
+			and dir == o.dir and move_tick == o.move_tick and down == o.down
 
 	func place(px: int, py: int) -> void:
 		x = px; y = py; fx = px; fy = py; cd = 0; move_tick = -1000
@@ -35,7 +36,7 @@ class State:
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
-	if st.cd > 0 or st.dir == 0:
+	if st.down or st.cd > 0 or st.dir == 0:
 		return false
 	st.facing = st.dir
 	var nx: int = st.x + Net.DX[st.dir]

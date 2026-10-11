@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 2
+const PROTOCOL := 3
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -33,6 +33,7 @@ const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
 const C_ADMIN := 5                  # u8 command, secret text: test tools of the hosting player (see ADMIN_*)
+const C_RESPAWN := 6                # nothing else: a dead player asks to come back as a new crew member
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
@@ -44,7 +45,7 @@ const S_WORLD := 15                 # u32 tick, then sections
 const S_CHAT := 16                  # u16 from id, u16 length, text
 
 # --- sections inside S_WORLD ---
-const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 facing (255 = gone)
+const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
 const SEC_DOOR := 2                 # u16 count, then 6-byte records: u16 door, s32 tick it is passable from (-1 = shut)
 const SEC_HULL := 3                 # u16 count, then 5-byte records: s16 x, s16 y, u8 state (1 = breached, 0 = whole)
 const SEC_VIEW := 4                 # u8 chunk x, u8 chunk y: the centre of what this client is shown
@@ -52,6 +53,8 @@ const SEC_CHECK := 5                # u32 checksum of the entities this client s
 const SEC_AIR := 6                  # u8 chunk x, u8 chunk y, u16 count, then pairs: u8 cell in the chunk (y*16+x), u8 air
 const SEC_SELF := 7                 # authoritative state of the client's own character (see pack_self)
 const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of all 256 cells of the chunk
+const SEC_VITALS := 9               # s16 health of the client's own character: 100 = unhurt, 0 and below =
+                                    # unconscious, HEALTH_DEAD = dead
 
 const FACING_GONE := 255
 const ENT_BYTES := 7
@@ -69,6 +72,14 @@ const REJECT_BAD_HELLO := 3
 
 const SUIT_COLOURS := 8             # rows in assets/chars.png
 
+# Condition of a character. It travels in the same byte as the facing.
+const COND_OK := 0
+const COND_CRIT := 1                # unconscious on the floor
+const COND_DEAD := 2
+const HEALTH_FULL := 100
+const HEALTH_DEAD := -100
+const RESPAWN_TICKS := 100          # a dead player may come back after 5 s
+
 
 static func reject_text(reason: int) -> String:
 	match reason:
@@ -83,8 +94,21 @@ static func reject_text(reason: int) -> String:
 
 ## Entity checksum term, summed by the server and by the client over the same
 ## set of entities. Must stay identical on both sides.
-static func ent_hash(id: int, x: int, y: int, facing: int) -> int:
-	return id * 31 + x * 17 + y * 13 + facing * 7 + 1
+static func ent_hash(id: int, x: int, y: int, look: int) -> int:
+	return id * 31 + x * 17 + y * 13 + look * 7 + 1
+
+
+## Facing and condition packed into the one byte sent for a character.
+static func pack_look(facing: int, cond: int) -> int:
+	return facing | (cond << 4)
+
+
+static func look_facing(look: int) -> int:
+	return look & 7
+
+
+static func look_cond(look: int) -> int:
+	return (look >> 4) & 3
 
 
 ## The same for the ship itself: doors, holes in the hull and air.

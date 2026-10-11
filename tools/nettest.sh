@@ -15,7 +15,7 @@ CPORT=$PORT; PP=""
 if [ "$DELAY" -ge 0 ]; then CPORT=$((PORT + 1)); "$LAGPROXY" $CPORT $PORT $DELAY $JIT $LOSS $STALL $EVERY 2> "$OUT/proxy.log" & PP=$!; fi
 sleep 1.5
 for i in $(seq 1 $N); do
-  "$GODOT" --headless --path . -- join=127.0.0.1 port=$CPORT name=Тест$i --demo demo_until=$((SECS - 3)) quit_after=$SECS stats="$OUT/c$i.json" > "$OUT/c$i.log" 2>&1 &
+  "$GODOT" --headless --path . -- join=127.0.0.1 port=$CPORT name=Тест$i --demo --respawn demo_until=$((SECS - 3)) quit_after=$SECS stats="$OUT/c$i.json" > "$OUT/c$i.log" 2>&1 &
   sleep 0.2
 done
 wait $SP
@@ -34,6 +34,7 @@ print(f"clients reporting: {len(ok)}/{n}, all in game: {all(r['phase'] == 3 for 
 print(f"predicted steps: {steps}, corrected by the server: {mis} ({100.0 * mis / max(steps, 1):.2f}%)")
 print(f"state checks: {sum(r['checks_ok'] for r in ok)} ok, {sum(r['checks_bad'] for r in ok)} bad "
       f"(of the bad ones, doors/hull/air: {sum(r['ship_checks_bad'] for r in ok)}); holes seen by clients: {sorted(set(r['holes'] for r in ok))}")
+print(f"health of the clients at the end: {sorted(r['health'] for r in ok)}; down or dead: {sum(1 for r in ok if r['cond'] != 0)}")
 print(f"ended where the server says: {sum(1 for r in ok if (r['pred_x'], r['pred_y']) == (r['auth_x'], r['auth_y']))}/{len(ok)}")
 print(f"ping seen by clients: {min(r['rtt_ms'] for r in ok):.0f}..{max(r['rtt_ms'] for r in ok):.0f} ms; errors in logs: {errs}")
 PY

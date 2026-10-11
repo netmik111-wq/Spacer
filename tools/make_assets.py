@@ -488,21 +488,64 @@ def read_dmi_states(path):
     return int(size.get("width", 32)), int(size.get("height", 32)), states
 
 
+# What the states of hud.dmi are, in file order (they carry no names).
+# The first eight are the heartbeat monitor from full health down to death,
+# the same eight steps Space Station 13 uses; the rest are warning lamps.
+HUD_HEALTH_STATES = 8
+HUD_ALERTS = ["overfeed", "hungry", "starving", "kpa_low1", "kpa_low2", "kpa_high1", "kpa_high2",
+              "o2_low", "o2_high", "toxic_air", "o2_on", "o2_off"]
+
+
 def build_hud():
     path = os.path.join(SRC, "hud.dmi")
     fw, fh, states = read_dmi_states(path)
     sheet = Image.open(path).convert("RGBA")
     cols = sheet.width // fw
-    first = states[0]
-    n = first["frames"] * first["dirs"]
-    strip = Image.new("RGBA", (fw * n, fh), (0, 0, 0, 0))
-    for i in range(n):
-        strip.paste(sheet.crop(((i % cols) * fw, (i // cols) * fh, (i % cols + 1) * fw, (i // cols + 1) * fh)), (i * fw, 0))
-    strip.save(os.path.join(OUT, "hud_monitor.png"))
-    delay = first["delay"][0] if first["delay"] else 1.0
+
+    def frame(i):
+        return sheet.crop(((i % cols) * fw, (i // cols) * fh, (i % cols + 1) * fw, (i // cols + 1) * fh))
+
+    starts, at = [], 0
+    for st in states:
+        starts.append(at)
+        at += st["frames"] * st["dirs"]
+    if len(states) != HUD_HEALTH_STATES + len(HUD_ALERTS):
+        raise MapError(f"hud.dmi has {len(states)} states, expected {HUD_HEALTH_STATES + len(HUD_ALERTS)}")
+
+    # monitor: one row per health state
+    n = states[0]["frames"]
+    grid = Image.new("RGBA", (fw * n, fh * HUD_HEALTH_STATES), (0, 0, 0, 0))
+    for row in range(HUD_HEALTH_STATES):
+        if states[row]["frames"] != n:
+            raise MapError("hud.dmi: the monitor states differ in length")
+        for i in range(n):
+            grid.paste(frame(starts[row] + i), (i * fw, row * fh))
+    grid.save(os.path.join(OUT, "hud_monitor.png"))
+    delay = states[0]["delay"][0] if states[0]["delay"] else 1.0
+
+    # warning lamps: each cut down to what is drawn, one after another in a strip
+    lamps, x = {}, 0
+    cut_frames = []
+    for k, name in enumerate(HUD_ALERTS):
+        st = states[HUD_HEALTH_STATES + k]
+        frames = [frame(starts[HUD_HEALTH_STATES + k] + i) for i in range(st["frames"])]
+        boxes = [f.getbbox() for f in frames if f.getbbox()]
+        box = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+        w, h = box[2] - box[0], box[3] - box[1]
+        lamps[name] = {"x": x, "w": w, "h": h, "frames": len(frames),
+                       "frame_seconds": (st["delay"][0] / 10.0) if st["delay"] else 0.0}
+        for f in frames:
+            cut_frames.append((x, f.crop(box)))
+            x += w + 1
+    strip = Image.new("RGBA", (x, max(v["h"] for v in lamps.values())), (0, 0, 0, 0))
+    for px, im in cut_frames:
+        strip.paste(im, (px, 0))
+    strip.save(os.path.join(OUT, "hud_alerts.png"))
+
     with open(os.path.join(OUT, "hud_monitor.json"), "w", encoding="utf-8") as f:
-        json.dump({"frame_width": fw, "frame_height": fh, "frames": n, "frame_seconds": delay / 10.0}, f)
-    print(f"hud: monitor {n} frames of {fw}x{fh}, {delay / 10.0:.2f} s per frame ({len(states)} states in the .dmi)")
+        json.dump({"frame_width": fw, "frame_height": fh, "frames": n, "states": HUD_HEALTH_STATES,
+                   "frame_seconds": delay / 10.0, "alerts": lamps}, f, indent=1)
+    print(f"hud: monitor {HUD_HEALTH_STATES} states x {n} frames of {fw}x{fh}, {len(lamps)} warning lamps")
 
 
 # ---------------------------------------------------------------- effects

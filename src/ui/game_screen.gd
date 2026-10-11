@@ -11,6 +11,10 @@ const WorldView := preload("res://src/client/world_view.gd")
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
+# when the lamps light, as shares of normal pressure (the damage itself is the server's: see vitals.gd)
+const BREATH_MIN := 0.76
+const PRESSURE_WARN := 0.5
+const PRESSURE_MIN := 0.2
 const NAME_COLOURS: Array[String] = ["ff6b5e", "6fa8ff", "6fd487", "f2c84b", "b98cf0", "f59a55", "5fd3e0", "e3e6ee"]
 
 var client: GameClient
@@ -25,10 +29,13 @@ var _info: Label
 var _hint: Label
 var _debug: Label
 var _monitor: TextureRect
-var _monitor_frames: Array[AtlasTexture] = []
+var _monitor_frames: Array = []       # per health state: Array[AtlasTexture]
+var _alerts := {}                    # lamp name -> {"frames": Array[AtlasTexture], "seconds": float, "node": TextureRect}
+var _alert_box: VBoxContainer
+var _shade: ColorRect
+var _fate: Label
 var _monitor_step := 0.08
 var _monitor_time := 0.0
-var _pressure: Label
 var _chat_box: VBoxContainer
 var _chat_lines: Array = []          # [RichTextLabel, time it was added]
 var _chat_input: LineEdit
@@ -87,16 +94,19 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		var fw := int(meta["frame_width"])
 		var fh := int(meta["frame_height"])
 		_monitor_step = float(meta["frame_seconds"])
-		for i in int(meta["frames"]):
-			var frame := AtlasTexture.new()
-			frame.atlas = sheet
-			frame.region = Rect2(i * fw, 0, fw, fh)
-			_monitor_frames.append(frame)
+		for state in int(meta["states"]):
+			var row: Array[AtlasTexture] = []
+			for i in int(meta["frames"]):
+				var frame := AtlasTexture.new()
+				frame.atlas = sheet
+				frame.region = Rect2(i * fw, state * fh, fw, fh)
+				row.append(frame)
+			_monitor_frames.append(row)
 		_monitor = TextureRect.new()
 		_monitor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_monitor.stretch_mode = TextureRect.STRETCH_SCALE
 		_monitor.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_monitor.texture = _monitor_frames[0]
+		_monitor.texture = _monitor_frames[0][0]
 		_monitor.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 		_monitor.offset_left = -fw * 3 - 14
 		_monitor.offset_top = -fh * 3 - 14
@@ -104,14 +114,53 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		_monitor.offset_bottom = -14
 		root.add_child(_monitor)
 
-	# air pressure where our character stands
-	_pressure = _text(root, 15)
-	_pressure.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_pressure.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	_pressure.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_pressure.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_pressure.offset_right = -14
-	_pressure.offset_bottom = -118
+		# warning lamps from the same HUD sheet, stacked above the monitor; lit only when something is wrong
+		_alert_box = VBoxContainer.new()
+		_alert_box.alignment = BoxContainer.ALIGNMENT_END
+		_alert_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_alert_box.add_theme_constant_override("separation", 6)
+		_alert_box.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+		_alert_box.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+		_alert_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		_alert_box.offset_right = -14
+		_alert_box.offset_bottom = -fh * 3 - 22
+		root.add_child(_alert_box)
+		var lamps: Texture2D = load("res://assets/hud_alerts.png")
+		var described: Dictionary = meta.get("alerts", {})
+		for lamp: String in ["kpa_low1", "kpa_low2", "o2_low"]:
+			if not described.has(lamp) or lamps == null:
+				continue
+			var d: Dictionary = described[lamp]
+			var frames: Array[AtlasTexture] = []
+			for i in int(d["frames"]):
+				var frame := AtlasTexture.new()
+				frame.atlas = lamps
+				frame.region = Rect2(int(d["x"]) + i * (int(d["w"]) + 1), 0, int(d["w"]), int(d["h"]))
+				frames.append(frame)
+			var node := TextureRect.new()
+			node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			node.stretch_mode = TextureRect.STRETCH_SCALE
+			node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			node.custom_minimum_size = Vector2(int(d["w"]), int(d["h"])) * 3
+			node.size_flags_horizontal = Control.SIZE_SHRINK_END
+			node.texture = frames[0]
+			node.visible = false
+			_alert_box.add_child(node)
+			_alerts[lamp] = {"frames": frames, "seconds": float(d["frame_seconds"]), "node": node}
+
+	# the screen goes dark as our character fades, and says so when it is down
+	_shade = ColorRect.new()
+	_shade.color = Color(0, 0, 0, 0)
+	_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_shade)
+	root.move_child(_shade, 0)
+	_fate = _text(root, 22)
+	_fate.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_fate.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_fate.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_fate.offset_top = 96
+	_fate.visible = false
 
 	_chat_box = VBoxContainer.new()
 	_chat_box.alignment = BoxContainer.ALIGNMENT_END
@@ -289,9 +338,35 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("debug"):
 		show_debug(not _debug.visible)
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("respawn") and not _chat_input.visible:
+		client.send_respawn()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("toggle_predict"):
 		client.predict = not client.predict
 		get_viewport().set_input_as_handled()
+
+
+func _health_state() -> int:
+	## Which of the monitor's eight pictures fits our health (the scale Space Station 13 uses).
+	if client.my_cond == Net.COND_DEAD:
+		return 7
+	if client.my_cond == Net.COND_CRIT or client.health <= 0:
+		return 6
+	if client.health >= 100:
+		return 0
+	return clampi(5 - client.health / 20, 1, 5)
+
+
+func _lamp(lamp: String, on: bool) -> void:
+	if not _alerts.has(lamp):
+		return
+	var a: Dictionary = _alerts[lamp]
+	var node: TextureRect = a["node"]
+	node.visible = on
+	if on:
+		var frames: Array = a["frames"]
+		var seconds: float = a["seconds"]
+		node.texture = frames[int(_monitor_time / seconds) % frames.size()] if seconds > 0.0 else frames[0]
 
 
 func _input(event: InputEvent) -> void:
@@ -330,22 +405,29 @@ func _process(delta: float) -> void:
 		var alpha := 1.0 if _chat_input.visible else clampf(1.0 - (age - CHAT_VISIBLE_SEC) / 2.0, 0.0, 1.0)
 		(entry[0] as RichTextLabel).modulate.a = alpha
 
+	# the monitor shows one of eight states, from unhurt to dead
+	_monitor_time += delta
 	if _monitor != null and not _monitor_frames.is_empty():
-		_monitor_time += delta
-		_monitor.texture = _monitor_frames[int(_monitor_time / _monitor_step) % _monitor_frames.size()]
+		var row: Array = _monitor_frames[mini(_health_state(), _monitor_frames.size() - 1)]
+		_monitor.texture = row[int(_monitor_time / _monitor_step) % row.size()]
 
+	# warning lamps: thin air and low pressure where our character stands
 	var here := client.air_at(client.pred.x, client.pred.y)
-	if here >= 0:
-		var kpa := int(round(here * Net.KPA_FULL / Net.AIR_FULL))
-		if here >= Net.AIR_FULL * 0.75:
-			_pressure.text = "Давление: %d кПа" % kpa
-			_pressure.modulate = Color(0.75, 0.95, 0.8)
-		elif here >= Net.AIR_FULL * 0.3:
-			_pressure.text = "Давление падает: %d кПа" % kpa
-			_pressure.modulate = Color(1.0, 0.85, 0.35)
-		else:
-			_pressure.text = "Воздуха почти нет: %d кПа" % kpa
-			_pressure.modulate = Color(1.0, 0.42, 0.36)
+	var alive := client.my_cond != Net.COND_DEAD
+	_lamp("o2_low", alive and here >= 0 and here < Net.AIR_FULL * BREATH_MIN)
+	_lamp("kpa_low1", alive and here >= Net.AIR_FULL * PRESSURE_MIN and here < Net.AIR_FULL * PRESSURE_WARN)
+	_lamp("kpa_low2", alive and here >= 0 and here < Net.AIR_FULL * PRESSURE_MIN)
+
+	# fading out: the screen darkens below 40 health
+	var dark := clampf((40.0 - client.health) / 40.0, 0.0, 1.0) * 0.5
+	if client.my_cond == Net.COND_CRIT:
+		dark = 0.72
+		_fate.text = "Вы без сознания"
+	elif client.my_cond == Net.COND_DEAD:
+		dark = 0.8
+		_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа."
+	_fate.visible = client.my_cond != Net.COND_OK
+	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
 
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
 	_info_timer -= delta
@@ -353,7 +435,8 @@ func _process(delta: float) -> void:
 		_info_timer = 0.25
 		_info.text = "На борту: %d     Пинг: %d мс" % [client.roster.size(), int(round(client.rtt_ms))]
 		if _debug.visible:
-			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d" % [
+			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,
 				client.checks_ok, client.checks_bad, client.packets_in, client.bytes_in / 1024.0,
-				int(round(_fps_smooth))]
+				int(round(_fps_smooth)), client.health,
+				int(round(maxi(client.air_at(client.pred.x, client.pred.y), 0) * Net.KPA_FULL / Net.AIR_FULL))]

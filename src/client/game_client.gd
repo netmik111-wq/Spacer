@@ -37,6 +37,8 @@ class Ent:
 	var x := 0
 	var y := 0
 	var facing := 2
+	var cond := 0                    # Net.COND_*
+	var look := 2                    # facing and condition as the server packs them (for the checksum)
 	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing]
 
 
@@ -53,6 +55,10 @@ var doors := Doors.new()
 var air := PackedByteArray()         # per cell: 0..Net.AIR_FULL (cells outside our view keep their last value)
 var holes := {}                      # breached hull cell -> true
 var ship_changes := 0                # goes up whenever doors, hull or air change: views redraw on it
+
+# our own character's body
+var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
+var my_cond := 0                     # Net.COND_*
 var want_dir := 0                    # direction the player holds right now; set by the game screen
 
 # for the debug overlay
@@ -150,6 +156,8 @@ func close() -> void:
 	ship_checks_bad = 0
 	holes.clear()
 	admin_token = ""
+	health = 100
+	my_cond = 0
 	bytes_in = 0
 	packets_in = 0
 
@@ -182,6 +190,12 @@ func stop_server_and_close(token: String) -> void:
 			_host.service(0)
 			OS.delay_msec(5)
 	close()
+
+
+func send_respawn() -> void:
+	## Dead: ask to come back as a new crew member (the server allows it after a few seconds).
+	if phase == PLAYING and my_cond == Net.COND_DEAD:
+		_peer.send(0, PackedByteArray([Net.C_RESPAWN]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_admin(command: int) -> void:
@@ -414,6 +428,9 @@ func _on_world(pkt: PackedByteArray) -> void:
 			_reconcile(s_tick, pkt, pos)
 			reconciled = true
 			pos += Net.SELF_BYTES
+		elif sec == Net.SEC_VITALS:
+			health = pkt.decode_s16(pos)
+			pos += 2
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)
 			pos += 2
@@ -474,7 +491,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			pos += 8
 			var sum := 0
 			for e: Ent in ents.values():
-				sum += Net.ent_hash(e.id, e.x, e.y, e.facing)
+				sum += Net.ent_hash(e.id, e.x, e.y, e.look)
 			var ship_ok := (_ship_sum() & 0xFFFFFFFF) == want_ship
 			if (sum & 0xFFFFFFFF) == want and ship_ok:
 				checks_ok += 1
@@ -513,10 +530,11 @@ func _outside_view(x: int, y: int) -> bool:
 	return absi((x >> Net.CHUNK_SHIFT) - _view_cx) > 1 or absi((y >> Net.CHUNK_SHIFT) - _view_cy) > 1
 
 
-func _apply_record(id: int, x: int, y: int, facing: int, s_tick: int) -> void:
-	if facing == Net.FACING_GONE or _outside_view(x, y):
+func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
+	if look == Net.FACING_GONE or _outside_view(x, y):
 		ents.erase(id)
 		return
+	var facing := Net.look_facing(look)
 	var e: Ent = ents.get(id)
 	if e == null:
 		e = Ent.new()
@@ -524,8 +542,12 @@ func _apply_record(id: int, x: int, y: int, facing: int, s_tick: int) -> void:
 		e.x = x
 		e.y = y
 		e.facing = facing
+		e.look = look
+		e.cond = Net.look_cond(look)
 		ents[id] = e
 		return
+	e.look = look
+	e.cond = Net.look_cond(look)
 	if e.x != x or e.y != y:
 		if absi(e.x - x) + absi(e.y - y) == 1:
 			e.steps.append([s_tick, e.x, e.y, x, y, facing])
@@ -601,7 +623,9 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.x = pkt.decode_s16(o)
 	_auth.y = pkt.decode_s16(o + 2)
 	_auth.cd = pkt[o + 4]
-	_auth.facing = pkt[o + 5]
+	_auth.facing = Net.look_facing(pkt[o + 5])
+	my_cond = Net.look_cond(pkt[o + 5])
+	_auth.down = my_cond != Net.COND_OK
 	_auth.dir = pkt[o + 6]
 	var ack := pkt.decode_u16(o + 7)
 	_auth.move_tick = pkt.decode_s32(o + 9)
@@ -663,12 +687,12 @@ func _rebuild_prediction() -> void:
 
 func sample(id: int) -> Array:
 	## Where to draw a character right now:
-	## [position in tiles, facing, is moving, tick its current step started on].
+	## [position in tiles, facing, is moving, tick its current step started on, condition].
 	## Empty if the character is not known.
 	if id == my_id and predict and _have_self:
 		_simulate_to_now()
 		var t := pred_time()
-		return [Mover.visual_pos(pred, t) + _corr, pred.facing, Mover.is_sliding(pred, t), pred.move_tick]
+		return [Mover.visual_pos(pred, t) + _corr, pred.facing, Mover.is_sliding(pred, t), pred.move_tick, my_cond]
 	var e: Ent = ents.get(id)
 	if e == null:
 		return []
@@ -679,9 +703,9 @@ func sample(id: int) -> Array:
 		if rt >= float(s[0]):
 			var k := (rt - float(s[0])) / float(Net.MOVE_TICKS)
 			if k < 1.0:
-				return [Vector2(lerpf(s[1], s[3], k), lerpf(s[2], s[4], k)), s[5], true, s[0]]
-			return [Vector2(s[3], s[4]), e.facing if i == last else int(s[5]), false, s[0]]
+				return [Vector2(lerpf(s[1], s[3], k), lerpf(s[2], s[4], k)), s[5], true, s[0], e.cond]
+			return [Vector2(s[3], s[4]), e.facing if i == last else int(s[5]), false, s[0], e.cond]
 	if last >= 0:
 		var first: Array = e.steps[0]
-		return [Vector2(first[1], first[2]), first[5], false, first[0]]
-	return [Vector2(e.x, e.y), e.facing, false, 0]
+		return [Vector2(first[1], first[2]), first[5], false, first[0], e.cond]
+	return [Vector2(e.x, e.y), e.facing, false, 0, e.cond]

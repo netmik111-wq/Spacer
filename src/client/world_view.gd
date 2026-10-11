@@ -231,8 +231,17 @@ func _process(delta: float) -> void:
 			_label_layer.add_child(label)
 			_labels[id] = label
 		var pos: Vector2 = s[0]
+		var cond: int = s[4]
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
-		sprite.region_rect = _frame(s[1], s[2], pos, client.player_colour(id))
+		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id))
+		if cond == Net.COND_OK:
+			sprite.rotation = 0.0
+			sprite.modulate = Color.WHITE
+		else:
+			# on the floor: the figure is turned on its side and slid back over its tile
+			sprite.rotation = PI / 2.0
+			sprite.position += Vector2(-22.0, -7.0)
+			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
 	for id: int in _views.keys():
 		if not client.ents.has(id):
 			(_views[id] as Sprite2D).queue_free()
@@ -268,13 +277,17 @@ func _process(delta: float) -> void:
 		if show_names:
 			var sprite: Sprite2D = _views[id]
 			label.text = client.player_name(id)
-			if id == client.my_id:
+			var lying: bool = sprite.rotation != 0.0
+			if lying:
+				label.modulate = Color(0.75, 0.5, 0.5)
+			elif id == client.my_id:
 				label.modulate = Color(0.6, 1.0, 0.7)
 			elif client.is_bot(id):
 				label.modulate = Color(0.72, 0.76, 0.86)
 			else:
 				label.modulate = Color(1, 1, 1)
-			var top := (sprite.position - Vector2(0, CHAR_H - 6) - _camera.position) * zoom + screen_centre
+			var above := Vector2(22, 7 - 20) if lying else Vector2(0, 6 - CHAR_H)
+			var top := (sprite.position + above - _camera.position) * zoom + screen_centre
 			label.position = (top - Vector2(label.size.x * 0.5, label.size.y)).round()
 
 	# debug: the server's idea of where we are

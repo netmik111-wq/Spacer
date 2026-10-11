@@ -17,7 +17,12 @@ var view_cx := -100                  # chunk this client's view is centred on
 var view_cy := -100
 var rep_x := -9999                   # position and facing as last sent to clients
 var rep_y := -9999
-var rep_facing := -1
+var rep_look := -1
+
+var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; Net.HEALTH_DEAD = dead
+var cond := 0                        # Net.COND_*
+var health_sent := 9999              # health as last told to the client
+var died_tick := 0
 
 var self_dirty := true               # own state changed and must be confirmed to the client
 var last_self_tick := -1000

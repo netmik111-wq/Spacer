@@ -109,7 +109,7 @@ func _define_inputs() -> void:
 		"move_up": [KEY_W, KEY_UP], "move_down": [KEY_S, KEY_DOWN],
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"chat": [KEY_ENTER, KEY_KP_ENTER], "pause": [KEY_ESCAPE],
-		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11],
+		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11], "respawn": [KEY_R],
 	}
 	for action: String in keys:
 		if not InputMap.has_action(action):
@@ -304,6 +304,8 @@ func _process(_delta: float) -> void:
 		elif _screen != null:
 			_breached = true
 			_client.send_admin(Net.ADMIN_BREACH)
+	if _flags.has("respawn") and _client != null and _client.my_cond == Net.COND_DEAD and Engine.get_process_frames() % 30 == 0:
+		_client.send_respawn()               # test clients come back by themselves
 	if _opt.has("seal_after") and not _sealed and _screen != null and t >= float(_opt["seal_after"]):
 		_sealed = true
 		_client.send_admin(Net.ADMIN_SEAL)
@@ -362,6 +364,7 @@ func _process(_delta: float) -> void:
 					"steps_predicted": _client.steps_predicted,
 					"ship_checks_bad": _client.ship_checks_bad, "holes": _client.holes.size(),
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
+					"health": _client.health, "cond": _client.my_cond,
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
 				}))
 		if _client != null:

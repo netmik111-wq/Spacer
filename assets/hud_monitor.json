@@ -1,1 +1,93 @@
-{"frame_width": 64, "frame_height": 32, "frames": 22, "frame_seconds": 0.08}
+{
+ "frame_width": 64,
+ "frame_height": 32,
+ "frames": 22,
+ "states": 8,
+ "frame_seconds": 0.08,
+ "alerts": {
+  "overfeed": {
+   "x": 0,
+   "w": 61,
+   "h": 18,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "hungry": {
+   "x": 62,
+   "w": 61,
+   "h": 18,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "starving": {
+   "x": 124,
+   "w": 61,
+   "h": 18,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "kpa_low1": {
+   "x": 186,
+   "w": 61,
+   "h": 18,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "kpa_low2": {
+   "x": 248,
+   "w": 61,
+   "h": 18,
+   "frames": 2,
+   "frame_seconds": 0.5
+  },
+  "kpa_high1": {
+   "x": 372,
+   "w": 61,
+   "h": 18,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "kpa_high2": {
+   "x": 434,
+   "w": 61,
+   "h": 18,
+   "frames": 2,
+   "frame_seconds": 0.5
+  },
+  "o2_low": {
+   "x": 558,
+   "w": 61,
+   "h": 18,
+   "frames": 2,
+   "frame_seconds": 0.5
+  },
+  "o2_high": {
+   "x": 682,
+   "w": 61,
+   "h": 18,
+   "frames": 2,
+   "frame_seconds": 0.5
+  },
+  "toxic_air": {
+   "x": 806,
+   "w": 46,
+   "h": 21,
+   "frames": 2,
+   "frame_seconds": 0.5
+  },
+  "o2_on": {
+   "x": 900,
+   "w": 35,
+   "h": 13,
+   "frames": 1,
+   "frame_seconds": 0.0
+  },
+  "o2_off": {
+   "x": 936,
+   "w": 35,
+   "h": 13,
+   "frames": 1,
+   "frame_seconds": 0.0
+  }
+ }
+}

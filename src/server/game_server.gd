@@ -15,6 +15,7 @@ const Mover := preload("res://src/shared/mover.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Player := preload("res://src/server/player.gd")
 const Air := preload("res://src/server/air.gd")
+const Vitals := preload("res://src/server/vitals.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -24,6 +25,7 @@ const MAX_INPUT_QUEUE := 32
 const MAX_INPUT_LEAD := 40          # inputs stamped further ahead than this are pulled back
 const CHAT_BURST := 5               # messages allowed per CHAT_WINDOW_MS
 const CHAT_WINDOW_MS := 5000
+const BOT_RESPAWN_TICKS := 300      # a dead bot is replaced after 15 s
 
 var port := Net.DEFAULT_PORT
 var max_players := 32
@@ -235,6 +237,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_SHUTDOWN:
 		if shutdown_token != "" and pkt.slice(1).get_string_from_utf8() == shutdown_token:
 			shutdown_requested.emit()
+	elif kind == Net.C_RESPAWN:
+		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
+			_respawn(p)
 	elif kind == Net.C_ADMIN:
 		if pkt.size() > 2 and shutdown_token != "" and pkt.slice(2).get_string_from_utf8() == shutdown_token:
 			if pkt[1] == Net.ADMIN_BREACH:
@@ -508,7 +513,8 @@ func _tick() -> void:
 			_bot_think(p)
 		if Mover.step(p.st, map, doors, tick):
 			p.self_dirty = true
-		if p.st.x != p.rep_x or p.st.y != p.rep_y or p.st.facing != p.rep_facing:
+		_update_vitals(p)
+		if p.st.x != p.rep_x or p.st.y != p.rep_y or Net.pack_look(p.st.facing, p.cond) != p.rep_look:
 			_record(p)
 	_update_doors()
 	if tick % Net.AIR_EVERY == 0:
@@ -516,6 +522,45 @@ func _tick() -> void:
 	if tick % Net.AIR_SEND_EVERY == 0:
 		_collect_air()
 	_send_world()
+
+
+func _update_vitals(p: Player) -> void:
+	## What the air in its cell does to one character this tick.
+	if p.cond == Net.COND_DEAD:
+		if p.bot and tick - p.died_tick >= BOT_RESPAWN_TICKS:
+			_respawn(p)
+		return
+	p.health = Vitals.advance(p.health, p.cond, air.air[p.st.y * map.width + p.st.x], Net.TICK_SEC)
+	var cond := Vitals.condition(p.health, p.cond)
+	if cond == p.cond:
+		return
+	if cond == Net.COND_CRIT:
+		_ship_says("%s теряет сознание." % p.name)
+	elif cond == Net.COND_DEAD:
+		p.died_tick = tick
+		_ship_says("%s погибает." % p.name)
+	elif p.cond == Net.COND_CRIT:
+		_ship_says("%s приходит в себя." % p.name)
+	p.cond = cond
+	p.st.down = cond != Net.COND_OK
+	p.st.dir = Net.DIR_NONE
+	p.inputs.clear()
+	p.self_dirty = true
+
+
+func _respawn(p: Player) -> void:
+	## A dead character comes back as a fresh crew member at a spawn point.
+	var spot := _spawn_point()
+	p.st.place(spot.x, spot.y)
+	p.st.dir = Net.DIR_NONE
+	p.st.down = false
+	p.st.facing = Net.DIR_DOWN
+	p.health = Net.HEALTH_FULL
+	p.cond = Net.COND_OK
+	p.inputs.clear()
+	p.self_dirty = true
+	_record(p)
+	_ship_says("%s снова в строю." % p.name)
 
 
 func _update_doors() -> void:
@@ -653,7 +698,10 @@ func _would_vent(x: int, y: int, dir: int) -> bool:
 	var fy: int = dy + Net.DY[dir]
 	if not map.walkable(fx, fy):
 		return false
-	return absf(air.air[y * map.width + x] - air.air[fy * map.width + fx]) > 0.25
+	var here := air.air[y * map.width + x]
+	if here < Vitals.BREATH_MIN:
+		return false                # it is suffocating: getting out matters more
+	return absf(here - air.air[fy * map.width + fx]) > 0.25
 
 
 func _chunk_of(x: int, y: int) -> int:
@@ -671,7 +719,7 @@ func _put_record(buf: PackedByteArray, slot: int, x: int, y: int, facing: int) -
 
 func _record(p: Player, gone: bool = false) -> void:
 	## Notes that a character changed, for everyone who can see where it is or was.
-	var facing := Net.FACING_GONE if gone else p.st.facing
+	var facing := Net.FACING_GONE if gone else Net.pack_look(p.st.facing, p.cond)
 	var now_chunk := _chunk_of(p.st.x, p.st.y)
 	var buf: PackedByteArray = _change[now_chunk]
 	_put_record(buf, p.slot, p.st.x, p.st.y, facing)
@@ -682,7 +730,7 @@ func _record(p: Player, gone: bool = false) -> void:
 			_put_record(old_buf, p.slot, p.st.x, p.st.y, facing)
 	p.rep_x = p.st.x
 	p.rep_y = p.st.y
-	p.rep_facing = p.st.facing
+	p.rep_look = Net.pack_look(p.st.facing, p.cond)
 
 
 func _ensure_full() -> void:
@@ -697,8 +745,9 @@ func _ensure_full() -> void:
 			continue
 		var c := _chunk_of(p.st.x, p.st.y)
 		var buf: PackedByteArray = _full[c]
-		_put_record(buf, p.slot, p.st.x, p.st.y, p.st.facing)
-		_sums[c] += Net.ent_hash(p.slot, p.st.x, p.st.y, p.st.facing)
+		var look := Net.pack_look(p.st.facing, p.cond)
+		_put_record(buf, p.slot, p.st.x, p.st.y, look)
+		_sums[c] += Net.ent_hash(p.slot, p.st.x, p.st.y, look)
 
 
 func _append_ents(out: PackedByteArray, records: PackedByteArray) -> void:
@@ -767,6 +816,13 @@ func _send_world() -> void:
 				if check:
 					sum += _sums[c]
 					ship_sum += _ship_sums[c]
+		var health_now := roundi(p.health)
+		if health_now != p.health_sent:
+			p.health_sent = health_now
+			var ov := out.size()
+			out.resize(ov + 3)
+			out.encode_u8(ov, Net.SEC_VITALS)
+			out.encode_s16(ov + 1, health_now)
 		if p.self_dirty or tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)
@@ -774,7 +830,7 @@ func _send_world() -> void:
 			out.encode_s16(o + 1, st.x)
 			out.encode_s16(o + 3, st.y)
 			out.encode_u8(o + 5, st.cd)
-			out.encode_u8(o + 6, st.facing)
+			out.encode_u8(o + 6, Net.pack_look(st.facing, p.cond))
 			out.encode_u8(o + 7, st.dir)
 			out.encode_u16(o + 8, p.last_seq)
 			out.encode_s32(o + 10, st.move_tick)
