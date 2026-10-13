@@ -1477,20 +1477,25 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 
 
 func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
-	## The character in our own cell (if `self_too` and the click was on us) or
-	## in the cell next to us in the direction of the click; null if nobody.
+	## Whoever a click next to us means: ourselves (if `self_too` and the click
+	## was on us), else of those in the cells around us (diagonals too) the one
+	## nearest the click. A click is never quite on the cell, and the one
+	## clicked may be in mid-step, so this is forgiving.
 	var from := Vector2(p.st.x, p.st.y)
-	var way := at - from
-	if self_too and way.length() < 0.5:
+	if self_too and at.distance_to(from) < 0.5:
 		return p
-	var step := Vector2i(signi(roundi(way.x)) if absf(way.x) >= absf(way.y) else 0,
-		signi(roundi(way.y)) if absf(way.y) > absf(way.x) else 0)
-	var cell := Vector2i(p.st.x, p.st.y) + step
+	var best: Player = null
+	var best_d := 1.6
 	for q: Player in players:
-		if q != null and q != p and not q.corpse and q.cond != Net.COND_DEAD and q.st.x == cell.x and q.st.y == cell.y:
-			return q
-	return null
-
+		if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD:
+			continue
+		if absi(q.st.x - p.st.x) > 1 or absi(q.st.y - p.st.y) > 1 or map.deck_of(q.st.y) != map.deck_of(p.st.y):
+			continue
+		var d := at.distance_to(Vector2(q.st.x, q.st.y))
+		if d < best_d:
+			best_d = d
+			best = q
+	return best
 
 func _strike(p: Player, at: Vector2, damage: int) -> void:
 	var q := _beside(p, at, false)

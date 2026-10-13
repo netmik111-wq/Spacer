@@ -77,6 +77,10 @@ func _initialize() -> void:
 	_run(GameServer.RELOAD_TICKS)
 	server.use_at(a, server.tick, Vector2(9, 4))
 	_expect(b.health == 100.0 - 15, "a baton hurts the one next to us")
+	b.health = 100.0
+	_run(GameServer.BLOW_TICKS)
+	server.use_at(a, server.tick, Vector2(8.6, 3.7))
+	_expect(b.health == 100.0 - 15, "even when the click is not right on them")
 	b.st.place(11, 4)
 	b.health = 100.0
 	_run(GameServer.BLOW_TICKS)
