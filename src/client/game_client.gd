@@ -15,7 +15,7 @@ signal joined                        # accepted by the server; map is loaded
 signal failed(reason: String)        # could not get in
 signal lost(reason: String)          # dropped while playing
 signal roster_changed
-signal chat(from_id: int, text: String)
+signal chat(from_id: int, channel: int, text: String)
 signal notice(text: String)
 signal shot(kind: int, hit: bool, from: Vector2, to: Vector2)   # a shot or a blow, in cells of the whole grid
 signal heard(kind: int, x: int, y: int)   # a sound reached our character (see Net.SOUND_*)
@@ -97,6 +97,17 @@ var enemy_docks_in := 0              # seconds until it docks by force
 var pumps := {}                     # airlock pumps at work: wall cell -> GameServer.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
+# the campaign (see Net.S_CAMPAIGN)
+var hull := Net.HULL_MAX
+var reserve := 0
+var over := Net.OVER_NONE
+var sectors_seen := 0
+var farthest := 0
+var jumps := 0
+var voyage_seconds := 0
+# our own job and skills (see Net.S_ME)
+var job := Net.JOB_CREWMAN
+var skills := PackedByteArray([0, 0, 0])
 var _power := true                   # the ship has power (see powered)
 
 # our own character's body
@@ -157,7 +168,7 @@ var _haul_seen := -1                 # our step (its start tick) that slide belo
 var _haul_id := -1                   # who it was worked out for
 
 
-func connect_to(address: String, port: int, player_name: String) -> String:
+func connect_to(address: String, port: int, player_name: String, wanted_job: int = Net.JOB_CREWMAN) -> String:
 	## Starts connecting. Returns "" or what went wrong straight away;
 	## later results come through the `joined` / `failed` signals.
 	close()
@@ -171,6 +182,9 @@ func connect_to(address: String, port: int, player_name: String) -> String:
 		_host = null
 		return "Не удалось начать подключение к %s:%d. Проверьте адрес." % [address, port]
 	_name = player_name
+	job = clampi(wanted_job, 0, Net.JOBS - 1)
+	_auth.access = Net.JOB_ACCESS[job]     # until the server says otherwise (see Net.S_ME)
+	pred.access = _auth.access
 	_t_connect = Time.get_ticks_msec()
 	phase = CONNECTING
 	return ""
@@ -495,7 +509,8 @@ func use_target() -> int:
 	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled),
 	## 14 = something lying on the floor in front or underfoot, to pick up,
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
-	## 17 = the gun console.
+	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
+	## 19 = an intercom.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -520,6 +535,8 @@ func use_target() -> int:
 			return 17
 		if map.guns.has(cell):
 			return 8
+		if map.intercom.has(cell):
+			return 19
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -530,6 +547,8 @@ func use_target() -> int:
 				return 11
 			if doors.is_sealed(door):
 				return 9
+			if doors.barred(door, map.door_access[door], pred.access):
+				return 18
 	if lying_near() >= 0:
 		return 13
 	if floor_cell() >= 0:
@@ -809,6 +828,7 @@ func _poll() -> void:
 				hello.encode_u16(1, Net.PROTOCOL)
 				hello.encode_u8(3, name_bytes.size())
 				hello.append_array(name_bytes)
+				hello.append(job)
 				_peer.send(0, hello, ENetPacketPeer.FLAG_RELIABLE)
 				phase = GREETING
 			ENetConnection.EVENT_DISCONNECT:
@@ -924,6 +944,23 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			store.clear()
 			for i in pkt[5]:
 				store[pkt[6 + i * 3]] = pkt.decode_u16(7 + i * 3)
+		Net.S_CAMPAIGN:
+			if pkt.size() >= 14:
+				hull = pkt[1]
+				reserve = pkt[2]
+				over = pkt[3]
+				sectors_seen = pkt.decode_u16(4)
+				farthest = pkt.decode_u16(6)
+				jumps = pkt.decode_u16(8)
+				voyage_seconds = pkt.decode_u32(10)
+		Net.S_ME:
+			if pkt.size() >= 2 + Net.SKILLS:
+				job = pkt[1]
+				skills = pkt.slice(2, 2 + Net.SKILLS)
+				if _auth.access != Net.JOB_ACCESS[job]:
+					_auth.access = Net.JOB_ACCESS[job]
+					pred.access = _auth.access
+					_rebuild_prediction()
 		Net.S_POWER:
 			_power = pkt[1] != 0
 			ship_changes += 1
@@ -938,18 +975,19 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))
 		Net.S_CHAT:
-			var n := pkt.decode_u16(3)
-			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())
+			var n := pkt.decode_u16(4)
+			chat.emit(pkt.decode_u16(1), pkt[3], pkt.slice(6, 6 + n).get_string_from_utf8())
 
 
 func _read_roster_entry(pkt: PackedByteArray, pos: int) -> int:
-	var n := pkt[pos + 4]
+	var n := pkt[pos + 5]
 	roster[pkt.decode_u16(pos)] = {
 		"colour": pkt[pos + 2],
 		"kind": pkt[pos + 3],
-		"name": pkt.slice(pos + 5, pos + 5 + n).get_string_from_utf8(),
+		"job": pkt[pos + 4],
+		"name": pkt.slice(pos + 6, pos + 6 + n).get_string_from_utf8(),
 	}
-	return pos + 5 + n
+	return pos + 6 + n
 
 
 func _on_welcome(pkt: PackedByteArray) -> void:

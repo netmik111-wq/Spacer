@@ -16,7 +16,7 @@ BOARD=${BOARD:-0}; [ "$BOARD" != "0" ] && BARG="$BARG board_after=$BOARD"
 DERELICT=${DERELICT:-0}; [ "$DERELICT" != "0" ] && BARG="$BARG derelict_after=$DERELICT"
 PIRATESHIP=${PIRATESHIP:-0}; [ "$PIRATESHIP" != "0" ] && BARG="$BARG pirateship_after=$PIRATESHIP"
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
-"$GODOT" --headless --path . -- --server --no-events port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
+"$GODOT" --headless --path . -- --server --no-events campaign=off port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
 CPORT=$PORT; PP=""
 if [ "$DELAY" -ge 0 ]; then CPORT=$((PORT + 1)); "$LAGPROXY" $CPORT $PORT $DELAY $JIT $LOSS $STALL $EVERY 2> "$OUT/proxy.log" & PP=$!; fi
 sleep 1.5

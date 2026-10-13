@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 23
+const PROTOCOL := 24
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -29,7 +29,7 @@ const DX: Array[int] = [0, 0, 0, -1, 1]
 const DY: Array[int] = [0, -1, 1, 0, 0]
 
 # --- packets, client -> server (first byte) ---
-const C_HELLO := 1                  # u16 protocol, u8 name length, name
+const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job (JOB_*)
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
@@ -60,11 +60,11 @@ const C_ACT := 17                   # nothing else: use the thing in the hand by
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
 const S_REJECT := 11                # u8 reason
-const S_ROSTER := 12                # u16 count, then roster entries: u16 id, u8 colour, u8 kind (KIND_*), u8 name length, name
+const S_ROSTER := 12                # u16 count, then roster entries: u16 id, u8 colour, u8 kind (KIND_*), u8 job, u8 name length, name
 const S_JOIN := 13                  # one roster entry
 const S_LEAVE := 14                 # u16 id
 const S_WORLD := 15                 # u32 tick, then sections
-const S_CHAT := 16                  # u16 from id, u16 length, text
+const S_CHAT := 16                  # u16 from id, u8 channel (CHAT_*), u16 length, text
 const S_SECTORS := 17               # the part of space around the ship (see Sectors.pack); sent anew on every arrival
 const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is jumping to (NO_SECTOR = none),
                                     # both as numbers in the window last sent; u32 tick the jump lands on,
@@ -115,6 +115,7 @@ const ITEM_MAG := 5                 # a pistol magazine
 const ITEM_BATON := 6
 const ITEM_MEDPATCH := 7            # a patch that closes wounds at once
 const ITEM_FUEL := 8                # a can of fuel: a jump burns one from the supply locker
+const ITEM_RADIO := 9               # a radio: what is said into it with ";" in front reaches every radio
 const ITEM_MEDKIT := 20             # a first-aid kit with no uses left; ITEM_MEDKIT + n has n left
 const MEDKIT_USES := 5
 const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT + n has n tenths of a tank
@@ -169,6 +170,8 @@ const STORE_TAKE := 1               # one of the thing named
 const STORE_PUT_BACK := 3           # everything carried that the locker keeps goes back into it
 const STORE_BUY := 4                # one of the thing named; this and the one below only while docked with a trader
 const STORE_BUY_AIR := 6
+const STORE_HIRE := 7               # take on one more crew member for the reserve (from a trader)
+const STORE_BUY_HULL := 8           # have the hull patched up by HULL_LOT (from a trader)
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a
 # spare part, or three times as long without one.
@@ -180,6 +183,23 @@ const EXPLORE_REWARD := 15          # credits for the first visit to a sector
 const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
 const STATION_FUEL := 3             # a supply station tops the fuel in the locker up to this many cans
 const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirate ship
+
+# The campaign: what is at stake. The ship carries a reserve of crew: a dead
+# player comes back only by taking one of them. The hull has a strength that
+# every hole takes from; at nothing the ship breaks up. Either loss ends the campaign.
+const S_CAMPAIGN := 29              # u8 hull, u8 reserve, u8 over (OVER_*), u16 sectors visited, u16 farthest
+                                    # (jumps from the start), u16 jumps made, u32 seconds the voyage has lasted
+const OVER_NONE := 0
+const OVER_WRECKED := 1             # the hull gave way
+const OVER_CREW_LOST := 2           # everyone dead, nobody left in the reserve
+const START_RESERVE := 3
+const RESERVE_MAX := 9
+const PRICE_CREW := 30
+const HULL_MAX := 100
+const HULL_PER_HOLE := 5            # strength a hole in the hull takes
+const HULL_PER_SYSTEM_HIT := 3      # and a pirate shot that puts a gun or a console out of order
+const HULL_LOT := 10                # a trader patches up this much
+const PRICE_HULL := 6
 
 # Sounds. Each is heard this far, in cells, on its own deck; through air only:
 # where either the one who hears or the sound itself is in a vacuum, only what
@@ -206,10 +226,22 @@ const NO_SECTOR := 255
 const JUMP_TICKS := 160             # a jump takes 8 s to charge
 const DRIVE_REST_TICKS := 300       # and the drive needs 15 s after landing
 const SYSTEM_ID := 65535            # "from" of chat lines written by the ship itself
+# who hears what is said (the channel of S_CHAT)
+const CHAT_SHIP := 0                 # the ship's own messages, to everyone or one player
+const CHAT_NEAR := 1                 # spoken aloud: those close by, on the same deck, with air to carry it
+const CHAT_RADIO := 2                # by radio (";" in front): everyone with a radio, anywhere, in a vacuum too
+const CHAT_INTERCOM := 3             # into an intercom ("!" in front): those near any intercom; needs power
+const CHAT_DEAD := 4                 # between the dead only
+const CHAT_RADIO_MARK := ";"
+const CHAT_INTERCOM_MARK := "!"
+const SPEECH_RANGE := 7.0            # cells a voice carries
+const INTERCOM_REACH := 1.5          # how close to an intercom one speaks into it
+const INTERCOM_HEAR := 6.0           # how far from an intercom it is heard
 
 const REJECT_VERSION := 1
 const REJECT_FULL := 2
 const REJECT_BAD_HELLO := 3
+const REJECT_NO_CREW := 4           # the player's character is dead and the reserve is empty
 
 const SUIT_COLOURS := 8             # rows in assets/chars.png
 
@@ -220,6 +252,49 @@ const COND_DEAD := 2
 const HEALTH_FULL := 100
 const HEALTH_DEAD := -100
 const RESPAWN_TICKS := 100          # a dead player may come back after 5 s
+
+# Jobs. Each gives access to some rooms (the doors of a restricted room open
+# only for those who have its access, while the ship has power) and decides
+# which skills grow quickly: the others grow slowly.
+const ACCESS_BRIDGE := 1
+const ACCESS_ENGINE := 2            # the engine room and life support
+const ACCESS_MEDBAY := 4
+const ACCESS_ARMORY := 8
+const ACCESS_GUNS := 16             # the gun bays
+const ACCESS_ALL := 31
+const ACCESS_NAMES := {ACCESS_BRIDGE: "мостик", ACCESS_ENGINE: "машинное отделение", ACCESS_MEDBAY: "медблок",
+	ACCESS_ARMORY: "арсенал", ACCESS_GUNS: "орудийный отсек"}
+const JOB_CREWMAN := 0
+const JOB_CAPTAIN := 1
+const JOB_PILOT := 2
+const JOB_ENGINEER := 3
+const JOB_MEDIC := 4
+const JOB_GUARD := 5
+const JOBS := 6
+const JOB_NAMES: Array[String] = ["Матрос", "Капитан", "Пилот", "Инженер", "Врач", "Охранник"]
+const JOB_ABOUT: Array[String] = [
+	"Без особых доступов. Учится всему понемногу.",
+	"Доступ везде. Один на корабль.",
+	"Мостик: карта сектора, управление, пульт орудий.",
+	"Машинное отделение, жизнеобеспечение, орудийные отсеки. Быстро чинит.",
+	"Медблок. Быстро лечит.",
+	"Арсенал и орудийные отсеки. Метко стреляет.",
+]
+const JOB_ACCESS: Array[int] = [0, ACCESS_ALL, ACCESS_BRIDGE, ACCESS_ENGINE | ACCESS_GUNS, ACCESS_MEDBAY, ACCESS_ARMORY | ACCESS_GUNS]
+# skills, 0..SKILL_MAX: how quickly one mends, treats, how well one shoots
+const SKILL_REPAIR := 0
+const SKILL_MEDICINE := 1
+const SKILL_GUNS := 2
+const SKILLS := 3
+const SKILL_NAMES: Array[String] = ["ремонт", "медицина", "стрельба"]
+const SKILL_MAX := 100
+const JOB_SKILL: Array[int] = [-1, -1, -1, SKILL_REPAIR, SKILL_MEDICINE, SKILL_GUNS]   # the skill a job is about
+const JOB_START_SKILL := 50          # where a job's own skill starts
+const SKILL_GAIN := 2                # what one piece of work adds to its job's own skill
+const SKILL_GAIN_OTHER := 1          # and, every SKILL_SLOW_EVERY such pieces, to any other skill
+const SKILL_SLOW_EVERY := 3
+const HACK_TICKS := 100             # holding "use" on a door one has no access to for 5 s breaks its lock
+const S_ME := 30                    # u8 job, then SKILLS bytes: our own character's job and skills
 
 # who a roster entry is
 const KIND_PLAYER := 0
@@ -245,6 +320,8 @@ static func reject_text(reason: int) -> String:
 			return "Сервер заполнен."
 		REJECT_BAD_HELLO:
 			return "Сервер не принял подключение."
+		REJECT_NO_CREW:
+			return "Ваш персонаж погиб, а резерв экипажа пуст. Вернуться можно, когда товарищи наймут людей у торговца."
 	return "Сервер отклонил подключение (код %d)." % reason
 
 

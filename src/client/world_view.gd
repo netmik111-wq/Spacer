@@ -14,6 +14,7 @@ const Sight := preload("res://src/shared/sight.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
+const Sounds := preload("res://src/client/sounds.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
@@ -113,6 +114,9 @@ var _mask_view: SubViewport
 var _mask: Node2D                    # draws where light falls (red)
 var _look: Node2D                    # draws what our eyes reach (green)
 var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
+var _audio: Sounds                   # what is heard (see Sounds)
+var _last_cell := Vector2i(-1, -1)   # where our character was, for its own footsteps
+var _hum_timer := 0.0
 var _sound_pen: Node2D               # draws them over everything, in screen space
 var _shots: Array = []               # shots and blows to draw: [kind, hit, from, to (deck pixels), deck, seconds left]
 var _mask_camera: Camera2D
@@ -253,6 +257,8 @@ func setup(p_client: GameClient) -> void:
 	_sound_pen.draw.connect(_draw_sounds)
 	_label_layer.add_child(_sound_pen)
 	client.heard.connect(_on_heard)
+	_audio = Sounds.new()
+	add_child(_audio)
 	client.shot.connect(_on_shot)
 
 	# a fixed scatter of stars around the ship
@@ -677,10 +683,16 @@ func can_see(x: int, y: int) -> bool:
 
 
 func _on_heard(kind: int, x: int, y: int) -> void:
-	## A sound reached us. If we can see where it came from, there is nothing to
-	## mark; otherwise its mark appears there, the less exactly the further off.
+	## A sound reached us: it plays from where it was made. Air rushing out and
+	## a cry also leave a mark there if we cannot see the place (the author kept
+	## those two), the less exactly the further off.
 	var map := client.map
-	if kind <= 0 or kind >= SOUND_LOOK.size() or can_see(x, y):
+	if kind <= 0 or kind >= SOUND_LOOK.size():
+		return
+	var seen := can_see(x, y)
+	if map.deck_of(y) == client.my_deck():
+		_audio.play(kind, _feet(Vector2(x, map.local_y(y))), Net.SOUND_RANGE[kind], not seen or _thin_air_here())
+	if seen or (kind != Net.SOUND_HISS and kind != Net.SOUND_CRY):
 		return
 	var far := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y))
 	if kind == Net.SOUND_STEP:
@@ -694,6 +706,36 @@ func _on_heard(kind: int, x: int, y: int) -> void:
 	_sounds.append([kind, _feet(at) + Vector2(0, -14), map.deck_of(y), SOUND_SECONDS])
 	if _sounds.size() > 24:
 		_sounds.pop_front()
+
+
+func _thin_air_here() -> bool:
+	## Our character stands in thin air: what it hears is muffled.
+	var cell := client.pred.y * client.map.width + client.pred.x
+	return cell >= 0 and cell < client.air.size() and client.air[cell] < Net.AIR_FULL * 0.6
+
+
+func _update_audio(delta: float) -> void:
+	## Our own footsteps (the server does not send us those) and the engine's hum.
+	var map := client.map
+	var here := Vector2i(client.pred.x, client.pred.y)
+	if here != _last_cell:
+		if _last_cell.x >= 0 and map.deck_of(_last_cell.y) == map.deck_of(here.y) and client.my_cond == Net.COND_OK:
+			_audio.play(Net.SOUND_STEP, _feet(Vector2(here.x, map.local_y(here.y))), Net.SOUND_RANGE[Net.SOUND_STEP], _thin_air_here(), -7.0)
+		_last_cell = here
+	_hum_timer -= delta
+	if _hum_timer > 0.0:
+		return
+	_hum_timer = 0.25
+	var engine := -1
+	for cell: int in map.engine.keys():
+		if map.deck_of_cell(cell) == client.my_deck():
+			engine = cell
+	var cell_here := here.y * map.width + here.x
+	var in_air := cell_here >= 0 and cell_here < client.air.size() and client.air[cell_here] >= Net.AIR_FULL * Net.SOUND_AIR
+	var on := engine >= 0 and client.powered() and not client.broken.has(engine) and in_air and client.phase == GameClient.PLAYING
+	var ex := engine % map.width
+	var ey := engine / map.width + 1
+	_audio.hum(on, _feet(Vector2(ex, map.local_y(ey))), on and (not can_see(ex, ey) or _thin_air_here()))
 
 
 func _draw_sounds() -> void:
@@ -797,6 +839,13 @@ func _draw_fx(d: int) -> void:
 			var lamp_at := corner + (Vector2(15, 4) if band else Vector2(8, 26))
 			pen.draw_rect(Rect2(lamp_at - Vector2(1, 1), Vector2(5, 5)), Color(0.05, 0.05, 0.08))
 			pen.draw_rect(Rect2(lamp_at, Vector2(3, 3)), Color(1.0, 0.55, 0.1))
+		var needs := map.door_access[door]
+		if needs != 0 and lit and client.doors.dead[door] == 0:
+			# the lock of a restricted room: a lamp on the frame, green when our job opens it
+			var ours := (client.pred.access & needs) != 0
+			var lock_at := corner + (Vector2(3, 14) if band else Vector2(14, 1))
+			pen.draw_rect(Rect2(lock_at - Vector2(1, 1), Vector2(5, 5)), Color(0.05, 0.05, 0.08))
+			pen.draw_rect(Rect2(lock_at, Vector2(3, 3)), Color(0.25, 0.9, 0.4) if ours else Color(1.0, 0.25, 0.2))
 		if not sealed:
 			continue
 		var plate := Rect2(corner + Vector2(8, 9), Vector2(20, 14)) if band else Rect2(corner + Vector2(12, 3), Vector2(8, 21))
@@ -871,6 +920,7 @@ func _process(delta: float) -> void:
 	var zoom := clampf(floorf(get_viewport_rect().size.y / 230.0), 2.0, 6.0)
 	_camera.zoom = Vector2(zoom, zoom)
 	_update_ship(delta)
+	_update_audio(delta)
 	var my_deck := client.my_deck()
 	if my_deck != _deck_shown:
 		_arrange(my_deck)

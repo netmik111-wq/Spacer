@@ -161,6 +161,7 @@ func _enemy_fires() -> void:
 	var hit: int = targets[_rng.randi_range(0, targets.size() - 1)]
 	server.broken[hit] = true
 	server._to_all(server._devices_packet())
+	server.hull_hit(Net.HULL_PER_SYSTEM_HIT)
 	_tracer_to(hit)
 	server._ship_says("Попадание пиратов! Не работает: %s." % map.device_name(hit))
 

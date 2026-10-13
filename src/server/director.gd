@@ -105,6 +105,8 @@ func tick() -> void:
 	while not _queue.is_empty() and int(_queue[0][0]) <= now:
 		var item: Array = _queue.pop_front()
 		_do(str(item[1]))
+	if server.over != Net.OVER_NONE:
+		return                               # the campaign is over: nothing more happens
 	if auto:
 		_watch_fuel(now)
 	if not auto or now < _next_tick:

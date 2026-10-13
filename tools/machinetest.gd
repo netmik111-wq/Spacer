@@ -466,7 +466,8 @@ func _initialize() -> void:
 	var carried := q.count(Net.ITEM_PATCH)
 	server._respawn(q)
 	var body: RefCounted = server.players[p.dragging] if p.dragging >= 0 else null
-	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS, "the one who comes back has empty slots")
+	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_PATCH) == 1 and q.count(Net.ITEM_PART) == 1 and q.count(Net.ITEM_RADIO) == 1
+		and q.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS - 3, "the one who comes back has only what a newcomer is given")
 	_expect(body != null and body.corpse and body.count(Net.ITEM_PATCH) == carried and carried > 0, "the body keeps what they carried (%d patches)" % carried)
 	_expect(p.searching == body.slot if body != null else false, "and whoever was hauling and searching goes on with the body")
 	server._loot_asked(p, true, body.slots.find(Net.ITEM_PATCH))

@@ -109,6 +109,13 @@ func held_by_partner(door: int) -> bool:
 	return partner[door] >= 0 and ready[partner[door]] != CLOSED and forced[door] == 0
 
 
+func barred(door: int, needs: int, has: int) -> bool:
+	## A shut door of a restricted room does not open for one without its
+	## access. Its lock needs power: without it the door is pushed open by hand
+	## like any other.
+	return needs != 0 and (has & needs) == 0 and ready[door] == CLOSED and not manual and dead[door] == 0
+
+
 func bump(door: int, tick: int) -> void:
 	## Somebody walked into the door on this tick.
 	if ready[door] == CLOSED:

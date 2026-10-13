@@ -47,6 +47,8 @@ var _alerts := {}                    # lamp name -> {"frames": Array[AtlasTextur
 var _alert_box: VBoxContainer
 var _shade: ColorRect
 var _fate: Label
+var _over: PanelContainer            # the end of the campaign: what the voyage came to
+var _over_text: Label
 var _tank_bar: ColorRect
 var _tank_fill: ColorRect
 var _hint: Label
@@ -264,6 +266,21 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_fate.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_fate.offset_top = 96
 	_fate.visible = false
+	_over = PanelContainer.new()
+	_over.visible = false
+	_over.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_over.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_over.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_over.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var over_style := StyleBoxFlat.new()
+	over_style.bg_color = Color(0.06, 0.03, 0.04, 0.92)
+	over_style.border_color = Color(0.75, 0.25, 0.2)
+	over_style.set_border_width_all(2)
+	over_style.set_content_margin_all(24)
+	_over.add_theme_stylebox_override("panel", over_style)
+	root.add_child(_over)
+	_over_text = _text(_over, 20)
+	_over_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	_chat_box = VBoxContainer.new()
 	_chat_box.alignment = BoxContainer.ALIGNMENT_END
@@ -277,7 +294,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	root.add_child(_chat_box)
 
 	_chat_input = LineEdit.new()
-	_chat_input.placeholder_text = "Сообщение… (Enter: отправить, Esc: отмена)"
+	_chat_input.placeholder_text = "Вслух слышно рядом.  «;» в начале: рация,  «!»: интерком у панели.  Esc: отмена"
 	_chat_input.max_length = Net.MAX_CHAT
 	_chat_input.visible = false
 	_chat_input.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -307,6 +324,18 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	client.arrived.connect(func() -> void: _flash.color.a = 0.9)
 	_rng.randomize()
 	_say("[color=#9aa3b5]Вы на борту. Нажмите Enter, чтобы написать в чат.[/color]")
+
+
+func _skills_text() -> String:
+	var parts: Array[String] = []
+	for i in Net.SKILLS:
+		parts.append("%s %d" % [Net.SKILL_NAMES[i], client.skills[i]])
+	return ", ".join(parts)
+
+
+static func _voyage(seconds: int) -> String:
+	var minutes := seconds / 60
+	return "%d ч %02d мин" % [minutes / 60, minutes % 60] if minutes >= 60 else "%d мин" % minutes
 
 
 func _text(parent: Control, font_size: int) -> Label:
@@ -438,6 +467,7 @@ func _update_store() -> void:
 		held.append("%s: %d" % [Items.name_of(item).to_lower(), client.stock(item)])
 	lines.append("В шкафу: %s. Воздух для установки: %d из %d. Кредиты: %d." % [
 		", ".join(held), int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
+	lines.append("Резерв экипажа: %d из %d. Прочность обшивки: %d из %d." % [client.reserve, Net.RESERVE_MAX, client.hull, Net.HULL_MAX])
 	var free := 0
 	var open := 0
 	for i in Net.SLOTS:
@@ -469,6 +499,8 @@ func _update_store() -> void:
 				if Items.price(item) > 0:
 					offers.append([Net.STORE_BUY, item, "Купить: %s, %d кр." % [Items.name_of(item).to_lower(), Items.price(item)]])
 			offers.append([Net.STORE_BUY_AIR, 0, "Купить воздух (%d): %d кр." % [int(Net.AIR_LOT), Net.PRICE_AIR]])
+			offers.append([Net.STORE_HIRE, 0, "Нанять человека в резерв: %d кр." % Net.PRICE_CREW])
+			offers.append([Net.STORE_BUY_HULL, 0, "Залатать обшивку (+%d): %d кр." % [Net.HULL_LOT, Net.PRICE_HULL]])
 		for offer: Array in offers:
 			var b := Button.new()
 			b.text = offer[2]
@@ -491,6 +523,10 @@ func _update_store() -> void:
 				b.disabled = client.credits < Items.price(item)
 			Net.STORE_BUY_AIR:
 				b.disabled = client.credits < Net.PRICE_AIR or client.store_air >= Net.STORE_AIR_FULL
+			Net.STORE_HIRE:
+				b.disabled = client.credits < Net.PRICE_CREW or client.reserve >= Net.RESERVE_MAX
+			Net.STORE_BUY_HULL:
+				b.disabled = client.credits < Net.PRICE_HULL or client.hull >= Net.HULL_MAX
 
 
 func _update_console() -> void:
@@ -910,10 +946,11 @@ func _set_pause(on: bool) -> void:
 		_close_chat()
 
 
-func _open_chat() -> void:
+func _open_chat(start: String = "") -> void:
 	_chat_input.visible = true
-	_chat_input.text = ""
+	_chat_input.text = start
 	_chat_input.grab_focus()
+	_chat_input.caret_column = start.length()
 
 
 func _close_chat() -> void:
@@ -945,12 +982,14 @@ func _say(bbcode: String) -> void:
 		(_chat_lines.pop_front()[0] as RichTextLabel).queue_free()
 
 
-func _on_chat(from_id: int, text: String) -> void:
+func _on_chat(from_id: int, channel: int, text: String) -> void:
 	if from_id == Net.SYSTEM_ID:
 		_say("[color=#ffb14a][b]Корабль:[/b] %s[/color]" % _escape(text))
 		return
 	var colour := NAME_COLOURS[client.player_colour(from_id) % NAME_COLOURS.size()]
-	_say("[color=#%s][b]%s:[/b][/color] %s" % [colour, _escape(client.player_name(from_id)), _escape(text)])
+	var how: String = {Net.CHAT_RADIO: "[color=#7fd88f][рация][/color] ", Net.CHAT_INTERCOM: "[color=#8fc4ff][интерком][/color] ",
+		Net.CHAT_DEAD: "[color=#8a8f9c][мёртвые][/color] "}.get(channel, "")
+	_say("%s[color=#%s][b]%s:[/b][/color] %s" % [how, colour, _escape(client.player_name(from_id)), _escape(text)])
 
 
 func _on_notice(text: String) -> void:
@@ -1027,6 +1066,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			client.send_search(client.lying_near())      # the screen opens when the server agrees
 		else:
 			_open_console(client.use_target())
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and client.use_target() == 19:
+		_open_chat(Net.CHAT_INTERCOM_MARK + " ")          # an intercom: say something into it
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("drag") and not _chat_input.visible and not _pause.visible and not _console.visible:
 		if client.dragging():
@@ -1157,6 +1199,11 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения"
+	elif target == 19:
+		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
+	elif target == 18:
+		var room: String = Net.ACCESS_NAMES.get(client.map.door_access[client.map.door_of[client.use_cell()]], "отсек")
+		_hint.text = "Взламываю замок…" if (_use_held and client.work > 0) else "Нет доступа: %s. Держите E, чтобы взломать замок (услышит весь корабль)" % room
 	elif target == 14:
 		var cell := client.floor_cell()
 		var more: int = Net.FLOOR_STACK - (client.floor_things[cell] as PackedByteArray).count(Net.ITEM_NONE) - 1
@@ -1285,8 +1332,16 @@ func _process(delta: float) -> void:
 		_fate.text = "Вы без сознания"
 	elif client.my_cond == Net.COND_DEAD:
 		dark = 0.8
-		_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа."
-	_fate.visible = client.my_cond != Net.COND_OK
+		if client.reserve > 0:
+			_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа из резерва (в резерве: %d)." % client.reserve
+		else:
+			_fate.text = "Вы погибли. Резерв экипажа пуст: вернуться можно, когда товарищи наймут людей у торговца."
+	_fate.visible = client.my_cond != Net.COND_OK and client.over == Net.OVER_NONE
+	_over.visible = client.over != Net.OVER_NONE
+	if _over.visible:
+		_over_text.text = "КАМПАНИЯ ОКОНЧЕНА\n\n%s\n\nПройдено секторов: %d\nДальше всего от начала пути: %d прыжков\nПрыжков сделано: %d\nПродержались: %s\n\nНовую кампанию начинает хозяин игры: выйти в меню и создать игру заново." % [
+			"Корабль разрушен: обшивка не выдержала." if client.over == Net.OVER_WRECKED else "Экипаж погиб, и заменить его некем.",
+			client.sectors_seen, client.farthest, client.jumps, _voyage(client.voyage_seconds)]
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
 
 	# the jump
@@ -1300,10 +1355,12 @@ func _process(delta: float) -> void:
 	_info_timer -= delta
 	if _info_timer <= 0.0:
 		_info_timer = 0.25
-		_info.text = "На борту: %d     Пинг: %d мс     Сектор: %s" % [client.crew_count(), int(round(client.rtt_ms)),
+		_info.text = "На борту: %d     Резерв: %d     Обшивка: %d%%     Пинг: %d мс     Сектор: %s" % [client.crew_count(),
+			client.reserve, client.hull * 100 / Net.HULL_MAX, int(round(client.rtt_ms)),
 			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]
 		if client.map.deck_count > 1:
 			_info.text += "     %s" % client.map.deck_names[client.my_deck()]
+		_info.text += "\n%s     Навыки: %s" % [Net.JOB_NAMES[client.job], _skills_text()]
 		if _debug.visible:
 			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,

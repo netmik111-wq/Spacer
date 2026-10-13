@@ -20,11 +20,12 @@ class State:
 	var down := false          # unconscious or dead: cannot walk
 	var slow := false          # hauling somebody (or being hauled): a step takes Net.DRAG_TICKS
 	var span := 4              # how many ticks the last step takes (for drawing the slide)
+	var access := Net.ACCESS_ALL   # the rooms its job lets it into (Net.ACCESS_*): restricted doors open only for those
 
 	func copy_from(o: State) -> void:
 		x = o.x; y = o.y; cd = o.cd; facing = o.facing; dir = o.dir
 		move_tick = o.move_tick; fx = o.fx; fy = o.fy; down = o.down
-		slow = o.slow; span = o.span
+		slow = o.slow; span = o.span; access = o.access
 
 	func same_as(o: State) -> bool:
 		return x == o.x and y == o.y and cd == o.cd and facing == o.facing \
@@ -62,6 +63,8 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 		return false
 	var door := map.door_at(nx, ny)
 	if door >= 0:
+		if doors.barred(door, map.door_access[door], st.access):
+			return false                 # a restricted room, and its job gives no access there
 		doors.bump(door, tick)
 		if not doors.passable(door, tick):
 			return false

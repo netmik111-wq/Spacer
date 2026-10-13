@@ -1,17 +1,21 @@
 extends Control
 ## The first screen: pick a name, then create a game or join one.
 
-signal host_requested(player_name: String, port: int, bots: int)
+signal host_requested(player_name: String, port: int, bots: int, campaign: String)
 signal join_requested(player_name: String, address: String, port: int)
 signal quit_requested
 
 const Net := preload("res://src/shared/net.gd")
 const SETTINGS := "user://settings.cfg"
+const Campaign := preload("res://src/server/campaign.gd")
 
 var _name: LineEdit
 var _address: LineEdit
 var _bots: SpinBox
+var _job: OptionButton
+var _job_about: Label
 var _status: Label
+var _new_armed := false              # "new campaign" was pressed once while a saved one exists
 var _buttons: Array[Button] = []
 
 
@@ -47,7 +51,7 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var sub := Label.new()
-	sub.text = "Раны и лечение"
+	sub.text = "Экипаж и кампания"
 	sub.add_theme_font_size_override("font_size", 14)
 	sub.modulate = Color(1, 1, 1, 0.6)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -59,12 +63,25 @@ func _ready() -> void:
 	_name.max_length = Net.MAX_NAME
 	_name.placeholder_text = "Как вас зовут на борту"
 	box.add_child(_name)
+	box.add_child(_caption("Профессия"))
+	_job = OptionButton.new()
+	for j in Net.JOBS:
+		_job.add_item(Net.JOB_NAMES[j], j)
+	_job.item_selected.connect(func(_i: int) -> void: _show_job())
+	_job.select(Net.JOB_CAPTAIN)         # whoever starts a ship alone needs its bridge
+	box.add_child(_job)
+	_job_about = Label.new()
+	_job_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_job_about.custom_minimum_size = Vector2(440, 0)
+	_job_about.add_theme_font_size_override("font_size", 13)
+	_job_about.modulate = Color(1, 1, 1, 0.6)
+	box.add_child(_job_about)
 	box.add_child(_gap(6))
 
 	var host_row := HBoxContainer.new()
 	host_row.add_theme_constant_override("separation", 10)
 	box.add_child(host_row)
-	var host := _button("Создать игру")
+	var host := _button("Новая кампания")
 	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	host.pressed.connect(_on_host)
 	host_row.add_child(host)
@@ -77,6 +94,15 @@ func _ready() -> void:
 	_bots.value = 2
 	_bots.tooltip_text = "Боты просто бродят по кораблю: с ними видно, как выглядят другие игроки"
 	host_row.add_child(_bots)
+	var saved := Campaign.summary()
+	if saved != "":
+		var go_on := _button("Продолжить кампанию")
+		go_on.pressed.connect(_on_continue)
+		box.add_child(go_on)
+		var about := _caption("Сохранено: " + saved)
+		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		about.custom_minimum_size = Vector2(440, 0)
+		box.add_child(about)
 	box.add_child(_gap(6))
 
 	box.add_child(_caption("Адрес сервера (для подключения к чужой игре)"))
@@ -108,7 +134,18 @@ func _ready() -> void:
 		_name.text = str(cfg.get_value("player", "name", ""))
 		_address.text = str(cfg.get_value("player", "address", ""))
 		_bots.value = int(cfg.get_value("player", "bots", 2))
+		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)), 0, Net.JOBS - 1))
+	_show_job()
 	_name.grab_focus()
+
+
+func _show_job() -> void:
+	_job_about.text = Net.JOB_ABOUT[job()]
+
+
+func job() -> int:
+	## The job the player asks for (Net.JOB_*).
+	return maxi(_job.selected, 0)
 
 
 func _gap(height: int) -> Control:
@@ -153,12 +190,23 @@ func _save() -> void:
 	cfg.set_value("player", "name", _name.text.strip_edges())
 	cfg.set_value("player", "address", _address.text.strip_edges())
 	cfg.set_value("player", "bots", int(_bots.value))
+	cfg.set_value("player", "job", job())
 	cfg.save(SETTINGS)
 
 
 func _on_host() -> void:
+	if Campaign.exists() and not _new_armed:
+		_new_armed = true
+		show_status("Сохранённая кампания будет потеряна. Нажмите «Новая кампания» ещё раз, чтобы начать заново.", true)
+		return
+	_new_armed = false
 	_save()
-	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value))
+	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new")
+
+
+func _on_continue() -> void:
+	_save()
+	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "continue")
 
 
 func _on_join() -> void:

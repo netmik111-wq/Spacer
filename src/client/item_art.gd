@@ -78,6 +78,14 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(10.5, 2.5) * u, Vector2(2, 2) * u), Color(0.55, 0.55, 0.6))
 			canvas.draw_line(at + Vector2(6, 7) * u, at + Vector2(11, 12) * u, Color(0.55, 0.14, 0.1), 1.2 * u)
 			canvas.draw_line(at + Vector2(11, 7) * u, at + Vector2(6, 12) * u, Color(0.55, 0.14, 0.1), 1.2 * u)
+		Net.ITEM_RADIO:
+			# a handheld radio: a body with a speaker grille, a stub aerial and a lamp
+			canvas.draw_rect(Rect2(at + Vector2(5, 5) * u, Vector2(7, 10) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(6, 6) * u, Vector2(5, 8) * u), Color(0.28, 0.32, 0.3))
+			canvas.draw_rect(Rect2(at + Vector2(10, 1.5) * u, Vector2(1.4, 4) * u), Color(0.1, 0.1, 0.12))
+			for k in 3:
+				canvas.draw_rect(Rect2(at + Vector2(7, 9 + k * 1.6) * u, Vector2(3, 0.7) * u), Color(0.12, 0.13, 0.13))
+			canvas.draw_rect(Rect2(at + Vector2(7, 6.8) * u, Vector2(1.2, 1.2) * u), Color(0.35, 0.95, 0.4))
 		Net.ITEM_MAG:
 			# a magazine with a round showing at the top
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.12, 0.12, 0.15))

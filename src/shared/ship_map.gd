@@ -39,6 +39,7 @@ var chart := {}                      # wall cells with the sector console (the g
 var engine := {}                     # wall cells with the engine: it drives the ship and its jumps
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var locker := {}                     # wall cells with the supply locker
+var intercom := {}                   # wall cells with an intercom panel
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
@@ -46,6 +47,7 @@ var lock_pump := {}                  # wall cells with an airlock pump: cell -> 
 var door_partner := PackedInt32Array() # per door: the other door of its airlock chamber, or -1.
                                      # Only one of the two may be open at a time (see Doors.bump)
 var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
+var door_access := PackedByteArray() # per door: the access it asks for (Net.ACCESS_* bits), 0 = anybody
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -141,6 +143,11 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		doors.append(at)
 		door_kind.append(DOOR_AIRLOCK if str(d[2]) == "A" else DOOR_BAND)
 		h = (h * 31 + at.x * 131 + at.y + 5) & 0x7FFFFFFF
+	door_access = PackedByteArray()
+	var access: Array = data.get("door_access", [])
+	for d in doors.size():
+		door_access.append(int(access[d]) if d < access.size() else 0)
+		h = (h * 31 + door_access[d]) & 0x7FFFFFFF
 	crc = ((h * 31 + width) * 31 + deck_stride * 7 + deck_count) & 0x7FFFFFFF
 	door_sides = PackedInt32Array()
 	for d in doors.size():
@@ -155,6 +162,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	engine = {}
 	air_plant = {}
 	locker = {}
+	intercom = {}
 	guns = PackedInt32Array()
 	gun_console = {}
 	for i in cells.size():
@@ -166,6 +174,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			continue
 		if cells[i] == tile_ids.get("locker", -1):
 			locker[i] = true
+		if cells[i] == tile_ids.get("intercom", -1):
+			intercom[i] = true
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
@@ -307,6 +317,7 @@ func add_other(name: String) -> int:
 		door_sides.append(-1)
 		door_partner.append(-1)
 		door_vent.append(0)
+		door_access.append(0)              # another ship's doors ask for no access
 	return others.size() - 1
 
 

@@ -86,6 +86,7 @@ TILES.append(("air_plant", None, "wall"))
 TILES.append(("locker", None, "wall"))
 TILES.append(("lock_pump", None, "wall"))
 TILES.append(("gun", None, "wall"))
+TILES.append(("intercom", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -290,6 +291,14 @@ def make_machine(wall, what):
         rect(10, 12, 11, 13, (230, 120, 40, 255)); rect(20, 12, 21, 13, (230, 120, 40, 255))
         for x in range(8, 24):
             o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
+    elif what == "intercom":
+        # an intercom: a small panel with a speaker grille, a talk button and a lamp
+        rect(9, 6, 22, 22, mid); rect(10, 7, 21, 21, body); rect(10, 7, 21, 8, cap)
+        rect(12, 10, 19, 16, dark)
+        for y in range(11, 16, 2):                     # the grille
+            rect(13, y, 18, y, mid)
+        rect(12, 18, 15, 20, (200, 70, 50, 255))       # the talk button
+        rect(18, 18, 19, 19, (90, 220, 110, 255))      # the lamp
     elif what == "lock_pump":
         # the airlock pump: a panel with a gauge and two lamps (pump out, pump in)
         rect(6, 4, 25, 24, body); rect(6, 4, 25, 5, cap); rect(6, 24, 25, 24, mid)
@@ -342,6 +351,7 @@ def build_tiles():
         "locker": lambda: make_machine(images["wall_h"], "locker"),
         "lock_pump": lambda: make_machine(images["wall_h"], "lock_pump"),
         "gun": lambda: make_machine(images["wall_h"], "gun"),
+        "intercom": lambda: make_machine(images["wall_h"], "intercom"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -374,7 +384,12 @@ def build_tiles():
 #   '8'  wall with the supply locker in it
 #   'T'  a ship's gun in the hull (fired from the gun console, '4' on the bridge)
 #   '9'  wall with an airlock pump in it: the floor in front is the chamber; its outer 'D' opens into space
+#   'I'  wall with an intercom panel on it
 #
+# Rooms with restricted access are named by a line of their own anywhere in the file:
+#   @ <deck number, from 1> <x> <y> <access>
+# x, y is any floor cell of the room (counted in the deck's drawing, first row 0). Every door of
+# that room then opens only for those whose job gives that access (see Net.ACCESS_*).
 #
 # A ship with several decks is drawn deck by deck, the top one first. Each
 # deck starts with a line "= its name"; all are laid over one another from
@@ -385,7 +400,8 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789T")
+BAND_CHARS = set("#DW<>123456789TI")
+ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -472,7 +488,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
@@ -507,6 +523,8 @@ def read_decks(name, lines):
     """Splits a drawing into decks: [(deck name, lines)], top deck first."""
     decks = []
     for l in lines:
+        if l.startswith("@"):
+            continue
         if l.startswith("="):
             decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
         elif decks:
@@ -540,8 +558,34 @@ def resolve_ship(name, lines, ids):
         doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
     if not spawns and not name.startswith("derelict") and not name.startswith("pirate"):
         raise MapError(f"{name}: no spawn points ('s')")
+    door_access = [0] * len(doors)
+    for l in lines:
+        if not l.startswith("@"):
+            continue
+        parts = l[1:].split()
+        if len(parts) != 4 or parts[3] not in ACCESS_BITS:
+            raise MapError(f"{name}: bad access line '{l}'")
+        d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        rows = [r.ljust(w) for r in decks[d][1]]
+        def at(x, y):
+            return rows[y][x] if 0 <= y < len(rows) and 0 <= x < w else " "
+        if at(x0, y0) not in FLOOR_CHARS:
+            raise MapError(f"{name}: access line '{l}' does not point at a floor cell")
+        seen, todo = {(x0, y0)}, [(x0, y0)]
+        while todo:
+            x, y = todo.pop()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                c = at(x + dx, y + dy)
+                if c in FLOOR_CHARS and (x + dx, y + dy) not in seen:
+                    seen.add((x + dx, y + dy))
+                    todo.append((x + dx, y + dy))
+                elif c in "DA":
+                    for k, (dx2, dy2, _) in enumerate(doors):
+                        if dx2 == x + dx and dy2 == y + dy + d * stride:
+                            door_access[k] |= ACCESS_BITS[parts[3]]
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
-            "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors}
+            "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
+            "door_access": door_access}
 
 
 def build_maps(images, ids):

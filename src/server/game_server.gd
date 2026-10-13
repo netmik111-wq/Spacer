@@ -23,6 +23,7 @@ const Sight := preload("res://src/shared/sight.gd")
 const Pirates := preload("res://src/server/pirates.gd")
 const Derelict := preload("res://src/server/derelict.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
+const Campaign := preload("res://src/server/campaign.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -108,6 +109,17 @@ var credits := 0
 var _store_told := PackedByteArray()   # the supplies as clients were last told
 var _power_out_until := 0              # a passing power failure lasts until this tick
 var _power_told := true                # the state of the power as clients were last told
+# the campaign: what is at stake (see Net.S_CAMPAIGN)
+var reserve := 0                       # crew members waiting to replace the dead
+var hull := 0                          # strength of the hull, 0..Net.HULL_MAX
+var over := Net.OVER_NONE              # how the campaign ended, or OVER_NONE while it goes on
+var voyage_ticks := 0                  # ticks the campaign has lasted, over every evening it was played
+var jumps := 0
+var farthest := 0                      # the most jumps from the start the ship has been
+var _campaign_told := PackedByteArray()
+var _dead_names := {}                  # players whose character died and who left before coming back: name -> true
+var saved_crew := {}                   # characters of the saved campaign whose players have not come back yet: name -> what was saved
+var save_path := ""                    # where the campaign is saved ("" = nowhere: tests, see Campaign)
 var director := Director.new()
 var pirates := Pirates.new()
 var derelict := Derelict.new()
@@ -171,6 +183,15 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	store_air = Net.STORE_AIR_FULL
 	credits = Net.START_CREDITS
 	_store_told = PackedByteArray()
+	reserve = Net.START_RESERVE
+	hull = Net.HULL_MAX
+	over = Net.OVER_NONE
+	voyage_ticks = 0
+	jumps = 0
+	farthest = 0
+	_campaign_told = PackedByteArray()
+	_dead_names.clear()
+	saved_crew.clear()
 	floor_things.clear()
 	_forced_until.resize(map.doors.size())
 	_forced_until.fill(0)
@@ -217,6 +238,7 @@ func _index_doors() -> void:
 func stop() -> void:
 	if not running:
 		return
+	save_campaign()
 	running = false
 	# Tell everyone the server is closing, and stay just long enough for the
 	# goodbyes to go out; otherwise the players would sit in a frozen game until
@@ -354,7 +376,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			set_supply(p, pkt[1] != 0)
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
-			_respawn(p)
+			_respawn_from_reserve(p)
 	elif kind == Net.C_JUMP:
 		if pkt.size() > 1:
 			_jump_asked(p, pkt[1])
@@ -429,10 +451,34 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	if pkt.size() < 4 + n:
 		_reject(peer, Net.REJECT_BAD_HELLO)
 		return
-	var p := _new_player(_unique_name(_clean(pkt.slice(4, 4 + n).get_string_from_utf8(), Net.MAX_NAME, "Игрок")))
+	var wanted := _clean(pkt.slice(4, 4 + n).get_string_from_utf8(), Net.MAX_NAME, "Игрок")
+	var back_from_reserve := false
+	if over == Net.OVER_NONE and _dead_names.has(wanted):
+		# their character died and they left: coming back takes somebody from the reserve
+		if reserve <= 0 and _living_crew() > 0:
+			_reject(peer, Net.REJECT_NO_CREW)
+			return
+		_dead_names.erase(wanted)
+		if reserve > 0:
+			reserve -= 1
+			back_from_reserve = true
+		else:
+			_end_campaign(Net.OVER_CREW_LOST)    # nobody alive and nobody left to send
+	var p := _new_player(_unique_name(wanted))
 	p.peer = peer
-	p.add(Net.ITEM_PATCH)                # a newcomer has a little on them; the rest is in the locker
-	p.add(Net.ITEM_PART)
+	var demoted := false
+	if saved_crew.has(p.name):
+		_restore_character(p, saved_crew[p.name])   # back from the last evening, as they were
+		saved_crew.erase(p.name)
+	else:
+		var job: int = pkt[4 + n] if pkt.size() > 4 + n else Net.JOB_CREWMAN
+		if job >= Net.JOBS:
+			job = Net.JOB_CREWMAN
+		if job == Net.JOB_CAPTAIN and _has_captain():
+			job = Net.JOB_CREWMAN                # one captain to a ship
+			demoted = true
+		p.take_job(job)
+		_kit_out(p)
 	_pending.erase(peer)
 	_slot_of[peer] = p.slot
 
@@ -470,8 +516,112 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, PackedByteArray([Net.S_POWER, 1 if _power_told else 0]), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _store_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
+	peer.send(0, _campaign_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	_announce_join(p, peer)
+	if demoted:
+		_tell(p, "Капитан на борту уже есть: вы поднимаетесь на борт матросом.")
+	if back_from_reserve:
+		_ship_says("%s возвращается на борт из резерва экипажа. В резерве осталось: %d." % [p.name, reserve])
 	log_line.emit("%s подключился (игроков: %d)." % [p.name, player_count()])
+
+
+func _has_captain() -> bool:
+	for q: Player in players:
+		if q != null and not q.corpse and not q.bot and not q.pirate and q.job == Net.JOB_CAPTAIN:
+			return true
+	for c: Dictionary in saved_crew.values():
+		if int(c["job"]) == Net.JOB_CAPTAIN:
+			return true                      # the captain of the last evening keeps the post
+	return false
+
+
+func _restore_character(p: Player, c: Dictionary) -> void:
+	## A saved character back in the world (see Campaign).
+	p.take_job(int(c["job"]))
+	p.colour = int(c["colour"])
+	p.skills = PackedByteArray(c["skills"])
+	p.slots = PackedByteArray(c["slots"])
+	p.worn = PackedByteArray(c["worn"])
+	p.hand = int(c["hand"])
+	p.tank = float(c["tank"])
+	p.supply = bool(c["supply"])
+	p.health = float(c["health"])
+	p.wounds = float(c["wounds"])
+	p.cond = Net.COND_OK if p.health > 0.0 else Net.COND_CRIT
+	p.st.place(int(c["x"]), int(c["y"]))
+	p.st.facing = int(c["facing"])
+	p.st.down = p.cond != Net.COND_OK
+	p.self_dirty = true
+	_record(p)
+
+
+func restore_body(c: Dictionary) -> void:
+	## A body from the saved campaign, where it lay.
+	var b := _alloc(str(c["name"]))
+	b.colour = int(c["colour"])
+	b.job = int(c["job"])
+	b.st.place(int(c["x"]), int(c["y"]))
+	b.st.facing = int(c["facing"])
+	b.st.down = true
+	b.cond = Net.COND_DEAD
+	b.health = Net.HEALTH_DEAD
+	b.wounds = float(c["wounds"])
+	b.slots = PackedByteArray(c["slots"])
+	b.worn = PackedByteArray(c["worn"])
+	b.tank = float(c["tank"])
+	_becomes_corpse(b)
+	_record(b)
+
+
+func resume_campaign(path: String = Campaign.PATH) -> String:
+	## Goes on with the saved campaign (right after start, before anybody joins).
+	## Returns "" or what went wrong; with nothing saved a new campaign simply starts.
+	var data := Campaign.read(path)
+	if data.is_empty():
+		return ""
+	var problem := Campaign.restore(self, data)
+	if problem == "":
+		_power_changed()
+		log_line.emit("Кампания продолжена: секторов пройдено %d, в резерве %d." % [been.size(), reserve])
+	return problem
+
+
+func save_campaign() -> void:
+	if save_path != "" and over == Net.OVER_NONE:
+		if not Campaign.write(self, save_path):
+			log_line.emit("Не удалось сохранить кампанию в %s." % save_path)
+
+
+func _kit_out(p: Player) -> void:
+	## What a crew member has on them when they come aboard; the rest is in the locker.
+	p.add(Net.ITEM_RADIO)
+	p.add(Net.ITEM_PATCH)
+	p.add(Net.ITEM_PART)
+	match p.job:
+		Net.JOB_ENGINEER:
+			p.add(Net.ITEM_PART)
+		Net.JOB_MEDIC:
+			p.add(Net.ITEM_MEDPATCH)
+		Net.JOB_GUARD:
+			p.add(Net.ITEM_BATON)
+		Net.JOB_CAPTAIN, Net.JOB_PILOT:
+			p.add(Net.ITEM_FLASHLIGHT)
+
+
+func _me_packet(p: Player) -> PackedByteArray:
+	var out := PackedByteArray([Net.S_ME, p.job])
+	out.append_array(p.skills)
+	return out
+
+
+func _tell_me(p: Player) -> void:
+	## Tells a player their own job and skills when these changed.
+	if p.peer == null:
+		return
+	var now := _me_packet(p)
+	if now != p.me_sent:
+		p.me_sent = now
+		p.peer.send(0, now, ENetPacketPeer.FLAG_RELIABLE)
 
 
 func _alloc(player_name: String) -> Player:
@@ -519,11 +669,12 @@ func _announce_join(p: Player, except: ENetPacketPeer) -> void:
 func _roster_entry(p: Player) -> PackedByteArray:
 	var name_bytes := p.name.to_utf8_buffer()
 	var e := PackedByteArray()
-	e.resize(5)
+	e.resize(6)
 	e.encode_u16(0, p.slot)
 	e.encode_u8(2, p.colour)
 	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PIRATE if p.pirate else (Net.KIND_BOT if p.bot else Net.KIND_PLAYER)))
-	e.encode_u8(4, name_bytes.size())
+	e.encode_u8(4, p.job)
+	e.encode_u8(5, name_bytes.size())
 	e.append_array(name_bytes)
 	return e
 
@@ -553,7 +704,11 @@ func _drop(peer: ENetPacketPeer) -> void:
 		# the dead stay where they fell, whether or not their player is still here
 		p.peer = null
 		_becomes_corpse(p)
+		if not p.bot and not p.pirate:
+			_dead_names[p.name] = true       # coming back will take somebody from the reserve
 	else:
+		if not p.bot and not p.pirate and over == Net.OVER_NONE:
+			saved_crew[p.name] = Campaign.character(p)   # kept for when they come back
 		_remove(p)
 	log_line.emit("%s вышел (игроков: %d)." % [p.name, player_count()])
 
@@ -596,6 +751,7 @@ func _leave_body(p: Player) -> void:
 	## dead character goes on with the body.
 	var c := _alloc(p.name)
 	c.colour = p.colour
+	c.job = p.job
 	c.st.copy_from(p.st)
 	c.st.dir = Net.DIR_NONE
 	c.st.down = true
@@ -657,17 +813,95 @@ func _chat(p: Player, raw: String) -> void:
 	if text.is_empty():
 		return
 	p.chat_times.append(now)
+	var channel := Net.CHAT_NEAR
+	if p.cond == Net.COND_DEAD:
+		channel = Net.CHAT_DEAD
+	elif p.cond != Net.COND_OK:
+		_tell(p, "Без сознания не поговоришь.")
+		return
+	elif text.begins_with(Net.CHAT_RADIO_MARK):
+		channel = Net.CHAT_RADIO
+	elif text.begins_with(Net.CHAT_INTERCOM_MARK):
+		channel = Net.CHAT_INTERCOM
+	if channel == Net.CHAT_RADIO or channel == Net.CHAT_INTERCOM:
+		text = text.substr(1).strip_edges()
+		if text.is_empty():
+			return
+	if channel == Net.CHAT_RADIO and p.count(Net.ITEM_RADIO) == 0:
+		_tell(p, "У вас нет рации. Без неё вас слышат только те, кто рядом.")
+		return
+	var panel := -1
+	if channel == Net.CHAT_INTERCOM:
+		panel = _intercom_near(p.st.x, p.st.y, Net.INTERCOM_REACH)
+		if panel < 0:
+			_tell(p, "Рядом нет интеркома: подойдите к панели на стене.")
+			return
+		if not powered():
+			_tell(p, "Интерком молчит: на корабле нет питания.")
+			return
+	var msg := chat_packet(p.slot, channel, text)
+	for q: Player in players:
+		if q != null and (q == p or hears_said(q, p, channel)):
+			if keep_heard and q != p:
+				q.said.append([channel, p.slot, text])
+			if q.peer != null:
+				q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+	log_line.emit("[%s] %s: %s" % [["корабль", "рядом", "рация", "интерком", "мёртвые"][channel], p.name, text])
+
+
+static func chat_packet(from: int, channel: int, text: String) -> PackedByteArray:
 	var body := text.to_utf8_buffer()
 	var msg := PackedByteArray()
-	msg.resize(5)
+	msg.resize(6)
 	msg.encode_u8(0, Net.S_CHAT)
-	msg.encode_u16(1, p.slot)
-	msg.encode_u16(3, body.size())
+	msg.encode_u16(1, from)
+	msg.encode_u8(3, channel)
+	msg.encode_u16(4, body.size())
 	msg.append_array(body)
-	for q: Player in players:
-		if q != null and q.peer != null:
-			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
-	log_line.emit("[чат] %s: %s" % [p.name, text])
+	return msg
+
+
+func hears_said(q: Player, p: Player, channel: int) -> bool:
+	## Does q hear what p says on that channel?
+	if q.corpse or q.bot or q.pirate:
+		return false
+	if channel == Net.CHAT_DEAD:
+		return q.cond == Net.COND_DEAD
+	if q.cond == Net.COND_DEAD:
+		return false
+	match channel:
+		Net.CHAT_RADIO:
+			return q.count(Net.ITEM_RADIO) > 0
+		Net.CHAT_INTERCOM:
+			if hears_voice(q, p.st.x, p.st.y):
+				return true
+			for cell: int in map.intercom:
+				if map.deck_of_cell(cell) == map.deck_of(q.st.y) \
+						and Vector2(q.st.x - cell % map.width, q.st.y - cell / map.width).length() <= Net.INTERCOM_HEAR \
+						and air.air[q.st.y * map.width + q.st.x] >= Net.SOUND_AIR:
+					return true
+			return false
+	return hears_voice(q, p.st.x, p.st.y)
+
+
+func hears_voice(q: Player, x: int, y: int) -> bool:
+	## A voice at x, y: close by on the same deck, with air at both ends to carry
+	## it, or close enough to touch helmets.
+	if map.deck_of(q.st.y) != map.deck_of(y):
+		return false
+	var d := Vector2(q.st.x - x, q.st.y - y).length()
+	if d > Net.SPEECH_RANGE:
+		return false
+	if d <= Net.SOUND_CONTACT:
+		return true
+	return air.air[y * map.width + x] >= Net.SOUND_AIR and air.air[q.st.y * map.width + q.st.x] >= Net.SOUND_AIR
+
+
+func _intercom_near(x: int, y: int, reach: float) -> int:
+	for cell: int in map.intercom:
+		if map.deck_of_cell(cell) == map.deck_of(y) and Vector2(x - cell % map.width, y - cell / map.width).length() <= reach:
+			return cell
+	return -1
 
 
 func _air_for_sound(x: int, y: int) -> float:
@@ -711,13 +945,7 @@ func sound(kind: int, x: int, y: int, made_by: int = -1) -> void:
 
 func _ship_says(text: String) -> void:
 	## A line in everybody's chat from the ship itself.
-	var body := text.to_utf8_buffer()
-	var msg := PackedByteArray()
-	msg.resize(5)
-	msg.encode_u8(0, Net.S_CHAT)
-	msg.encode_u16(1, Net.SYSTEM_ID)
-	msg.encode_u16(3, body.size())
-	msg.append_array(body)
+	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_SHIP, text)
 	for q: Player in players:
 		if q != null and q.peer != null:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
@@ -1110,6 +1338,15 @@ func _store_asked(p: Player, action: int, item: int) -> void:
 			if can_trade() and credits >= Net.PRICE_AIR and store_air < Net.STORE_AIR_FULL:
 				credits -= Net.PRICE_AIR
 				store_air = minf(store_air + Net.AIR_LOT, Net.STORE_AIR_FULL)
+		Net.STORE_HIRE:
+			if can_trade() and credits >= Net.PRICE_CREW and reserve < Net.RESERVE_MAX and over == Net.OVER_NONE:
+				credits -= Net.PRICE_CREW
+				reserve += 1
+				_ship_says("%s нанимает у торговца нового члена экипажа. В резерве: %d." % [p.name, reserve])
+		Net.STORE_BUY_HULL:
+			if can_trade() and credits >= Net.PRICE_HULL and hull < Net.HULL_MAX and over == Net.OVER_NONE:
+				credits -= Net.PRICE_HULL
+				hull = mini(hull + Net.HULL_LOT, Net.HULL_MAX)
 	_tell_store()
 
 
@@ -1147,9 +1384,12 @@ func _update_ship() -> void:
 				var topped := fuel() < Net.STATION_FUEL
 				if topped:
 					store[Net.ITEM_FUEL] = Net.STATION_FUEL
+				var patched := hull < Net.HULL_MAX
+				hull = Net.HULL_MAX
 				_tell_store()
-				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s." %
-					(", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else ""))
+				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %
+					[", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else "",
+					", обшивка залатана" if patched else ""])
 		Sectors.TRADER:
 			if now_in:
 				_ship_says("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
@@ -1196,7 +1436,7 @@ func _tell_nav() -> void:
 
 func _jump_asked(p: Player, target: int) -> void:
 	## A player at the sector console asks for a jump.
-	if not _at_console(p, map.chart) or jump_to != Net.NO_SECTOR or tick < drive_ready or engine_down():
+	if not _at_console(p, map.chart) or jump_to != Net.NO_SECTOR or tick < drive_ready or engine_down() or over != Net.OVER_NONE:
 		return
 	if target >= sectors.count or not sectors.linked(sector, target):
 		return
@@ -1254,12 +1494,15 @@ func _update_jump() -> void:
 	var arrived: Vector2i = sectors.cell[jump_to]
 	jump_to = Net.NO_SECTOR
 	drive_ready = tick + Net.DRIVE_REST_TICKS
+	jumps += 1
 	if not been.has(Sectors.key(arrived)):
 		credits += Net.EXPLORE_REWARD
 		_ship_says("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)
 	been[Sectors.key(arrived)] = true
 	sectors.build(space_seed, arrived, been)
 	sector = sectors.here
+	farthest = maxi(farthest, sectors.far_from_start(sector))
+	save_campaign()
 	_to_all(_sectors_packet())
 	ship_pos = sectors.entry[sector]
 	ship_dest = ship_pos
@@ -1287,6 +1530,8 @@ func breach(cell: int) -> bool:
 		return false
 	_hull_record(cell, 1)
 	_ship_says("Разгерметизация! Пробоина в обшивке.")
+	if map.hull.has(cell):
+		hull_hit(Net.HULL_PER_HOLE)
 	return true
 
 
@@ -1365,10 +1610,18 @@ func _tick() -> void:
 		_update_vitals(p)
 		_update_hands(p)
 		_update_work(p)
+		_tell_me(p)
 		if p.st.x != p.rep_x or p.st.y != p.rep_y or _look(p) != p.rep_look:
 			_record(p)
 	_power_changed()
 	_tell_store()
+	if over == Net.OVER_NONE:
+		voyage_ticks += 1
+		if tick % Net.TICK_HZ == 0:
+			_check_crew()
+		if tick % Campaign.AUTOSAVE_TICKS == 0:
+			save_campaign()
+	_tell_campaign()
 	_update_doors()
 	_update_jump()
 	_update_ship()
@@ -1457,17 +1710,21 @@ func _update_work(p: Player) -> void:
 	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
 	var door := map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
-	var mend_ticks := Net.REPAIR_TICKS if p.count(Net.ITEM_PART) > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER
+	# and the skill of the one at work makes it quicker, down to half the time
+	var knack := 1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)
+	var mend_ticks := roundi((Net.REPAIR_TICKS if p.count(Net.ITEM_PART) > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER) * knack)
 	if cell >= 0 and air.holes.has(cell):
 		if p.count(Net.ITEM_PATCH) == 0:
 			p.work = 0                       # nothing to close it with
-		elif _work_done(p, cell, Net.REPAIR_TICKS):
+		elif _work_done(p, cell, roundi(Net.REPAIR_TICKS * knack)):
+			p.train(Net.SKILL_REPAIR)
 			p.remove(Net.ITEM_PATCH)
 			air.set_hole(cell, false)
 			_hull_record(cell, 0)
 			_ship_says("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
 	elif cell >= 0 and broken.has(cell):
 		if _work_done(p, cell, mend_ticks):
+			p.train(Net.SKILL_REPAIR)
 			p.remove(Net.ITEM_PART)
 			broken.erase(cell)
 			_to_all(_devices_packet())
@@ -1475,12 +1732,14 @@ func _update_work(p: Player) -> void:
 			_power_changed()
 	elif door >= 0 and doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
+			p.train(Net.SKILL_REPAIR)
 			p.remove(Net.ITEM_PART)
 			doors.jammed[door] = 0
 			_door_hold[door] = tick          # it may shut again as soon as the doorway is clear
 			_ship_says("%s чинит заклинившую дверь." % p.name)
 	elif door >= 0 and doors.faulty[door] == 1:
 		if _work_done(p, cell, mend_ticks):
+			p.train(Net.SKILL_REPAIR)
 			p.remove(Net.ITEM_PART)
 			doors.faulty[door] = 0           # from here on the pressure decides again
 			_ship_says("%s чинит аварийный шлюз." % p.name)
@@ -1496,6 +1755,13 @@ func _update_work(p: Player) -> void:
 			doors.locked[door] = 0
 			_forced_until[door] = tick + Net.FORCED_OPEN_TICKS
 			_ship_says("%s вручную поднимает аварийный шлюз." % p.name)
+	elif door >= 0 and doors.barred(door, map.door_access[door], p.st.access):
+		# no access: the lock can still be broken, slowly and for all to hear
+		if _work_done(p, cell, Net.HACK_TICKS):
+			doors.ready[door] = tick + Doors.OPEN_TICKS
+			_door_hold[door] = tick + Doors.OPEN_TICKS + Doors.HOLD_TICKS
+			sound(Net.SOUND_BLOW, cell % map.width, cell / map.width, p.slot)
+			_ship_says("%s взламывает замок двери: %s." % [p.name, Net.ACCESS_NAMES.get(map.door_access[door], "отсек")])
 	elif cell >= 0 and map.oxygen.has(cell) and powered() and p.has_suit():
 		p.work = 0
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
@@ -1685,7 +1951,7 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.treating = who.slot
 			p.work = 0
 			p.work_cell = -2
-			p.work_total = TREAT_TICKS
+			p.work_total = _treat_ticks(p)
 
 
 func hurt_level(q: Player) -> int:
@@ -1722,7 +1988,8 @@ func _update_treatment(p: Player) -> bool:
 		p.work = 0
 		return false
 	p.work += 1
-	if p.work >= TREAT_TICKS:
+	if p.work >= _treat_ticks(p):
+		p.train(Net.SKILL_MEDICINE)
 		heal(q, float(Items.MEDKIT_HEAL))
 		p.slots[p.hand] = kit - 1 if Items.uses(kit) > 1 else Net.ITEM_NONE
 		p.work = 0
@@ -1731,6 +1998,11 @@ func _update_treatment(p: Player) -> bool:
 		if q.wounds <= 0.0 or p.slots[p.hand] == Net.ITEM_NONE:
 			p.treating = -1
 	return true
+
+
+func _treat_ticks(p: Player) -> int:
+	## A treatment takes TREAT_TICKS for one with no skill, down to half that for the best.
+	return roundi(TREAT_TICKS * (1.0 - 0.5 * p.skill(Net.SKILL_MEDICINE)))
 
 
 func _stops_shot(x: int, y: int) -> bool:
@@ -1766,10 +2038,12 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 		var along := (pos - from).dot(way)
 		if along <= 0.2 or along >= best:
 			continue
-		if (pos - (from + way * along)).length() <= HIT_RADIUS:
+		if (pos - (from + way * along)).length() <= HIT_RADIUS + 0.1 * p.skill(Net.SKILL_GUNS):
 			best = along
 			hit = q
 	var end := from + way * best
+	if hit != null:
+		p.train(Net.SKILL_GUNS)
 	_tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y)
 	sound(Net.SOUND_SHOT, p.st.x, p.st.y, p.slot)
 	if hit != null:
@@ -2040,7 +2314,11 @@ func _respawn(p: Player) -> void:
 	p.using = false
 	p.work = 0
 	p.slots.fill(Net.ITEM_NONE)
-	p.dress()                            # (the old suit and clothes stay on the body)          # what the dead one carried stays with the body (see _leave_body)
+	p.dress()                            # (the old suit and clothes stay on the body; what the dead one carried stays with it)
+	if not p.bot:
+		p.skills.fill(0)                 # somebody new from the reserve, in the same job
+		p.take_job(p.job)
+		_kit_out(p)
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
@@ -2054,6 +2332,111 @@ func _respawn(p: Player) -> void:
 	p.self_dirty = true
 	_record(p)
 	_ship_says("%s снова в строю." % p.name)
+
+
+func _respawn_from_reserve(p: Player) -> void:
+	## A dead player asks to come back: that takes one of the reserve.
+	if over != Net.OVER_NONE:
+		return
+	if p.bot:
+		_respawn(p)
+		return
+	if reserve <= 0:
+		_tell(p, "Резерв экипажа пуст: заменить вас некем. Товарищи могут нанять людей у торговца.")
+		return
+	reserve -= 1
+	_respawn(p)
+	_ship_says("В резерве экипажа осталось: %d." % reserve)
+
+
+func _tell(p: Player, text: String) -> void:
+	## A line from the ship in one player's chat only.
+	if p.peer == null:
+		return
+	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_SHIP, text)
+	p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func _living_crew() -> int:
+	## Players' characters still alive (unconscious counts: they may yet come round).
+	var n := 0
+	for q: Player in players:
+		if q != null and not q.bot and not q.pirate and not q.corpse and q.cond != Net.COND_DEAD:
+			n += 1
+	return n
+
+
+func _check_crew() -> void:
+	## The campaign is lost when every player's character is dead and the
+	## reserve has nobody left to send.
+	if reserve > 0:
+		return
+	var players_here := 0
+	for q: Player in players:
+		if q != null and not q.bot and not q.pirate and not q.corpse:
+			players_here += 1
+	if players_here > 0 and _living_crew() == 0:
+		_end_campaign(Net.OVER_CREW_LOST)
+
+
+func hull_hit(amount: int) -> void:
+	## The hull takes a blow. At nothing it gives way and the campaign is over.
+	if over != Net.OVER_NONE:
+		return
+	var was := hull
+	hull = maxi(hull - amount, 0)
+	if hull == 0:
+		_end_campaign(Net.OVER_WRECKED)
+	elif was > 30 and hull <= 30:
+		_ship_says("Обшивка на пределе: прочность %d из %d. Залатать её могут на станции снабжения или у торговца." % [hull, Net.HULL_MAX])
+
+
+func _end_campaign(how: int) -> void:
+	if over != Net.OVER_NONE:
+		return
+	over = how
+	jump_to = Net.NO_SECTOR
+	_tell_nav()
+	ship_moving = false
+	_to_all(_helm_packet())
+	var why := "Корабль разрушен: обшивка не выдержала." if how == Net.OVER_WRECKED else "Экипаж погиб, и заменить его некем."
+	_ship_says("%s Кампания окончена. Пройдено секторов: %d, дальше всего от начала: %d прыжков, продержались %s." % [
+		why, been.size(), farthest, voyage_text(voyage_ticks)])
+	_tell_campaign()
+	campaign_ended()
+
+
+func campaign_ended() -> void:
+	## A lost campaign cannot be continued: its save is let go.
+	if save_path != "":
+		Campaign.forget(save_path)
+
+
+static func voyage_text(ticks: int) -> String:
+	var minutes := ticks / Net.TICK_HZ / 60
+	return "%d ч %02d мин" % [minutes / 60, minutes % 60] if minutes >= 60 else "%d мин" % minutes
+
+
+func _campaign_packet() -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(14)
+	out.encode_u8(0, Net.S_CAMPAIGN)
+	out.encode_u8(1, hull)
+	out.encode_u8(2, reserve)
+	out.encode_u8(3, over)
+	out.encode_u16(4, mini(been.size(), 65535))
+	out.encode_u16(6, mini(farthest, 65535))
+	out.encode_u16(8, mini(jumps, 65535))
+	out.encode_u32(10, voyage_ticks / Net.TICK_HZ)
+	return out
+
+
+func _tell_campaign() -> void:
+	## Tells everyone the state of the campaign when it changed (the time is only refreshed with the rest).
+	var now := _campaign_packet()
+	if now.slice(0, 10) != _campaign_told.slice(0, 10):
+		_campaign_told = now
+		_to_all(now)
 
 
 func _update_shutters() -> void:

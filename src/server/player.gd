@@ -66,7 +66,12 @@ var self_dirty := true               # own state changed and must be confirmed t
 var last_self_tick := -1000
 var last_packet_tick := -1000
 var chat_times: Array[int] = []
+var said: Array = []                 # [channel, from, text] this one heard, kept only for tests (see GameServer.keep_heard)
 var bot_until := 0
+var job := 0                         # Net.JOB_*: its access (st.access) and which skills grow quickly
+var skills := PackedByteArray([0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
+var slow_work := 0                   # pieces of work outside its job (every Net.SKILL_SLOW_EVERY-th one teaches)
+var me_sent := PackedByteArray()     # job and skills as last told to its client
 
 
 const HISTORY := 32
@@ -76,6 +81,30 @@ func _init() -> void:
 	slots.resize(Net.SLOTS)
 	worn.resize(Net.WORN)
 	history.resize(HISTORY)
+
+
+func take_job(which: int) -> void:
+	## Takes a job: its access, and its own skill at least where a newcomer to it starts.
+	job = clampi(which, 0, Net.JOBS - 1)
+	st.access = Net.JOB_ACCESS[job]
+	var own := Net.JOB_SKILL[job]
+	if own >= 0:
+		skills[own] = maxi(skills[own], Net.JOB_START_SKILL)
+
+
+func skill(which: int) -> float:
+	## 0..1
+	return skills[which] / float(Net.SKILL_MAX)
+
+
+func train(which: int) -> void:
+	## A piece of work of that kind done: its job's own skill grows quickly, the others slowly.
+	if Net.JOB_SKILL[job] == which:
+		skills[which] = mini(skills[which] + Net.SKILL_GAIN, Net.SKILL_MAX)
+	else:
+		slow_work += 1
+		if slow_work % Net.SKILL_SLOW_EVERY == 0:
+			skills[which] = mini(skills[which] + Net.SKILL_GAIN_OTHER, Net.SKILL_MAX)
 
 
 func count(item: int) -> int:
