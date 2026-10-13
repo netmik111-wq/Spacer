@@ -55,7 +55,9 @@ var climb := PackedInt32Array()      # per cell: where the ladder here leads (a 
 # ship; its doors take the numbers kept for them at the end of `doors`.
 # `base_*` keep our own ship as it is without it.
 const NO_OTHER := Vector2i(-9999, -9999)
-var other: RefCounted = null         # the other ship's own layout (a ShipMap), or null if this ship has none
+var others: Array = []               # every kind of other ship that may come (ShipMaps), by number
+var other: RefCounted = null         # the layout of the one here (or of the first kind while none is here)
+var other_kind := -1                 # its number in `others`, -1 = none here
 var other_at := NO_OTHER             # where its corner lies in our grid while it is here
 var other_first_door := 0            # the number of its first door among ours
 var other_cells := PackedInt32Array() # the cells it takes up while it is here
@@ -105,7 +107,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	opaque.resize(width * height)
 	var windows := []
 	for t: Dictionary in tiles["tiles"]:
-		if str(t["name"]).begins_with("window"):
+		if str(t["name"]).trim_prefix("pirate_").begins_with("window"):
 			windows.append(tile_ids[str(t["name"])])
 	var src: Array = data["cells"]
 	if src.size() != width * height:
@@ -279,23 +281,33 @@ func _find_airlocks() -> String:
 	return ""
 
 
-func add_other(name: String) -> String:
-	## Makes room for another ship that may come alongside: its layout, and
-	## numbers for its doors. It is not here until `place_other`.
+func add_other(name: String) -> int:
+	## Makes room for another kind of ship that may come alongside: its layout,
+	## and numbers for its doors. Returns its number in `others`, or -1 if its
+	## map would not load. It is not here until `place_other`.
 	var o: RefCounted = load("res://src/shared/ship_map.gd").new()
-	var problem: String = o.load_from(name, false)
-	if problem != "":
-		return problem
-	other = o
-	other_first_door = doors.size()
-	for d in o.doors.size():
+	if o.load_from(name, false) != "":
+		return -1
+	if others.is_empty():
+		other = o
+		other_first_door = doors.size()
+	others.append(o)
+	while doors.size() - other_first_door < o.doors.size():
 		doors.append(NO_OTHER)
-		door_kind.append(o.door_kind[d])
+		door_kind.append(DOOR_BAND)
 		door_sides.append(-1)
 		door_sides.append(-1)
 		door_partner.append(-1)
 		door_vent.append(0)
-	return ""
+	return others.size() - 1
+
+
+func other_fits_kind(kind: int, at: Vector2i) -> bool:
+	var keep = other
+	other = others[kind]
+	var ok := other_fits(at)
+	other = keep
+	return ok
 
 
 func other_fits(at: Vector2i) -> bool:
@@ -312,8 +324,8 @@ func other_fits(at: Vector2i) -> bool:
 	return true
 
 
-func place_other(at: Vector2i) -> void:
-	## Lays the other ship into the grid with its corner there (NO_OTHER takes it away).
+func place_other(at: Vector2i, kind: int = 0) -> void:
+	## Lays another ship of that kind into the grid with its corner there (NO_OTHER takes it away).
 	for c in other_cells:
 		cells[c] = base_cells[c]
 		walk[c] = base_walk[c]
@@ -321,9 +333,14 @@ func place_other(at: Vector2i) -> void:
 		door_of[c] = -1
 	other_cells = PackedInt32Array()
 	other_at = at
+	for d in range(other_first_door, doors.size()):
+		doors[d] = NO_OTHER
+	other_kind = kind if at != NO_OTHER else -1
+	if not others.is_empty():
+		other = others[maxi(kind, 0)]
 	var o = other
 	for d in o.doors.size():
-		doors[other_first_door + d] = NO_OTHER
+		door_kind[other_first_door + d] = o.door_kind[d]
 	if at != NO_OTHER:
 		for y in o.height:
 			for x in o.width:
@@ -340,6 +357,13 @@ func place_other(at: Vector2i) -> void:
 			doors[other_first_door + d] = p
 			door_of[p.y * width + p.x] = other_first_door + d
 	_sides()
+
+
+func door_tint(d: int) -> String:
+	## The prefix of the tiles this door is drawn in ("pirate_" on a pirate ship).
+	if d >= other_first_door and other_kind >= 0 and str(other.map_name).begins_with("pirate"):
+		return "pirate_"
+	return ""
 
 
 func is_other(cell: int) -> bool:

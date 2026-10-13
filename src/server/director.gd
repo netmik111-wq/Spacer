@@ -30,6 +30,7 @@ const DOOR_JAM := 6
 const SHUTTER_FAULT := 7
 const POWER_GLITCH := 8
 const BOARDING := 9
+const PIRATE_SHIP := 10
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -51,6 +52,8 @@ const EVENTS: Array[Dictionary] = [
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 	{"id": BOARDING, "name": "Абордаж", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+	{"id": PIRATE_SHIP, "name": "Пиратский корабль", "size": BIG,
+		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -156,12 +159,9 @@ func _run(event_id: int) -> void:
 		POWER_GLITCH:
 			server.power_glitch()
 		BOARDING:
-			# more crew, more pirates; an unarmed crew meets fewer of them
-			var crew := maxi(int(assess()["crew"]), 1)
-			var party := clampi(1 + crew / 2, 1, 4)
-			if server.weapons_aboard() == 0:
-				party = maxi(party - 1, 1)
-			server.pirates.board(party)
+			server.pirates.board(_party())
+		PIRATE_SHIP:
+			server.derelict.pirates_come(_party())
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -193,7 +193,18 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 			return server.can_break("power")
 		BOARDING:
 			return server.pirates.aboard() == 0
+		PIRATE_SHIP:
+			return server.pirates.aboard() == 0 and server.derelict.pirates_can_come()
 	return true
+
+
+func _party() -> int:
+	## How many pirates come: more crew, more pirates; an unarmed crew meets fewer of them.
+	var crew := maxi(int(assess()["crew"]), 1)
+	var party := clampi(1 + crew / 2, 1, 4)
+	if server.weapons_aboard() == 0:
+		party = maxi(party - 1, 1)
+	return party
 
 
 func _weight(e: Dictionary, here: int) -> int:
@@ -202,7 +213,7 @@ func _weight(e: Dictionary, here: int) -> int:
 		return 0
 	var w := int(e["weight"])
 	# a crew with no weapons at all is boarded half as often
-	if int(e["id"]) == BOARDING and server.weapons_aboard() == 0:
+	if (int(e["id"]) == BOARDING or int(e["id"]) == PIRATE_SHIP) and server.weapons_aboard() == 0:
 		w = maxi(w / 2, 1)
 	# a crew with nothing left to close a hole with gets holes three times as rarely
 	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.patches_aboard() == 0:

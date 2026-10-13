@@ -168,8 +168,8 @@ func setup(p_client: GameClient) -> void:
 
 	# doors are redrawn as they open and close
 	_door_tiles = [
-		[map.tile_ids["door"], map.tile_ids["door_half"], map.tile_ids["door_open"]],
-		[map.tile_ids["airlock_closed"], map.tile_ids["airlock_half"], map.tile_ids["airlock"]],
+		["door", "door_half", "door_open"],
+		["airlock_closed", "airlock_half", "airlock"],
 	]
 	_door_shown.resize(map.doors.size())
 	_door_shown.fill(-1)
@@ -318,7 +318,7 @@ func _update_ship(delta: float) -> void:
 				frame = 1
 		if frame != _door_shown[d]:
 			_door_shown[d] = frame
-			var id: int = _door_tiles[map.door_kind[d]][frame]
+			var id: int = map.tile_ids[map.door_tint(d) + str(_door_tiles[map.door_kind[d]][frame])]
 			var at: Vector2i = map.doors[d]
 			_decks[map.deck_of(at.y)].layer.set_cell(Vector2i(at.x, map.local_y(at.y)), _source_id,
 				Vector2i(id % map.atlas_columns, id / map.atlas_columns))
@@ -522,7 +522,7 @@ func _draw_mask() -> void:
 			elif kind == 1 and ship.a > 0.0:
 				_mask.draw_rect(rect, ship)
 			x = run
-	if _dark <= 0.0 and not client.other_here():
+	if _dark <= 0.0 and not (client.other_here() and client.map.other_kind == Net.OTHER_DERELICT):
 		return
 	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
 	# no glow around our own character)
@@ -540,7 +540,7 @@ func _light_kind(map: ShipMap, cell: int) -> int:
 	## 0 = open space (never dark), 1 = our ship, 2 = a derelict (no light of its own).
 	if map.cells[cell] < 0:
 		return 0
-	return 2 if map.is_other(cell) else 1
+	return 2 if client.dark_cell(cell) else 1
 
 
 func _soft_circle(pen: Node2D, mid: Vector2, full: float, gone: float, colour: Color) -> void:
@@ -591,7 +591,7 @@ func _draw_look() -> void:
 
 func _my_dark() -> bool:
 	## Is our character in the dark: a ship without power, or aboard a derelict?
-	return _dark >= 0.5 or client.map.is_other(client.pred.y * client.map.width + client.pred.x)
+	return _dark >= 0.5 or client.dark_cell(client.pred.y * client.map.width + client.pred.x)
 
 
 func can_see(x: int, y: int) -> bool:
@@ -605,7 +605,7 @@ func can_see(x: int, y: int) -> bool:
 	var on_ours := Vector2i(x, y - (its_deck - _deck_shown) * _stride)
 	var dark := _my_dark()
 	var arcs := Sight.eye_arcs(dark)
-	if not dark and not map.is_other(y * map.width + x):
+	if not dark and not client.dark_cell(y * map.width + x):
 		return Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
 	if Vector2(on_ours).distance_to(me) <= Sight.DARK_REACH + 0.5 \
 			and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.DARK_REACH):
@@ -854,7 +854,9 @@ func _process(delta: float) -> void:
 		var seen := client.seen_from(my_deck, cell_x, cell_y)
 		_seen[id] = seen
 		# out of our field of view (or in the dark) nobody is seen
-		sprite.visible = id == client.my_id or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
+		# (and the one we haul along behind us is always felt there)
+		var hauled := client.dragging() and id == client.drag_id
+		sprite.visible = id == client.my_id or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id))
 		if cond == Net.COND_OK:
@@ -902,10 +904,8 @@ func _process(delta: float) -> void:
 	for id: int in _labels.keys():
 		var label: Label = _labels[id]
 		# a name does not give away somebody the floor or the dark hides
-		label.visible = show_names and bool(_seen.get(id, false))
-		if label.visible and id != client.my_id:
-			var e: GameClient.Ent = client.ents.get(id)
-			label.visible = e != null and lit(e.y * map.width + e.x)
+		# (exactly when the character itself is shown: the same place, the same moment)
+		label.visible = show_names and bool(_seen.get(id, false)) and _views.has(id) and (_views[id] as Sprite2D).visible
 		if label.visible:
 			var sprite: Sprite2D = _views[id]
 			label.text = client.player_name(id)

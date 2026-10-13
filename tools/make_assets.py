@@ -85,7 +85,31 @@ TILES.append(("engine", None, "wall"))
 TILES.append(("air_plant", None, "wall"))
 TILES.append(("locker", None, "wall"))
 TILES.append(("lock_pump", None, "wall"))
+# The pirate ship is every tile again in the pirates' colours (the author's
+# words: brown, red, dark black). A map named pirate* is laid in these.
+PIRATE = "pirate_"
+for _name, _src, _kind in list(TILES):
+    TILES.append((PIRATE + _name, None, _kind))
 ATLAS_COLS = 8
+
+
+def pirate_tint(im):
+    """Repaints a tile by brightness: shadows near black, middles brown, lights rust red."""
+    stops = [(0.0, (10, 9, 11)), (0.4, (40, 30, 28)), (0.68, (84, 54, 36)), (0.86, (128, 42, 34)), (1.0, (176, 74, 52))]
+    out = im.copy()
+    px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            lum = (0.3 * r + 0.59 * g + 0.11 * b) / 255.0
+            for (l0, c0), (l1, c1) in zip(stops, stops[1:]):
+                if lum <= l1:
+                    k = (lum - l0) / (l1 - l0)
+                    px[x, y] = tuple(int(c0[i] + (c1[i] - c0[i]) * k) for i in range(3)) + (a,)
+                    break
+    return out
 
 
 def load_mockup():
@@ -309,7 +333,9 @@ def build_tiles():
         "lock_pump": lambda: make_machine(images["wall_h"], "lock_pump"),
     }
     for i, (name, src, kind) in enumerate(TILES):
-        if kind in COVERS:
+        if name.startswith(PIRATE):
+            im = pirate_tint(images[name[len(PIRATE):]])
+        elif kind in COVERS:
             im = make_cover(images["floor" + name[len(kind):]], kind)
         else:
             im = drawn[name]() if name in drawn else cut(mock, *src)
@@ -484,6 +510,8 @@ def read_decks(name, lines):
 
 
 def resolve_ship(name, lines, ids):
+    if name.startswith("pirate"):
+        ids = {k: ids.get(PIRATE + k, v) for k, v in ids.items()}
     decks = read_decks(name, lines)
     w = max(len(l) for _, rows in decks for l in rows)
     h = max(len(rows) for _, rows in decks)
@@ -498,7 +526,7 @@ def resolve_ship(name, lines, ids):
         cells[d * stride * w:d * stride * w + w * h] = deck_cells
         spawns += [[x, y + d * stride] for x, y in deck_spawns]
         doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
-    if not spawns and not name.startswith("derelict"):
+    if not spawns and not name.startswith("derelict") and not name.startswith("pirate"):
         raise MapError(f"{name}: no spawn points ('s')")
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors}

@@ -103,6 +103,37 @@ func _initialize() -> void:
 			again += Net.FLOOR_STACK - (server.floor_things[c] as PackedByteArray).count(Net.ITEM_NONE)
 	_expect(again == left, "coming back, what was left on it is still there (%d)" % again)
 
+	# a pirate ship: shows up, docks by force, breaks the airlock open, sends its crew
+	server.ship_pos = server.sectors.spot[server.sector] + Vector2(40, 0)
+	server.ship_dest = server.ship_pos
+	_run(1)
+	_expect(not d.here and d.pirates_can_come(), "with nothing alongside, pirates can come")
+	var before_pirates := server.pirates.aboard()
+	_expect(d.pirates_come(2) and d.here and d.kind == Net.OTHER_PIRATE and not d.docked, "a pirate ship shows up off the airlock")
+	_expect(d.dock(true) != "", "nobody docks with pirates of their own accord")
+	_run(Derelict.PIRATE_WARNING_TICKS + 2)
+	var inner: int = map.lock_pump[pump]["inner"]
+	_expect(d.docked and server.doors.jammed[outer] == 1 and server.doors.jammed[inner] == 1,
+		"after the warning it docks by force and breaks both airlock doors open")
+	_expect(server.pirates.aboard() == before_pirates + 2, "and its pirates come out (%d)" % (server.pirates.aboard() - before_pirates))
+	_expect(server.doors.dead[theirs] == 0, "its doors have power")
+	p.st.place(ours.x + 6, ours.y + 5)                 # one of the crew in the corridor below the airlock
+	p.health = 100.0
+	var came := 0
+	for t in 30 * Net.TICK_HZ:
+		_run(1)
+		p.health = maxf(p.health, 50.0)
+		came = 0
+		for q in server.players:
+			if q != null and q.pirate and not q.corpse and map.on_ship(q.st.y * map.width + q.st.x):
+				came += 1
+		if came > 0:
+			break
+	_expect(came > 0, "pirates come through the broken airlock into the ship")
+	_expect(d.dock(false) == "" and not d.docked, "it can be cast off from the controls")
+	_run(2)
+	_expect(not d.here and map.other_at == ShipMap.NO_OTHER, "and then it goes")
+
 	server.stop()
 	server.free()
 	print("DERELICTTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))

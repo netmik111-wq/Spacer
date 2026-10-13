@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 19
+const PROTOCOL := 20
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -129,7 +129,11 @@ const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
 const S_OTHER := 26                 # s16 x, s16 y of the other ship's corner in the grid (-9999 = none here),
-                                    # u8 docked: a derelict alongside (see ShipMap.place_other)
+                                    # u8 docked, u8 kind (OTHER_*): a ship alongside (see ShipMap.place_other)
+# the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)
+const OTHER_DERELICT := 0
+const OTHER_PIRATE := 1
+const OTHER_MAPS: Array[String] = ["derelict01", "pirate01"]
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how

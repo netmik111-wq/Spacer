@@ -45,7 +45,8 @@ extends Node
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
 ## Dedicated server: board_after=SECONDS (pirates come aboard then),
-## derelict_after=SECONDS (a derelict comes alongside then and docks at once).
+## derelict_after=SECONDS (a derelict comes alongside then and docks at once),
+## pirateship_after=SECONDS (a pirate ship comes then, and docks by force 15 s later).
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
 ## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside).
@@ -59,6 +60,7 @@ const MainMenu := preload("res://src/ui/main_menu.gd")
 
 var _placed := false
 var _derelicted := false
+var _pirateshipped := false
 var _dockship := false
 var _server: GameServer = null
 var _client: GameClient = null
@@ -369,6 +371,9 @@ func _process(_delta: float) -> void:
 	if _opt.has("derelict_after") and _derelicted and not _dockship and _server != null and _server.derelict.here:
 		_dockship = true
 		_server.derelict.dock(true)
+	if _opt.has("pirateship_after") and not _pirateshipped and _flags.has("server") and _server != null and t >= float(_opt["pirateship_after"]):
+		_pirateshipped = true
+		_server.director.fire(_server.director.PIRATE_SHIP)
 	if _opt.has("board_after") and not _boarded and _flags.has("server") and _server != null and t >= float(_opt["board_after"]):
 		_boarded = true
 		_server.director.fire(_server.director.BOARDING)

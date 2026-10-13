@@ -120,8 +120,9 @@ var late_inputs := 0
 func start(p_port: int, map_name: String, bots: int) -> String:
 	## Opens the port and starts ticking. Returns "" or what went wrong.
 	var problem := map.load_from(map_name)
-	if problem == "":
-		problem = map.add_other(Derelict.NAME)
+	for other_map in Net.OTHER_MAPS:
+		if problem == "" and map.add_other(other_map) < 0:
+			problem = "Не найдена карта «%s»." % other_map
 	if problem != "":
 		return problem
 	_host = ENetConnection.new()

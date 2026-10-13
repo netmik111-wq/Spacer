@@ -359,13 +359,17 @@ func lit_cells() -> Dictionary:
 
 
 func other_here() -> bool:
-	## Is a derelict alongside?
+	## Is another ship alongside (a derelict, or pirates)?
 	return map.other_at != ShipMap.NO_OTHER
 
 
-func in_the_dark(cell: int) -> bool:
-	## Is this cell without light of its own: the whole ship without power, or a derelict always?
-	return not powered() or map.is_other(cell)
+func pirates_alongside() -> bool:
+	return other_here() and map.other_kind == Net.OTHER_PIRATE
+
+
+func dark_cell(cell: int) -> bool:
+	## Is this cell on a derelict, which has no light of its own? (A pirate ship is lit.)
+	return map.is_other(cell) and map.other_kind == Net.OTHER_DERELICT
 
 
 func send_dock(on: bool) -> void:
@@ -817,11 +821,13 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if pkt.size() >= 6:
 				var at := Vector2i(pkt.decode_s16(1), pkt.decode_s16(3))
 				other_docked = pkt[5] != 0
-				if at != map.other_at:
-					map.place_other(at)
+				var kind: int = pkt[6] if pkt.size() > 6 else Net.OTHER_DERELICT
+				if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind):
+					map.place_other(at, kind)
 					for d in range(map.other_first_door, map.doors.size()):
 						doors.ready[d] = Doors.CLOSED
 						doors.set_flags(d, 0)
+						doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0
 					other_changes += 1
 					ship_changes += 1
 					_rebuild_prediction()
@@ -871,8 +877,9 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	var n := pkt[11]
 	var map_name := pkt.slice(12, 12 + n).get_string_from_utf8()
 	var problem := map.load_from(map_name)
-	if problem == "":
-		problem = map.add_other("derelict01")
+	for other_map in Net.OTHER_MAPS:
+		if problem == "" and map.add_other(other_map) < 0:
+			problem = "Не найдена карта «%s»." % other_map
 	if problem == "" and map.crc != crc:
 		problem = "Карта «%s» на сервере отличается от вашей. Нужна одинаковая сборка игры." % map_name
 	if problem != "":
@@ -883,8 +890,6 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	pred_doors.setup(map.doors.size())
 	doors.partner = map.door_partner
 	pred_doors.partner = map.door_partner
-	for d in range(map.other_first_door, map.doors.size()):
-		doors.dead[d] = 1
 	pred_doors.dead = doors.dead
 	other_docked = false
 	pumps.clear()
