@@ -9,6 +9,8 @@ extends Node2D
 ## whoever stands on them.
 
 const Net := preload("res://src/shared/net.gd")
+const Items := preload("res://src/shared/items.gd")
+const Sight := preload("res://src/shared/sight.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
@@ -23,9 +25,19 @@ const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
 const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
-const DARK := Color(0.01, 0.0, 0.03, 0.86)        # a cell without power and without light
-const NEAR_DARK := 0.55                           # how dark it stays right around our own character
+const DARK := Color(0.0, 0.0, 0.01, 1.0)          # the ship without power and without light: pitch black
+const NEAR_SEEN := 1.0                            # without light our own character still makes out this many
+const NEAR_FADE := 2.0                            # cells around it in full, fading out by this many
 const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's light
+const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
+const DARK_SHADER := """
+shader_type canvas_item;
+uniform sampler2D mask : filter_linear;
+uniform vec4 dark;
+void fragment() {
+	COLOR = vec4(dark.rgb, dark.a * (1.0 - texture(mask, SCREEN_UV).r));
+}
+"""
 
 
 class DeckView:
@@ -68,8 +80,16 @@ var _door_closing := PackedFloat32Array()   # per door: seconds left of the clos
 var _hole_views := {}                # hull cell -> Sprite2D
 var _ship_seen := -1                 # client.ship_changes when the hull and air were last redrawn
 var _floor_seen := -1                # client.floor_changes when the things on the floor were last redrawn
-var _shade: Node2D                   # darkness without power, and the light of flashlights
-var _lit := {}                       # the cells lit right now (see GameClient.lit_cells)
+var _shade: Node2D                   # the warm light of flashlights on the floor
+var _lit := {}                       # the cells lit right now (see GameClient.lit_cells): for names in the dark
+var _beams: Array = []               # the beams on the deck shown: [polygon, colours], in its pixels
+# Darkness is a black sheet over the screen with holes where light falls. The holes
+# are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
+var _mask_view: SubViewport
+var _mask: Node2D
+var _mask_camera: Camera2D
+var _dark_layer: CanvasLayer
+var _dark_sheet: ColorRect
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 
 
@@ -149,6 +169,30 @@ func setup(p_client: GameClient) -> void:
 	_shade.z_index = map.deck_count + 3
 	_shade.draw.connect(_draw_shade)
 	add_child(_shade)
+	_mask_view = SubViewport.new()
+	_mask_view.disable_3d = true
+	_mask_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(_mask_view)
+	_mask = Node2D.new()
+	_mask.draw.connect(_draw_mask)
+	_mask_view.add_child(_mask)
+	_mask_camera = Camera2D.new()
+	_mask_view.add_child(_mask_camera)
+	_mask_camera.enabled = true
+	_dark_layer = CanvasLayer.new()
+	_dark_layer.layer = 1
+	add_child(_dark_layer)
+	_dark_sheet = ColorRect.new()
+	_dark_sheet.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dark_sheet.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var sheet_shader := Shader.new()
+	sheet_shader.code = DARK_SHADER
+	var sheet_material := ShaderMaterial.new()
+	sheet_material.shader = sheet_shader
+	sheet_material.set_shader_parameter("mask", _mask_view.get_texture())
+	_dark_sheet.material = sheet_material
+	_dark_sheet.visible = false
+	_dark_layer.add_child(_dark_sheet)
 
 	_ghost = Sprite2D.new()
 	_ghost.texture = _chars_tex
@@ -165,7 +209,7 @@ func setup(p_client: GameClient) -> void:
 	_camera.make_current()
 
 	_label_layer = CanvasLayer.new()
-	_label_layer.layer = 1
+	_label_layer.layer = 2
 	add_child(_label_layer)
 
 	# a fixed scatter of stars around the ship
@@ -277,7 +321,13 @@ func _update_ship(delta: float) -> void:
 	# light and dark change with every step anybody holding a flashlight takes
 	_dark = move_toward(_dark, 0.0 if client.powered() else 1.0, delta * 2.5)
 	_lit = client.lit_cells()
+	_beams = _find_beams()
 	_shade.queue_redraw()
+	_dark_sheet.visible = _dark > 0.0
+	_mask_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _dark > 0.0 else SubViewport.UPDATE_DISABLED
+	if _dark > 0.0:
+		(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", Color(DARK, DARK.a * _dark))
+		_mask.queue_redraw()
 
 
 func _draw_things(d: int) -> void:
@@ -301,38 +351,100 @@ func _draw_things(d: int) -> void:
 			ItemArt.draw(pen, Rect2(corner + spot, Vector2(14, 14)), here[k])
 
 
-func _draw_shade() -> void:
-	## Without power the ship is dark: every cell of it is shaded, a little less
-	## right around our own character, and not at all where a flashlight shines.
-	## With the lights on a flashlight only warms the floor a little.
+func _find_beams() -> Array:
+	## The beam of every lit flashlight on the deck shown, as a polygon that
+	## follows the walls: rays go out from the holder until something stops them.
+	var out: Array = []
 	var map := client.map
-	var deck := _deck_shown
-	var me := client.sample(client.my_id) if client.ents.has(client.my_id) else []
-	var near := Vector2(-100, -100)
-	if not me.is_empty():
-		near = me[0]
+	var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
+	var half := deg_to_rad(float(beam[0]) * 0.5)
+	var reach := float(beam[1]) * _tile
+	for id: int in client.ents.keys():
+		var e: GameClient.Ent = client.ents[id]
+		var lit := (not Items.light(client.in_hand()).is_empty() and client.my_cond != Net.COND_DEAD) if id == client.my_id else e.light
+		if not lit:
+			continue
+		var s := client.sample(id)
+		if s.is_empty() or int(s[1]) < 1 or int(s[1]) > 4:
+			continue
+		var pos: Vector2 = s[0]
+		var deck := map.deck_of(clampi(roundi(pos.y), 0, map.height - 1))
+		if deck != _deck_shown:
+			continue
+		var origin := Vector2(pos.x + 0.5, pos.y - deck * _stride + 0.5) * _tile
+		var ahead := Vector2(Net.DX[int(s[1])], Net.DY[int(s[1])])
+		var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
+		var points := PackedVector2Array([origin + ahead * 6.0])
+		var colours := PackedColorArray([Color(1, 1, 1, 1)])
+		for k in BEAM_RAYS + 1:
+			var way := ahead.rotated(-half + 2.0 * half * k / BEAM_RAYS)
+			var t := 6.0
+			while t < reach:
+				var at := origin + way * t
+				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
+				if c != start_cell and Sight.blocks(map, client.doors, c.x, c.y + deck * _stride):
+					t += 5.0                 # the light falls on the face of the wall
+					break
+				t += 3.0
+			t = minf(t, reach)
+			points.append(origin + way * t)
+			colours.append(Color(1, 1, 1, 1.0 - 0.75 * t / reach))
+		out.append([points, colours])
+	return out
+
+
+func _draw_shade() -> void:
+	## The warm light of flashlights on the floor (the dark itself is the sheet over the screen).
+	for b: Array in _beams:
+		var colours := PackedColorArray()
+		for c: Color in b[1]:
+			colours.append(Color(BEAM, c.a * (0.1 + 0.08 * _dark)))
+		_shade.draw_polygon(b[0], colours)
+
+
+func _draw_mask() -> void:
+	## Where the dark sheet has holes: white is seen, black is dark. Space
+	## outside the ship is not dark, the ship is, and light opens it up.
+	var map := client.map
+	_mask.draw_rect(Rect2(_camera.position - Vector2(8000, 8000), Vector2(16000, 16000)), Color.WHITE)
 	for y in map.deck_height:
-		var gy := deck * _stride + y
-		for x in map.width:
-			var cell := gy * map.width + x
-			if map.cells[cell] < 0:
+		var row := (_deck_shown * _stride + y) * map.width
+		var x := 0
+		while x < map.width:
+			if map.cells[row + x] < 0:
+				x += 1
 				continue
-			var light := float(_lit.get(cell, 0.0))
-			var rect := Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile))
-			if _dark > 0.0:
-				var shade := 1.0 - light
-				var d := Vector2(x, gy).distance_to(near)
-				if d <= 2.5:
-					shade = minf(shade, NEAR_DARK + (1.0 - NEAR_DARK) * maxf(d - 1.0, 0.0) / 1.5)
-				if shade > 0.0:
-					_shade.draw_rect(rect, Color(DARK, DARK.a * shade * _dark))
-			if light > 0.0:
-				_shade.draw_rect(rect, Color(BEAM, light * (0.08 + 0.1 * _dark)))
+			var run := x
+			while run < map.width and map.cells[row + run] >= 0:
+				run += 1
+			_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(run - x, 1) * _tile), Color.BLACK)
+			x = run
+	# right around our own character: a little seen even in the dark
+	var me: Sprite2D = _views.get(client.my_id)
+	if me != null and me.get_parent() == _decks[_deck_shown].chars:
+		var mid := me.position + Vector2(0, -12)
+		_mask.draw_circle(mid, NEAR_SEEN * _tile, Color.WHITE)
+		var ring := 24
+		for k in ring:
+			var a0 := TAU * k / ring
+			var a1 := TAU * (k + 1) / ring
+			var inner0 := mid + Vector2.RIGHT.rotated(a0) * NEAR_SEEN * _tile
+			var inner1 := mid + Vector2.RIGHT.rotated(a1) * NEAR_SEEN * _tile
+			var outer0 := mid + Vector2.RIGHT.rotated(a0) * NEAR_FADE * _tile
+			var outer1 := mid + Vector2.RIGHT.rotated(a1) * NEAR_FADE * _tile
+			_mask.draw_polygon(PackedVector2Array([inner0, outer0, outer1, inner1]),
+				PackedColorArray([Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE]))
+	for b: Array in _beams:
+		_mask.draw_polygon(b[0], b[1])
 
 
 func lit(cell: int) -> bool:
 	## Can a character in this cell be made out: the lights are on, or a light falls on it.
-	return _dark < 0.5 or _lit.has(cell)
+	if _dark < 0.5 or _lit.has(cell):
+		return true
+	var mine: GameClient.Ent = client.ents.get(client.my_id)
+	var map := client.map
+	return mine != null and Vector2(mine.x, mine.y).distance_to(Vector2(cell % map.width, cell / map.width)) <= NEAR_FADE
 
 
 func _draw_fx(d: int) -> void:
@@ -556,6 +668,10 @@ func _process(delta: float) -> void:
 	# one), so the rounding has to take the screen centre into account.
 	var screen_half := get_viewport_rect().size * 0.5
 	_camera.position = ((focus * zoom - screen_half).round() + screen_half) / zoom
+	# the picture of where light falls follows the camera exactly
+	_mask_view.size = Vector2i(get_viewport_rect().size)
+	_mask_camera.position = _camera.position
+	_mask_camera.zoom = _camera.zoom
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5

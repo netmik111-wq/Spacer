@@ -28,7 +28,7 @@ const INFO := {
 	Net.ITEM_FLASHLIGHT: {"name": "Фонарик", "about": "Светит узким лучом. Свет видно издалека.",
 		"price": 8, "stock": 4, "switch": Net.ITEM_FLASHLIGHT_ON},
 	Net.ITEM_FLASHLIGHT_ON: {"name": "Фонарик (горит)", "about": "Светит узким лучом. Свет видно издалека.",
-		"kind": Net.ITEM_FLASHLIGHT, "switch": Net.ITEM_FLASHLIGHT, "light": [35.0, 9]},
+		"kind": Net.ITEM_FLASHLIGHT, "switch": Net.ITEM_FLASHLIGHT, "light": [25.0, 9]},
 }
 
 
