@@ -35,6 +35,7 @@ const HOLD_TICKS := 40               # stays open at least 2 s after it was last
 var ready := PackedInt32Array()      # per door: the tick it is passable from, or CLOSED
 var locked := PackedByteArray()      # per door: 1 = its emergency shutter is down
 var jammed := PackedByteArray()      # per door: 1 = stuck open
+var forced := PackedByteArray()      # per door: 1 = its airlock lock was overridden by hand (the other door no longer holds it)
 var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no longer works by itself
 var partner := PackedInt32Array()    # per door: the other door of its airlock, or -1 (set from ShipMap.door_partner)
 var dead := PackedByteArray()        # per door: 1 = it has no power at all (a derelict's): always opened by hand
@@ -51,6 +52,8 @@ func setup(count: int) -> void:
 	jammed.fill(0)
 	faulty.resize(count)
 	faulty.fill(0)
+	forced.resize(count)
+	forced.fill(0)
 	manual = false
 	partner.resize(count)
 	partner.fill(-1)
@@ -64,6 +67,7 @@ func copy_from(o: RefCounted) -> void:
 	locked = o.locked.duplicate()
 	jammed = o.jammed.duplicate()
 	faulty = o.faulty.duplicate()
+	forced = o.forced.duplicate()
 	partner = o.partner
 	dead = o.dead
 	manual = o.manual
@@ -72,13 +76,14 @@ func copy_from(o: RefCounted) -> void:
 
 func flags(door: int) -> int:
 	## The door's troubles as one byte, the way they travel over the network.
-	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2)
+	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3)
 
 
 func set_flags(door: int, value: int) -> void:
 	locked[door] = value & 1
 	jammed[door] = (value >> 1) & 1
 	faulty[door] = (value >> 2) & 1
+	forced[door] = (value >> 3) & 1
 
 
 func open_ticks(door: int = -1) -> int:
@@ -101,7 +106,7 @@ func is_sealed(door: int) -> bool:
 
 func held_by_partner(door: int) -> bool:
 	## A door of an airlock stays shut while the other one is not.
-	return partner[door] >= 0 and ready[partner[door]] != CLOSED
+	return partner[door] >= 0 and ready[partner[door]] != CLOSED and forced[door] == 0
 
 
 func bump(door: int, tick: int) -> void:

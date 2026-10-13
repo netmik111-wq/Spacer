@@ -1444,6 +1444,13 @@ func _update_work(p: Player) -> void:
 			p.remove(Net.ITEM_PART)
 			doors.faulty[door] = 0           # from here on the pressure decides again
 			_ship_says("%s чинит аварийный шлюз." % p.name)
+	elif door >= 0 and doors.is_shut(door) and doors.held_by_partner(door):
+		# the other door of the airlock is open (or stuck open): the lock is overridden by hand
+		if _work_done(p, cell, Net.FORCE_TICKS):
+			doors.forced[door] = 1
+			doors.locked[door] = 0
+			_forced_until[door] = tick + Net.FORCED_OPEN_TICKS
+			_ship_says("%s вручную снимает блокировку двери шлюза." % p.name)
 	elif door >= 0 and doors.is_sealed(door):
 		if _work_done(p, cell, Net.FORCE_TICKS):
 			doors.locked[door] = 0
@@ -1478,7 +1485,7 @@ func _usable_ahead(p: Player) -> bool:
 	return air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell) \
 		or map.chart.has(cell) or map.helm.has(cell) or map.locker.has(cell) or map.lock_pump.has(cell) \
 		or map.gun_console.has(cell) or map.guns.has(cell) \
-		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
+		or (door >= 0 and (doors.is_sealed(door) or (doors.is_shut(door) and doors.held_by_partner(door)) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 
 func _press(p: Player) -> void:
@@ -2047,6 +2054,8 @@ func _update_doors() -> void:
 			if d >= 0 and _door_hold[d] < tick + Net.MOVE_TICKS + 2:
 				_door_hold[d] = tick + Net.MOVE_TICKS + 2
 	for d in doors.ready.size():
+		if doors.forced[d] == 1 and tick >= _forced_until[d] and doors.ready[d] == Doors.CLOSED:
+			doors.forced[d] = 0              # the lock holds again once the door has shut
 		if doors.ready[d] == tick:
 			air.wake()                       # it has just finished opening: air may pass now
 		if doors.ready[d] != Doors.CLOSED and tick >= doors.ready[d] and tick >= _door_hold[d] and doors.jammed[d] == 0:

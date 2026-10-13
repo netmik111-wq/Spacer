@@ -1193,7 +1193,8 @@ func _process(delta: float) -> void:
 		else:
 			_hint.text = "E: закачать воздух в шлюз (внутренняя дверь откроется, когда давление выровняется)"
 	elif target == 16:
-		_hint.text = "Дверь шлюза не откроется, пока не закрыта вторая"
+		_hint.text = "Снимаю блокировку двери шлюза…" if (_use_held and client.work > 0) else \
+			"Дверь шлюза не откроется, пока не закрыта вторая.\nДержите E, чтобы снять блокировку вручную"
 	elif target == 10:
 		_hint.text = "Чиню дверь…" if (_use_held and client.work > 0) else "Дверь заклинило открытой. Держите E, чтобы починить%s" % no_part
 	elif target == 11:

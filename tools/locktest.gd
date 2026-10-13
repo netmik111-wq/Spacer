@@ -84,6 +84,26 @@ func _initialize() -> void:
 	_expect(server.pumps.is_empty(), "with no air in store there is nothing to fill it with")
 	server.store_air = store
 
+	# the outer door stuck open must not lock the crew out of the airlock
+	server.doors.jammed[outer] = 1
+	server.doors.ready[outer] = server.tick
+	_run(4)
+	var crew := server._new_player("Ремонтник")
+	crew.st.place(in_door.x, in_door.y + 1)
+	crew.st.facing = Net.DIR_UP
+	crew.st.dir = Net.DIR_UP
+	_run(10)
+	crew.st.dir = Net.DIR_NONE
+	_expect(server.doors.is_shut(inner) and crew.st.y == in_door.y + 1, "with the outer door stuck open the inner one stays shut")
+	crew.using = true
+	_run(Net.FORCE_TICKS + 2)
+	crew.using = false
+	_expect(server.doors.forced[inner] == 1, "but its lock can be overridden by hand")
+	crew.st.dir = Net.DIR_UP
+	_run(30)
+	crew.st.dir = Net.DIR_NONE
+	_expect(crew.st.y < in_door.y, "and then one gets into the chamber to mend the outer door (at %d,%d)" % [crew.st.x, crew.st.y])
+
 	server.stop()
 	server.free()
 	print("LOCKTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
