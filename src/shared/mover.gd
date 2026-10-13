@@ -39,9 +39,11 @@ class State:
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
+	# the character turns the way it is told at once, even in mid-step or against a wall
+	if not st.down and st.dir != 0:
+		st.facing = st.dir
 	if st.down or st.cd > 0 or st.dir == 0:
 		return false
-	st.facing = st.dir
 	var nx: int = st.x + Net.DX[st.dir]
 	var ny: int = st.y + Net.DY[st.dir]
 	if not map.passable(nx, ny):

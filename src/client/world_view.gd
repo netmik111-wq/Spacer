@@ -41,9 +41,18 @@ uniform vec4 dark;
 uniform float fog;
 void fragment() {
 	vec4 m = texture(mask, SCREEN_UV);
-	float lit = clamp(m.r, 0.0, 1.0);
 	float seen = clamp(m.g, 0.0, 1.0);
+	// red: the ship's own light; blue: flashlights and flashes, which light only what we look at
+	float lit = clamp(m.r + m.b * seen, 0.0, 1.0);
 	COLOR = vec4(dark.rgb, dark.a * (1.0 - lit * (1.0 - fog * (1.0 - seen))));
+}
+"""
+const SEEN_ONLY_SHADER := """
+shader_type canvas_item;
+uniform sampler2D mask : filter_linear;
+void fragment() {
+	// shown only where our eyes reach (the green of the mask)
+	COLOR.a *= clamp(texture(mask, SCREEN_UV).g, 0.0, 1.0);
 }
 """
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
@@ -109,6 +118,9 @@ var _shots: Array = []               # shots and blows to draw: [kind, hit, from
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
 var _dark_sheet: ColorRect
+const AFTERIMAGE_SECONDS := 10.0                # how long the silhouette of somebody lost from sight stays
+var _afterimages := {}               # id -> [Sprite2D, seconds left, the cell it was last seen in]
+var _shown := {}                     # id -> was it shown last frame
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 
@@ -211,6 +223,13 @@ func setup(p_client: GameClient) -> void:
 	sheet_material.set_shader_parameter("mask", _mask_view.get_texture())
 	sheet_material.set_shader_parameter("fog", FOG)
 	_dark_sheet.material = sheet_material
+	# the warm light of flashlights and the traces of shots show only where we look
+	var seen_only := Shader.new()
+	seen_only.code = SEEN_ONLY_SHADER
+	var shade_material := ShaderMaterial.new()
+	shade_material.shader = seen_only
+	shade_material.set_shader_parameter("mask", _mask_view.get_texture())
+	_shade.material = shade_material
 	_dark_layer.add_child(_dark_sheet)
 
 	_ghost = Sprite2D.new()
@@ -472,6 +491,44 @@ func _paint_decks() -> void:
 	_other_seen = client.other_changes
 
 
+func _leave_afterimage(id: int, sprite: Sprite2D, _at: Vector2i) -> void:
+	## Somebody just went out of sight: a fading silhouette stays where they were last seen.
+	if _afterimages.has(id):
+		(_afterimages[id][0] as Sprite2D).queue_free()
+	var ghost := Sprite2D.new()
+	ghost.texture = sprite.texture
+	ghost.region_enabled = true
+	ghost.region_rect = sprite.region_rect
+	ghost.centered = false
+	ghost.offset = sprite.offset
+	ghost.position = sprite.position
+	ghost.rotation = sprite.rotation
+	ghost.modulate = Color(0.75, 0.8, 0.9, 0.55)
+	sprite.get_parent().add_child(ghost)
+	var s := client.sample(id)
+	var cell := Vector2i(roundi(float(s[0].x)), roundi(float(s[0].y))) if not s.is_empty() else Vector2i(-1, -1)
+	_afterimages[id] = [ghost, AFTERIMAGE_SECONDS, cell]
+
+
+func _fade_afterimages(delta: float) -> void:
+	## Silhouettes fade out; one goes at once when its owner is seen again, or
+	## when we look at the place and nobody is there any more.
+	for id: int in _afterimages.keys():
+		var a: Array = _afterimages[id]
+		a[1] = float(a[1]) - delta
+		var cell: Vector2i = a[2]
+		var view: Sprite2D = _views.get(id)
+		var gone := float(a[1]) <= 0.0 or (view != null and view.visible) or not client.ents.has(id)
+		if not gone and cell.x >= 0 and can_see(cell.x, cell.y):
+			gone = true                      # we look there now: what is there is seen as it is
+		var ghost: Sprite2D = a[0]
+		if gone:
+			ghost.queue_free()
+			_afterimages.erase(id)
+		else:
+			ghost.modulate.a = 0.55 * float(a[1]) / AFTERIMAGE_SECONDS
+
+
 func _draw_shade() -> void:
 	## The warm light of flashlights on the floor, and shots: a trace, a flash
 	## at the muzzle and a spark where it hit (the dark itself is the sheet over the screen).
@@ -529,11 +586,11 @@ func _draw_mask() -> void:
 	# no glow around our own character)
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
-			_mask.draw_circle(sh[2], 26.0, Color(1, 0, 0, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
+			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
 	for b: Array in _beams:
 		var reds := PackedColorArray()
 		for c: Color in b[1]:
-			reds.append(Color(1, 0, 0, c.a))
+			reds.append(Color(0, 0, 1, c.a))
 		_mask.draw_polygon(b[0], reds)
 
 
@@ -858,6 +915,9 @@ func _process(delta: float) -> void:
 		# (and the one we haul along behind us is always felt there)
 		var hauled := client.dragging() and id == client.drag_id
 		sprite.visible = id == client.my_id or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
+		if bool(_shown.get(id, false)) and not sprite.visible and id != client.my_id:
+			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
+		_shown[id] = sprite.visible
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 		if cond == Net.COND_OK:
@@ -868,8 +928,10 @@ func _process(delta: float) -> void:
 			sprite.rotation = PI / 2.0
 			sprite.position += Vector2(-22.0, -7.0)
 			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
+	_fade_afterimages(delta)
 	for id: int in _views.keys():
 		if not client.ents.has(id):
+			_shown.erase(id)
 			(_views[id] as Sprite2D).queue_free()
 			(_labels[id] as Label).queue_free()
 			_views.erase(id)

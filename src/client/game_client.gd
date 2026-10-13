@@ -655,7 +655,9 @@ func send_admin(command: int, argument: int = 0) -> void:
 
 
 func air_at(x: int, y: int) -> int:
-	## Air in a cell, 0..Net.AIR_FULL; -1 where nobody can stand.
+	## Air in a cell, 0..Net.AIR_FULL (none at all out in space); -1 where nobody can stand.
+	if map.floats(x, y):
+		return 0
 	if not map.walkable(x, y):
 		return -1
 	return air[y * map.width + x]
