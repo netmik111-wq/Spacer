@@ -107,6 +107,7 @@ func _initialize() -> void:
 	server.been = {Sectors.key(server.sectors.cell[server.sector]): true}    # the walk below starts from here
 	server.sectors.build(server.space_seed, server.sectors.cell[server.sector], server.been)
 	server.credits = Net.START_CREDITS
+	server.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
 	for t in Net.DRIVE_REST_TICKS:
 		server._tick()
 	var start_cell: Vector2i = server.sectors.cell[server.sector]

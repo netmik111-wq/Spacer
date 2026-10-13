@@ -10,6 +10,8 @@ extends SceneTree
 ## few seconds: the director's smaller troubles.
 ## Supplies: a hole needs a patch, a machine is mended three times as slowly
 ## without a spare part, the air plant runs out, a trader sells and a station restocks.
+## Fuel: a jump burns a can from the locker, there is no jump without one, a
+## station tops it up, and a ship with none aboard finds some after a while.
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
@@ -357,6 +359,37 @@ func _initialize() -> void:
 	server.start_jump(target, "Проверка")
 	_run(Net.JUMP_TICKS + 2)
 	_expect(server.sectors.cell[server.sector] == target_cell and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
+
+	print("fuel")
+	_expect(server.fuel() == Items.stock(Net.ITEM_FUEL) - 1, "the jump burned one can of fuel (%d left)" % server.fuel())
+	_run(Net.DRIVE_REST_TICKS + 2)
+	_face(q, map.chart.keys()[0])
+	target = server.sectors.neighbours(server.sector)[0]
+	var stayed := server.sector
+	server.store[Net.ITEM_FUEL] = 0
+	server._jump_asked(q, target)
+	_expect(server.jump_to == Net.NO_SECTOR, "no jump with no fuel in the locker")
+	server.store[Net.ITEM_FUEL] = 1
+	server._jump_asked(q, target)
+	_expect(server.jump_to == target, "with a can in the locker the jump starts")
+	server.store[Net.ITEM_FUEL] = 0                  # somebody takes it out while the drive charges
+	_run(Net.JUMP_TICKS + 2)
+	_expect(server.jump_to == Net.NO_SECTOR and server.sector == stayed, "a jump whose last can was taken out of the locker fails")
+	server.director._watch_fuel(server.tick)
+	_expect(server.fuel() == 0, "a ship with no fuel aboard does not find some at once")
+	server.director._watch_fuel(server.tick + int(Director.RESCUE_SECONDS * Net.TICK_HZ))
+	_expect(server.fuel() == Director.RESCUE_FUEL, "but after %d s a drifting container brings %d cans" % [int(Director.RESCUE_SECONDS), Director.RESCUE_FUEL])
+	server.store[Net.ITEM_FUEL] = 0
+	here = server.sector
+	server.sectors.kind[here] = Sectors.STATION
+	server.sectors.spot[here] = server.ship_pos
+	server.sectors.reach[here] = Sectors.DOCK_RANGE
+	server.in_reach = false
+	_run(2)
+	_expect(server.fuel() == Net.STATION_FUEL, "a supply station tops the fuel up to %d cans" % Net.STATION_FUEL)
+	server.sectors.kind[here] = Sectors.EMPTY
+	server.sectors.reach[here] = 0
+	_run(2)
 
 	print("searching and hauling")
 	air.refill()

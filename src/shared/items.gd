@@ -31,6 +31,8 @@ const INFO := {
 	Net.ITEM_BACKPACK: {"name": "Рюкзак", "about": "Четыре места для вещей. Z: надеть.", "price": 15, "stock": 2, "wear": Net.WEAR_PACK},
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
 		"price": 5, "stock": 8},
+	Net.ITEM_FUEL: {"name": "Топливо", "about": "Канистра топлива на один прыжок. Прыжок берёт её из шкафа снабжения.",
+		"price": 6, "stock": 8},
 	Net.ITEM_PART: {"name": "Запчасть", "about": "Ускоряет ремонт машин и дверей втрое.",
 		"price": 10, "stock": 5},
 	Net.ITEM_FLASHLIGHT: {"name": "Фонарик", "about": "Светит узким лучом. Свет видно издалека.",

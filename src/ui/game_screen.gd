@@ -527,6 +527,11 @@ func _update_console() -> void:
 		_console_text.text = "Корабль в секторе %s.\nДвигатель перезаряжается: ещё %d с." % [client.sectors.describe(client.sector), int(ceil(wait))]
 	else:
 		_console_text.text = "Корабль в секторе %s.\nДвигатель готов. Куда прыгаем?" % client.sectors.describe(client.sector)
+	var fuel := client.stock(Net.ITEM_FUEL)
+	if fuel > 0:
+		_console_text.text += "\nТопливо в шкафу снабжения: %d. Прыжок сжигает одну канистру." % fuel
+	else:
+		_console_text.text += "\nТоплива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях, станция снабжения даёт немного."
 	_console_text.text += "\nДо начала пути отсюда прыжков: %d. Карта показывает только окрестности корабля." % client.sectors.far_from_start(client.sector)
 	# one button per sector within reach; rebuilt when the ship has moved
 	var place_key := Sectors.key(client.sectors.cell[client.sector]) * 2    # the buttons belong to this place in space
@@ -543,7 +548,7 @@ func _update_console() -> void:
 		_chart.queue_redraw()
 	for go in _jump_box.get_children():
 		if go is Button:
-			(go as Button).disabled = jumping or wait > 0.0
+			(go as Button).disabled = jumping or wait > 0.0 or fuel < 1
 	if jumping:
 		_chart.queue_redraw()
 

@@ -126,8 +126,9 @@ func _our_shot(i: int) -> void:
 func _wrecked() -> void:
 	enemy_hull = 0
 	server.credits += WRECK_REWARD
+	server.store[Net.ITEM_FUEL] = int(server.store.get(Net.ITEM_FUEL, 0)) + Net.WRECK_FUEL
 	server.derelict.pirates_wrecked()
-	server._ship_says("Пиратский корабль разбит и уходит, не успев пристыковаться! За него начислено %d кредитов." % WRECK_REWARD)
+	server._ship_says("Пиратский корабль разбит и уходит, не успев пристыковаться! За него начислено %d кредитов, из обломков подобрана канистра топлива." % WRECK_REWARD)
 	server._tell_store()
 
 

@@ -28,12 +28,12 @@ const VACUUM_ROOM := 0.4             # share of its rooms with no air left at al
 const HOLE_CHANCE := 0.5             # chance that a hole in its hull still leaks
 # what pirates keep on their ship: [thing, weight]
 const PIRATE_LOOT := [
-	[Net.ITEM_MAG, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_PATCH, 2], [-Net.ITEM_PISTOL, 2], [Net.ITEM_BATON, 2],
+	[Net.ITEM_MAG, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_PATCH, 2], [-Net.ITEM_PISTOL, 2], [Net.ITEM_BATON, 2], [Net.ITEM_FUEL, 3],
 ]
 # what may lie about on a derelict: [thing, weight]
 const LOOT := [
 	[Net.ITEM_PATCH, 6], [Net.ITEM_PART, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_MAG, 3],
-	[Net.ITEM_FLASHLIGHT, 2], [Net.ITEM_BATON, 2], [-Net.ITEM_MEDKIT, 2], [-Net.ITEM_PISTOL, 1],
+	[Net.ITEM_FLASHLIGHT, 2], [Net.ITEM_BATON, 2], [-Net.ITEM_MEDKIT, 2], [-Net.ITEM_PISTOL, 1], [Net.ITEM_FUEL, 5],
 ]
 
 var server: Node

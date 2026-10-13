@@ -70,6 +70,14 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 				canvas.draw_rect(Rect2(mid + out - Vector2(1.2, 1.2) * u, Vector2(2.4, 2.4) * u), Color(0.9, 0.55, 0.15))
 			canvas.draw_circle(mid, 4.4 * u, Color(0.95, 0.65, 0.2))
 			canvas.draw_circle(mid, 1.8 * u, Color(0.16, 0.14, 0.18))
+		Net.ITEM_FUEL:
+			# a jerrycan: a handle on top, a spout at the corner, a cross pressed into its side
+			canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(9, 11) * u), Color(0.14, 0.1, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(5, 5) * u, Vector2(7, 9) * u), Color(0.78, 0.22, 0.14))
+			canvas.draw_rect(Rect2(at + Vector2(5, 2.5) * u, Vector2(4, 2) * u), Color(0.14, 0.1, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(10.5, 2.5) * u, Vector2(2, 2) * u), Color(0.55, 0.55, 0.6))
+			canvas.draw_line(at + Vector2(6, 7) * u, at + Vector2(11, 12) * u, Color(0.55, 0.14, 0.1), 1.2 * u)
+			canvas.draw_line(at + Vector2(11, 7) * u, at + Vector2(6, 12) * u, Color(0.55, 0.14, 0.1), 1.2 * u)
 		Net.ITEM_MAG:
 			# a magazine with a round showing at the top
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.12, 0.12, 0.15))

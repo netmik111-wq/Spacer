@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 22
+const PROTOCOL := 23
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -114,6 +114,7 @@ const ITEM_FLASHLIGHT_ON := 4       # the same, switched on (what things are and
 const ITEM_MAG := 5                 # a pistol magazine
 const ITEM_BATON := 6
 const ITEM_MEDPATCH := 7            # a patch that closes wounds at once
+const ITEM_FUEL := 8                # a can of fuel: a jump burns one from the supply locker
 const ITEM_MEDKIT := 20             # a first-aid kit with no uses left; ITEM_MEDKIT + n has n left
 const MEDKIT_USES := 5
 const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT + n has n tenths of a tank
@@ -177,6 +178,8 @@ const PRICE_AIR := 5                # for AIR_LOT cells' worth
 const AIR_LOT := 10.0
 const EXPLORE_REWARD := 15          # credits for the first visit to a sector
 const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
+const STATION_FUEL := 3             # a supply station tops the fuel in the locker up to this many cans
+const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirate ship
 
 # Sounds. Each is heard this far, in cells, on its own deck; through air only:
 # where either the one who hears or the sound itself is in a vacuum, only what

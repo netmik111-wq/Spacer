@@ -31,6 +31,7 @@ const SHUTTER_FAULT := 7
 const POWER_GLITCH := 8
 const BOARDING := 9
 const PIRATE_SHIP := 10
+const FUEL_DRIFT := 11
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -50,6 +51,9 @@ const EVENTS: Array[Dictionary] = [
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 3},
 	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+	# never picked by chance (weight 0): it comes by itself to a ship left with no fuel at all
+	{"id": FUEL_DRIFT, "name": "Дрейфующее топливо", "size": SMALL,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.STATION], "weight": 0},
 	{"id": BOARDING, "name": "Абордаж", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 	{"id": PIRATE_SHIP, "name": "Пиратский корабль", "size": BIG,
@@ -66,6 +70,8 @@ const PACE := {
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
 const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector
 const STREAM_GRACE_SECONDS := 8.0    # quiet after flying into or out of a meteor stream
+const RESCUE_SECONDS := 120.0        # a ship with no fuel aboard at all finds some after this long
+const RESCUE_FUEL := 2               # cans in that find
 
 var server: Node                     # the GameServer: the director reads it and calls its methods
 var auto := true                     # false: only events fired by hand happen
@@ -74,6 +80,7 @@ var fired := 0                       # how many events have happened (for tests)
 var _rng := RandomNumberGenerator.new()
 var _next_tick := 0
 var _queue: Array = []               # things still to happen: [tick, what]
+var _dry_until := -1                 # the tick a ship with no fuel aboard finds some (-1 = it has fuel)
 
 
 func setup(p_server: Node) -> void:
@@ -98,6 +105,8 @@ func tick() -> void:
 	while not _queue.is_empty() and int(_queue[0][0]) <= now:
 		var item: Array = _queue.pop_front()
 		_do(str(item[1]))
+	if auto:
+		_watch_fuel(now)
 	if not auto or now < _next_tick:
 		return
 	var report := assess()
@@ -115,6 +124,19 @@ func tick() -> void:
 	_schedule(0.0)
 
 
+func _watch_fuel(now: int) -> void:
+	## A ship with not a single can of fuel left could be stuck for good: no
+	## jump, and no trader or nothing to pay one with. Space is cruel, but not
+	## a dead end: after a while a drifting container of fuel turns up.
+	if server.fuel_aboard() > 0:
+		_dry_until = -1
+	elif _dry_until < 0:
+		_dry_until = now + int(RESCUE_SECONDS * Net.TICK_HZ)
+	elif now >= _dry_until:
+		_dry_until = -1
+		fire(FUEL_DRIFT)
+
+
 func assess() -> Dictionary:
 	## What the director knows about the ship right now. This is where the
 	## "scan" of the vision will grow: skills, gear, how the crew has been doing.
@@ -127,7 +149,7 @@ func assess() -> Dictionary:
 				crew_up += 1
 	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind(),
 		"broken": server.broken.size(), "engine_down": server.engine_down(), "patches": server.patches_aboard(),
-		"weapons": server.weapons_aboard(), "pirates": server.pirates.aboard()}
+		"weapons": server.weapons_aboard(), "pirates": server.pirates.aboard(), "fuel": server.fuel_aboard()}
 
 
 func fire(event_id: int) -> bool:
@@ -162,6 +184,8 @@ func _run(event_id: int) -> void:
 			server.pirates.board(_party())
 		PIRATE_SHIP:
 			server.derelict.pirates_come(_party())
+		FUEL_DRIFT:
+			server.find_fuel(RESCUE_FUEL)
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:

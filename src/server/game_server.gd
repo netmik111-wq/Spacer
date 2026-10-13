@@ -1060,6 +1060,30 @@ func patches_aboard() -> int:
 	return n
 
 
+func fuel() -> int:
+	## Cans of fuel in the supply locker: a jump burns one from there.
+	return int(store.get(Net.ITEM_FUEL, 0))
+
+
+func fuel_aboard() -> int:
+	## Every can of fuel on board, wherever it is: in the locker, in pockets, on bodies and on the floor.
+	var n := fuel()
+	for p: Player in players:
+		if p != null:
+			n += p.count(Net.ITEM_FUEL)
+	for things: PackedByteArray in floor_things.values():
+		n += things.count(Net.ITEM_FUEL)
+	return n
+
+
+func find_fuel(cans: int) -> bool:
+	## A drifting container of fuel is picked up: the cans go straight into the locker.
+	store[Net.ITEM_FUEL] = fuel() + cans
+	_tell_store()
+	_ship_says("Радар засёк дрейфующий контейнер. Его подобрали: в шкафу снабжения %d канистры топлива." % cans)
+	return true
+
+
 func _store_asked(p: Player, action: int, item: int) -> void:
 	## A player at the supply locker takes something, puts it back, or buys from a trader.
 	if p.cond != Net.COND_OK:
@@ -1120,7 +1144,12 @@ func _update_ship() -> void:
 			if now_in:
 				air.refill()
 				store_air = Net.STORE_AIR_FULL
-				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены.")
+				var topped := fuel() < Net.STATION_FUEL
+				if topped:
+					store[Net.ITEM_FUEL] = Net.STATION_FUEL
+				_tell_store()
+				_ship_says("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s." %
+					(", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else ""))
 		Sectors.TRADER:
 			if now_in:
 				_ship_says("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
@@ -1171,6 +1200,9 @@ func _jump_asked(p: Player, target: int) -> void:
 		return
 	if target >= sectors.count or not sectors.linked(sector, target):
 		return
+	if fuel() < 1:
+		_ship_says("Прыгнуть не на чем: в шкафу снабжения нет топлива.")
+		return
 	var held := derelict.holds_ship()
 	if held != "":
 		_ship_says(held)
@@ -1209,6 +1241,14 @@ func _update_jump() -> void:
 		_tell_nav()
 		_ship_says("Прыжок отменён: %s" % derelict.holds_ship().to_lower())
 		return
+	if fuel() < 1:
+		# somebody took the last can out of the locker while the drive was charging
+		jump_to = Net.NO_SECTOR
+		_tell_nav()
+		_ship_says("Прыжок сорван: в шкафу снабжения не осталось топлива.")
+		return
+	store[Net.ITEM_FUEL] = fuel() - 1      # the jump burns one can
+	_tell_store()
 	# The ship is somewhere else now: the chart is drawn anew around the new
 	# sector, which is how space goes on for ever without being kept anywhere.
 	var arrived: Vector2i = sectors.cell[jump_to]
