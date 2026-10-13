@@ -29,6 +29,8 @@ const DARK := Color(0.0, 0.0, 0.01, 1.0)          # the ship without power and w
 const NEAR_SEEN := 1.0                            # without light our own character still makes out this many
 const NEAR_FADE := 2.0                            # cells around it in full, fading out by this many
 const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's light
+const BEAM_HEIGHT := 18.0                        # how far above the feet a beam starts, in pixels
+const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
 const DARK_SHADER := """
 shader_type canvas_item;
@@ -371,23 +373,30 @@ func _find_beams() -> Array:
 		var deck := map.deck_of(clampi(roundi(pos.y), 0, map.height - 1))
 		if deck != _deck_shown:
 			continue
-		var origin := Vector2(pos.x + 0.5, pos.y - deck * _stride + 0.5) * _tile
+		# the beam leaves the character at chest height and already as wide as
+		# the body (the author drew it so), then widens at the cone's angle
+		var origin := _feet(Vector2(pos.x, pos.y - deck * _stride)) + Vector2(0, -BEAM_HEIGHT)
 		var ahead := Vector2(Net.DX[int(s[1])], Net.DY[int(s[1])])
+		if ahead.y != 0.0:
+			origin += ahead * 12.0           # looking up or down the beam starts past the head or the chest
+		var side := ahead.orthogonal() * BEAM_START_WIDTH * 0.5
 		var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
-		var points := PackedVector2Array([origin + ahead * 6.0])
-		var colours := PackedColorArray([Color(1, 1, 1, 1)])
-		for k in BEAM_RAYS + 1:
-			var way := ahead.rotated(-half + 2.0 * half * k / BEAM_RAYS)
-			var t := 6.0
+		var points := PackedVector2Array([origin - side, origin + side])
+		var colours := PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 1)])
+		for k in range(BEAM_RAYS, -1, -1):
+			# ray N leaves the +side edge and leans that way (orthogonal() is a quarter turn back)
+			var from := origin - side + side * (2.0 * k / BEAM_RAYS)
+			var way := ahead.rotated(half - 2.0 * half * k / BEAM_RAYS)
+			var t := 0.0
 			while t < reach:
-				var at := origin + way * t
+				var at := from + way * t
 				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
 				if c != start_cell and Sight.blocks(map, client.doors, c.x, c.y + deck * _stride):
 					t += 5.0                 # the light falls on the face of the wall
 					break
 				t += 3.0
 			t = minf(t, reach)
-			points.append(origin + way * t)
+			points.append(from + way * t)
 			colours.append(Color(1, 1, 1, 1.0 - 0.75 * t / reach))
 		out.append([points, colours])
 	return out
