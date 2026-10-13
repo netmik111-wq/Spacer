@@ -44,16 +44,22 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
-## Dedicated server: board_after=SECONDS (pirates come aboard then).
+## Dedicated server: board_after=SECONDS (pirates come aboard then),
+## derelict_after=SECONDS (a derelict comes alongside then and docks at once).
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
-## the character's hand, or its first free slot).
+## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
+## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside).
 
 const Net := preload("res://src/shared/net.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 const GameServer := preload("res://src/server/game_server.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const GameScreen := preload("res://src/ui/game_screen.gd")
 const MainMenu := preload("res://src/ui/main_menu.gd")
 
+var _placed := false
+var _derelicted := false
+var _dockship := false
 var _server: GameServer = null
 var _client: GameClient = null
 var _menu: MainMenu = null
@@ -352,6 +358,17 @@ func _process(_delta: float) -> void:
 		else:
 			_show_menu("Сервер остановился.", true)
 	# test helpers; unused in normal play
+	if _opt.has("derelict_after") and not _derelicted and _flags.has("server") and _server != null and t >= float(_opt["derelict_after"]):
+		_derelicted = true
+		_server.sectors.kind[_server.sector] = Sectors.DERELICT
+		_server.sectors.reach[_server.sector] = Sectors.DOCK_RANGE
+		_server.ship_pos = _server.sectors.spot[_server.sector]
+		_server.ship_dest = _server.ship_pos
+		_server.ship_moving = false
+		_server._to_all(_server._helm_packet())
+	if _opt.has("derelict_after") and _derelicted and not _dockship and _server != null and _server.derelict.here:
+		_dockship = true
+		_server.derelict.dock(true)
 	if _opt.has("board_after") and not _boarded and _flags.has("server") and _server != null and t >= float(_opt["board_after"]):
 		_boarded = true
 		_server.director.fire(_server.director.BOARDING)
@@ -472,6 +489,15 @@ func _process(_delta: float) -> void:
 		_server.ship_dest = _server.ship_pos
 		_server.ship_moving = false
 		_server._to_all(_server._helm_packet())
+	if _opt.has("place_after") and not _placed and _server != null and _screen != null and t >= float(_opt["place_after"]):
+		_placed = true
+		var xy := str(_opt.get("place", "0,0")).split(",")
+		var me = _server.players[_client.my_id]
+		me.st.place(int(xy[0]), int(xy[1]))
+		me.self_dirty = true
+	if _opt.has("dockship_after") and not _dockship and _server != null and _screen != null and t >= float(_opt["dockship_after"]):
+		_dockship = true
+		_server.derelict.dock(true)
 	if _opt.has("door_trouble_after") and not _door_troubled and _server != null and _screen != null and t >= float(_opt["door_trouble_after"]):
 		_door_troubled = true
 		var ahead := _client.use_cell()

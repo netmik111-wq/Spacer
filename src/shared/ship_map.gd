@@ -50,13 +50,26 @@ var air_down := PackedInt32Array()   # per cell: the cell below that shares its 
 var air_up := PackedInt32Array()     # the same, the other way
 var climb := PackedInt32Array()      # per cell: where the ladder here leads (a cell on another deck), or -1
 
+# Another ship alongside (a derelict). Its drawing lives in its own map file
+# and is laid into this grid while it is near, at some place over our own
+# ship; its doors take the numbers kept for them at the end of `doors`.
+# `base_*` keep our own ship as it is without it.
+const NO_OTHER := Vector2i(-9999, -9999)
+var other: RefCounted = null         # the other ship's own layout (a ShipMap), or null if this ship has none
+var other_at := NO_OTHER             # where its corner lies in our grid while it is here
+var other_first_door := 0            # the number of its first door among ours
+var other_cells := PackedInt32Array() # the cells it takes up while it is here
+var base_cells := PackedInt32Array()
+var base_walk := PackedByteArray()
+var base_opaque := PackedByteArray()
+
 var tile_size := 32
 var atlas_columns := 8
 var tile_kinds := PackedStringArray()
 var tile_ids := {}                   # tile name -> id
 
 
-func load_from(name: String) -> String:
+func load_from(name: String, needs_spawns: bool = true) -> String:
 	## Returns "" on success or a description of what went wrong.
 	var tiles_text := FileAccess.get_file_as_string("res://assets/tiles.json")
 	var map_text := FileAccess.get_file_as_string("res://maps/%s.json" % name)
@@ -108,7 +121,7 @@ func load_from(name: String) -> String:
 	spawns = []
 	for s: Array in data["spawns"]:
 		spawns.append(Vector2i(int(s[0]), int(s[1])))
-	if spawns.is_empty():
+	if spawns.is_empty() and needs_spawns:
 		return "Карта «%s»: нет точек появления." % name
 
 	doors = []
@@ -163,6 +176,9 @@ func load_from(name: String) -> String:
 	var problem := _find_airlocks()
 	if problem != "":
 		return problem
+	base_cells = cells.duplicate()
+	base_walk = walk.duplicate()
+	base_opaque = opaque.duplicate()
 
 	# what joins the decks: see-through floors, shared air, ladders
 	var n_cells := width * height
@@ -261,6 +277,108 @@ func _find_airlocks() -> String:
 		door_partner[outer] = inner
 		lock_pump[i] = {"chamber": PackedInt32Array(seen.keys()), "inner": inner, "outer": outer}
 	return ""
+
+
+func add_other(name: String) -> String:
+	## Makes room for another ship that may come alongside: its layout, and
+	## numbers for its doors. It is not here until `place_other`.
+	var o: RefCounted = load("res://src/shared/ship_map.gd").new()
+	var problem: String = o.load_from(name, false)
+	if problem != "":
+		return problem
+	other = o
+	other_first_door = doors.size()
+	for d in o.doors.size():
+		doors.append(NO_OTHER)
+		door_kind.append(o.door_kind[d])
+		door_sides.append(-1)
+		door_sides.append(-1)
+		door_partner.append(-1)
+		door_vent.append(0)
+	return ""
+
+
+func other_fits(at: Vector2i) -> bool:
+	## Can the other ship lie with its corner there: on one deck, over nothing but space?
+	if other == null:
+		return false
+	var o = other
+	if at.x < 0 or at.y < 0 or at.x + o.width > width or local_y(at.y) + o.height > deck_height:
+		return false
+	for y in o.height:
+		for x in o.width:
+			if o.cells[y * o.width + x] >= 0 and base_cells[(at.y + y) * width + at.x + x] >= 0:
+				return false
+	return true
+
+
+func place_other(at: Vector2i) -> void:
+	## Lays the other ship into the grid with its corner there (NO_OTHER takes it away).
+	for c in other_cells:
+		cells[c] = base_cells[c]
+		walk[c] = base_walk[c]
+		opaque[c] = base_opaque[c]
+		door_of[c] = -1
+	other_cells = PackedInt32Array()
+	other_at = at
+	var o = other
+	for d in o.doors.size():
+		doors[other_first_door + d] = NO_OTHER
+	if at != NO_OTHER:
+		for y in o.height:
+			for x in o.width:
+				var from: int = y * o.width + x
+				if o.cells[from] < 0:
+					continue
+				var c: int = (at.y + y) * width + at.x + x
+				other_cells.append(c)
+				cells[c] = o.cells[from]
+				walk[c] = o.walk[from]
+				opaque[c] = o.opaque[from]
+		for d in o.doors.size():
+			var p: Vector2i = o.doors[d] + at
+			doors[other_first_door + d] = p
+			door_of[p.y * width + p.x] = other_first_door + d
+	_sides()
+
+
+func is_other(cell: int) -> bool:
+	## Is this cell part of the other ship (while it is here)?
+	return other_at != NO_OTHER and cell >= 0 and cell < cells.size() and base_cells[cell] < 0 and cells[cell] >= 0
+
+
+func on_ship(cell: int) -> bool:
+	## Is this cell inside our own ship?
+	return cell >= 0 and cell < base_walk.size() and base_walk[cell] == 1
+
+
+func door_here(d: int) -> bool:
+	## Is this door anywhere (the other ship's doors are not while it is away)?
+	return doors[d] != NO_OTHER
+
+
+func _sides() -> void:
+	## Which floor lies on either side of every door, and which doors open into space.
+	for d in doors.size():
+		var at: Vector2i = doors[d]
+		var step := Vector2i(0, 1) if door_kind[d] == DOOR_BAND else Vector2i(1, 0)
+		var a := at - step
+		var b := at + step
+		var here := at != NO_OTHER
+		door_sides[d * 2] = a.y * width + a.x if here and walkable(a.x, a.y) else -1
+		door_sides[d * 2 + 1] = b.y * width + b.x if here and walkable(b.x, b.y) else -1
+		door_vent[d] = 1 if here and ((door_sides[d * 2] < 0 and is_space(a.x, a.y)) or (door_sides[d * 2 + 1] < 0 and is_space(b.x, b.y))) else 0
+
+
+func floats(x: int, y: int) -> bool:
+	## Open space a suited character can drift through: inside the grid, on a
+	## deck's own rows, where there is no ship.
+	return x >= 0 and y >= 0 and x < width and y < height and local_y(y) < deck_height and cells[y * width + x] < 0
+
+
+func passable(x: int, y: int) -> bool:
+	## Can a character be in this cell: on a floor, in a doorway, or out in space?
+	return walkable(x, y) or floats(x, y)
 
 
 func walkable(x: int, y: int) -> bool:

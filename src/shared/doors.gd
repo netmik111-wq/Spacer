@@ -37,6 +37,7 @@ var locked := PackedByteArray()      # per door: 1 = its emergency shutter is do
 var jammed := PackedByteArray()      # per door: 1 = stuck open
 var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no longer works by itself
 var partner := PackedInt32Array()    # per door: the other door of its airlock, or -1 (set from ShipMap.door_partner)
+var dead := PackedByteArray()        # per door: 1 = it has no power at all (a derelict's): always opened by hand
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -53,6 +54,8 @@ func setup(count: int) -> void:
 	manual = false
 	partner.resize(count)
 	partner.fill(-1)
+	dead.resize(count)
+	dead.fill(0)
 	bumped.clear()
 
 
@@ -62,6 +65,7 @@ func copy_from(o: RefCounted) -> void:
 	jammed = o.jammed.duplicate()
 	faulty = o.faulty.duplicate()
 	partner = o.partner
+	dead = o.dead
 	manual = o.manual
 	bumped.clear()
 
@@ -77,9 +81,9 @@ func set_flags(door: int, value: int) -> void:
 	faulty[door] = (value >> 2) & 1
 
 
-func open_ticks() -> int:
+func open_ticks(door: int = -1) -> int:
 	## How long a door takes to open right now.
-	return MANUAL_OPEN_TICKS if manual else OPEN_TICKS
+	return MANUAL_OPEN_TICKS if manual or (door >= 0 and dead[door] == 1) else OPEN_TICKS
 
 
 func passable(door: int, tick: int) -> bool:
@@ -105,5 +109,5 @@ func bump(door: int, tick: int) -> void:
 	if ready[door] == CLOSED:
 		if locked[door] == 1 or held_by_partner(door):
 			return
-		ready[door] = tick + open_ticks()
+		ready[door] = tick + open_ticks(door)
 	bumped.append(door)

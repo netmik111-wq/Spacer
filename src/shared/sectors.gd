@@ -18,7 +18,8 @@ const EMPTY := 0                     # nothing in particular
 const METEORS := 1                   # a meteor stream: the hull takes hits
 const TRADER := 2                    # a trader: sells supplies
 const STATION := 3                   # a supply station: the ship's air is topped up
-const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения"]
+const DERELICT := 4                  # a derelict: an abandoned ship to search
+const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль"]
 
 const NAMES: Array[String] = [
 	"Тихая заводь", "Кеплер", "Пояс Хадли", "Рубеж", "Стеклянное море", "Маяк Орта",
@@ -106,7 +107,11 @@ static func kind_at(seed_value: int, at: Vector2i) -> int:
 	if roll < meteors:
 		return METEORS
 	roll = (roll - meteors) / (1.0 - meteors)        # what is left is shared out as before
-	return EMPTY if roll < 0.45 else (TRADER if roll < 0.72 else STATION)
+	if roll < 0.32:
+		return EMPTY
+	if roll < 0.47:
+		return DERELICT
+	return TRADER if roll < 0.72 else STATION
 
 
 static func name_at(seed_value: int, at: Vector2i) -> String:
@@ -150,7 +155,7 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary) -> void:
 					# a jump lands the ship inside the stream, some way from its edge
 					reach[i] = rng.randi_range(45, 60)
 					entry[i] = spot[i] + away * reach[i] * rng.randf_range(0.35, 0.6)
-				TRADER, STATION:
+				TRADER, STATION, DERELICT:
 					reach[i] = DOCK_RANGE
 					entry[i] = spot[i] + away * rng.randf_range(45.0, 65.0)
 				_:

@@ -6,11 +6,13 @@
 #   GODOT=/path/to/godot  LAGPROXY=/path/to/lagproxy
 #   BREACH=SECONDS  tear a hole in the hull that long after the start (default 6; 0 = never)
 #   BOARD=SECONDS   pirates come aboard that long after the start (default 0 = never)
+#   DERELICT=SECONDS a derelict comes alongside and docks that long after the start (default 0 = never)
 set -u
 N=${1:-4}; SECS=${2:-20}; DELAY=${3:--1}; JIT=${4:-0}; LOSS=${5:-0}; STALL=${6:-0}; EVERY=${7:-1000}
 GODOT=${GODOT:-godot}; PORT=${PORT:-24700}; OUT=${OUT:-/tmp/nettest}; BREACH=${BREACH:-6}
 BARG=""; [ "$BREACH" != "0" ] && BARG="breach_after=$BREACH"
 BOARD=${BOARD:-0}; [ "$BOARD" != "0" ] && BARG="$BARG board_after=$BOARD"
+DERELICT=${DERELICT:-0}; [ "$DERELICT" != "0" ] && BARG="$BARG derelict_after=$DERELICT"
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
 "$GODOT" --headless --path . -- --server --no-events port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
 CPORT=$PORT; PP=""

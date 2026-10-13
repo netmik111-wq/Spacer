@@ -85,6 +85,8 @@ var search_hurt := 0                 # how hurt they look (see GameServer.hurt_l
 var search_slots := PackedByteArray()  # what they carry
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
+var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
+var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
 var pumps := {}                     # airlock pumps at work: wall cell -> GameServer.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
@@ -356,6 +358,22 @@ func lit_cells() -> Dictionary:
 	return out
 
 
+func other_here() -> bool:
+	## Is a derelict alongside?
+	return map.other_at != ShipMap.NO_OTHER
+
+
+func in_the_dark(cell: int) -> bool:
+	## Is this cell without light of its own: the whole ship without power, or a derelict always?
+	return not powered() or map.is_other(cell)
+
+
+func send_dock(on: bool) -> void:
+	## Asks to dock with the derelict alongside (or undock). Only from the ship's controls.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_DOCK, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_jump(target: int) -> void:
 	## Asks for a jump. The server agrees only while our character stands at the sector console.
 	if phase == PLAYING:
@@ -618,7 +636,7 @@ func door_open_amount(door: int) -> float:
 	if ready == Doors.CLOSED:
 		return 0.0
 	var t := pred_time() if (predict and _have_self) else now_ticks() + _recv_offset
-	return clampf(1.0 - (float(ready) - t) / float(table.open_ticks()), 0.0, 1.0)
+	return clampf(1.0 - (float(ready) - t) / float(table.open_ticks(door)), 0.0, 1.0)
 
 
 func player_name(id: int) -> String:
@@ -795,6 +813,18 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				for i in pkt[at]:
 					pumps[pkt.decode_u16(at + 1 + i * 3)] = pkt[at + 3 + i * 3]
 			ship_changes += 1
+		Net.S_OTHER:
+			if pkt.size() >= 6:
+				var at := Vector2i(pkt.decode_s16(1), pkt.decode_s16(3))
+				other_docked = pkt[5] != 0
+				if at != map.other_at:
+					map.place_other(at)
+					for d in range(map.other_first_door, map.doors.size()):
+						doors.ready[d] = Doors.CLOSED
+						doors.set_flags(d, 0)
+					other_changes += 1
+					ship_changes += 1
+					_rebuild_prediction()
 		Net.S_SEARCH:
 			var who := pkt.decode_u16(1)
 			search_id = -1 if who == Net.NOBODY else who
@@ -841,6 +871,8 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	var n := pkt[11]
 	var map_name := pkt.slice(12, 12 + n).get_string_from_utf8()
 	var problem := map.load_from(map_name)
+	if problem == "":
+		problem = map.add_other("derelict01")
 	if problem == "" and map.crc != crc:
 		problem = "Карта «%s» на сервере отличается от вашей. Нужна одинаковая сборка игры." % map_name
 	if problem != "":
@@ -851,6 +883,10 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	pred_doors.setup(map.doors.size())
 	doors.partner = map.door_partner
 	pred_doors.partner = map.door_partner
+	for d in range(map.other_first_door, map.doors.size()):
+		doors.dead[d] = 1
+	pred_doors.dead = doors.dead
+	other_docked = false
 	pumps.clear()
 	air.resize(map.width * map.height)
 	air.fill(0)
@@ -986,7 +1022,7 @@ func _ship_sum() -> int:
 	var sum := 0
 	for d in doors.ready.size():
 		var at: Vector2i = map.doors[d]
-		if not _outside_view(at.x, at.y):
+		if map.door_here(d) and not _outside_view(at.x, at.y):
 			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d], doors.flags(d))
 	for cell: int in holes.keys():
 		sum += Net.hull_hash(cell % map.width, cell / map.width)

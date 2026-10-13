@@ -21,6 +21,7 @@ const Director := preload("res://src/server/director.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
 const Pirates := preload("res://src/server/pirates.gd")
+const Derelict := preload("res://src/server/derelict.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -108,6 +109,7 @@ var _power_out_until := 0              # a passing power failure lasts until thi
 var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
 var pirates := Pirates.new()
+var derelict := Derelict.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -118,6 +120,8 @@ var late_inputs := 0
 func start(p_port: int, map_name: String, bots: int) -> String:
 	## Opens the port and starts ticking. Returns "" or what went wrong.
 	var problem := map.load_from(map_name)
+	if problem == "":
+		problem = map.add_other(Derelict.NAME)
 	if problem != "":
 		return problem
 	_host = ENetConnection.new()
@@ -149,6 +153,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_ship_sums.resize(chunks)
 	doors.setup(map.doors.size())
 	doors.partner = map.door_partner
+	for d in range(map.other_first_door, map.doors.size()):
+		doors.dead[d] = 1
 	pumps.clear()
 	_door_hold.resize(map.doors.size())
 	_door_hold.fill(0)
@@ -165,10 +171,9 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	floor_things.clear()
 	_forced_until.resize(map.doors.size())
 	_forced_until.fill(0)
-	for d in map.doors.size():
-		var in_chunk: PackedInt32Array = _doors_in[_chunk_of(map.doors[d].x, map.doors[d].y)]
-		in_chunk.append(d)
+	_index_doors()
 	air.setup(map)
+	derelict.setup(self)
 	_air_sent = air.level.duplicate()
 	space_seed = _rng.randi()
 	been = {Sectors.key(Vector2i.ZERO): true}
@@ -192,6 +197,17 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		_add_bot()
 	log_line.emit("Сервер запущен: порт %d, карта «%s», ботов %d." % [port, map.map_name, bots])
 	return ""
+
+
+func _index_doors() -> void:
+	## Which doors are in which chunk (the other ship's doors move with it).
+	for c in _doors_in.size():
+		_doors_in[c] = PackedInt32Array()
+	for d in map.doors.size():
+		if map.door_here(d):
+			var in_chunk: PackedInt32Array = _doors_in[_chunk_of(map.doors[d].x, map.doors[d].y)]
+			in_chunk.append(d)
+			_doors_in[_chunk_of(map.doors[d].x, map.doors[d].y)] = in_chunk
 
 
 func stop() -> void:
@@ -341,6 +357,13 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HELM:
 		if pkt.size() > 3:
 			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
+	elif kind == Net.C_DOCK:
+		if pkt.size() > 1 and _at_console(p, map.helm):
+			var why := derelict.dock(pkt[1] != 0)
+			if why != "":
+				_ship_says(why)
+			elif derelict.here:
+				_ship_says("%s: %s." % [p.name, "стыковка с брошенным кораблём" if derelict.docked else "расстыковка"])
 	elif kind == Net.C_STORE:
 		if pkt.size() > 2:
 			_store_asked(p, pkt[1], pkt[2])
@@ -428,6 +451,7 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, _sectors_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, derelict.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, PackedByteArray([Net.S_POWER, 1 if _power_told else 0]), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _store_packet(), ENetPacketPeer.FLAG_RELIABLE)
@@ -809,7 +833,7 @@ func jam_door() -> bool:
 	if not can_break("door"):
 		return false
 	var choice := PackedInt32Array()
-	for d in doors.ready.size():
+	for d in map.other_first_door:
 		if doors.jammed[d] == 0 and doors.faulty[d] == 0:
 			choice.append(d)
 	var d := choice[_rng.randi_range(0, choice.size() - 1)]
@@ -828,7 +852,7 @@ func fault_shutter() -> bool:
 	if not can_break("shutter"):
 		return false
 	var choice := PackedInt32Array()
-	for d in doors.ready.size():
+	for d in map.other_first_door:
 		if doors.jammed[d] == 0 and doors.faulty[d] == 0:
 			choice.append(d)
 	var d := choice[_rng.randi_range(0, choice.size() - 1)]
@@ -1052,6 +1076,10 @@ func _helm_asked(p: Player, go: bool, to: Vector2) -> void:
 	## A player at the ship's controls sets a course inside the sector, or stops the ship.
 	if not _at_console(p, map.helm) or jump_to != Net.NO_SECTOR or engine_down():
 		return
+	var held := derelict.holds_ship()
+	if go and held != "":
+		_ship_says(held)
+		return
 	ship_moving = go
 	ship_dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else ship_pos
 	_to_all(_helm_packet())
@@ -1126,6 +1154,10 @@ func _jump_asked(p: Player, target: int) -> void:
 		return
 	if target >= sectors.count or not sectors.linked(sector, target):
 		return
+	var held := derelict.holds_ship()
+	if held != "":
+		_ship_says(held)
+		return
 	start_jump(target, p.name)
 
 
@@ -1153,6 +1185,12 @@ func start_jump(target: int, by: String) -> void:
 
 func _update_jump() -> void:
 	if jump_to == Net.NO_SECTOR or tick < jump_tick:
+		return
+	if derelict.holds_ship() != "":
+		# somebody went outside while the drive was charging: the ship does not leave them
+		jump_to = Net.NO_SECTOR
+		_tell_nav()
+		_ship_says("Прыжок отменён: %s" % derelict.holds_ship().to_lower())
 		return
 	# The ship is somewhere else now: the chart is drawn anew around the new
 	# sector, which is how space goes on for ever without being kept anywhere.
@@ -1277,6 +1315,7 @@ func _tick() -> void:
 	_update_doors()
 	_update_jump()
 	_update_ship()
+	derelict.update()
 	director.tick()
 	if tick % Net.AIR_EVERY == 0:
 		_feed_air()
@@ -1888,7 +1927,7 @@ func _update_shutters() -> void:
 	## nothing lifts. A faulty one does neither, and a jammed door has nothing to shut.
 	if not powered():
 		return
-	for d in doors.ready.size():
+	for d in map.other_first_door:                 # (the other ship's doors have no power)
 		var a := map.door_sides[d * 2]
 		var b := map.door_sides[d * 2 + 1]
 		if doors.faulty[d] == 1 or doors.jammed[d] == 1:
@@ -1908,7 +1947,7 @@ func _update_shutters() -> void:
 func _update_doors() -> void:
 	# doors pushed this tick stay open for a while
 	for d in doors.bumped:
-		if _door_sent[d] == Doors.CLOSED and _door_hold[d] < tick:
+		if _door_sent[d] == Doors.CLOSED and _door_hold[d] < tick and map.door_here(d):
 			sound(Net.SOUND_DOOR, map.doors[d].x, map.doors[d].y)
 		_door_hold[d] = tick + Doors.HOLD_TICKS
 	doors.bumped.clear()
@@ -1928,6 +1967,8 @@ func _update_doors() -> void:
 				air.wake()
 			_door_sent[d] = doors.ready[d]
 			_flags_sent[d] = doors.flags(d)
+			if not map.door_here(d):
+				continue
 			var buf: PackedByteArray = _door_change[_chunk_of(map.doors[d].x, map.doors[d].y)]
 			_put_door(buf, d)
 			_ship_sums_tick = -1
@@ -1965,6 +2006,8 @@ func _ensure_ship_sums() -> void:
 	_ship_sums.fill(0)
 	for d in doors.ready.size():
 		var at: Vector2i = map.doors[d]
+		if not map.door_here(d):
+			continue
 		_ship_sums[_chunk_of(at.x, at.y)] += Net.door_hash(d, -1 if _door_sent[d] == Doors.CLOSED else _door_sent[d], _flags_sent[d])
 	for cell: int in air.holes.keys():
 		_ship_sums[_chunk_of(cell % map.width, cell / map.width)] += Net.hull_hash(cell % map.width, cell / map.width)

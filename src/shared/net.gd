@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 18
+const PROTOCOL := 19
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -54,6 +54,7 @@ const C_DROP := 16                  # nothing else: put the thing in the hand do
 const C_FIRE := 18                  # u32 tick the player saw the others on (see GameClient.render_tick),
                                     # s16 x * 16, s16 y * 16: the place clicked, in cells of the whole grid.
                                     # Uses the thing in the hand on that place: shoot, strike, bandage.
+const C_DOCK := 19                  # u8 on: bring the derelict alongside up against the airlock (1) or draw it off (0)
 const C_ACT := 17                   # nothing else: use the thing in the hand by itself (switch a flashlight)
 
 # --- packets, server -> client ---
@@ -127,6 +128,8 @@ const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
+const S_OTHER := 26                 # s16 x, s16 y of the other ship's corner in the grid (-9999 = none here),
+                                    # u8 docked: a derelict alongside (see ShipMap.place_other)
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how

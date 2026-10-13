@@ -517,11 +517,20 @@ func _update_helm() -> void:
 			var what := "станции" if sectors.kind[here] == Sectors.STATION else "торговца"
 			var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
 			lines.append("До %s %d." % [what, int(ceil(gap))] if gap > 0.0 else "Корабль у %s." % what)
+		Sectors.DERELICT:
+			if client.other_here():
+				lines.append("Брошенный корабль пристыкован к шлюзу." if client.other_docked else
+					"Брошенный корабль рядом, над шлюзом. До него можно добраться через открытый космос или пристыковаться.")
+				lines.append("Пока кто-то снаружи или корабли состыкованы, корабль не тронется и не прыгнет.")
+			else:
+				var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
+				lines.append("До брошенного корабля %d." % int(ceil(gap)))
 		_:
 			lines.append("В этом секторе идти некуда: вокруг пусто.")
 	_console_text.text = "\n".join(lines)
-	if _jump_buttons_for != Sectors.key(sectors.cell[here]) * 2 + 1:
-		_jump_buttons_for = Sectors.key(sectors.cell[here]) * 2 + 1
+	var buttons_key := Sectors.key(sectors.cell[here]) * 8 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0)
+	if _jump_buttons_for != buttons_key:
+		_jump_buttons_for = buttons_key
 		for old in _jump_box.get_children():
 			old.queue_free()
 		var halt := Button.new()
@@ -529,6 +538,13 @@ func _update_helm() -> void:
 		halt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		halt.pressed.connect(func() -> void: client.send_helm(false))
 		_jump_box.add_child(halt)
+		if client.other_here():
+			var dock := Button.new()
+			dock.text = "Расстыковаться" if client.other_docked else "Пристыковаться к брошенному кораблю"
+			dock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var on := not client.other_docked
+			dock.pressed.connect(func() -> void: client.send_dock(on))
+			_jump_box.add_child(dock)
 	for b in _jump_box.get_children():
 		if b is Button:
 			(b as Button).disabled = leaving
@@ -639,6 +655,11 @@ func _draw_helm() -> void:
 			_chart.draw_rect(Rect2(spot - Vector2(4, 4), Vector2(8, 8)), colour)
 			_chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else "торговец",
 				HORIZONTAL_ALIGNMENT_CENTER, 140, 12, colour)
+		Sectors.DERELICT:
+			var grey := Color(0.7, 0.7, 0.72)
+			_chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(grey, 0.6), 1.0)
+			_chart.draw_rect(Rect2(spot - Vector2(5, 3), Vector2(10, 6)), grey, false, 1.5)
+			_chart.draw_string(font, spot + Vector2(-70, 26), "брошенный корабль", HORIZONTAL_ALIGNMENT_CENTER, 140, 12, grey)
 	var ship := area.position + client.ship_pos() * scale
 	if client.ship_under_way() and client.jump_to == Net.NO_SECTOR:
 		var dest := area.position + client.ship_dest * scale

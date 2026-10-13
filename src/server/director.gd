@@ -34,23 +34,23 @@ const BOARDING := 9
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
 	{"id": MICROMETEORITE, "name": "Микрометеорит", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 10},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 10},
 	{"id": METEOR_VOLLEY, "name": "Метеорный залп", "size": MEDIUM,
 		"where": [Sectors.METEORS], "weight": 4},
 	{"id": CONSOLE_FAULT, "name": "Замыкание пульта", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 3},
 	{"id": ENGINE_FAULT, "name": "Отказ двигателя", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 	{"id": AIR_PLANT_FAULT, "name": "Отказ воздушной установки", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 	{"id": DOOR_JAM, "name": "Заклинившая дверь", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 4},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 4},
 	{"id": SHUTTER_FAULT, "name": "Отказ аварийного шлюза", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 3},
 	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 	{"id": BOARDING, "name": "Абордаж", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -58,6 +58,7 @@ const PACE := {
 	Sectors.EMPTY: [180.0, 360.0],
 	Sectors.METEORS: [25.0, 45.0],
 	Sectors.TRADER: [180.0, 360.0],
+	Sectors.DERELICT: [180.0, 360.0],
 }
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
 const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector

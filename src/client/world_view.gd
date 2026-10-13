@@ -111,6 +111,7 @@ var _shots: Array = []               # shots and blows to draw: [kind, hit, from
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
 var _dark_sheet: ColorRect
+var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 
 
@@ -144,16 +145,6 @@ func setup(p_client: GameClient) -> void:
 		deck.ceiling.tile_set = tiles
 		deck.ceiling.modulate = CEILING_TINT
 		deck.ceiling.visible = false
-		for y in map.deck_height:
-			for x in map.width:
-				var cell := (d * _stride + y) * map.width + x
-				var id := map.cells[cell]
-				if id < 0:
-					continue
-				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
-				deck.layer.set_cell(Vector2i(x, y), source_id, in_atlas)
-				if map.see_through[cell] == 1:
-					deck.ceiling.set_cell(Vector2i(x, y), source_id, in_atlas)
 		deck.holes = Node2D.new()
 		deck.group.add_child(deck.holes)
 		deck.fx = Node2D.new()
@@ -172,6 +163,7 @@ func setup(p_client: GameClient) -> void:
 			deck.group.add_child(_decks[d - 1].ceiling)
 			deck.group.move_child(_decks[d - 1].ceiling, 1)
 
+	_paint_decks()
 	var last := _decks[_decks.size() - 1]
 	last.group.add_child(last.ceiling)       # nothing is below the lowest deck to see it from; kept only so it is freed
 	last.ceiling.visible = false
@@ -311,8 +303,12 @@ func _cell(column: int, colour: int) -> Rect2:
 
 func _update_ship(delta: float) -> void:
 	var map := client.map
+	if client.other_changes != _other_seen:
+		_paint_decks()
 	# doors: shut, sliding or open
 	for d in map.doors.size():
+		if not map.door_here(d):
+			continue
 		var amount := client.door_open_amount(d)
 		var frame := 0 if amount <= 0.0 else (2 if amount >= 1.0 else 1)
 		if frame == 0 and _door_was_open[d] == 1:
@@ -456,6 +452,27 @@ func cell_under_mouse() -> Vector2:
 	return Vector2(at.x / _tile - 0.5, (at.y - FEET_Y) / _tile + 0.5 + _deck_shown * _stride - 0.5)
 
 
+func _paint_decks() -> void:
+	## Lays the tiles of every deck (again when another ship comes, goes or moves).
+	var map := client.map
+	for d in _decks.size():
+		var deck: DeckView = _decks[d]
+		deck.layer.clear()
+		deck.ceiling.clear()
+		for y in map.deck_height:
+			for x in map.width:
+				var cell := (d * _stride + y) * map.width + x
+				var id := map.cells[cell]
+				if id < 0:
+					continue
+				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
+				deck.layer.set_cell(Vector2i(x, y), _source_id, in_atlas)
+				if map.see_through[cell] == 1:
+					deck.ceiling.set_cell(Vector2i(x, y), _source_id, in_atlas)
+	_door_shown.fill(-1)
+	_other_seen = client.other_changes
+
+
 func _draw_shade() -> void:
 	## The warm light of flashlights on the floor, and shots: a trace, a flash
 	## at the muzzle and a spark where it hit (the dark itself is the sheet over the screen).
@@ -496,20 +513,18 @@ func _draw_mask() -> void:
 		var row := (_deck_shown * _stride + y) * map.width
 		var x := 0
 		while x < map.width:
-			var inside := map.cells[row + x] >= 0
+			# runs of cells of one kind: space, our ship, or a derelict (always dark)
+			var kind := _light_kind(map, row + x)
 			var run := x
-			while run < map.width and (map.cells[row + run] >= 0) == inside:
+			while run < map.width and _light_kind(map, row + run) == kind:
 				run += 1
 			var rect := Rect2(Vector2(x, y) * _tile, Vector2(run - x, 1) * _tile)
-			if not inside:
+			if kind == 0:
 				_mask.draw_rect(rect, red)
-			elif _dark > 0.0:
-				if ship.a > 0.0:
-					_mask.draw_rect(rect, ship)
-			else:
-				_mask.draw_rect(rect, red)
+			elif kind == 1 and ship.a > 0.0:
+				_mask.draw_rect(rect, ship)
 			x = run
-	if _dark <= 0.0:
+	if _dark <= 0.0 and not client.other_here():
 		return
 	# right around our own character: a little seen even in the dark
 	var me: Sprite2D = _views.get(client.my_id)
@@ -523,6 +538,13 @@ func _draw_mask() -> void:
 		for c: Color in b[1]:
 			reds.append(Color(1, 0, 0, c.a))
 		_mask.draw_polygon(b[0], reds)
+
+
+func _light_kind(map: ShipMap, cell: int) -> int:
+	## 0 = open space (never dark), 1 = our ship, 2 = a derelict (no light of its own).
+	if map.cells[cell] < 0:
+		return 0
+	return 2 if map.is_other(cell) else 1
 
 
 func _soft_circle(pen: Node2D, mid: Vector2, full: float, gone: float, colour: Color) -> void:
@@ -555,7 +577,7 @@ func _draw_look() -> void:
 	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	var reach := float(Sight.SIGHT_REACH) * _tile
-	for arc: Array in Sight.eye_arcs(_dark >= 0.5):
+	for arc: Array in Sight.eye_arcs(_my_dark()):
 		var points := PackedVector2Array([origin])
 		for k in LOOK_RAYS + 1:
 			var way := ahead.rotated(deg_to_rad(lerpf(float(arc[0]), float(arc[1]), float(k) / LOOK_RAYS)))
@@ -571,6 +593,11 @@ func _draw_look() -> void:
 		_look.draw_colored_polygon(points, green)
 
 
+func _my_dark() -> bool:
+	## Is our character in the dark: a ship without power, or aboard a derelict?
+	return _dark >= 0.5 or client.map.is_other(client.pred.y * client.map.width + client.pred.x)
+
+
 func can_see(x: int, y: int) -> bool:
 	## Can our character make out somebody at this cell (a cell on any deck:
 	## one seen through a see-through floor counts as the cell above it)?
@@ -580,9 +607,9 @@ func can_see(x: int, y: int) -> bool:
 		return false                         # out cold, or dead: nothing is seen
 	var its_deck := map.deck_of(y)
 	var on_ours := Vector2i(x, y - (its_deck - _deck_shown) * _stride)
-	var dark := _dark >= 0.5
+	var dark := _my_dark()
 	var arcs := Sight.eye_arcs(dark)
-	if not dark:
+	if not dark and not map.is_other(y * map.width + x):
 		return Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
 	if Vector2(on_ours).distance_to(me) <= Sight.DARK_REACH + 0.5 \
 			and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.DARK_REACH):
@@ -690,7 +717,7 @@ func _draw_fx(d: int) -> void:
 	var lit := client.powered()
 	for door in map.doors.size():
 		var cell_at: Vector2i = map.doors[door]
-		if map.deck_of(cell_at.y) != d:
+		if not map.door_here(door) or map.deck_of(cell_at.y) != d:
 			continue
 		var corner := Vector2(cell_at.x, map.local_y(cell_at.y)) * _tile
 		var band := map.door_kind[door] == ShipMap.DOOR_BAND

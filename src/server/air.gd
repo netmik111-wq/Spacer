@@ -41,33 +41,53 @@ func setup(p_map: ShipMap) -> void:
 	map = p_map
 	var n := map.width * map.height
 	air.resize(n)
+	air.fill(0.0)
 	_next.resize(n)
 	level.resize(n)
+	level.fill(0)
 	_near.resize(n * 6)
-	_near.fill(-1)
 	_leaks.resize(n)
-	_cells.clear()
 	holes.clear()
+	reshape()
+	for i in _cells:
+		air[i] = 1.0
+		level[i] = Net.AIR_FULL
+
+
+func reshape() -> void:
+	## The ship changed shape (another ship came alongside or left): which cells
+	## hold air and which touch which are worked out again. The air in the cells
+	## that stay is kept; cells that are no longer part of a ship are emptied.
+	_cells.clear()
+	_near.fill(-1)
+	_leaks.fill(0)
 	_vents.clear()
-	for d in map.doors.size():
-		if map.door_vent[d] == 1:
-			_vents.append(map.doors[d].y * map.width + map.doors[d].x)
-			_vents.append(d)
 	for y in map.height:
 		for x in map.width:
 			var i := y * map.width + x
 			if map.walk[i] == 0:
+				air[i] = 0.0
+				level[i] = 0
 				continue
 			_cells.append(i)
-			air[i] = 1.0
-			level[i] = Net.AIR_FULL
 			if map.walkable(x - 1, y): _near[i * 6] = i - 1
 			if map.walkable(x + 1, y): _near[i * 6 + 1] = i + 1
 			if map.walkable(x, y - 1): _near[i * 6 + 2] = i - map.width
 			if map.walkable(x, y + 1): _near[i * 6 + 3] = i + map.width
 			_near[i * 6 + 4] = map.air_up[i]
 			_near[i * 6 + 5] = map.air_down[i]
-	settled = true
+	for cell: int in holes.keys():
+		var x := cell % map.width
+		var y := cell / map.width
+		for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			if map.walkable(x + o.x, y + o.y):
+				var i := (y + o.y) * map.width + x + o.x
+				_leaks[i] += 1
+	for d in map.doors.size():
+		if map.door_vent[d] == 1:
+			_vents.append(map.doors[d].y * map.width + map.doors[d].x)
+			_vents.append(d)
+	settled = false
 
 
 func set_hole(cell: int, on: bool) -> bool:

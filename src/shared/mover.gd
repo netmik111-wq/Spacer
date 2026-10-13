@@ -44,7 +44,7 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	st.facing = st.dir
 	var nx: int = st.x + Net.DX[st.dir]
 	var ny: int = st.y + Net.DY[st.dir]
-	if not map.walkable(nx, ny):
+	if not map.passable(nx, ny):
 		return false
 	var door := map.door_at(nx, ny)
 	if door >= 0:
@@ -55,7 +55,8 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	st.fy = st.y
 	st.x = nx
 	st.y = ny
-	st.span = Net.DRAG_TICKS if st.slow else Net.MOVE_TICKS
+	# hauling somebody, or pushing off through open space, is slow going
+	st.span = Net.DRAG_TICKS if st.slow or map.floats(nx, ny) or map.floats(st.fx, st.fy) else Net.MOVE_TICKS
 	st.cd = st.span
 	st.move_tick = tick
 	return true

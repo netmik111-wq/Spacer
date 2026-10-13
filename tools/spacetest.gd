@@ -69,14 +69,14 @@ func _initialize() -> void:
 	print("  from the start %d of the %d sectors within 10 can be reached without going further than %d" % [reached, inner, size])
 	_expect(reached >= inner * 95 / 100, "space is in one piece around the start")
 
-	# 4. what space holds: all four kinds, and more meteor streams further out
-	var near := [0, 0, 0, 0]
-	var far := [0, 0, 0, 0]
+	# 4. what space holds: all five kinds, and more meteor streams further out
+	var near := [0, 0, 0, 0, 0]
+	var far := [0, 0, 0, 0, 0]
 	for y in range(-6, 7):
 		for x in range(-6, 7):
 			near[Sectors.kind_at(seed_value, Vector2i(x, y))] += 1
 			far[Sectors.kind_at(seed_value, Vector2i(x + 300, y + 300))] += 1
-	print("  around the start: %s; far away: %s (quiet, meteors, traders, stations)" % [near, far])
+	print("  around the start: %s; far away: %s (quiet, meteors, traders, stations, derelicts)" % [near, far])
 	_expect(near.min() > 0 and far.min() > 0, "every kind of sector is found near the start and far from it")
 	_expect(far[Sectors.METEORS] > near[Sectors.METEORS], "meteor streams are commoner far from the start")
 	_expect(Sectors.kind_at(seed_value, Vector2i.ZERO) == Sectors.EMPTY, "the voyage begins in quiet space")

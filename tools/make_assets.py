@@ -498,7 +498,7 @@ def resolve_ship(name, lines, ids):
         cells[d * stride * w:d * stride * w + w * h] = deck_cells
         spawns += [[x, y + d * stride] for x, y in deck_spawns]
         doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
-    if not spawns:
+    if not spawns and not name.startswith("derelict"):
         raise MapError(f"{name}: no spawn points ('s')")
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors}
