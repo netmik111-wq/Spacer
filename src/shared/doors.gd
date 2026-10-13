@@ -14,6 +14,8 @@ extends RefCounted
 ##    differs too much the server drops it (`locked`), and walking into the
 ##    door does nothing until the difference is gone or somebody forces it;
 ##  - without power (`manual`) a door is pushed open by hand, which is slow.
+## A door of an airlock chamber also stays shut while the other door of the
+## same chamber is not (`partner`), so the chamber never opens both ways.
 ## Two more things can go wrong with a door; the server decides them and they
 ## reach clients with the rest:
 ##  - a door can jam open (`jammed`): it stays open until somebody mends it;
@@ -34,6 +36,7 @@ var ready := PackedInt32Array()      # per door: the tick it is passable from, o
 var locked := PackedByteArray()      # per door: 1 = its emergency shutter is down
 var jammed := PackedByteArray()      # per door: 1 = stuck open
 var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no longer works by itself
+var partner := PackedInt32Array()    # per door: the other door of its airlock, or -1 (set from ShipMap.door_partner)
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -48,6 +51,8 @@ func setup(count: int) -> void:
 	faulty.resize(count)
 	faulty.fill(0)
 	manual = false
+	partner.resize(count)
+	partner.fill(-1)
 	bumped.clear()
 
 
@@ -56,6 +61,7 @@ func copy_from(o: RefCounted) -> void:
 	locked = o.locked.duplicate()
 	jammed = o.jammed.duplicate()
 	faulty = o.faulty.duplicate()
+	partner = o.partner
 	manual = o.manual
 	bumped.clear()
 
@@ -89,10 +95,15 @@ func is_sealed(door: int) -> bool:
 	return ready[door] == CLOSED and locked[door] == 1
 
 
+func held_by_partner(door: int) -> bool:
+	## A door of an airlock stays shut while the other one is not.
+	return partner[door] >= 0 and ready[partner[door]] != CLOSED
+
+
 func bump(door: int, tick: int) -> void:
 	## Somebody walked into the door on this tick.
 	if ready[door] == CLOSED:
-		if locked[door] == 1:
+		if locked[door] == 1 or held_by_partner(door):
 			return
 		ready[door] = tick + open_ticks()
 	bumped.append(door)

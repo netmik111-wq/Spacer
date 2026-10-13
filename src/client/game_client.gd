@@ -85,6 +85,7 @@ var search_hurt := 0                 # how hurt they look (see GameServer.hurt_l
 var search_slots := PackedByteArray()  # what they carry
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
+var pumps := {}                     # airlock pumps at work: wall cell -> GameServer.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
 var _power := true                   # the ship has power (see powered)
@@ -405,7 +406,8 @@ func use_target() -> int:
 	## 9 = a door whose emergency shutter is down and can be forced,
 	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended),
 	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled),
-	## 14 = something lying on the floor in front or underfoot, to pick up.
+	## 14 = something lying on the floor in front or underfoot, to pick up,
+	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -424,8 +426,12 @@ func use_target() -> int:
 			return 8
 		if map.locker.has(cell):
 			return 12
+		if map.lock_pump.has(cell):
+			return 15
 		var door := map.door_of[cell]
 		if door >= 0:
+			if doors.is_shut(door) and doors.held_by_partner(door):
+				return 16
 			if doors.jammed[door] == 1:
 				return 10
 			if doors.faulty[door] == 1:
@@ -440,6 +446,15 @@ func use_target() -> int:
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func lock_air(pump: int) -> float:
+	## The air in the chamber of an airlock as our character sees it (0..1).
+	var cells: PackedInt32Array = map.lock_pump[pump]["chamber"]
+	var sum := 0
+	for c in cells:
+		sum += air[c]
+	return float(sum) / (cells.size() * Net.AIR_FULL)
 
 
 func lying_near() -> int:
@@ -774,6 +789,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			broken.clear()
 			for i in pkt[1]:
 				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
+			pumps.clear()
+			var at: int = 2 + pkt[1] * 2
+			if pkt.size() > at:
+				for i in pkt[at]:
+					pumps[pkt.decode_u16(at + 1 + i * 3)] = pkt[at + 3 + i * 3]
 			ship_changes += 1
 		Net.S_SEARCH:
 			var who := pkt.decode_u16(1)
@@ -829,6 +849,9 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 		return
 	doors.setup(map.doors.size())
 	pred_doors.setup(map.doors.size())
+	doors.partner = map.door_partner
+	pred_doors.partner = map.door_partner
+	pumps.clear()
 	air.resize(map.width * map.height)
 	air.fill(0)
 	holes.clear()

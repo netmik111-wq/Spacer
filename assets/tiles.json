@@ -321,6 +321,11 @@
    "id": 63,
    "name": "locker",
    "kind": "wall"
+  },
+  {
+   "id": 64,
+   "name": "lock_pump",
+   "kind": "wall"
   }
  ]
 }

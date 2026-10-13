@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 17
+const PROTOCOL := 18
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second

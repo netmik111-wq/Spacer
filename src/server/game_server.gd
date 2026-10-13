@@ -100,6 +100,7 @@ var in_reach := false                  # inside the sector's meteor stream, or d
 var broken := {}                       # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
 # the ship's supplies, kept in the supply locker
 var store := {}                         # the supply locker: thing (Net.ITEM_*) -> how many
+var pumps := {}                       # airlock pumps at work: wall cell -> PUMP_OUT or PUMP_IN
 var store_air := 0.0                   # air the air plant still has to give, in cells' worth
 var credits := 0
 var _store_told := PackedByteArray()   # the supplies as clients were last told
@@ -147,6 +148,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_sums.resize(chunks)
 	_ship_sums.resize(chunks)
 	doors.setup(map.doors.size())
+	doors.partner = map.door_partner
+	pumps.clear()
 	_door_hold.resize(map.doors.size())
 	_door_hold.fill(0)
 	_door_sent = doors.ready.duplicate()
@@ -714,10 +717,16 @@ func _helm_packet() -> PackedByteArray:
 
 
 func _devices_packet() -> PackedByteArray:
+	## What is broken, then which airlock pumps are at work and which way.
 	var out := PackedByteArray([Net.S_DEVICES, broken.size()])
 	for cell: int in broken.keys():
 		out.append(cell & 0xFF)
 		out.append(cell >> 8)
+	out.append(pumps.size())
+	for cell: int in pumps.keys():
+		out.append(cell & 0xFF)
+		out.append(cell >> 8)
+		out.append(int(pumps[cell]))
 	return out
 
 
@@ -883,6 +892,80 @@ func break_air_plant() -> bool:
 
 
 
+
+
+# ---------------------------------------------------------------- airlocks
+#
+# An airlock is a chamber between an inner door and an outer one that opens
+# into space. Only one of the two can be open (Doors.bump). The emergency
+# shutters do the rest: they treat space as a side with no air, so the outer
+# door stays sealed while the chamber holds air and the inner one while it
+# does not. The pump on the chamber wall moves the air: out into the ship's
+# store, or back in from it.
+
+const PUMP_OUT := 1
+const PUMP_IN := 2
+const PUMP_PER_STEP := 0.02            # air moved per chamber cell per air step (two ticks): about 5 s for a full chamber
+
+
+func lock_air(pump: int) -> float:
+	## The air in the chamber of an airlock, 0..1.
+	var cells: PackedInt32Array = map.lock_pump[pump]["chamber"]
+	var sum := 0.0
+	for c in cells:
+		sum += air.air[c]
+	return sum / cells.size()
+
+
+func lock_shut(pump: int) -> bool:
+	var lock: Dictionary = map.lock_pump[pump]
+	return doors.is_shut(int(lock["inner"])) and doors.is_shut(int(lock["outer"]))
+
+
+func toggle_pump(p: Player, cell: int) -> void:
+	## The "use" key on a pump: start it the way the chamber needs, or stop it.
+	if pumps.has(cell):
+		pumps.erase(cell)
+	elif not powered() or not lock_shut(cell):
+		return
+	elif lock_air(cell) > 0.5:
+		pumps[cell] = PUMP_OUT
+	elif store_air > 0.0:
+		pumps[cell] = PUMP_IN
+	else:
+		return
+	sound(Net.SOUND_HISS, cell % map.width, cell / map.width, p.slot)
+	_to_all(_devices_packet())
+
+
+func _run_pumps() -> void:
+	if pumps.is_empty():
+		return
+	var done := []
+	for cell: int in pumps.keys():
+		if not powered() or not lock_shut(cell):
+			done.append(cell)
+			continue
+		var cells: PackedInt32Array = map.lock_pump[cell]["chamber"]
+		var left := 0.0
+		for c in cells:
+			if pumps[cell] == PUMP_OUT:
+				var take := minf(air.air[c], PUMP_PER_STEP)
+				air.air[c] -= take
+				store_air = minf(store_air + take, Net.STORE_AIR_FULL)   # what does not fit is let out
+				left = maxf(left, air.air[c])
+			else:
+				var give := minf(minf(1.0 - air.air[c], PUMP_PER_STEP), store_air)
+				air.air[c] += give
+				store_air -= give
+				left = maxf(left, 1.0 - air.air[c])
+		air.wake()
+		if left < 0.001 or (pumps[cell] == PUMP_IN and store_air <= 0.0):
+			done.append(cell)
+	for cell: int in done:
+		pumps.erase(cell)
+	if not done.is_empty():
+		_to_all(_devices_packet())
 
 
 func _feed_air() -> void:
@@ -1197,6 +1280,7 @@ func _tick() -> void:
 	director.tick()
 	if tick % Net.AIR_EVERY == 0:
 		_feed_air()
+		_run_pumps()
 		air.step(doors, tick)
 		_update_shutters()
 	if tick % Net.AIR_SEND_EVERY == 0:
@@ -1322,7 +1406,7 @@ func _usable_ahead(p: Player) -> bool:
 		return false
 	var door := map.door_of[cell]
 	return air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell) \
-		or map.chart.has(cell) or map.helm.has(cell) or map.locker.has(cell) \
+		or map.chart.has(cell) or map.helm.has(cell) or map.locker.has(cell) or map.lock_pump.has(cell) \
 		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 
@@ -1330,7 +1414,10 @@ func _press(p: Player) -> void:
 	## The "use" key went down (on the tick the client pressed it). Most of what
 	## it does is holding it (see _update_work); a press itself picks up a thing
 	## lying in front or underfoot, or else takes a ladder.
-	if not _pick_up(p):
+	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	if ahead >= 0 and map.lock_pump.has(ahead) and p.cond == Net.COND_OK and not p.corpse:
+		toggle_pump(p, ahead)
+	elif not _pick_up(p):
 		_climb(p)
 
 
@@ -1804,9 +1891,12 @@ func _update_shutters() -> void:
 	for d in doors.ready.size():
 		var a := map.door_sides[d * 2]
 		var b := map.door_sides[d * 2 + 1]
-		if a < 0 or b < 0 or doors.faulty[d] == 1 or doors.jammed[d] == 1:
+		if doors.faulty[d] == 1 or doors.jammed[d] == 1:
 			continue
-		var gap := absf(air.air[a] - air.air[b])
+		if (a < 0 or b < 0) and map.door_vent[d] == 0:
+			continue
+		# the outer door of an airlock has space on one side: no air there
+		var gap := absf((air.air[a] if a >= 0 else 0.0) - (air.air[b] if b >= 0 else 0.0))
 		if doors.locked[d] == 1:
 			if gap < Net.SHUTTER_LIFT:
 				doors.locked[d] = 0
@@ -1829,6 +1919,8 @@ func _update_doors() -> void:
 			if d >= 0 and _door_hold[d] < tick + Net.MOVE_TICKS + 2:
 				_door_hold[d] = tick + Net.MOVE_TICKS + 2
 	for d in doors.ready.size():
+		if doors.ready[d] == tick:
+			air.wake()                       # it has just finished opening: air may pass now
 		if doors.ready[d] != Doors.CLOSED and tick >= doors.ready[d] and tick >= _door_hold[d] and doors.jammed[d] == 0:
 			doors.ready[d] = Doors.CLOSED
 		if doors.ready[d] != _door_sent[d] or doors.flags(d) != _flags_sent[d]:

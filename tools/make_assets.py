@@ -84,6 +84,7 @@ for _cover in COVERS:
 TILES.append(("engine", None, "wall"))
 TILES.append(("air_plant", None, "wall"))
 TILES.append(("locker", None, "wall"))
+TILES.append(("lock_pump", None, "wall"))
 ATLAS_COLS = 8
 
 
@@ -255,6 +256,20 @@ def make_machine(wall, what):
             o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
         for px in (8, 9, 22, 23):                      # feed pipes down to the deck
             rect(px, 25, px, 29, mid if px in (8, 22) else body)
+    elif what == "lock_pump":
+        # the airlock pump: a panel with a gauge and two lamps (pump out, pump in)
+        rect(6, 4, 25, 24, body); rect(6, 4, 25, 5, cap); rect(6, 24, 25, 24, mid)
+        rect(8, 7, 23, 15, dark)
+        for y in range(8, 15):
+            for x in range(9, 23):
+                d = ((x - 15.5) ** 2 + (y - 15.0) ** 2) ** 0.5
+                if 5.5 < d < 7.0:
+                    o[x, y] = (200, 205, 210, 255)
+        for i in range(5):
+            o[15 + i // 2, 14 - i] = HAZARD
+        rect(9, 18, 13, 21, (200, 70, 50, 255)); rect(18, 18, 22, 21, (70, 170, 220, 255))
+        for x in range(6, 26):
+            o[x, 23] = HAZARD if (x // 2) % 2 == 0 else dark
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -291,6 +306,7 @@ def build_tiles():
         "engine": lambda: make_machine(images["wall_h"], "engine"),
         "air_plant": lambda: make_machine(images["wall_h"], "air_plant"),
         "locker": lambda: make_machine(images["wall_h"], "locker"),
+        "lock_pump": lambda: make_machine(images["wall_h"], "lock_pump"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if kind in COVERS:
@@ -319,6 +335,7 @@ def build_tiles():
 #   '1'..'5'  wall with a console on it
 #   '6'  wall with the engine in it          '7'  wall with the air plant in it
 #   '8'  wall with the supply locker in it
+#   '9'  wall with an airlock pump in it: the floor in front is the chamber; its outer 'D' opens into space
 #
 #
 # A ship with several decks is drawn deck by deck, the top one first. Each
@@ -330,7 +347,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>12345678")
+BAND_CHARS = set("#DW<>123456789")
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -417,12 +434,16 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
-                        if c == "D" and not (at(x, y - 1) in FLOOR_CHARS and at(x, y + 1) in FLOOR_CHARS):
-                            raise MapError(f"{name}: door at {x},{y} needs floor above and below")
+                        # a door needs floor on both sides; the outer door of an airlock
+                        # chamber has open space on one of them
+                        up, down = at(x, y - 1), at(x, y + 1)
+                        if c == "D" and not (up in FLOOR_CHARS and down in FLOOR_CHARS or
+                                             up in FLOOR_CHARS and down == " " or up == " " and down in FLOOR_CHARS):
+                            raise MapError(f"{name}: door at {x},{y} needs floor above and below (or space on one side)")
                         if c == "<" and at(x + 1, y) != ">" or c == ">" and at(x - 1, y) != "<":
                             raise MapError(f"{name}: wide window at {x},{y} needs both halves '<>'")
                         piece = special[c]

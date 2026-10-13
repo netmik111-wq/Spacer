@@ -21,6 +21,7 @@ const FLOW_DECK := 0.1               # the same between a cell and the one above
 const LEAK := 0.12                   # share of a cell's air lost per step through each hole next to it
 const PLANT_PER_STEP := 0.012        # air an air plant adds to the cell in front of it per step: one cell's
                                      # worth in about 8 s, a room of ten cells in a minute and a half
+const VENT := 0.35                   # share of the air in an open outer airlock door lost to space per step
 const REST := 0.00002                # below this much change per step the air is considered settled
 
 var map: ShipMap
@@ -33,6 +34,7 @@ var _next := PackedFloat32Array()
 var _cells := PackedInt32Array()     # the walkable cells
 var _near := PackedInt32Array()      # 6 neighbours of each cell: 4 on its deck, the one above, the one below (-1 = none)
 var _leaks := PackedByteArray()      # holes next to each cell
+var _vents := PackedInt32Array()     # door cells that open into space: cell -> door
 
 
 func setup(p_map: ShipMap) -> void:
@@ -46,6 +48,11 @@ func setup(p_map: ShipMap) -> void:
 	_leaks.resize(n)
 	_cells.clear()
 	holes.clear()
+	_vents.clear()
+	for d in map.doors.size():
+		if map.door_vent[d] == 1:
+			_vents.append(map.doors[d].y * map.width + map.doors[d].x)
+			_vents.append(d)
 	for y in map.height:
 		for x in map.width:
 			var i := y * map.width + x
@@ -142,6 +149,12 @@ func step(doors: Doors, tick: int) -> void:
 		var change := absf(v - a)
 		if change > biggest:
 			biggest = change
+	for k in range(0, _vents.size(), 2):
+		var c := _vents[k]
+		if doors.passable(_vents[k + 1], tick) and _next[c] > 0.0:
+			var lost := _next[c] * VENT
+			_next[c] -= lost
+			biggest = maxf(biggest, lost)
 	var swap := air
 	air = _next
 	_next = swap

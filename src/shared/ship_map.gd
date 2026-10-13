@@ -39,6 +39,11 @@ var chart := {}                      # wall cells with the sector console (the g
 var engine := {}                     # wall cells with the engine: it drives the ship and its jumps
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var locker := {}                     # wall cells with the supply locker
+var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
+                                     # chamber it serves, "inner": door, "outer": door (-1 = none)}
+var door_partner := PackedInt32Array() # per door: the other door of its airlock chamber, or -1.
+                                     # Only one of the two may be open at a time (see Doors.bump)
+var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -155,6 +160,10 @@ func load_from(name: String) -> String:
 		elif cells[i] == tile_ids.get("console_1", -1):
 			chart[i] = true
 
+	var problem := _find_airlocks()
+	if problem != "":
+		return problem
+
 	# what joins the decks: see-through floors, shared air, ladders
 	var n_cells := width * height
 	see_through = PackedByteArray()
@@ -195,6 +204,65 @@ func load_from(name: String) -> String:
 	return ""
 
 
+func _find_airlocks() -> String:
+	## An airlock is a chamber with a pump on its wall and two doors: an outer
+	## one that opens into space and an inner one into the ship.
+	lock_pump = {}
+	door_partner = PackedInt32Array()
+	door_partner.resize(doors.size())
+	door_partner.fill(-1)
+	door_vent = PackedByteArray()
+	door_vent.resize(doors.size())
+	for d in doors.size():
+		var at: Vector2i = doors[d]
+		var step := Vector2i(0, 1) if door_kind[d] == DOOR_BAND else Vector2i(1, 0)
+		var a := at - step
+		var b := at + step
+		if (door_sides[d * 2] < 0 and is_space(a.x, a.y)) or (door_sides[d * 2 + 1] < 0 and is_space(b.x, b.y)):
+			door_vent[d] = 1
+	var pump_id: int = tile_ids.get("lock_pump", -1)
+	for i in cells.size():
+		if pump_id < 0 or cells[i] != pump_id:
+			continue
+		var x := i % width
+		var y := i / width
+		var start := -1
+		for o: int in [width, -width]:
+			var j := i + o
+			if j >= 0 and j < cells.size() and walk[j] == 1 and door_of[j] < 0:
+				start = j
+				break
+		if start < 0:
+			return "Карта «%s»: насос шлюза в %d,%d не смотрит в камеру." % [map_name, x, y]
+		# the chamber: floor reached from the pump without passing a door
+		var seen := {start: true}
+		var todo := [start]
+		while not todo.is_empty():
+			var c: int = todo.pop_back()
+			for o: int in [1, -1, width, -width]:
+				var j := c + o
+				if j < 0 or j >= cells.size() or seen.has(j) or walk[j] == 0 or door_of[j] >= 0:
+					continue
+				if absi(j % width - c % width) > 1:
+					continue
+				seen[j] = true
+				todo.append(j)
+		var inner := -1
+		var outer := -1
+		for d in doors.size():
+			if seen.has(door_sides[d * 2]) or seen.has(door_sides[d * 2 + 1]):
+				if door_vent[d] == 1:
+					outer = d
+				else:
+					inner = d
+		if inner < 0 or outer < 0:
+			return "Карта «%s»: у шлюза с насосом в %d,%d нет двух дверей (внутренней и наружной)." % [map_name, x, y]
+		door_partner[inner] = outer
+		door_partner[outer] = inner
+		lock_pump[i] = {"chamber": PackedInt32Array(seen.keys()), "inner": inner, "outer": outer}
+	return ""
+
+
 func walkable(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < width and y < height and walk[y * width + x] == 1
 
@@ -229,6 +297,8 @@ func device_name(cell: int) -> String:
 		return "двигатель"
 	if air_plant.has(cell):
 		return "воздушная установка"
+	if lock_pump.has(cell):
+		return "насос шлюза"
 	return ""
 
 

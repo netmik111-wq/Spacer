@@ -1030,6 +1030,23 @@ func _process(delta: float) -> void:
 			var kpa := int(round(int(gap[0]) * Net.KPA_FULL / Net.AIR_FULL))
 			var where := "" if int(gap[1]) == 0 else (", за ним давление ниже" if int(gap[1]) < 0 else ", за ним давление выше")
 			_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
+	elif target == 15:
+		var pump := client.use_cell()
+		var lock: Dictionary = client.map.lock_pump[pump]
+		if client.pumps.has(pump):
+			_hint.text = "Насос шлюза %s воздух.  E: остановить" % ("откачивает" if int(client.pumps[pump]) == 1 else "закачивает")
+		elif no_power:
+			_hint.text = "Насос шлюза обесточен: %s" % why
+		elif not (client.doors.is_shut(int(lock["inner"])) and client.doors.is_shut(int(lock["outer"]))):
+			_hint.text = "Насос шлюза: сначала должны закрыться обе двери"
+		elif client.lock_air(pump) > 0.5:
+			_hint.text = "E: откачать воздух из шлюза (наружная дверь откроется, когда воздуха не останется)"
+		elif client.store_air <= 0.0:
+			_hint.text = "Насос шлюза: запас воздуха пуст, закачать нечего"
+		else:
+			_hint.text = "E: закачать воздух в шлюз (внутренняя дверь откроется, когда давление выровняется)"
+	elif target == 16:
+		_hint.text = "Дверь шлюза не откроется, пока не закрыта вторая"
 	elif target == 10:
 		_hint.text = "Чиню дверь…" if (_use_held and client.work > 0) else "Дверь заклинило открытой. Держите E, чтобы починить%s" % no_part
 	elif target == 11:

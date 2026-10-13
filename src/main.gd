@@ -129,7 +129,7 @@ func _ready() -> void:
 		_server.shutdown_token = str(_opt.get("token", ""))
 		_server.director.auto = not _flags.has("no-events")
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
-		var problem := _server.start(port, "ship01", bots)
+		var problem := _server.start(port, "ship02", bots)
 		if problem != "":
 			printerr(problem)
 			get_tree().quit(1)
@@ -249,7 +249,7 @@ func _host_inside(port: int) -> void:
 	_server.shutdown_token = _server_token
 	if _flags.has("log"):
 		_server.log_line.connect(func(text: String) -> void: print(text))
-	var problem := _server.start(port, "ship01", _host_bots)
+	var problem := _server.start(port, "ship02", _host_bots)
 	if problem != "":
 		_stop_server()
 		_show_menu(problem, true)
