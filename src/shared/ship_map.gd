@@ -21,6 +21,8 @@ var deck_count := 1
 var deck_names := PackedStringArray()
 var cells := PackedInt32Array()      # tile id per cell, -1 = empty space
 var walk := PackedByteArray()        # 1 = can be walked on (doors count: they open)
+var opaque := PackedByteArray()      # 1 = light and sight do not pass (walls and the things on them;
+                                     # windows let them through, and shut doors stop them: see Sight)
 var spawns: Array[Vector2i] = []
 var crc := 0                         # fingerprint of the layout, compared at login
 
@@ -79,8 +81,14 @@ func load_from(name: String) -> String:
 		return "Карта «%s»: палубы уложены неверно." % name
 	cells = PackedInt32Array()
 	walk = PackedByteArray()
+	opaque = PackedByteArray()
 	cells.resize(width * height)
 	walk.resize(width * height)
+	opaque.resize(width * height)
+	var windows := []
+	for t: Dictionary in tiles["tiles"]:
+		if str(t["name"]).begins_with("window"):
+			windows.append(tile_ids[str(t["name"])])
 	var src: Array = data["cells"]
 	if src.size() != width * height:
 		return "Карта «%s»: размер не совпадает с содержимым." % name
@@ -90,6 +98,7 @@ func load_from(name: String) -> String:
 		cells[i] = id
 		var ok := id >= 0 and id < tile_kinds.size() and tile_kinds[id] != "wall"
 		walk[i] = 1 if ok else 0
+		opaque[i] = 1 if id >= 0 and not ok and not windows.has(id) else 0
 		h = (h * 31 + id + 2) & 0x7FFFFFFF
 	spawns = []
 	for s: Array in data["spawns"]:

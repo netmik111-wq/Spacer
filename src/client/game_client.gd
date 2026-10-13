@@ -24,6 +24,8 @@ const ShipMap := preload("res://src/shared/ship_map.gd")
 const Mover := preload("res://src/shared/mover.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const Items := preload("res://src/shared/items.gd")
+const Sight := preload("res://src/shared/sight.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
@@ -41,6 +43,7 @@ class Ent:
 	var facing := 2
 	var cond := 0                    # Net.COND_*
 	var look := 2                    # facing and condition as the server packs them (for the checksum)
+	var light := false               # shines a light (a lit flashlight in the hand)
 	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing, ticks it takes]
 
 
@@ -56,6 +59,8 @@ var admin_token := ""                # set when this game started the server: un
 var doors := Doors.new()
 var air := PackedByteArray()         # per cell: 0..Net.AIR_FULL (cells outside our view keep their last value)
 var holes := {}                      # breached hull cell -> true
+var floor_things := {}               # things lying on the floor: cell -> PackedByteArray (see Net.SEC_FLOOR)
+var floor_changes := 0               # goes up whenever something is put down or picked up
 var ship_changes := 0                # goes up whenever doors, hull or air change: views redraw on it
 
 # where the ship is
@@ -70,13 +75,13 @@ var ship_moving := false
 var ship_tick := 0
 var broken := {}                     # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
 var slots := PackedByteArray()       # what our character carries: one item per slot (Net.ITEM_*)
+var hand := 0                        # the slot whose thing is in the hand (we choose it; the server follows)
 var patches := 0                     # of that, hull patches
 var parts := 0                       # and spare parts
 var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
 var search_slots := PackedByteArray()  # what they carry
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
-var store_patches := 0               # the ship's supplies in the locker
-var store_parts := 0
+var store := {}                      # the ship's supplies in the locker: thing -> how many
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
 var _power := true                   # the ship has power (see powered)
@@ -189,6 +194,9 @@ func close() -> void:
 	checks_bad = 0
 	ship_checks_bad = 0
 	holes.clear()
+	floor_things.clear()
+	hand = 0
+	store.clear()
 	admin_token = ""
 	health = 100
 	my_cond = 0
@@ -250,6 +258,84 @@ func send_use(held: bool) -> void:
 		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_hand(slot: int) -> void:
+	## Takes the thing in that slot into the hand (or an empty hand, if the slot is empty).
+	if phase == PLAYING and slot >= 0 and slot < Net.SLOTS:
+		hand = slot
+		_peer.send(0, PackedByteArray([Net.C_HAND, slot]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_drop() -> void:
+	## Puts the thing in the hand down here.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_DROP]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_act() -> void:
+	## Uses the thing in the hand by itself (switches a flashlight).
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_ACT]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func in_hand() -> int:
+	return slots[hand] if hand < slots.size() else Net.ITEM_NONE
+
+
+func stock(item: int) -> int:
+	## How many of that thing the supply locker holds.
+	return int(store.get(item, 0))
+
+
+func carried(item: int) -> int:
+	## How many of that thing (in any state) our character carries.
+	var n := 0
+	for v in slots:
+		if v != Net.ITEM_NONE and Items.kind_of(v) == Items.kind_of(item):
+			n += 1
+	return n
+
+
+func floor_cell() -> int:
+	## The cell whose top thing the "use" key would pick up: the one in front, or
+	## failing that our own; -1 if there is nothing to pick up (the same order as
+	## GameServer._pick_up).
+	if phase != PLAYING or my_cond != Net.COND_OK:
+		return -1
+	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing)
+	if ahead >= 0 and floor_things.has(ahead):
+		return ahead
+	var here := pred.y * map.width + pred.x
+	return here if floor_things.has(here) else -1
+
+
+func top_thing(cell: int) -> int:
+	## The thing lying on top in that cell (ITEM_NONE if none).
+	var things: PackedByteArray = floor_things.get(cell, PackedByteArray())
+	for k in range(things.size() - 1, -1, -1):
+		if things[k] != Net.ITEM_NONE:
+			return things[k]
+	return Net.ITEM_NONE
+
+
+func lit_cells() -> Dictionary:
+	## Every cell some light falls on (a flashlight in somebody's hand): cell ->
+	## how strongly. Lights are worked out from where characters are drawn.
+	var out := {}
+	for id: int in ents.keys():
+		var lit := (id == my_id and not Items.light(in_hand()).is_empty() and my_cond != Net.COND_DEAD) if id == my_id \
+			else (ents[id] as Ent).light
+		if not lit:
+			continue
+		var s := sample(id)
+		if s.is_empty():
+			continue
+		var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
+		var cells := Sight.cone(map, doors, s[0], s[1], float(beam[0]), int(beam[1]))
+		for cell: int in cells.keys():
+			out[cell] = maxf(float(out.get(cell, 0.0)), float(cells[cell]))
+	return out
+
+
 func send_jump(target: int) -> void:
 	## Asks for a jump. The server agrees only while our character stands at the sector console.
 	if phase == PLAYING:
@@ -299,7 +385,8 @@ func use_target() -> int:
 	## 8 = the engine or the air plant in working order: nothing to do, but it says so,
 	## 9 = a door whose emergency shutter is down and can be forced,
 	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended),
-	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled).
+	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled),
+	## 14 = something lying on the floor in front or underfoot, to pick up.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -328,6 +415,8 @@ func use_target() -> int:
 				return 9
 	if lying_near() >= 0:
 		return 13
+	if floor_cell() >= 0:
+		return 14
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
@@ -386,11 +475,11 @@ func send_loot(theirs: bool, index: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_LOOT, 1 if theirs else 0, index]), ENetPacketPeer.FLAG_RELIABLE)
 
 
-func send_store(action: int) -> void:
+func send_store(action: int, item: int = Net.ITEM_NONE) -> void:
 	## Asks the supply locker for something (Net.STORE_*). The server agrees
 	## only while our character stands at the locker.
 	if phase == PLAYING:
-		_peer.send(0, PackedByteArray([Net.C_STORE, action]), ENetPacketPeer.FLAG_RELIABLE)
+		_peer.send(0, PackedByteArray([Net.C_STORE, action, item]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func can_trade() -> bool:
@@ -672,10 +761,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			search_id = -1 if who == Net.NOBODY else who
 			search_slots = pkt.slice(3, 3 + Net.SLOTS)
 		Net.S_STORE:
-			store_patches = pkt.decode_u16(1)
-			store_parts = pkt.decode_u16(3)
-			store_air = pkt.decode_u16(5) / 10.0
-			credits = pkt.decode_u16(7)
+			store_air = pkt.decode_u16(1) / 10.0
+			credits = pkt.decode_u16(3)
+			store.clear()
+			for i in pkt[5]:
+				store[pkt[6 + i * 3]] = pkt.decode_u16(7 + i * 3)
 		Net.S_POWER:
 			_power = pkt[1] != 0
 			ship_changes += 1
@@ -746,8 +836,8 @@ func _on_world(pkt: PackedByteArray) -> void:
 			supply = (pkt[pos + 3] & 1) != 0
 			work = pkt[pos + 4]
 			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
-			patches = slots.count(Net.ITEM_PATCH)
-			parts = slots.count(Net.ITEM_PART)
+			patches = carried(Net.ITEM_PATCH)
+			parts = carried(Net.ITEM_PART)
 			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)
@@ -770,6 +860,18 @@ func _on_world(pkt: PackedByteArray) -> void:
 					holes.erase(cell)
 				pos += Net.HULL_BYTES
 			ship_changes += 1
+		elif sec == Net.SEC_FLOOR:
+			var count := pkt.decode_u16(pos)
+			pos += 2
+			for i in count:
+				var cell := pkt.decode_s16(pos + 2) * map.width + pkt.decode_s16(pos)
+				var things := pkt.slice(pos + 4, pos + 4 + Net.FLOOR_STACK)
+				if things.count(Net.ITEM_NONE) == Net.FLOOR_STACK:
+					floor_things.erase(cell)
+				else:
+					floor_things[cell] = things
+				pos += Net.FLOOR_BYTES
+			floor_changes += 1
 		elif sec == Net.SEC_AIR:
 			var x0 := pkt[pos] * 16
 			var y0 := pkt[pos + 1] * 16
@@ -804,6 +906,10 @@ func _on_world(pkt: PackedByteArray) -> void:
 			for cell: int in holes.keys():
 				if _outside_view(cell % map.width, cell / map.width):
 					holes.erase(cell)
+			for cell: int in floor_things.keys():
+				if _outside_view(cell % map.width, cell / map.width):
+					floor_things.erase(cell)
+			floor_changes += 1
 		elif sec == Net.SEC_CHECK:
 			var want := pkt.decode_u32(pos)
 			var want_ship := pkt.decode_u32(pos + 4)
@@ -834,6 +940,8 @@ func _ship_sum() -> int:
 			sum += Net.door_hash(d, -1 if doors.ready[d] == Doors.CLOSED else doors.ready[d], doors.flags(d))
 	for cell: int in holes.keys():
 		sum += Net.hull_hash(cell % map.width, cell / map.width)
+	for cell: int in floor_things.keys():
+		sum += Net.floor_hash(cell % map.width, cell / map.width, floor_things[cell])
 	for deck in map.deck_count:
 		for cy in range(maxi(_view_cy - 1, 0), mini(_view_cy + 2, map.chunks_high())):
 			var y0 := deck * map.deck_stride + cy * 16
@@ -866,10 +974,12 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
 		e.facing = facing
 		e.look = look
 		e.cond = Net.look_cond(look)
+		e.light = Net.look_light(look)
 		ents[id] = e
 		return
 	e.look = look
 	e.cond = Net.look_cond(look)
+	e.light = Net.look_light(look)
 	if e.x != x or e.y != y:
 		if absi(e.x - x) + absi(e.y - y) == 1:
 			# somebody hauling, or being hauled, takes longer over a step

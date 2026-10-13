@@ -18,6 +18,7 @@ const Air := preload("res://src/server/air.gd")
 const Vitals := preload("res://src/server/vitals.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Director := preload("res://src/server/director.gd")
+const Items := preload("res://src/shared/items.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -69,6 +70,9 @@ var _doors_in: Array = []              # per chunk: the doors in it
 var _door_change: Array = []           # per chunk: door records changed this tick
 var _hull_change: Array = []           # per chunk: hull records changed this tick
 var _air_change: Array = []            # per chunk: (cell, air) pairs changed since the last air send
+var _floor_change: Array = []         # per chunk: floor records changed this tick
+var floor_things := {}                # things lying on the floor: cell -> PackedByteArray of Net.FLOOR_STACK
+                                      # (bottom first, ITEM_NONE where there is nothing)
 var _air_sent := PackedByteArray()     # per cell: the air level clients were last told
 var _ship_sums := PackedInt64Array()   # per chunk: checksum of doors, hull and air as clients know them
 var _ship_sums_tick := -1
@@ -87,11 +91,10 @@ var ship_moving := false
 var in_reach := false                  # inside the sector's meteor stream, or docked at its station or trader
 var broken := {}                       # things out of order (bridge consoles, the engine, the air plant): wall cell -> true
 # the ship's supplies, kept in the supply locker
-var store_patches := 0
-var store_parts := 0
+var store := {}                         # the supply locker: thing (Net.ITEM_*) -> how many
 var store_air := 0.0                   # air the air plant still has to give, in cells' worth
 var credits := 0
-var _store_told := -1                  # the supplies as clients were last told, packed
+var _store_told := PackedByteArray()   # the supplies as clients were last told
 var _power_out_until := 0              # a passing power failure lasts until this tick
 var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
@@ -121,6 +124,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_door_change.clear()
 	_hull_change.clear()
 	_air_change.clear()
+	_floor_change.clear()
 	_doors_in.clear()
 	for c in chunks:
 		_change.append(PackedByteArray())
@@ -128,6 +132,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		_door_change.append(PackedByteArray())
 		_hull_change.append(PackedByteArray())
 		_air_change.append(PackedByteArray())
+		_floor_change.append(PackedByteArray())
 		_doors_in.append(PackedInt32Array())
 	_sums.resize(chunks)
 	_ship_sums.resize(chunks)
@@ -138,11 +143,13 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_flags_sent = doors.locked.duplicate()
 	_power_out_until = 0
 	_power_told = true
-	store_patches = Net.START_PATCHES
-	store_parts = Net.START_PARTS
+	store.clear()
+	for item in Items.kept_in_locker():
+		store[item] = Items.stock(item)
 	store_air = Net.STORE_AIR_FULL
 	credits = Net.START_CREDITS
-	_store_told = -1
+	_store_told = PackedByteArray()
+	floor_things.clear()
 	_forced_until.resize(map.doors.size())
 	_forced_until.fill(0)
 	for d in map.doors.size():
@@ -306,7 +313,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			p.climb_tick = clampi(at, tick, tick + MAX_INPUT_LEAD)
 			if p.climb_tick == tick:
 				p.climb_tick = -1
-				_climb(p)
+				_press(p)
 		p.using = held
 	elif kind == Net.C_SUIT:
 		if p.cond == Net.COND_OK and pkt.size() > 1:
@@ -321,8 +328,15 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		if pkt.size() > 3:
 			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
 	elif kind == Net.C_STORE:
-		if pkt.size() > 1:
-			_store_asked(p, pkt[1])
+		if pkt.size() > 2:
+			_store_asked(p, pkt[1], pkt[2])
+	elif kind == Net.C_HAND:
+		if pkt.size() > 1 and pkt[1] < Net.SLOTS:
+			p.hand = pkt[1]
+	elif kind == Net.C_DROP:
+		_put_down(p)
+	elif kind == Net.C_ACT:
+		_act(p)
 	elif kind == Net.C_SEARCH or kind == Net.C_DRAG:
 		if pkt.size() >= 7:
 			_hands_asked(p, HAND_SEARCH if kind == Net.C_SEARCH else HAND_DRAG, pkt.decode_u16(1), pkt.decode_u32(3))
@@ -434,6 +448,7 @@ func _add_bot() -> void:
 			n += 1
 	var p := _new_player(_unique_name("Бот %d" % n))
 	p.bot = true
+	p.add(Net.ITEM_FLASHLIGHT, true)
 	_announce_join(p, null)
 
 
@@ -530,6 +545,7 @@ func _leave_body(p: Player) -> void:
 	c.cond = Net.COND_DEAD
 	c.health = Net.HEALTH_DEAD
 	c.slots = p.slots.duplicate()
+	c.hand = p.hand
 	for q: Player in players:
 		if q == null:
 			continue
@@ -828,21 +844,25 @@ func _feed_air() -> void:
 
 func _store_packet() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(9)
+	out.resize(6)
 	out.encode_u8(0, Net.S_STORE)
-	out.encode_u16(1, store_patches)
-	out.encode_u16(3, store_parts)
-	out.encode_u16(5, roundi(store_air * 10.0))
-	out.encode_u16(7, credits)
+	out.encode_u16(1, roundi(store_air * 10.0))
+	out.encode_u16(3, credits)
+	out.encode_u8(5, store.size())
+	for item: int in store.keys():
+		var o := out.size()
+		out.resize(o + 3)
+		out.encode_u8(o, item)
+		out.encode_u16(o + 1, store[item])
 	return out
 
 
 func _tell_store() -> void:
 	## Tells everyone the ship's supplies, if they changed since the last time.
-	var now := ((store_patches * 1000 + store_parts) * 1000 + roundi(store_air)) * 100000 + credits
+	var now := _store_packet()
 	if now != _store_told:
 		_store_told = now
-		_to_all(_store_packet())
+		_to_all(now)
 
 
 func can_trade() -> bool:
@@ -851,15 +871,17 @@ func can_trade() -> bool:
 
 
 func patches_aboard() -> int:
-	## Every patch the crew could still use: in the locker, in pockets and on bodies.
-	var n := store_patches
+	## Every patch the crew could still use: in the locker, in pockets, on bodies and on the floor.
+	var n: int = store.get(Net.ITEM_PATCH, 0)
 	for p: Player in players:
 		if p != null:
 			n += p.count(Net.ITEM_PATCH)
+	for things: PackedByteArray in floor_things.values():
+		n += things.count(Net.ITEM_PATCH)
 	return n
 
 
-func _store_asked(p: Player, action: int) -> void:
+func _store_asked(p: Player, action: int, item: int) -> void:
 	## A player at the supply locker takes something, puts it back, or buys from a trader.
 	if p.cond != Net.COND_OK:
 		return
@@ -867,25 +889,20 @@ func _store_asked(p: Player, action: int) -> void:
 	if ahead < 0 or not map.locker.has(ahead):
 		return
 	match action:
-		Net.STORE_TAKE_PATCH:
-			if store_patches > 0 and p.add(Net.ITEM_PATCH):
-				store_patches -= 1
-		Net.STORE_TAKE_PART:
-			if store_parts > 0 and p.add(Net.ITEM_PART):
-				store_parts -= 1
+		Net.STORE_TAKE:
+			if int(store.get(item, 0)) > 0 and p.add(item, true):
+				store[item] -= 1
 		Net.STORE_PUT_BACK:
-			while p.remove(Net.ITEM_PATCH):
-				store_patches += 1
-			while p.remove(Net.ITEM_PART):
-				store_parts += 1
-		Net.STORE_BUY_PATCH:
-			if can_trade() and credits >= Net.PRICE_PATCH:
-				credits -= Net.PRICE_PATCH
-				store_patches += 1
-		Net.STORE_BUY_PART:
-			if can_trade() and credits >= Net.PRICE_PART:
-				credits -= Net.PRICE_PART
-				store_parts += 1
+			for at in Net.SLOTS:
+				var kind := Items.kind_of(p.slots[at])
+				if p.slots[at] != Net.ITEM_NONE and store.has(kind):
+					store[kind] += 1
+					p.slots[at] = Net.ITEM_NONE
+		Net.STORE_BUY:
+			var price := Items.price(item)
+			if can_trade() and store.has(item) and price > 0 and credits >= price:
+				credits -= price
+				store[item] += 1
 		Net.STORE_BUY_AIR:
 			if can_trade() and credits >= Net.PRICE_AIR and store_air < Net.STORE_AIR_FULL:
 				credits -= Net.PRICE_AIR
@@ -1105,7 +1122,7 @@ func _tick() -> void:
 				_haul(p, was_x, was_y)
 		if p.climb_tick >= 0 and tick >= p.climb_tick:
 			p.climb_tick = -1
-			_climb(p)
+			_press(p)
 		_update_vitals(p)
 		_update_hands(p)
 		_update_work(p)
@@ -1231,6 +1248,92 @@ func _usable_ahead(p: Player) -> bool:
 		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 
+func _press(p: Player) -> void:
+	## The "use" key went down (on the tick the client pressed it). Most of what
+	## it does is holding it (see _update_work); a press itself picks up a thing
+	## lying in front or underfoot, or else takes a ladder.
+	if not _pick_up(p):
+		_climb(p)
+
+
+func _lying_in(cell: int) -> bool:
+	for q: Player in players:
+		if q != null and q.cond != Net.COND_OK and q.st.y * map.width + q.st.x == cell:
+			return true
+	return false
+
+
+func _pick_up(p: Player) -> bool:
+	## Picks up the top thing lying in the cell in front, or else in its own cell:
+	## into the hand if the hand is free. Somebody lying there is searched instead
+	## (the client asks for that), and a thing on the wall in front comes first.
+	if p.cond != Net.COND_OK or p.corpse or _usable_ahead(p):
+		return false
+	var here := p.st.y * map.width + p.st.x
+	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	for cell: int in [ahead, here]:
+		if cell < 0 or not floor_things.has(cell) or _lying_in(cell):
+			continue
+		var things: PackedByteArray = floor_things[cell]
+		var top := Net.FLOOR_STACK - 1
+		while top >= 0 and things[top] == Net.ITEM_NONE:
+			top -= 1
+		if top < 0 or not p.add(things[top], true):
+			return false
+		things[top] = Net.ITEM_NONE
+		if things.count(Net.ITEM_NONE) == Net.FLOOR_STACK:
+			floor_things.erase(cell)
+		else:
+			floor_things[cell] = things
+		_floor_record(cell)
+		return true
+	return false
+
+
+func _put_down(p: Player) -> bool:
+	## Puts the thing in the hand down in its own cell, if there is room there.
+	var item := p.in_hand()
+	if p.cond != Net.COND_OK or p.corpse or item == Net.ITEM_NONE:
+		return false
+	var cell := p.st.y * map.width + p.st.x
+	var things: PackedByteArray = floor_things.get(cell, PackedByteArray())
+	if things.is_empty():
+		things.resize(Net.FLOOR_STACK)
+	var at := things.find(Net.ITEM_NONE)
+	if at < 0:
+		return false                         # the cell is full
+	things[at] = item
+	floor_things[cell] = things
+	p.slots[p.hand] = Net.ITEM_NONE
+	_floor_record(cell)
+	return true
+
+
+func _act(p: Player) -> bool:
+	## Uses the thing in the hand by itself: switches a flashlight on or off.
+	var item := p.in_hand()
+	if p.cond != Net.COND_OK or p.corpse or Items.switched(item) == Net.ITEM_NONE:
+		return false
+	p.slots[p.hand] = Items.switched(item)
+	return true
+
+
+func _floor_record(cell: int) -> void:
+	var buf: PackedByteArray = _floor_change[_chunk_of(cell % map.width, cell / map.width)]
+	_put_floor(buf, cell)
+	_ship_sums_tick = -1
+
+
+func _put_floor(buf: PackedByteArray, cell: int) -> void:
+	var o := buf.size()
+	buf.resize(o + Net.FLOOR_BYTES)
+	buf.encode_s16(o, cell % map.width)
+	buf.encode_s16(o + 2, cell / map.width)
+	var things: PackedByteArray = floor_things.get(cell, PackedByteArray())
+	for k in Net.FLOOR_STACK:
+		buf[o + 4 + k] = things[k] if k < things.size() else Net.ITEM_NONE
+
+
 func _climb(p: Player) -> bool:
 	## The "use" key was pressed. On a ladder, with nothing else to use in front,
 	## the character goes to the other deck, and takes along whoever it hauls.
@@ -1256,8 +1359,8 @@ func _climb(p: Player) -> bool:
 # ------------------------------------------------- searching and hauling
 
 func _look(p: Player) -> int:
-	## Facing, condition and "moves slowly" as one byte (see Net.pack_look).
-	return Net.pack_look(p.st.facing, p.cond, p.st.slow)
+	## Facing, condition, light and "moves slowly" as one byte (see Net.pack_look).
+	return Net.pack_look(p.st.facing, p.cond, p.st.slow, not Items.light(p.in_hand()).is_empty())
 
 
 func _can_reach(p: Player, id: int) -> bool:
@@ -1378,6 +1481,8 @@ func _loot_asked(p: Player, theirs: bool, index: int) -> void:
 	var item := from.slots[index]
 	if item != Net.ITEM_NONE and to.add(item):
 		from.slots[index] = Net.ITEM_NONE
+		if _look(other) != other.rep_look:
+			_record(other)                       # a lit flashlight taken out of their hand
 
 
 func _respawn(p: Player) -> void:
@@ -1481,6 +1586,8 @@ func _ensure_ship_sums() -> void:
 		_ship_sums[_chunk_of(at.x, at.y)] += Net.door_hash(d, -1 if _door_sent[d] == Doors.CLOSED else _door_sent[d], _flags_sent[d])
 	for cell: int in air.holes.keys():
 		_ship_sums[_chunk_of(cell % map.width, cell / map.width)] += Net.hull_hash(cell % map.width, cell / map.width)
+	for cell: int in floor_things.keys():
+		_ship_sums[_chunk_of(cell % map.width, cell / map.width)] += Net.floor_hash(cell % map.width, cell / map.width, floor_things[cell])
 	var w := map.width
 	for i in _air_sent.size():
 		if _air_sent[i] != 0:
@@ -1505,6 +1612,12 @@ func _append_ship_full(out: PackedByteArray, c: int, cx: int, cy: int) -> void:
 			holes.encode_u8(o + 4, 1)
 	if not holes.is_empty():
 		_append_records(out, Net.SEC_HULL, holes, Net.HULL_BYTES)
+	var things := PackedByteArray()
+	for cell: int in floor_things.keys():
+		if _chunk_of(cell % map.width, cell / map.width) == c:
+			_put_floor(things, cell)
+	if not things.is_empty():
+		_append_records(out, Net.SEC_FLOOR, things, Net.FLOOR_BYTES)
 	var o2 := out.size()
 	out.resize(o2 + 3 + 256)
 	out.encode_u8(o2, Net.SEC_AIR_FULL)
@@ -1539,6 +1652,15 @@ func _bot_think(p: Player) -> void:
 	if map.climb[st.y * map.width + st.x] >= 0 and _rng.randf() < 0.3 and _climb(p):
 		p.bot_until = tick + _rng.randi_range(4, 12)
 		return
+	# now and then it switches its flashlight, puts it down or picks something up
+	# (which also keeps the floor busy in network tests)
+	var whim := _rng.randf()
+	if st.cd == 0 and whim < 0.04:
+		_act(p)
+	elif st.cd == 0 and whim < 0.06:
+		_put_down(p)
+	elif st.cd == 0 and whim < 0.1:
+		_pick_up(p)
 	if _rng.randf() < 0.2 and not blocked:
 		st.dir = Net.DIR_NONE
 		p.bot_until = tick + _rng.randi_range(10, 40)
@@ -1683,6 +1805,9 @@ func _send_world() -> void:
 						var hull_changes: PackedByteArray = _hull_change[c]
 						if not hull_changes.is_empty():
 							_append_records(out, Net.SEC_HULL, hull_changes, Net.HULL_BYTES)
+						var floor_changes: PackedByteArray = _floor_change[c]
+						if not floor_changes.is_empty():
+							_append_records(out, Net.SEC_FLOOR, floor_changes, Net.FLOOR_BYTES)
 						var air_changes: PackedByteArray = _air_change[c]
 						if not air_changes.is_empty():
 							var oa := out.size()
@@ -1744,5 +1869,7 @@ func _send_world() -> void:
 			_door_change[c] = PackedByteArray()
 		if not (_hull_change[c] as PackedByteArray).is_empty():
 			_hull_change[c] = PackedByteArray()
+		if not (_floor_change[c] as PackedByteArray).is_empty():
+			_floor_change[c] = PackedByteArray()
 		if not (_air_change[c] as PackedByteArray).is_empty():
 			_air_change[c] = PackedByteArray()

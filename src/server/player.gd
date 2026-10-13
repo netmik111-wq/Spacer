@@ -3,6 +3,7 @@ extends RefCounted
 
 const Mover := preload("res://src/shared/mover.gd")
 const Net := preload("res://src/shared/net.gd")
+const Items := preload("res://src/shared/items.gd")
 
 var slot := 0
 var peer: ENetPacketPeer = null      # null for bots
@@ -29,6 +30,7 @@ var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = ful
 var supply := false                  # breathing from the tank instead of the air around
 var slots := PackedByteArray()       # what it carries: one item per slot (Net.ITEM_*), Net.SLOTS of them
 var slots_sent := PackedByteArray()  # the same as last told to its client
+var hand := 0                        # the slot whose thing is in the hand (its player chooses it)
 var dragging := -1                   # the slot of the lying character it hauls along (-1 = nobody)
 var dragged_by := -1                 # the slot of whoever hauls it
 var searching := -1                  # the slot of the lying character whose pockets it is going through
@@ -57,13 +59,24 @@ func _init() -> void:
 
 
 func count(item: int) -> int:
-	## How many of that thing it carries.
-	return slots.count(item)
+	## How many of that thing it carries (in any state).
+	if item == Net.ITEM_NONE:
+		return slots.count(Net.ITEM_NONE)
+	var n := 0
+	for v in slots:
+		if v != Net.ITEM_NONE and Items.kind_of(v) == Items.kind_of(item):
+			n += 1
+	return n
 
 
-func add(item: int) -> bool:
-	## Puts a thing into the first free slot. False if there is none.
-	var at := slots.find(Net.ITEM_NONE)
+func in_hand() -> int:
+	return slots[hand]
+
+
+func add(item: int, to_hand: bool = false) -> bool:
+	## Puts a thing into the first free slot (into the hand if asked and it is
+	## free). False if there is no room.
+	var at := hand if to_hand and slots[hand] == Net.ITEM_NONE else slots.find(Net.ITEM_NONE)
 	if at < 0:
 		return false
 	slots[at] = item
@@ -71,9 +84,10 @@ func add(item: int) -> bool:
 
 
 func remove(item: int) -> bool:
-	## Takes one such thing out. False if it carries none.
-	var at := slots.find(item)
-	if at < 0:
-		return false
-	slots[at] = Net.ITEM_NONE
-	return true
+	## Takes one such thing out (any state of it: a lit flashlight is a flashlight).
+	## False if it carries none.
+	for at in slots.size():
+		if Items.kind_of(slots[at]) == Items.kind_of(item) and slots[at] != Net.ITEM_NONE:
+			slots[at] = Net.ITEM_NONE
+			return true
+	return false

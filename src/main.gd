@@ -39,7 +39,13 @@ extends Node
 ## search_after=SECONDS (go through their pockets), loot_after=SECONDS (take
 ## the first thing found there), faint_after=SECONDS with --inproc (the other
 ## characters aboard fall unconscious, one of them right in front of ours, for
-## trying the three above).
+## trying the three above). hand=N with hand_after=SECONDS (take slot N, counted
+## from 0, into the hand), take=ITEM with take_after=SECONDS (take that thing from
+## the supply locker the character faces), act_after=SECONDS (use the thing in
+## the hand: switch a flashlight), drop_after=SECONDS (put it down),
+## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
+## the character's hand, or its first free slot).
 
 const Net := preload("res://src/shared/net.gd")
 const GameServer := preload("res://src/server/game_server.gd")
@@ -92,6 +98,12 @@ var _dragged := false
 var _searched := false
 var _looted := false
 var _fainted := false
+var _handed := false
+var _taken := false
+var _acted := false
+var _dropped := false
+var _picked := false
+var _given := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -147,7 +159,8 @@ func _define_inputs() -> void:
 		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"chat": [KEY_ENTER, KEY_KP_ENTER], "pause": [KEY_ESCAPE],
 		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11], "respawn": [KEY_R],
-		"use": [KEY_E], "suit": [KEY_Q], "drag": [KEY_F],
+		"use": [KEY_E], "suit": [KEY_Q], "drag": [KEY_F], "drop": [KEY_G], "act": [KEY_Z],
+		"slot_1": [KEY_1], "slot_2": [KEY_2], "slot_3": [KEY_3], "slot_4": [KEY_4], "slot_5": [KEY_5], "slot_6": [KEY_6],
 	}
 	for action: String in keys:
 		if not InputMap.has_action(action):
@@ -429,6 +442,25 @@ func _process(_delta: float) -> void:
 			if _client.search_slots[i] != Net.ITEM_NONE:
 				_client.send_loot(true, i)
 				break
+	if _opt.has("hand_after") and not _handed and _screen != null and t >= float(_opt["hand_after"]):
+		_handed = true
+		_client.send_hand(int(_opt.get("hand", 0)))
+	if _opt.has("take_after") and not _taken and _screen != null and t >= float(_opt["take_after"]):
+		_taken = true
+		_client.send_store(Net.STORE_TAKE, int(_opt.get("take", Net.ITEM_FLASHLIGHT)))
+	if _opt.has("act_after") and not _acted and _screen != null and t >= float(_opt["act_after"]):
+		_acted = true
+		_client.send_act()
+	if _opt.has("drop_after") and not _dropped and _screen != null and t >= float(_opt["drop_after"]):
+		_dropped = true
+		_client.send_drop()
+	if _opt.has("give_after") and not _given and _server != null and _screen != null and t >= float(_opt["give_after"]):
+		_given = true
+		_server.players[_client.my_id].add(int(_opt.get("give", Net.ITEM_FLASHLIGHT)), true)
+	if _opt.has("pick_after") and not _picked and _screen != null and t >= float(_opt["pick_after"]):
+		_picked = true
+		_client.send_use(true)
+		_client.send_use(false)
 	if _opt.has("dock_after") and not _docked and _server != null and _screen != null and t >= float(_opt["dock_after"]):
 		_docked = true
 		_server.ship_pos = _server.sectors.spot[_server.sector]
@@ -516,6 +548,7 @@ func _process(_delta: float) -> void:
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
 					"deck": _client.my_deck(), "patches": _client.patches, "parts": _client.parts,
 					"dragging": _client.dragging(), "searching": _client.search_id,
+					"floor": _client.floor_things.size(), "in_hand": _client.in_hand(), "lit": _client.lit_cells().size(),
 					"sector": _client.sector, "visited": _client.sectors.visited.count(1), "sectors": _client.sectors.count,
 						"far": _client.sectors.far_from_start(_client.sector) if _client.sectors.count > 0 else -1,
 					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),

@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 13
+const PROTOCOL := 14
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -47,8 +47,11 @@ const C_SEARCH := 12                # u16 id (NOBODY = stop), u32 tick: go throu
 const C_DRAG := 13                  # u16 id (NOBODY = let go), u32 tick: take hold of somebody lying next to us
                                     # (both carry the tick of the client's predicted clock, like C_USE)
 const C_LOOT := 14                  # u8 theirs (1 = take from them, 0 = give them ours), u8 slot: while searching
-const C_STORE := 11                 # u8 action (STORE_*): take from the supply locker, put back, or buy from
-                                    # a trader (the player must stand at the locker)
+const C_STORE := 11                 # u8 action (STORE_*), u8 thing (ITEM_*): take from the supply locker,
+                                    # put back, or buy from a trader (the player must stand at the locker)
+const C_HAND := 15                  # u8 slot: the slot whose thing is in the hand
+const C_DROP := 16                  # nothing else: put the thing in the hand down on the floor here
+const C_ACT := 17                   # nothing else: use the thing in the hand by itself (switch a flashlight)
 
 # --- packets, server -> client ---
 const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
@@ -76,6 +79,8 @@ const SEC_CHECK := 5                # u32 checksum of the entities this client s
 const SEC_AIR := 6                  # u8 chunk x, u8 chunk y, u16 count, then pairs: u8 cell in the chunk (y*16+x), u8 air
 const SEC_SELF := 7                 # authoritative state of the client's own character (see pack_self)
 const SEC_AIR_FULL := 8             # u8 chunk x, u8 chunk y, then the air of all 256 cells of the chunk
+const SEC_FLOOR := 10               # u16 count, then FLOOR_BYTES-byte records: s16 x, s16 y, then FLOOR_STACK
+                                    # bytes: the things lying in that cell, bottom first (ITEM_NONE = none)
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
                                     # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100),
@@ -87,6 +92,8 @@ const VITALS_BYTES := 5 + SLOTS
 const ITEM_NONE := 0
 const ITEM_PATCH := 1               # closes a hole in the hull
 const ITEM_PART := 2                # a spare part: mends a machine or a door quickly
+const ITEM_FLASHLIGHT := 3
+const ITEM_FLASHLIGHT_ON := 4       # the same, switched on (what things are and do: see Items)
 const NOBODY := 65535               # "no character" where an id is expected
 
 const FACING_GONE := 255
@@ -94,6 +101,8 @@ const ENT_BYTES := 7
 const SELF_BYTES := 17
 const DOOR_BYTES := 7
 const HULL_BYTES := 5
+const FLOOR_STACK := 4              # how many things can lie in one cell
+const FLOOR_BYTES := 4 + FLOOR_STACK
 
 const S_HELM := 19                  # the ship inside its sector: s16 x*10, s16 y*10 (where it was on that tick),
                                     # u8 under way, u8 destination x, u8 destination y, u32 tick
@@ -104,25 +113,20 @@ const S_POWER := 21                 # u8 on: the ship has power (1) or every sys
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry
-const S_STORE := 22                 # the ship's supplies: u16 patches, u16 spare parts, u16 air for the air
-                                    # plant in tenths of a cell's worth, u16 credits
+const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
+                                    # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
+                                    # many of it the locker holds
 
 # what a player may ask of the supply locker (C_STORE)
-const STORE_TAKE_PATCH := 1
-const STORE_TAKE_PART := 2
-const STORE_PUT_BACK := 3           # everything carried goes back into the locker
-const STORE_BUY_PATCH := 4          # the three below: only while docked with a trader
-const STORE_BUY_PART := 5
+const STORE_TAKE := 1               # one of the thing named
+const STORE_PUT_BACK := 3           # everything carried that the locker keeps goes back into it
+const STORE_BUY := 4                # one of the thing named; this and the one below only while docked with a trader
 const STORE_BUY_AIR := 6
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a
 # spare part, or three times as long without one.
-const START_PATCHES := 8            # what the ship sets out with
-const START_PARTS := 5
-const START_CREDITS := 30
+const START_CREDITS := 30           # (what the locker starts with, and prices of things: see Items)
 const STORE_AIR_FULL := 60.0        # air the air plant can give out before it must be restocked, in cells' worth
-const PRICE_PATCH := 5
-const PRICE_PART := 10
 const PRICE_AIR := 5                # for AIR_LOT cells' worth
 const AIR_LOT := 10.0
 const EXPLORE_REWARD := 15          # credits for the first visit to a sector
@@ -183,14 +187,20 @@ static func ent_hash(id: int, x: int, y: int, look: int) -> int:
 	return id * 31 + x * 17 + y * 13 + look * 7 + 1
 
 
-## Facing, condition and "moves slowly" (hauling somebody, or being hauled)
-## packed into the one byte sent for a character. The top bit is used only in
-## SEC_SELF: the step in progress is a slow one.
+## Facing, condition, "shines a light" (a lit flashlight in the hand) and
+## "moves slowly" (hauling somebody, or being hauled) packed into the one byte
+## sent for a character. The top bit is used only in SEC_SELF: the step in
+## progress is a slow one.
+const LOOK_LIGHT := 8
 const LOOK_SLOW := 64
 const LOOK_LONG_STEP := 128
 
-static func pack_look(facing: int, cond: int, slow: bool = false) -> int:
-	return facing | (cond << 4) | (LOOK_SLOW if slow else 0)
+static func pack_look(facing: int, cond: int, slow: bool = false, light: bool = false) -> int:
+	return facing | (cond << 4) | (LOOK_SLOW if slow else 0) | (LOOK_LIGHT if light else 0)
+
+
+static func look_light(look: int) -> bool:
+	return (look & LOOK_LIGHT) != 0
 
 
 static func look_slow(look: int) -> bool:
@@ -212,6 +222,13 @@ static func door_hash(door: int, ready: int, flags: int) -> int:
 
 static func hull_hash(x: int, y: int) -> int:
 	return x * 29 + y * 37 + 11
+
+
+static func floor_hash(x: int, y: int, things: PackedByteArray) -> int:
+	var h := x * 53 + y * 59 + 17
+	for i in things.size():
+		h += things[i] * (i * 7 + 3) * 101
+	return h
 
 
 static func air_hash(x: int, y: int, air: int) -> int:

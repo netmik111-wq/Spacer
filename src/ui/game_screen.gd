@@ -9,6 +9,8 @@ const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Director := preload("res://src/server/director.gd")   # only for the list of events in the host's menu
+const Items := preload("res://src/shared/items.gd")
+const ItemArt := preload("res://src/client/item_art.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -42,7 +44,6 @@ var _monitor_frames: Array = []       # per health state: Array[AtlasTexture]
 var _alerts := {}                    # lamp name -> {"frames": Array[AtlasTexture], "seconds": float, "node": TextureRect}
 var _alert_box: VBoxContainer
 var _shade: ColorRect
-var _blackout: ColorRect
 var _fate: Label
 var _tank_bar: ColorRect
 var _tank_fill: ColorRect
@@ -61,6 +62,8 @@ var _console_shut: Button
 var _store_buttons := {}             # the supply locker's buttons: Net.STORE_* -> Button
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
+var _hand_shown := -1
+var _hand_label: Label               # what is in the hand, over the slots
 var _jump_label: Label
 var _flash: ColorRect
 var _monitor_step := 0.08
@@ -108,8 +111,14 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	top.add_child(spacer)
-	_keys = _text(top, 13)
-	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню    F11: весь экран"
+	# the keys, in two lines under the top right corner, so they do not run into the line on the left
+	_keys = _text(root, 13)
+	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню\n1–6 или колесо: что в руке    Z: применить в руке    G: положить"
+	_keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_keys.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_keys.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_keys.offset_right = -14
+	_keys.offset_top = 34
 	_keys.modulate = Color(1, 1, 1, 0.75)
 
 	_debug = _text(root, 13)
@@ -179,15 +188,23 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 
 	# what our character carries, slot by slot, to the left of the instruments
 	_slots_view = Control.new()
-	_slots_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_slots_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_slots_view.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	var slots_wide := Net.SLOTS * SLOT_PX + (Net.SLOTS - 1) * SLOT_GAP
 	_slots_view.offset_right = -14 - 192 - 10 - 12 - 12
 	_slots_view.offset_left = _slots_view.offset_right - slots_wide
 	_slots_view.offset_bottom = -14
 	_slots_view.offset_top = -14 - SLOT_PX
-	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, SLOT_PX, SLOT_GAP))
+	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, SLOT_PX, SLOT_GAP, client.hand))
+	_slots_view.gui_input.connect(_on_slots_input)
 	root.add_child(_slots_view)
+	_hand_label = _text(root, 14)
+	_hand_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hand_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_hand_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hand_label.offset_right = _slots_view.offset_right
+	_hand_label.offset_bottom = _slots_view.offset_top - 6
 
 	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
 	_tank_bar = ColorRect.new()
@@ -231,13 +248,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_work_fill.size = Vector2(0, 10)
 	_work_bar.add_child(_work_fill)
 
-	# without power the ship is on emergency lighting: everything but our own instruments dims
-	_blackout = ColorRect.new()
-	_blackout.color = Color(0.03, 0.0, 0.06, 0.0)
-	_blackout.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_blackout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	root.add_child(_blackout)
-	root.move_child(_blackout, 0)
+	# (without power the ship goes dark: the world view shades it cell by cell, see WorldView._draw_shade)
 	# the screen goes dark as our character fades, and says so when it is down
 	_shade = ColorRect.new()
 	_shade.color = Color(0, 0, 0, 0)
@@ -373,13 +384,19 @@ func _open_console(kind: int) -> void:
 func _update_store() -> void:
 	## The supply locker: what the ship has, what we carry, and a trader's prices when one is alongside.
 	var trading := client.can_trade()
+	var kept := Items.kept_in_locker()
 	var lines := PackedStringArray()
-	lines.append("В шкафу: заплаток %d, запчастей %d. Воздух для установки: %d из %d. Кредиты: %d." % [
-		client.store_patches, client.store_parts, int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
+	var held := PackedStringArray()
+	for item in kept:
+		held.append("%s: %d" % [Items.name_of(item).to_lower(), client.stock(item)])
+	lines.append("В шкафу: %s. Воздух для установки: %d из %d. Кредиты: %d." % [
+		", ".join(held), int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
 	var free := client.slots.count(Net.ITEM_NONE)
-	lines.append("У вас с собой: заплаток %d, запчастей %d. Свободных слотов: %d из %d." % [
-		client.patches, client.parts, free, Net.SLOTS])
-	lines.append("Заплатка нужна, чтобы заделать пробоину. Запчасть ускоряет ремонт машин и дверей: без неё он идёт втрое дольше.")
+	lines.append("Свободных слотов у вас: %d из %d. Взятое ложится в руку, если она пуста." % [free, Net.SLOTS])
+	var about := PackedStringArray()
+	for item in kept:
+		about.append("%s: %s" % [Items.name_of(item), Items.about(item).to_lower()])
+	lines.append("\n".join(about))
 	if trading:
 		lines.append("Торговец на связи.")
 	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
@@ -393,32 +410,35 @@ func _update_store() -> void:
 		_store_buttons.clear()
 		for old in _jump_box.get_children():
 			old.queue_free()
-		var offers := [[Net.STORE_TAKE_PATCH, "Взять заплатку"], [Net.STORE_TAKE_PART, "Взять запчасть"],
-			[Net.STORE_PUT_BACK, "Положить всё обратно"]]
+		var offers := []
+		for item in kept:
+			offers.append([Net.STORE_TAKE, item, "Взять: %s" % Items.name_of(item).to_lower()])
+		offers.append([Net.STORE_PUT_BACK, 0, "Положить всё обратно"])
 		if trading:
-			offers.append([Net.STORE_BUY_PATCH, "Купить заплатку: %d" % Net.PRICE_PATCH])
-			offers.append([Net.STORE_BUY_PART, "Купить запчасть: %d" % Net.PRICE_PART])
-			offers.append([Net.STORE_BUY_AIR, "Купить воздух (%d): %d" % [int(Net.AIR_LOT), Net.PRICE_AIR]])
+			for item in kept:
+				if Items.price(item) > 0:
+					offers.append([Net.STORE_BUY, item, "Купить: %s, %d кр." % [Items.name_of(item).to_lower(), Items.price(item)]])
+			offers.append([Net.STORE_BUY_AIR, 0, "Купить воздух (%d): %d кр." % [int(Net.AIR_LOT), Net.PRICE_AIR]])
 		for offer: Array in offers:
 			var b := Button.new()
-			b.text = offer[1]
+			b.text = offer[2]
 			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b.pressed.connect(client.send_store.bind(int(offer[0])))
+			b.pressed.connect(client.send_store.bind(int(offer[0]), int(offer[1])))
 			_jump_box.add_child(b)
-			_store_buttons[int(offer[0])] = b
-	for action: int in _store_buttons.keys():
-		var b: Button = _store_buttons[action]
-		match action:
-			Net.STORE_TAKE_PATCH:
-				b.disabled = client.store_patches <= 0 or free == 0
-			Net.STORE_TAKE_PART:
-				b.disabled = client.store_parts <= 0 or free == 0
+			_store_buttons[[int(offer[0]), int(offer[1])]] = b
+	var keeps_any := false
+	for item in kept:
+		keeps_any = keeps_any or client.carried(item) > 0
+	for key: Array in _store_buttons.keys():
+		var b: Button = _store_buttons[key]
+		var item: int = key[1]
+		match int(key[0]):
+			Net.STORE_TAKE:
+				b.disabled = client.stock(item) <= 0 or free == 0
 			Net.STORE_PUT_BACK:
-				b.disabled = client.patches + client.parts == 0
-			Net.STORE_BUY_PATCH:
-				b.disabled = client.credits < Net.PRICE_PATCH
-			Net.STORE_BUY_PART:
-				b.disabled = client.credits < Net.PRICE_PART
+				b.disabled = not keeps_any
+			Net.STORE_BUY:
+				b.disabled = client.credits < Items.price(item)
 			Net.STORE_BUY_AIR:
 				b.disabled = client.credits < Net.PRICE_AIR or client.store_air >= Net.STORE_AIR_FULL
 
@@ -515,33 +535,19 @@ func _update_helm() -> void:
 	_chart.queue_redraw()
 
 
-func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, px: float, gap: float) -> void:
-	## A row of inventory slots with what is in them.
+func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, px: float, gap: float, hand: int = -1) -> void:
+	## A row of inventory slots with what is in them; the one in the hand is lit up.
 	for i in slots.size():
 		var cell := Rect2(origin + Vector2(i * (px + gap), 0), Vector2(px, px))
-		canvas.draw_rect(cell, Color(0.07, 0.08, 0.12, 0.88))
-		canvas.draw_rect(cell, Color(0.42, 0.46, 0.56, 0.9), false, 1.0)
-		_draw_item(canvas, cell, slots[i])
+		canvas.draw_rect(cell, Color(0.07, 0.08, 0.12, 0.88) if i != hand else Color(0.14, 0.15, 0.1, 0.92))
+		if i == hand:
+			canvas.draw_rect(cell.grow(1.0), Color(0.98, 0.82, 0.35), false, 2.0)
+		else:
+			canvas.draw_rect(cell, Color(0.42, 0.46, 0.56, 0.9), false, 1.0)
+		ItemArt.draw(canvas, cell, slots[i])
 
 
-func _draw_item(canvas: Control, cell: Rect2, item: int) -> void:
-	var u := cell.size.x / 17.0          # the pictures are laid out on a 17 by 17 grid
-	var at := cell.position
-	if item == Net.ITEM_PATCH:
-		# a plate of hull metal with a rivet in each corner
-		canvas.draw_rect(Rect2(at + Vector2(3, 3) * u, Vector2(11, 11) * u), Color(0.2, 0.21, 0.27))
-		canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(9, 9) * u), Color(0.72, 0.75, 0.8))
-		canvas.draw_rect(Rect2(at + Vector2(4, 11) * u, Vector2(9, 2) * u), Color(0.52, 0.55, 0.62))
-		for corner: Vector2 in [Vector2(5, 5), Vector2(11, 5), Vector2(5, 11), Vector2(11, 11)]:
-			canvas.draw_rect(Rect2(at + corner * u, Vector2(u, u)), Color(0.25, 0.26, 0.33))
-	elif item == Net.ITEM_PART:
-		# a cog
-		var mid := at + Vector2(8.5, 8.5) * u
-		for k in 8:
-			var out := Vector2.RIGHT.rotated(k * TAU / 8.0) * 5.2 * u
-			canvas.draw_rect(Rect2(mid + out - Vector2(1.2, 1.2) * u, Vector2(2.4, 2.4) * u), Color(0.9, 0.55, 0.15))
-		canvas.draw_circle(mid, 4.4 * u, Color(0.95, 0.65, 0.2))
-		canvas.draw_circle(mid, 1.8 * u, Color(0.16, 0.14, 0.18))
+
 
 
 func _search_row(mine: bool) -> Vector2:
@@ -559,6 +565,12 @@ func _draw_search() -> void:
 	_draw_slots(_chart, theirs, client.search_slots, BIG_SLOT_PX, BIG_SLOT_GAP)
 	_chart.draw_string(font, ours + Vector2(0, -12), "У вас:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
 	_draw_slots(_chart, ours, client.slots, BIG_SLOT_PX, BIG_SLOT_GAP)
+	for row: Array in [[theirs, client.search_slots], [ours, client.slots]]:
+		var things: PackedByteArray = row[1]
+		for i in things.size():
+			if things[i] != Net.ITEM_NONE:
+				_chart.draw_string(font, row[0] + Vector2(i * (BIG_SLOT_PX + BIG_SLOT_GAP), BIG_SLOT_PX + 14), Items.name_of(things[i]),
+					HORIZONTAL_ALIGNMENT_CENTER, BIG_SLOT_PX, 10, Color(0.75, 0.85, 0.8))
 
 
 func _update_search() -> void:
@@ -815,7 +827,40 @@ func _escape(text: String) -> String:
 	return text.replace("[", "[lb]")
 
 
+func _on_slots_input(event: InputEvent) -> void:
+	## A click on a slot takes what is in it into the hand.
+	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
+			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		var x := (event as InputEventMouseButton).position.x
+		var i := int(floorf(x / (SLOT_PX + SLOT_GAP)))
+		if i >= 0 and i < Net.SLOTS and x - i * (SLOT_PX + SLOT_GAP) < SLOT_PX:
+			client.send_hand(i)
+		_slots_view.accept_event()
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	var free_hands := not _chat_input.visible and not _pause.visible and not _console.visible
+	if free_hands and event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		# the wheel turns through the slots
+		var button := (event as InputEventMouseButton).button_index
+		if button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN:
+			client.send_hand(posmod(client.hand + (-1 if button == MOUSE_BUTTON_WHEEL_UP else 1), Net.SLOTS))
+			get_viewport().set_input_as_handled()
+			return
+	if free_hands:
+		for i in Net.SLOTS:
+			if event.is_action_pressed("slot_%d" % (i + 1)):
+				client.send_hand(i)
+				get_viewport().set_input_as_handled()
+				return
+		if event.is_action_pressed("drop"):
+			client.send_drop()
+			get_viewport().set_input_as_handled()
+			return
+		if event.is_action_pressed("act"):
+			client.send_act()
+			get_viewport().set_input_as_handled()
+			return
 	if event.is_action_pressed("pause"):
 		if _chat_input.visible:
 			_close_chat()
@@ -906,8 +951,11 @@ func _process(delta: float) -> void:
 			_demo_dir = _rng.randi_range(1, 4) if _rng.randf() < 0.85 else 0
 			_demo_until = now + _rng.randf_range(0.15, 1.2)
 			if client.use_target() >= 6 and _rng.randf() < 0.5:
-				client.send_use(true)        # happened to stop on a ladder: take it
+				client.send_use(true)        # happened to stop on a ladder or by a thing on the floor: take it
 				client.send_use(false)
+			elif _rng.randf() < 0.08:
+				client.send_hand(_rng.randi_range(0, Net.SLOTS - 1))
+				client.send_drop()           # and now and then leave something lying about
 		want = _demo_dir
 	if forced_dir >= 0:
 		want = forced_dir
@@ -953,6 +1001,12 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения"
+	elif target == 14:
+		var cell := client.floor_cell()
+		var more: int = Net.FLOOR_STACK - (client.floor_things[cell] as PackedByteArray).count(Net.ITEM_NONE) - 1
+		var room := client.slots.count(Net.ITEM_NONE) > 0
+		_hint.text = "На полу: %s%s.  %s" % [Items.name_of(client.top_thing(cell)).to_lower(),
+			(" и ещё %d" % more) if more > 0 else "", "E: поднять" if room else "Некуда взять: все слоты заняты"]
 	elif target == 13:
 		var lying := client.lying_near()
 		var is_dead := client.ents.has(lying) and (client.ents[lying] as GameClient.Ent).cond == Net.COND_DEAD
@@ -1007,9 +1061,20 @@ func _process(delta: float) -> void:
 	_lamp("o2_off", alive and not client.supply)
 	_tank_bar.visible = alive
 	_slots_view.visible = alive
-	if client.slots != _slots_shown:
+	if client.slots != _slots_shown or client.hand != _hand_shown:
 		_slots_shown = client.slots.duplicate()
+		_hand_shown = client.hand
 		_slots_view.queue_redraw()
+		var item := client.in_hand()
+		if item == Net.ITEM_NONE:
+			_hand_label.text = "Рука пуста"
+		else:
+			var switch := Items.switched(item)
+			var extra := ""
+			if switch != Net.ITEM_NONE:
+				extra = "    Z: %s" % ("выключить" if not Items.light(item).is_empty() else "включить")
+			_hand_label.text = "В руке: %s%s    G: положить" % [Items.name_of(item).to_lower(), extra]
+	_hand_label.visible = alive
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)
@@ -1025,7 +1090,6 @@ func _process(delta: float) -> void:
 		_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа."
 	_fate.visible = client.my_cond != Net.COND_OK
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
-	_blackout.color.a = lerpf(_blackout.color.a, 0.0 if client.powered() else 0.42, 1.0 - exp(-delta * 6.0))
 
 	# the jump
 	_jump_label.visible = client.jump_to != Net.NO_SECTOR and not _console.visible

@@ -15,6 +15,7 @@ extends SceneTree
 const GameServer := preload("res://src/server/game_server.gd")
 const Director := preload("res://src/server/director.gd")
 const Doors := preload("res://src/shared/doors.gd")
+const Items := preload("res://src/shared/items.gd")
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 
@@ -263,21 +264,21 @@ func _initialize() -> void:
 	print("supplies")
 	var q := server._new_player("Кладовщик")
 	_expect(q.count(Net.ITEM_PATCH) == 0 and q.count(Net.ITEM_PART) == 0 and map.locker.size() == 1, "the ship has a supply locker")
-	var had_patches := server.store_patches
-	var had_parts := server.store_parts
-	server._store_asked(q, Net.STORE_TAKE_PATCH)
+	var had_patches: int = server.store[Net.ITEM_PATCH]
+	var had_parts: int = server.store[Net.ITEM_PART]
+	server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
 	_expect(q.count(Net.ITEM_PATCH) == 0, "nothing can be taken from across the ship")
 	_face(q, map.locker.keys()[0])
 	for i in 2:
-		server._store_asked(q, Net.STORE_TAKE_PATCH)
-		server._store_asked(q, Net.STORE_TAKE_PART)
+		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
+		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PART)
 	_expect(q.count(Net.ITEM_PATCH) == 2 and q.count(Net.ITEM_PART) == 2, "at the locker a crew member takes patches and parts into their slots")
 	for i in 5:
-		server._store_asked(q, Net.STORE_TAKE_PATCH)
+		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
 	_expect(q.count(Net.ITEM_NONE) == 0 and q.count(Net.ITEM_PATCH) == Net.SLOTS - 2, "but no more than there are slots for (%d)" % Net.SLOTS)
-	_expect(server.store_patches == had_patches - q.count(Net.ITEM_PATCH) and server.store_parts == had_parts - 2, "and the locker has that much less")
-	server._store_asked(q, Net.STORE_PUT_BACK)
-	_expect(q.count(Net.ITEM_NONE) == Net.SLOTS and server.store_patches == had_patches and server.store_parts == had_parts, "everything can be put back")
+	_expect(server.store[Net.ITEM_PATCH] == had_patches - q.count(Net.ITEM_PATCH) and server.store[Net.ITEM_PART] == had_parts - 2, "and the locker has that much less")
+	server._store_asked(q, Net.STORE_PUT_BACK, 0)
+	_expect(q.count(Net.ITEM_NONE) == Net.SLOTS and server.store[Net.ITEM_PATCH] == had_patches and server.store[Net.ITEM_PART] == had_parts, "everything can be put back")
 
 	# a hole needs a patch
 	_give(p, 0, 0)
@@ -327,22 +328,22 @@ func _initialize() -> void:
 
 	# a trader sells, a station restocks
 	var here := server.sector
-	server._store_asked(q, Net.STORE_BUY_PATCH)
-	_expect(server.store_patches == had_patches, "nothing can be bought with no trader alongside")
+	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	_expect(server.store[Net.ITEM_PATCH] == had_patches, "nothing can be bought with no trader alongside")
 	server.sectors.kind[here] = Sectors.TRADER
 	server.sectors.spot[here] = server.ship_pos
 	server.sectors.reach[here] = Sectors.DOCK_RANGE
 	_run(2)
 	_expect(server.can_trade(), "docked with a trader, the ship can trade")
 	var money := server.credits
-	server._store_asked(q, Net.STORE_BUY_PATCH)
-	server._store_asked(q, Net.STORE_BUY_PART)
-	server._store_asked(q, Net.STORE_BUY_AIR)
-	_expect(server.store_patches == had_patches + 1 and server.store_parts == had_parts + 1 and server.store_air == Net.AIR_LOT
-		and server.credits == money - Net.PRICE_PATCH - Net.PRICE_PART - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.credits)
+	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PART)
+	server._store_asked(q, Net.STORE_BUY_AIR, 0)
+	_expect(server.store[Net.ITEM_PATCH] == had_patches + 1 and server.store[Net.ITEM_PART] == had_parts + 1 and server.store_air == Net.AIR_LOT
+		and server.credits == money - Items.price(Net.ITEM_PATCH) - Items.price(Net.ITEM_PART) - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.credits)
 	server.credits = 0
-	server._store_asked(q, Net.STORE_BUY_PATCH)
-	_expect(server.store_patches == had_patches + 1, "and not without credits")
+	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	_expect(server.store[Net.ITEM_PATCH] == had_patches + 1, "and not without credits")
 	server.sectors.kind[here] = Sectors.STATION
 	server.in_reach = false
 	_run(2)

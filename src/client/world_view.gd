@@ -11,6 +11,7 @@ extends Node2D
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const ItemArt := preload("res://src/client/item_art.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
@@ -22,6 +23,9 @@ const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
 const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
+const DARK := Color(0.01, 0.0, 0.03, 0.86)        # a cell without power and without light
+const NEAR_DARK := 0.55                           # how dark it stays right around our own character
+const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's light
 
 
 class DeckView:
@@ -29,6 +33,7 @@ class DeckView:
 	var layer: TileMapLayer          # its tiles
 	var holes: Node2D                # breaches in its hull
 	var fx: Node2D                   # air streaming out, sparks
+	var things: Node2D               # things lying on the floor
 	var chars: Node2D                # the characters on it
 	var ceiling: TileMapLayer        # its see-through floors alone: what is seen of it from the deck below
 
@@ -62,6 +67,10 @@ var _door_was_open := PackedByteArray()
 var _door_closing := PackedFloat32Array()   # per door: seconds left of the closing frame
 var _hole_views := {}                # hull cell -> Sprite2D
 var _ship_seen := -1                 # client.ship_changes when the hull and air were last redrawn
+var _floor_seen := -1                # client.floor_changes when the things on the floor were last redrawn
+var _shade: Node2D                   # darkness without power, and the light of flashlights
+var _lit := {}                       # the cells lit right now (see GameClient.lit_cells)
+var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 
 
 func setup(p_client: GameClient) -> void:
@@ -109,6 +118,9 @@ func setup(p_client: GameClient) -> void:
 		deck.fx = Node2D.new()
 		deck.fx.draw.connect(_draw_fx.bind(d))
 		deck.group.add_child(deck.fx)
+		deck.things = Node2D.new()
+		deck.things.draw.connect(_draw_things.bind(d))
+		deck.group.add_child(deck.things)
 		deck.chars = Node2D.new()
 		deck.chars.y_sort_enabled = true
 		deck.group.add_child(deck.chars)
@@ -132,6 +144,11 @@ func setup(p_client: GameClient) -> void:
 	_door_shown.fill(-1)
 	_door_was_open.resize(map.doors.size())
 	_door_closing.resize(map.doors.size())
+
+	_shade = Node2D.new()
+	_shade.z_index = map.deck_count + 3
+	_shade.draw.connect(_draw_shade)
+	add_child(_shade)
 
 	_ghost = Sprite2D.new()
 	_ghost.texture = _chars_tex
@@ -187,6 +204,7 @@ func _arrange(shown: int) -> void:
 		deck.layer.visible = not above
 		deck.holes.visible = not above
 		deck.fx.visible = not above
+		deck.things.visible = not above
 		deck.chars.modulate = ABOVE_TINT if above else Color.WHITE
 		deck.ceiling.visible = d == shown - 1
 
@@ -252,6 +270,69 @@ func _update_ship(delta: float) -> void:
 	else:
 		for deck in _decks:
 			deck.fx.queue_redraw()           # air streaming out, sparks and the machines are animated
+	if client.floor_changes != _floor_seen:
+		_floor_seen = client.floor_changes
+		for deck in _decks:
+			deck.things.queue_redraw()
+	# light and dark change with every step anybody holding a flashlight takes
+	_dark = move_toward(_dark, 0.0 if client.powered() else 1.0, delta * 2.5)
+	_lit = client.lit_cells()
+	_shade.queue_redraw()
+
+
+func _draw_things(d: int) -> void:
+	## Things lying on the floor of one deck: one in the middle of its cell, several side by side.
+	var map := client.map
+	var pen := _decks[d].things
+	for cell: int in client.floor_things.keys():
+		if map.deck_of_cell(cell) != d:
+			continue
+		var things: PackedByteArray = client.floor_things[cell]
+		var here := PackedByteArray()
+		for v in things:
+			if v != Net.ITEM_NONE:
+				here.append(v)
+		var corner := _on_deck(cell) * _tile
+		if here.size() == 1:
+			ItemArt.draw(pen, Rect2(corner + Vector2(7, 9), Vector2(18, 18)), here[0])
+			continue
+		for k in here.size():
+			var spot := Vector2(3 + (k % 2) * 13, 6 + (k / 2) * 12)
+			ItemArt.draw(pen, Rect2(corner + spot, Vector2(14, 14)), here[k])
+
+
+func _draw_shade() -> void:
+	## Without power the ship is dark: every cell of it is shaded, a little less
+	## right around our own character, and not at all where a flashlight shines.
+	## With the lights on a flashlight only warms the floor a little.
+	var map := client.map
+	var deck := _deck_shown
+	var me := client.sample(client.my_id) if client.ents.has(client.my_id) else []
+	var near := Vector2(-100, -100)
+	if not me.is_empty():
+		near = me[0]
+	for y in map.deck_height:
+		var gy := deck * _stride + y
+		for x in map.width:
+			var cell := gy * map.width + x
+			if map.cells[cell] < 0:
+				continue
+			var light := float(_lit.get(cell, 0.0))
+			var rect := Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile))
+			if _dark > 0.0:
+				var shade := 1.0 - light
+				var d := Vector2(x, gy).distance_to(near)
+				if d <= 2.5:
+					shade = minf(shade, NEAR_DARK + (1.0 - NEAR_DARK) * maxf(d - 1.0, 0.0) / 1.5)
+				if shade > 0.0:
+					_shade.draw_rect(rect, Color(DARK, DARK.a * shade * _dark))
+			if light > 0.0:
+				_shade.draw_rect(rect, Color(BEAM, light * (0.08 + 0.1 * _dark)))
+
+
+func lit(cell: int) -> bool:
+	## Can a character in this cell be made out: the lights are on, or a light falls on it.
+	return _dark < 0.5 or _lit.has(cell)
 
 
 func _draw_fx(d: int) -> void:
@@ -480,8 +561,11 @@ func _process(delta: float) -> void:
 	var screen_centre := get_viewport_rect().size * 0.5
 	for id: int in _labels.keys():
 		var label: Label = _labels[id]
-		# a name does not give away somebody the floor hides
+		# a name does not give away somebody the floor or the dark hides
 		label.visible = show_names and bool(_seen.get(id, false))
+		if label.visible and id != client.my_id:
+			var e: GameClient.Ent = client.ents.get(id)
+			label.visible = e != null and lit(e.y * map.width + e.x)
 		if label.visible:
 			var sprite: Sprite2D = _views[id]
 			label.text = client.player_name(id)
