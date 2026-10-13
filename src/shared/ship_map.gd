@@ -39,6 +39,8 @@ var chart := {}                      # wall cells with the sector console (the g
 var engine := {}                     # wall cells with the engine: it drives the ship and its jumps
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var locker := {}                     # wall cells with the supply locker
+var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
+var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
                                      # chamber it serves, "inner": door, "outer": door (-1 = none)}
 var door_partner := PackedInt32Array() # per door: the other door of its airlock chamber, or -1.
@@ -153,7 +155,13 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	engine = {}
 	air_plant = {}
 	locker = {}
+	guns = PackedInt32Array()
+	gun_console = {}
 	for i in cells.size():
+		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
+			guns.append(i)
+		if cells[i] >= 0 and cells[i] == tile_ids.get("console_4", -2):
+			gun_console[i] = true
 		if cells[i] < 0:
 			continue
 		if cells[i] == tile_ids.get("locker", -1):
@@ -441,6 +449,10 @@ func device_name(cell: int) -> String:
 		return "воздушная установка"
 	if lock_pump.has(cell):
 		return "насос шлюза"
+	if guns.has(cell):
+		return "орудие %d" % (guns.find(cell) + 1)
+	if gun_console.has(cell):
+		return "пульт орудий"
 	return ""
 
 

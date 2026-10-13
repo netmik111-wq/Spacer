@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 21
+const PROTOCOL := 22
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -143,11 +143,15 @@ const S_SEARCH := 23                # u16 id of the character we are searching (
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
                                     # then u8 how hurt they are (0 = unhurt .. 4 = dying)
 const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed
+const S_GUNS := 28                  # u8 count, per gun u8 charge (0..100, 255 = broken), then u8 enemy hull
+                                    # left, u8 enemy hull full (0 = no enemy), u16 seconds until it docks (0 = not coming)
+const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
+const SHOT_CANNON := 3              # a ship's gun firing, or the enemy's shot landing on us
 const S_OTHER := 26                 # s16 x, s16 y of the other ship's corner in the grid (-9999 = none here),
                                     # u8 docked, u8 kind (OTHER_*): a ship alongside (see ShipMap.place_other)
 # the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)

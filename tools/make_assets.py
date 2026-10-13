@@ -85,6 +85,7 @@ TILES.append(("engine", None, "wall"))
 TILES.append(("air_plant", None, "wall"))
 TILES.append(("locker", None, "wall"))
 TILES.append(("lock_pump", None, "wall"))
+TILES.append(("gun", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -280,6 +281,15 @@ def make_machine(wall, what):
             o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
         for px in (8, 9, 22, 23):                      # feed pipes down to the deck
             rect(px, 25, px, 29, mid if px in (8, 22) else body)
+    elif what == "gun":
+        # a ship's gun set into the hull: a breech block with the barrel through the wall
+        rect(7, 5, 24, 24, mid); rect(8, 6, 23, 23, body); rect(8, 6, 23, 7, cap)
+        rect(13, 1, 18, 26, dark); rect(14, 0, 17, 27, (70, 72, 84, 255))
+        rect(14, 0, 17, 1, (40, 40, 50, 255)); rect(14, 26, 17, 27, (40, 40, 50, 255))
+        rect(9, 10, 12, 19, dark); rect(19, 10, 22, 19, dark)
+        rect(10, 12, 11, 13, (230, 120, 40, 255)); rect(20, 12, 21, 13, (230, 120, 40, 255))
+        for x in range(8, 24):
+            o[x, 22] = HAZARD if (x // 2) % 2 == 0 else dark
     elif what == "lock_pump":
         # the airlock pump: a panel with a gauge and two lamps (pump out, pump in)
         rect(6, 4, 25, 24, body); rect(6, 4, 25, 5, cap); rect(6, 24, 25, 24, mid)
@@ -331,6 +341,7 @@ def build_tiles():
         "air_plant": lambda: make_machine(images["wall_h"], "air_plant"),
         "locker": lambda: make_machine(images["wall_h"], "locker"),
         "lock_pump": lambda: make_machine(images["wall_h"], "lock_pump"),
+        "gun": lambda: make_machine(images["wall_h"], "gun"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -361,6 +372,7 @@ def build_tiles():
 #   '1'..'5'  wall with a console on it
 #   '6'  wall with the engine in it          '7'  wall with the air plant in it
 #   '8'  wall with the supply locker in it
+#   'T'  a ship's gun in the hull (fired from the gun console, '4' on the bridge)
 #   '9'  wall with an airlock pump in it: the floor in front is the chamber; its outer 'D' opens into space
 #
 #
@@ -373,7 +385,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789")
+BAND_CHARS = set("#DW<>123456789T")
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -460,7 +472,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

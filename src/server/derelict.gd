@@ -22,7 +22,7 @@ const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 
-const PIRATE_WARNING_TICKS := 15 * Net.TICK_HZ    # from showing up to docking by force
+const PIRATE_WARNING_TICKS := 40 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const GAP := 3                       # cells of open space between it and our airlock while not docked
 const VACUUM_ROOM := 0.4             # share of its rooms with no air left at all
 const HOLE_CHANCE := 0.5             # chance that a hole in its hull still leaks
@@ -110,7 +110,8 @@ func pirates_come(party: int) -> bool:
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
 	server._to_all(packet())
-	server._ship_says("Тревога! К шлюзу подходит пиратский корабль. Через %d секунд он пристыкуется силой и вскроет шлюз." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
+	server.gunnery.enemy_arrives()
+	server._ship_says("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
 	return true
 
 
@@ -167,6 +168,12 @@ func dock(on: bool) -> String:
 
 
 # ---------------------------------------------------------------- inside
+
+func pirates_wrecked() -> void:
+	## Our guns have wrecked the pirate ship before it docked: it goes, with its crew.
+	_pirates_dock_at = -1
+	_leave(true)
+
 
 func _pirates_board() -> void:
 	## The pirate ship docks by force, breaks the airlock open and its crew comes aboard.
@@ -237,7 +244,7 @@ func _arrive() -> void:
 	server._ship_says("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 
 
-func _leave() -> void:
+func _leave(quiet: bool = false) -> void:
 	# what is left on a derelict is remembered for this sector
 	if kind == Net.OTHER_DERELICT:
 		var key := Sectors.key(server.sectors.cell[server.sector])
@@ -255,7 +262,9 @@ func _leave() -> void:
 	docked = false
 	_place(ShipMap.NO_OTHER)
 	server._to_all(packet())
-	server._ship_says("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else "Пиратский корабль отошёл от шлюза и ушёл.")
+	server.gunnery.enemy_gone()
+	if not quiet:
+		server._ship_says("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else "Пиратский корабль отошёл от шлюза и ушёл.")
 
 
 func _move(from: Vector2i, to: Vector2i) -> void:

@@ -90,6 +90,10 @@ var drag_id := -1                    # the lying character we last took hold of 
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
+var gun_charge := PackedByteArray()  # per gun: 0..100, 255 = out of order (see Net.S_GUNS)
+var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
+var enemy_full := 0
+var enemy_docks_in := 0              # seconds until it docks by force
 var pumps := {}                     # airlock pumps at work: wall cell -> GameServer.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
@@ -357,6 +361,12 @@ func look_of(id: int) -> int:
 	return int(looks.get(id, 0))
 
 
+func send_guns(which: int) -> void:
+	## Fires a gun (255 = every gun that is ready); only from the gun console.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_GUNS, which]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_wear(wear: int) -> void:
 	## Asks to take off what we wear there.
 	if _peer != null:
@@ -484,7 +494,8 @@ func use_target() -> int:
 	## 10 = a door jammed open, 11 = a door whose emergency shutter is faulty (both can be mended),
 	## 12 = the supply locker, 13 = somebody lying here who can be searched (and hauled),
 	## 14 = something lying on the floor in front or underfoot, to pick up,
-	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open.
+	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
+	## 17 = the gun console.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -505,6 +516,10 @@ func use_target() -> int:
 			return 12
 		if map.lock_pump.has(cell):
 			return 15
+		if map.gun_console.has(cell):
+			return 17
+		if map.guns.has(cell):
+			return 8
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -894,6 +909,12 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			search_slots = pkt.slice(3, 3 + Net.SLOTS)
 			search_worn = pkt.slice(3 + Net.SLOTS, 3 + Net.SLOTS + Net.WORN)
 			search_hurt = pkt[3 + Net.SLOTS + Net.WORN] if pkt.size() > 3 + Net.SLOTS + Net.WORN else 0
+		Net.S_GUNS:
+			var n: int = pkt[1]
+			gun_charge = pkt.slice(2, 2 + n)
+			enemy_hull = pkt[2 + n]
+			enemy_full = pkt[3 + n]
+			enemy_docks_in = pkt.decode_u16(4 + n)
 		Net.S_OUTFIT:
 			if pkt.size() >= 4:
 				looks[pkt.decode_u16(1)] = pkt[3]

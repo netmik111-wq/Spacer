@@ -460,7 +460,7 @@ func _on_shot(kind: int, hit: bool, from: Vector2, to: Vector2) -> void:
 	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
 	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
 	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
-	_shots.append([kind, hit, a, b, deck, SHOT_SECONDS])
+	_shots.append([kind, hit, a, b, deck, SHOT_SECONDS * (3.0 if kind == Net.SHOT_CANNON else 1.0)])
 
 
 func cell_under_mouse() -> Vector2:
@@ -538,6 +538,11 @@ func _draw_shade() -> void:
 		var left := float(sh[5]) / SHOT_SECONDS
 		var a: Vector2 = sh[2]
 		var b: Vector2 = sh[3]
+		if int(sh[0]) == Net.SHOT_CANNON:
+			# a ship's gun: a thick orange trace and a burst where it lands
+			_shade.draw_line(a, b, Color(1.0, 0.55, 0.15, 0.9 * minf(left, 1.0)), 4.0)
+			_shade.draw_circle(b, 14.0 * left + 4.0, Color(1.0, 0.7, 0.3, 0.8 * minf(left, 1.0)))
+			continue
 		if int(sh[0]) == Net.SHOT_BULLET:
 			_shade.draw_line(a, b, Color(1.0, 0.9, 0.5, 0.85 * left), 1.5)
 			_shade.draw_circle(a + (b - a).normalized() * 10.0, 5.0 * left, Color(1.0, 0.85, 0.4, left))

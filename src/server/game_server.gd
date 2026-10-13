@@ -22,6 +22,7 @@ const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
 const Pirates := preload("res://src/server/pirates.gd")
 const Derelict := preload("res://src/server/derelict.gd")
+const Gunnery := preload("res://src/server/gunnery.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -110,6 +111,7 @@ var _power_told := true                # the state of the power as clients were 
 var director := Director.new()
 var pirates := Pirates.new()
 var derelict := Derelict.new()
+var gunnery := Gunnery.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -175,6 +177,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	_index_doors()
 	air.setup(map)
 	derelict.setup(self)
+	gunnery.setup(self)
 	_air_sent = air.level.duplicate()
 	space_seed = _rng.randi()
 	been = {Sectors.key(Vector2i.ZERO): true}
@@ -358,6 +361,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HELM:
 		if pkt.size() > 3:
 			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
+	elif kind == Net.C_GUNS:
+		if pkt.size() > 1:
+			gunnery.fire(p, pkt[1])
 	elif kind == Net.C_WEAR:
 		if pkt.size() > 1 and pkt[1] < Net.WORN:
 			_take_off(p, pkt[1])
@@ -456,6 +462,7 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, derelict.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, gunnery.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	for q: Player in players:
 		if q != null and q != p:
 			peer.send(0, _look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
@@ -1326,6 +1333,7 @@ func _tick() -> void:
 	_update_jump()
 	_update_ship()
 	derelict.update()
+	gunnery.tick()
 	director.tick()
 	if tick % Net.AIR_EVERY == 0:
 		_feed_air()
@@ -1469,6 +1477,7 @@ func _usable_ahead(p: Player) -> bool:
 	var door := map.door_of[cell]
 	return air.holes.has(cell) or broken.has(cell) or map.oxygen.has(cell) \
 		or map.chart.has(cell) or map.helm.has(cell) or map.locker.has(cell) or map.lock_pump.has(cell) \
+		or map.gun_console.has(cell) or map.guns.has(cell) \
 		or (door >= 0 and (doors.is_sealed(door) or doors.jammed[door] == 1 or doors.faulty[door] == 1))
 
 

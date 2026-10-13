@@ -363,7 +363,7 @@ func _build_console(root: Control) -> void:
 func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
 	## The bridge consoles need power; the supply locker is opened by hand.
-	return target == 12 or ((target == 3 or target == 4) and client.powered())
+	return target == 12 or ((target == 3 or target == 4 or target == 17) and client.powered())
 
 
 func _open_console(kind: int) -> void:
@@ -380,8 +380,52 @@ func _open_console(kind: int) -> void:
 	_chart.visible = kind != 12
 	_jump_box.visible = true
 	_jump_box.columns = 3 if kind == 12 else 2           # the locker has many buttons
-	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else "Шкаф снабжения")
+	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else ("Пульт орудий" if kind == 17 else "Шкаф снабжения"))
+	if kind == 17:
+		_chart.visible = false
 	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")
+
+
+func _update_guns() -> void:
+	## The gun console: how each gun is, the enemy if there is one, and buttons to fire.
+	var lines := PackedStringArray()
+	if client.enemy_full > 0:
+		lines.append("Цель: пиратский корабль над шлюзом. Корпус: %d из %d попаданий до разрушения." % [client.enemy_hull, client.enemy_full])
+		lines.append("Он пристыкуется силой через %d с." % client.enemy_docks_in)
+	else:
+		lines.append("Целей нет. Орудия бьют по кораблю, который нападает на нас.")
+	for i in client.gun_charge.size():
+		var c: int = client.gun_charge[i]
+		var where: String = ["левый борт у носа", "правый борт у носа", "днище"][i] if i < 3 else ""
+		var state := "сломано, нужен ремонт" if c == 255 else ("готово" if c >= 100 else "заряжается, %d%%" % c)
+		lines.append("Орудие %d (%s): %s." % [i + 1, where, state])
+	lines.append("Каждое попадание — %d%% вероятность. Зарядка %d с, нужно питание." % [75, 8])
+	_console_text.text = "\n".join(lines)
+	if _jump_buttons_for != 17000 + client.gun_charge.size():
+		_jump_buttons_for = 17000 + client.gun_charge.size()
+		for old in _jump_box.get_children():
+			old.queue_free()
+		for i in client.gun_charge.size():
+			var b := Button.new()
+			b.text = "Огонь: орудие %d" % (i + 1)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var which := i
+			b.pressed.connect(func() -> void: client.send_guns(which))
+			_jump_box.add_child(b)
+		var all := Button.new()
+		all.text = "Залп всеми готовыми"
+		all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		all.pressed.connect(func() -> void: client.send_guns(255))
+		_jump_box.add_child(all)
+	var buttons := _jump_box.get_children()
+	for i in buttons.size():
+		var b := buttons[i] as Button
+		if b == null:
+			continue
+		var ready := client.enemy_full > 0
+		if i < client.gun_charge.size():
+			ready = ready and client.gun_charge[i] == 100
+		b.disabled = not ready
 
 
 func _update_store() -> void:
@@ -465,6 +509,9 @@ func _update_console() -> void:
 		return
 	if _console_kind == 12:
 		_update_store()
+		return
+	if _console_kind == 17:
+		_update_guns()
 		return
 	if _console_kind == 4:
 		_update_helm()
@@ -1091,6 +1138,12 @@ func _process(delta: float) -> void:
 	elif target == 5:
 		var what := _capital(client.map.device_name(client.use_cell()))
 		_hint.text = "Чиню…" if (_use_held and client.work > 0) else "%s не работает. Держите E, чтобы починить%s" % [what, no_part]
+	elif target == 8 and client.map.guns.has(client.use_cell()):
+		var g := client.map.guns.find(client.use_cell())
+		var c: int = client.gun_charge[g] if g < client.gun_charge.size() else 0
+		_hint.text = "Орудие %d: %s. Стреляют с пульта орудий на мостике" % [g + 1, "нет питания" if no_power else ("готово" if c >= 100 else "заряжается, %d%%" % c)]
+	elif target == 17:
+		_hint.text = "Пульт орудий обесточен: %s" % why if no_power else "E: пульт орудий"
 	elif target == 8:
 		var state := "нет питания" if no_power else "работает"
 		if client.map.air_plant.has(client.use_cell()) and not no_power:
