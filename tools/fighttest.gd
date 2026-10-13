@@ -182,6 +182,13 @@ func _initialize() -> void:
 		server._tick()
 	_expect(victim.health > -40.0 and victim.cond != Net.COND_DEAD, "pirates leave those lying on the floor alone")
 
+	print("a click turns the character")
+	var t = _crew("Поворот", 8, 4)
+	t.st.facing = Net.DIR_RIGHT
+	t.inputs.append([server.tick + 1, preload("res://src/shared/mover.gd").TURN + Net.DIR_UP, 1])
+	_run(2)
+	_expect(t.st.facing == Net.DIR_UP and t.st.dir == Net.DIR_NONE and t.st.x == 8 and t.st.y == 4, "a turn input turns it on the spot")
+
 	print("the locker and the trader")
 	_expect(int(server.store.get(Net.ITEM_PISTOL, 0)) == 1 and int(server.store.get(Net.ITEM_MAG, 0)) == 2, "the ship sets out with a pistol and two magazines")
 	_expect(server.weapons_aboard() >= 2, "the director knows the crew is armed (%d)" % server.weapons_aboard())

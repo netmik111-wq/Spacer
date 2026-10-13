@@ -932,6 +932,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var button := (event as InputEventMouseButton).button_index
 		if button == MOUSE_BUTTON_LEFT:
 			# a click in the world uses the thing in the hand there: shoot, strike, bandage
+			client.turn_to(_world.cell_under_mouse())        # the character turns to where it is clicked
 			client.send_fire(_world.cell_under_mouse())
 			get_viewport().set_input_as_handled()
 			return

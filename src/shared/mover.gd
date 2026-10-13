@@ -34,6 +34,18 @@ class State:
 		x = px; y = py; fx = px; fy = py; cd = 0; move_tick = -1000
 
 
+const TURN := 8                      # an input of TURN + a direction only turns the character that way
+
+
+static func apply_input(st: State, value: int) -> void:
+	## An input from the queue: hold a direction (0 = none), or just turn (TURN + direction).
+	if value > TURN:
+		if not st.down:
+			st.facing = value - TURN
+	else:
+		st.dir = value
+
+
 ## Advances one character by one tick. Returns true if a step started.
 ## Walking into a shut door pushes it open and waits in front of it.
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:

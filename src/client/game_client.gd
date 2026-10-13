@@ -276,6 +276,33 @@ func send_hand(slot: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_HAND, slot]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func turn_to(at: Vector2) -> void:
+	## Turns our character to face a place (in cells of the whole grid), the way a
+	## click does: sent as an input like walking, so it is predicted at once.
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK:
+		return
+	var d := at - Vector2(pred.x, pred.y)
+	if d.length() < 0.3:
+		return
+	var facing := (Net.DIR_RIGHT if d.x > 0.0 else Net.DIR_LEFT) if absf(d.x) >= absf(d.y) else (Net.DIR_DOWN if d.y > 0.0 else Net.DIR_UP)
+	if facing == pred.facing:
+		return
+	var at_tick := maxi(pred_tick + 1, _last_apply + 1)
+	_seq += 1
+	_inputs.append([_seq, at_tick, Mover.TURN + facing, false])
+	_last_apply = at_tick
+	var msg := PackedByteArray()
+	msg.resize(8)
+	msg.encode_u8(0, Net.C_INPUT)
+	msg.encode_u16(1, _seq & 0xFFFF)
+	msg.encode_u32(3, at_tick)
+	msg.encode_u8(7, Mover.TURN + facing)
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+	_host.flush()
+	_repeat_msg = msg
+	_repeat_left = INPUT_COPIES
+
+
 func send_fire(at: Vector2) -> void:
 	## Uses the thing in the hand on that place (in cells of the whole grid):
 	## shoot, strike, bandage. It carries the tick we see the others on, so the
@@ -1170,7 +1197,7 @@ func _simulate_to_now() -> void:
 		pred_tick += 1
 		for inp: Array in _inputs:
 			if not inp[3] and int(inp[1]) <= pred_tick:
-				pred.dir = inp[2]
+				Mover.apply_input(pred, inp[2])
 				inp[3] = true
 		if Mover.step(pred, map, pred_doors, pred_tick):
 			steps_predicted += 1
@@ -1221,7 +1248,7 @@ func _rebuild_prediction() -> void:
 	while t < pred_tick:
 		t += 1
 		while k < _inputs.size() and int(_inputs[k][1]) <= t:
-			st.dir = _inputs[k][2]
+			Mover.apply_input(st, _inputs[k][2])
 			k += 1
 		Mover.step(st, map, table, t)
 	table.bumped.clear()
