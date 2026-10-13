@@ -5,10 +5,12 @@
 # usage: tools/nettest.sh CLIENTS SECONDS [DELAY_MS JITTER_MS LOSS_PERCENT [STALL_MS STALL_EVERY_MS]]
 #   GODOT=/path/to/godot  LAGPROXY=/path/to/lagproxy
 #   BREACH=SECONDS  tear a hole in the hull that long after the start (default 6; 0 = never)
+#   BOARD=SECONDS   pirates come aboard that long after the start (default 0 = never)
 set -u
 N=${1:-4}; SECS=${2:-20}; DELAY=${3:--1}; JIT=${4:-0}; LOSS=${5:-0}; STALL=${6:-0}; EVERY=${7:-1000}
 GODOT=${GODOT:-godot}; PORT=${PORT:-24700}; OUT=${OUT:-/tmp/nettest}; BREACH=${BREACH:-6}
 BARG=""; [ "$BREACH" != "0" ] && BARG="breach_after=$BREACH"
+BOARD=${BOARD:-0}; [ "$BOARD" != "0" ] && BARG="$BARG board_after=$BOARD"
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
 "$GODOT" --headless --path . -- --server --no-events port=$PORT bots=2 $BARG quit_after=$((SECS + 8)) > "$OUT/server.log" 2>&1 & SP=$!
 CPORT=$PORT; PP=""
@@ -36,6 +38,7 @@ print(f"state checks: {sum(r['checks_ok'] for r in ok)} ok, {sum(r['checks_bad']
       f"(of the bad ones, doors/hull/air: {sum(r['ship_checks_bad'] for r in ok)}); holes seen by clients: {sorted(set(r['holes'] for r in ok))}")
 print(f"health of the clients at the end: {sorted(r['health'] for r in ok)}; down or dead: {sum(1 for r in ok if r['cond'] != 0)}")
 print(f"clients on each deck at the end (0 = top): {sorted(r.get('deck', 0) for r in ok)}")
+print(f"pirates seen at the end: {sorted(set(r.get('pirates', 0) for r in ok))}")
 print(f"cells with things on the floor seen by clients: {sorted(set(r.get('floor', 0) for r in ok))}")
 print(f"ended where the server says: {sum(1 for r in ok if (r['pred_x'], r['pred_y']) == (r['auth_x'], r['auth_y']))}/{len(ok)}")
 print(f"ping seen by clients: {min(r['rtt_ms'] for r in ok):.0f}..{max(r['rtt_ms'] for r in ok):.0f} ms; errors in logs: {errs}")

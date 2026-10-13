@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 15
+const PROTOCOL := 16
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -51,6 +51,9 @@ const C_STORE := 11                 # u8 action (STORE_*), u8 thing (ITEM_*): ta
                                     # put back, or buy from a trader (the player must stand at the locker)
 const C_HAND := 15                  # u8 slot: the slot whose thing is in the hand
 const C_DROP := 16                  # nothing else: put the thing in the hand down on the floor here
+const C_FIRE := 18                  # u32 tick the player saw the others on (see GameClient.render_tick),
+                                    # s16 x * 16, s16 y * 16: the place clicked, in cells of the whole grid.
+                                    # Uses the thing in the hand on that place: shoot, strike, bandage.
 const C_ACT := 17                   # nothing else: use the thing in the hand by itself (switch a flashlight)
 
 # --- packets, server -> client ---
@@ -94,6 +97,11 @@ const ITEM_PATCH := 1               # closes a hole in the hull
 const ITEM_PART := 2                # a spare part: mends a machine or a door quickly
 const ITEM_FLASHLIGHT := 3
 const ITEM_FLASHLIGHT_ON := 4       # the same, switched on (what things are and do: see Items)
+const ITEM_MAG := 5                 # a pistol magazine
+const ITEM_BATON := 6
+const ITEM_MEDPATCH := 7            # a patch that closes wounds at once
+const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
+const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
 
 const FACING_GONE := 255
@@ -113,6 +121,10 @@ const S_POWER := 21                 # u8 on: the ship has power (1) or every sys
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry
+const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
+                                    # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
+const SHOT_BULLET := 1
+const SHOT_BLOW := 2
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
@@ -142,7 +154,10 @@ const SOUND_HISS := 3               # air rushing out of a hole in the hull
 const SOUND_THUD := 4               # somebody falling
 const SOUND_DROP := 5               # a thing put down
 const SOUND_LADDER := 6             # somebody on a ladder
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7]
+const SOUND_SHOT := 7               # a gunshot
+const SOUND_BLOW := 8               # a blow struck
+const SOUND_CRY := 9                # somebody hurt crying out
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 
@@ -174,6 +189,8 @@ const RESPAWN_TICKS := 100          # a dead player may come back after 5 s
 const KIND_PLAYER := 0
 const KIND_BOT := 1
 const KIND_CORPSE := 2              # a body left behind; nobody controls it
+const KIND_PIRATE := 3              # an enemy the server moves
+const PIRATE_COLOURS := 3           # rows of assets/chars.png after the crew's SUIT_COLOURS: pirates' suits
 
 const TANK_FULL := 200              # a full oxygen tank as sent over the network
 const REPAIR_TICKS := 120           # holding "use" on a hole for 6 s mends it

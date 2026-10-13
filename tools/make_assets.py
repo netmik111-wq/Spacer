@@ -526,6 +526,8 @@ SUIT_COLOURS = [
     ("red", (200, 55, 45)), ("blue", (47, 111, 208)), ("green", (58, 154, 74)),
     ("yellow", (217, 165, 32)), ("purple", (138, 79, 200)), ("orange", (217, 112, 42)),
     ("cyan", (42, 169, 184)), ("white", (201, 204, 212)),
+    # pirates (Net.PIRATE_COLOURS rows after the crew's): brown, blood red, near black
+    ("pirate_brown", (112, 72, 40)), ("pirate_red", (128, 28, 24)), ("pirate_black", (44, 40, 46)),
 ]
 OUTLINE = (20, 20, 28, 255)
 HELM = (86, 88, 100, 255)

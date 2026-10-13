@@ -44,6 +44,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## Dedicated server: board_after=SECONDS (pirates come aboard then).
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot).
 
@@ -104,6 +105,7 @@ var _acted := false
 var _dropped := false
 var _picked := false
 var _given := false
+var _boarded := false
 var _goto_at := 0
 var _trace: FileAccess = null
 
@@ -350,6 +352,9 @@ func _process(_delta: float) -> void:
 		else:
 			_show_menu("Сервер остановился.", true)
 	# test helpers; unused in normal play
+	if _opt.has("board_after") and not _boarded and _flags.has("server") and _server != null and t >= float(_opt["board_after"]):
+		_boarded = true
+		_server.director.fire(_server.director.BOARDING)
 	if _opt.has("breach_after") and not _breached and t >= float(_opt["breach_after"]):
 		if _flags.has("server") and _server != null:
 			_breached = true
@@ -548,7 +553,7 @@ func _process(_delta: float) -> void:
 					"tank": _client.tank, "supply": _client.supply, "crew": _client.crew_count(),
 					"deck": _client.my_deck(), "patches": _client.patches, "parts": _client.parts,
 					"dragging": _client.dragging(), "searching": _client.search_id,
-					"floor": _client.floor_things.size(), "in_hand": _client.in_hand(), "lit": _client.lit_cells().size(),
+					"floor": _client.floor_things.size(), "pirates": _client.roster.values().filter(func(r: Dictionary) -> bool: return int(r["kind"]) == Net.KIND_PIRATE).size(), "in_hand": _client.in_hand(), "lit": _client.lit_cells().size(),
 					"sector": _client.sector, "visited": _client.sectors.visited.count(1), "sectors": _client.sectors.count,
 						"far": _client.sectors.far_from_start(_client.sector) if _client.sectors.count > 0 else -1,
 					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),

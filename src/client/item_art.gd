@@ -8,6 +8,17 @@ const Net := preload("res://src/shared/net.gd")
 static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 	var u := cell.size.x / 17.0
 	var at := cell.position
+	if item >= Net.ITEM_PISTOL and item <= Net.ITEM_PISTOL + Net.PISTOL_ROUNDS:
+		# a pistol, and a pip for every round left in it
+		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(12, 4) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(10, 2) * u), Color(0.42, 0.44, 0.5))
+		canvas.draw_rect(Rect2(at + Vector2(4, 7) * u, Vector2(4, 6) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(5, 8) * u, Vector2(2, 4) * u), Color(0.45, 0.28, 0.16))
+		var n := item - Net.ITEM_PISTOL
+		for k in Net.PISTOL_ROUNDS:
+			canvas.draw_rect(Rect2(at + Vector2(9 + (k % 4) * 1.6, 9 + (k / 4) * 2.2) * u, Vector2(1, 1.4) * u),
+				Color(0.95, 0.75, 0.25) if k < n else Color(0.25, 0.25, 0.3))
+		return
 	match item:
 		Net.ITEM_PATCH:
 			# a plate of hull metal with a rivet in each corner
@@ -24,6 +35,22 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 				canvas.draw_rect(Rect2(mid + out - Vector2(1.2, 1.2) * u, Vector2(2.4, 2.4) * u), Color(0.9, 0.55, 0.15))
 			canvas.draw_circle(mid, 4.4 * u, Color(0.95, 0.65, 0.2))
 			canvas.draw_circle(mid, 1.8 * u, Color(0.16, 0.14, 0.18))
+		Net.ITEM_MAG:
+			# a magazine with a round showing at the top
+			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.12, 0.12, 0.15))
+			canvas.draw_rect(Rect2(at + Vector2(7, 5) * u, Vector2(3, 8) * u), Color(0.38, 0.4, 0.46))
+			canvas.draw_rect(Rect2(at + Vector2(7.5, 2.5) * u, Vector2(2, 2) * u), Color(0.9, 0.7, 0.25))
+		Net.ITEM_BATON:
+			# a baton lying across, a grip at one end
+			canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(14, 4) * u, Color(0.1, 0.1, 0.12), 3.2 * u)
+			canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(14, 4) * u, Color(0.3, 0.32, 0.38), 1.8 * u)
+			canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(6, 10.5) * u, Color(0.55, 0.3, 0.15), 2.2 * u)
+		Net.ITEM_MEDPATCH:
+			# a white patch with a red cross
+			canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 7) * u), Color(0.2, 0.2, 0.24))
+			canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(9, 5) * u), Color(0.93, 0.92, 0.88))
+			canvas.draw_rect(Rect2(at + Vector2(7.5, 6.5) * u, Vector2(2, 4) * u), Color(0.85, 0.15, 0.15))
+			canvas.draw_rect(Rect2(at + Vector2(6.5, 7.5) * u, Vector2(4, 2) * u), Color(0.85, 0.15, 0.15))
 		Net.ITEM_FLASHLIGHT, Net.ITEM_FLASHLIGHT_ON:
 			# a torch lying on its side, the lens to the right; lit, the lens glows and throws a little light
 			var lit := item == Net.ITEM_FLASHLIGHT_ON

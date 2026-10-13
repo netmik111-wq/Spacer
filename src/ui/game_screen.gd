@@ -113,7 +113,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	top.add_child(spacer)
 	# the keys, in two lines under the top right corner, so they do not run into the line on the left
 	_keys = _text(root, 13)
-	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню\n1–6 или колесо: что в руке    Z: применить в руке    G: положить"
+	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню\n1–6 или колесо: что в руке    Щелчок: применить на месте    Z: применить    G: положить"
 	_keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_keys.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	_keys.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -843,6 +843,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if free_hands and event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 		# the wheel turns through the slots
 		var button := (event as InputEventMouseButton).button_index
+		if button == MOUSE_BUTTON_LEFT:
+			# a click in the world uses the thing in the hand there: shoot, strike, bandage
+			client.send_fire(_world.cell_under_mouse())
+			get_viewport().set_input_as_handled()
+			return
 		if button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN:
 			client.send_hand(posmod(client.hand + (-1 if button == MOUSE_BUTTON_WHEEL_UP else 1), Net.SLOTS))
 			get_viewport().set_input_as_handled()
@@ -1073,7 +1078,22 @@ func _process(delta: float) -> void:
 			var extra := ""
 			if switch != Net.ITEM_NONE:
 				extra = "    Z: %s" % ("выключить" if not Items.light(item).is_empty() else "включить")
-			_hand_label.text = "В руке: %s%s    G: положить" % [Items.name_of(item).to_lower(), extra]
+			var rounds := Items.rounds(item)
+			var info: Dictionary = Items.INFO.get(item, {})
+			var what := Items.name_of(item).to_lower()
+			if rounds > 0:
+				what += " (%d из %d)" % [rounds, Net.PISTOL_ROUNDS]
+				extra = "    Щелчок: выстрел"
+			elif rounds == 0:
+				what += " (пуст)"
+				extra = "    Щелчок: перезарядить" if client.carried(Net.ITEM_MAG) > 0 else "    Нужен магазин"
+			elif info.has("blow"):
+				extra = "    Щелчок рядом: удар"
+			elif info.has("heal"):
+				extra = "    Щелчок по себе или соседу: заклеить раны"
+			_hand_label.text = "В руке: %s%s    G: положить" % [what, extra]
+		# a weapon in the hand shows a sight instead of the arrow
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") else Input.CURSOR_ARROW)
 	_hand_label.visible = alive
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))

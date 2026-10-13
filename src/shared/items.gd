@@ -20,6 +20,8 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 
+const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
+
 const INFO := {
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
 		"price": 5, "stock": 8},
@@ -29,7 +31,35 @@ const INFO := {
 		"price": 8, "stock": 4, "switch": Net.ITEM_FLASHLIGHT_ON},
 	Net.ITEM_FLASHLIGHT_ON: {"name": "Фонарик (горит)", "about": "Светит узким лучом. Свет видно издалека.",
 		"kind": Net.ITEM_FLASHLIGHT, "switch": Net.ITEM_FLASHLIGHT, "light": [35.0, 9]},
+	Net.ITEM_MAG: {"name": "Магазин", "about": "Восемь патронов к пистолету.", "price": 6, "stock": 2},
+	Net.ITEM_BATON: {"name": "Дубинка", "about": "Бьёт того, кто рядом.", "price": 8, "stock": 1,
+		"blow": 15},
+	Net.ITEM_MEDPATCH: {"name": "Пластырь", "about": "Сразу закрывает раны: себе или соседу.", "price": 6, "stock": 2,
+		"heal": 40},
+	# a pistol's rounds are part of what it is: one number per load, so a pistol
+	# keeps its rounds in a pocket, on the floor and on a body alike
+	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
+	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
+	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
+	Net.ITEM_PISTOL + 3: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 3},
+	Net.ITEM_PISTOL + 4: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 4},
+	Net.ITEM_PISTOL + 5: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 5},
+	Net.ITEM_PISTOL + 6: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 6},
+	Net.ITEM_PISTOL + 7: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 7},
+	Net.ITEM_PISTOL + 8: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 8},
 }
+
+const PISTOL_DAMAGE := 30
+const PISTOL_RANGE := 14
+
+
+static func rounds(item: int) -> int:
+	## Rounds in a pistol; -1 if it is not one.
+	return int(INFO[item].get("rounds", -1)) if INFO.has(item) else -1
+
+
+static func is_weapon(item: int) -> bool:
+	return rounds(item) >= 0 or (INFO.has(item) and INFO[item].has("blow"))
 
 
 static func known(item: int) -> bool:

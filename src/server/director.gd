@@ -29,6 +29,7 @@ const AIR_PLANT_FAULT := 5
 const DOOR_JAM := 6
 const SHUTTER_FAULT := 7
 const POWER_GLITCH := 8
+const BOARDING := 9
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -47,6 +48,8 @@ const EVENTS: Array[Dictionary] = [
 	{"id": SHUTTER_FAULT, "name": "Отказ аварийного шлюза", "size": SMALL,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 3},
 	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
+	{"id": BOARDING, "name": "Абордаж", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER], "weight": 2},
 ]
 
@@ -119,7 +122,8 @@ func assess() -> Dictionary:
 			if p.cond == Net.COND_OK:
 				crew_up += 1
 	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind(),
-		"broken": server.broken.size(), "engine_down": server.engine_down(), "patches": server.patches_aboard()}
+		"broken": server.broken.size(), "engine_down": server.engine_down(), "patches": server.patches_aboard(),
+		"weapons": server.weapons_aboard(), "pirates": server.pirates.aboard()}
 
 
 func fire(event_id: int) -> bool:
@@ -150,6 +154,13 @@ func _run(event_id: int) -> void:
 			server.fault_shutter()
 		POWER_GLITCH:
 			server.power_glitch()
+		BOARDING:
+			# more crew, more pirates; an unarmed crew meets fewer of them
+			var crew := maxi(int(assess()["crew"]), 1)
+			var party := clampi(1 + crew / 2, 1, 4)
+			if server.weapons_aboard() == 0:
+				party = maxi(party - 1, 1)
+			server.pirates.board(party)
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -179,6 +190,8 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 			return server.can_break("shutter")
 		POWER_GLITCH:
 			return server.can_break("power")
+		BOARDING:
+			return server.pirates.aboard() == 0
 	return true
 
 
@@ -187,6 +200,9 @@ func _weight(e: Dictionary, here: int) -> int:
 	if not _can_happen(e, here):
 		return 0
 	var w := int(e["weight"])
+	# a crew with no weapons at all is boarded half as often
+	if int(e["id"]) == BOARDING and server.weapons_aboard() == 0:
+		w = maxi(w / 2, 1)
 	# a crew with nothing left to close a hole with gets holes three times as rarely
 	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.patches_aboard() == 0:
 		w = maxi(w / 3, 1)

@@ -11,6 +11,15 @@ var name := ""
 var colour := 0
 var bot := false
 var corpse := false                  # a body left behind: it only lies there
+var pirate := false                  # an enemy the server moves (see Pirates)
+var ready_tick := 0                  # its hands are free again from this tick (after a shot, a blow, a reload)
+var history := PackedVector2Array()  # where it was drawn on each of the last HISTORY ticks (see GameServer.place_at)
+# what a pirate has in mind (see Pirates)
+var ai_target := -1                  # the slot of the one it is after
+var ai_goal := Vector2i(-1, -1)      # where it is going
+var ai_step := 0                     # its next step: a direction, or -1 for the ladder underfoot
+var ai_plan_tick := 0                # when it last worked out its way
+var ai_fire_tick := 0                # when it may shoot next
 var st := Mover.State.new()
 
 var inputs: Array = []               # queued input changes, oldest first: [apply tick, direction, seq]
@@ -56,8 +65,12 @@ var chat_times: Array[int] = []
 var bot_until := 0
 
 
+const HISTORY := 32
+
+
 func _init() -> void:
 	slots.resize(Net.SLOTS)
+	history.resize(HISTORY)
 
 
 func count(item: int) -> int:

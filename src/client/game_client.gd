@@ -17,6 +17,7 @@ signal lost(reason: String)          # dropped while playing
 signal roster_changed
 signal chat(from_id: int, text: String)
 signal notice(text: String)
+signal shot(kind: int, hit: bool, from: Vector2, to: Vector2)   # a shot or a blow, in cells of the whole grid
 signal heard(kind: int, x: int, y: int)   # a sound reached our character (see Net.SOUND_*)
 signal arrived                       # the ship has just landed in another sector
 
@@ -264,6 +265,22 @@ func send_hand(slot: int) -> void:
 	if phase == PLAYING and slot >= 0 and slot < Net.SLOTS:
 		hand = slot
 		_peer.send(0, PackedByteArray([Net.C_HAND, slot]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_fire(at: Vector2) -> void:
+	## Uses the thing in the hand on that place (in cells of the whole grid):
+	## shoot, strike, bandage. It carries the tick we see the others on, so the
+	## server judges a shot against what we saw.
+	if phase == PLAYING:
+		var msg := PackedByteArray([Net.C_FIRE, 0, 0, 0, 0, 0, 0, 0, 0])
+		msg.encode_u32(1, maxi(int(render_tick()), 0))
+		msg.encode_s16(5, clampi(roundi(at.x * 16.0), -32000, 32000))
+		msg.encode_s16(7, clampi(roundi(at.y * 16.0), -32000, 32000))
+		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func is_pirate(id: int) -> bool:
+	return roster.has(id) and int(roster[id]["kind"]) == Net.KIND_PIRATE
 
 
 func send_drop() -> void:
@@ -547,7 +564,7 @@ func crew_count() -> int:
 	## Everybody aboard who is not a body left behind.
 	var n := 0
 	for id: int in roster.keys():
-		if int(roster[id]["kind"]) != Net.KIND_CORPSE:
+		if int(roster[id]["kind"]) != Net.KIND_CORPSE and int(roster[id]["kind"]) != Net.KIND_PIRATE:
 			n += 1
 	return n
 
@@ -725,11 +742,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			var id := pkt.decode_u16(1)
 			_read_roster_entry(pkt, 1)
 			roster_changed.emit()
-			if id != my_id and not is_corpse(id):
+			if id != my_id and not is_corpse(id) and not is_pirate(id):
 				notice.emit("%s на борту." % player_name(id))
 		Net.S_LEAVE:
 			var gone := pkt.decode_u16(1)
-			if roster.has(gone) and not is_corpse(gone):
+			if roster.has(gone) and not is_corpse(gone) and not is_pirate(gone):
 				notice.emit("%s покинул корабль." % player_name(gone))
 			roster.erase(gone)
 			ents.erase(gone)
@@ -773,6 +790,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			# without power doors open by hand: that is part of the walking rule we predict
 			doors.manual = not _power
 			_rebuild_prediction()
+		Net.S_SHOT:
+			if pkt.size() >= 11:
+				shot.emit(pkt[1], pkt[2] != 0, Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,
+					Vector2(pkt.decode_s16(7), pkt.decode_s16(9)) / 16.0)
 		Net.S_SOUND:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))

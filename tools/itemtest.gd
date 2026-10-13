@@ -34,7 +34,9 @@ func _initialize() -> void:
 	for item in [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FLASHLIGHT, Net.ITEM_FLASHLIGHT_ON]:
 		all_known = all_known and Items.known(item) and Items.name_of(item) != ""
 	_expect(all_known, "every thing has a name")
-	_expect(Items.kept_in_locker() == PackedInt32Array([Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FLASHLIGHT]), "the locker keeps patches, parts and flashlights")
+	var kept := Items.kept_in_locker()
+	_expect(kept.has(Net.ITEM_PATCH) and kept.has(Net.ITEM_PART) and kept.has(Net.ITEM_FLASHLIGHT) and not kept.has(Net.ITEM_FLASHLIGHT_ON),
+		"the locker keeps patches, parts and flashlights (and a lit flashlight as a flashlight)")
 	_expect(Items.kind_of(Net.ITEM_FLASHLIGHT_ON) == Net.ITEM_FLASHLIGHT and not Items.light(Net.ITEM_FLASHLIGHT_ON).is_empty()
 		and Items.light(Net.ITEM_FLASHLIGHT).is_empty(), "a lit flashlight is a flashlight that gives light")
 	_expect(int(server.store[Net.ITEM_FLASHLIGHT]) == Items.stock(Net.ITEM_FLASHLIGHT), "the ship sets out with %d flashlights" % Items.stock(Net.ITEM_FLASHLIGHT))

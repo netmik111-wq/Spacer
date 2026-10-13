@@ -49,9 +49,12 @@ void fragment() {
 }
 """
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
-const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница"]
+const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик"]
 const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0.4, 0.9, 0.85), Color(0.6, 0.85, 1.0),
-	Color(1.0, 0.4, 0.35), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.9)]
+	Color(1.0, 0.4, 0.35), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.9), Color(1.0, 0.65, 0.2), Color(1.0, 0.55, 0.4),
+	Color(1.0, 0.3, 0.3)]
+const STEP_MARK_GAP := 1.8                        # seconds: footsteps near an earlier mark of them make no new one
+const SHOT_SECONDS := 0.18                        # how long a shot's trace stays
 
 
 class DeckView:
@@ -104,6 +107,7 @@ var _mask: Node2D                    # draws where light falls (red)
 var _look: Node2D                    # draws what our eyes reach (green)
 var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
 var _sound_pen: Node2D               # draws them over everything, in screen space
+var _shots: Array = []               # shots and blows to draw: [kind, hit, from, to (deck pixels), deck, seconds left]
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
 var _dark_sheet: ColorRect
@@ -240,6 +244,7 @@ func setup(p_client: GameClient) -> void:
 	_sound_pen.draw.connect(_draw_sounds)
 	_label_layer.add_child(_sound_pen)
 	client.heard.connect(_on_heard)
+	client.shot.connect(_on_shot)
 
 	# a fixed scatter of stars around the ship
 	var rng := RandomNumberGenerator.new()
@@ -355,6 +360,10 @@ func _update_ship(delta: float) -> void:
 	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
 	_mask.queue_redraw()
 	_look.queue_redraw()
+	for i in range(_shots.size() - 1, -1, -1):
+		_shots[i][5] -= delta
+		if float(_shots[i][5]) <= 0.0:
+			_shots.remove_at(i)
 	for i in range(_sounds.size() - 1, -1, -1):
 		_sounds[i][3] -= delta
 		if float(_sounds[i][3]) <= 0.0:
@@ -432,8 +441,37 @@ func _find_beams() -> Array:
 	return out
 
 
+func _on_shot(kind: int, hit: bool, from: Vector2, to: Vector2) -> void:
+	var map := client.map
+	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
+	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
+	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
+	_shots.append([kind, hit, a, b, deck, SHOT_SECONDS])
+
+
+func cell_under_mouse() -> Vector2:
+	## The place under the mouse in cells of the whole grid, on the deck shown.
+	## A click on somebody's body counts as their cell (the body stands above its feet).
+	var at := get_local_mouse_position() + Vector2(0, 14)
+	return Vector2(at.x / _tile - 0.5, (at.y - FEET_Y) / _tile + 0.5 + _deck_shown * _stride - 0.5)
+
+
 func _draw_shade() -> void:
-	## The warm light of flashlights on the floor (the dark itself is the sheet over the screen).
+	## The warm light of flashlights on the floor, and shots: a trace, a flash
+	## at the muzzle and a spark where it hit (the dark itself is the sheet over the screen).
+	for sh: Array in _shots:
+		if int(sh[4]) != _deck_shown:
+			continue
+		var left := float(sh[5]) / SHOT_SECONDS
+		var a: Vector2 = sh[2]
+		var b: Vector2 = sh[3]
+		if int(sh[0]) == Net.SHOT_BULLET:
+			_shade.draw_line(a, b, Color(1.0, 0.9, 0.5, 0.85 * left), 1.5)
+			_shade.draw_circle(a + (b - a).normalized() * 10.0, 5.0 * left, Color(1.0, 0.85, 0.4, left))
+		else:
+			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
+		if bool(sh[1]):
+			_shade.draw_circle(b, 6.0 * left + 2.0, Color(0.9, 0.1, 0.1, 0.9 * left))
 	for b: Array in _beams:
 		var colours := PackedColorArray()
 		for c: Color in b[1]:
@@ -477,6 +515,9 @@ func _draw_mask() -> void:
 	var me: Sprite2D = _views.get(client.my_id)
 	if me != null and me.get_parent() == _decks[_deck_shown].chars:
 		_soft_circle(_mask, me.position + Vector2(0, -12), NEAR_SEEN * _tile, NEAR_FADE * _tile, red)
+	for sh: Array in _shots:
+		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
+			_mask.draw_circle(sh[2], 26.0, Color(1, 0, 0, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
 	for b: Array in _beams:
 		var reds := PackedColorArray()
 		for c: Color in b[1]:
@@ -535,6 +576,8 @@ func can_see(x: int, y: int) -> bool:
 	## one seen through a see-through floor counts as the cell above it)?
 	var map := client.map
 	var me := Vector2(client.pred.x, client.pred.y)
+	if client.my_cond != Net.COND_OK:
+		return false                         # out cold, or dead: nothing is seen
 	var its_deck := map.deck_of(y)
 	var on_ours := Vector2i(x, y - (its_deck - _deck_shown) * _stride)
 	var dark := _dark >= 0.5
@@ -554,6 +597,12 @@ func _on_heard(kind: int, x: int, y: int) -> void:
 	if kind <= 0 or kind >= SOUND_LOOK.size() or can_see(x, y):
 		return
 	var far := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y))
+	if kind == Net.SOUND_STEP:
+		# footsteps come often: one mark for a while for somebody walking about there
+		for old: Array in _sounds:
+			if int(old[0]) == kind and float(old[3]) > SOUND_SECONDS - STEP_MARK_GAP \
+					and (old[1] as Vector2).distance_to(_feet(Vector2(x, map.local_y(y)))) < 3.0 * _tile:
+				return
 	var spread := far / 5.0
 	var at := Vector2(x + randf_range(-spread, spread), map.local_y(y) + randf_range(-spread, spread))
 	_sounds.append([kind, _feet(at) + Vector2(0, -14), map.deck_of(y), SOUND_SECONDS])
@@ -842,6 +891,8 @@ func _process(delta: float) -> void:
 				label.modulate = Color(0.75, 0.5, 0.5)
 			elif id == client.my_id:
 				label.modulate = Color(0.6, 1.0, 0.7)
+			elif client.is_pirate(id):
+				label.modulate = Color(1.0, 0.45, 0.35)
 			elif client.is_bot(id):
 				label.modulate = Color(0.72, 0.76, 0.86)
 			else:

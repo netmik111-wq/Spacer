@@ -19,6 +19,8 @@ const Vitals := preload("res://src/server/vitals.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Director := preload("res://src/server/director.gd")
 const Items := preload("res://src/shared/items.gd")
+const Sight := preload("res://src/shared/sight.gd")
+const Pirates := preload("res://src/server/pirates.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
@@ -32,6 +34,11 @@ const BOT_RESPAWN_TICKS := 300      # a dead bot is replaced after 15 s
 const MAX_CORPSES := 30             # the oldest body is cleared away when there are more
 const HAND_SEARCH := 1              # what a press of "search" or "drag" asks for (Player.want_kind)
 const HAND_DRAG := 2
+const SHOT_TICKS := 6                # a pistol fires at most this often
+const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
+const BLOW_TICKS := 16               # a blow with a baton
+const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
+const SHOT_SEEN := 24                # a shot is drawn for everybody this close on its deck
 const HAND_WAIT_TICKS := 10         # a drag asked for in mid-step waits this long for the step to end
 
 var port := Net.DEFAULT_PORT
@@ -98,6 +105,7 @@ var _store_told := PackedByteArray()   # the supplies as clients were last told
 var _power_out_until := 0              # a passing power failure lasts until this tick
 var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
+var pirates := Pirates.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -170,6 +178,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship_moving = false
 	in_reach = sectors.within_reach(sector, ship_pos)
 	broken.clear()
+	pirates.setup(self)
 	director.setup(self)
 	_rng.randomize()
 	tick = 0
@@ -338,6 +347,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		_put_down(p)
 	elif kind == Net.C_ACT:
 		_act(p)
+	elif kind == Net.C_FIRE:
+		if pkt.size() >= 9:
+			use_at(p, pkt.decode_u32(1), Vector2(pkt.decode_s16(5), pkt.decode_s16(7)) / 16.0)
 	elif kind == Net.C_SEARCH or kind == Net.C_DRAG:
 		if pkt.size() >= 7:
 			_hands_asked(p, HAND_SEARCH if kind == Net.C_SEARCH else HAND_DRAG, pkt.decode_u16(1), pkt.decode_u32(3))
@@ -467,7 +479,7 @@ func _roster_entry(p: Player) -> PackedByteArray:
 	e.resize(5)
 	e.encode_u16(0, p.slot)
 	e.encode_u8(2, p.colour)
-	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_BOT if p.bot else Net.KIND_PLAYER))
+	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PIRATE if p.pirate else (Net.KIND_BOT if p.bot else Net.KIND_PLAYER)))
 	e.encode_u8(4, name_bytes.size())
 	e.append_array(name_bytes)
 	return e
@@ -644,6 +656,8 @@ func sound(kind: int, x: int, y: int, made_by: int = -1) -> void:
 			continue
 		if keep_heard:
 			q.heard.append([kind, x, y])
+		if q.pirate and made_by >= 0 and players[made_by] != null and not players[made_by].pirate:
+			pirates.heard(q, x, y)
 		if q.peer != null:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
@@ -1152,6 +1166,8 @@ func _tick() -> void:
 			p.self_dirty = true
 		if p.bot:
 			_bot_think(p)
+		elif p.pirate:
+			pirates.think(p)
 		var was_x := p.st.x
 		var was_y := p.st.y
 		if Mover.step(p.st, map, doors, tick):
@@ -1164,6 +1180,7 @@ func _tick() -> void:
 		if p.climb_tick >= 0 and tick >= p.climb_tick:
 			p.climb_tick = -1
 			_press(p)
+		p.history[tick % Player.HISTORY] = Mover.visual_pos(p.st, tick)
 		_update_vitals(p)
 		_update_hands(p)
 		_update_work(p)
@@ -1194,7 +1211,9 @@ func _update_vitals(p: Player) -> void:
 			_respawn(p)
 		return
 	var breathes := air.air[p.st.y * map.width + p.st.x]
-	if p.supply:
+	if p.pirate:
+		breathes = 1.0                       # pirates come in sealed suits
+	elif p.supply:
 		# on the tank: the air around does not matter while there is oxygen left
 		p.tank = maxf(p.tank - Net.TICK_SEC / Vitals.TANK_SECONDS, 0.0)
 		if p.tank > 0.0:
@@ -1212,6 +1231,14 @@ func _update_vitals(p: Player) -> void:
 	elif cond == Net.COND_DEAD:
 		p.died_tick = tick
 		_ship_says("%s погибает." % p.name)
+		if p.pirate:
+			# a dead pirate is a body like any other, with what it carried
+			p.cond = cond
+			p.st.down = true
+			p.st.dir = Net.DIR_NONE
+			_becomes_corpse(p)
+			_record(p)
+			return
 	elif p.cond == Net.COND_CRIT:
 		_ship_says("%s приходит в себя." % p.name)
 	p.cond = cond
@@ -1363,6 +1390,149 @@ func _act(p: Player) -> bool:
 		return false
 	p.slots[p.hand] = Items.switched(item)
 	return true
+
+
+# ---------------------------------------------------------------- weapons
+
+func place_at(q: Player, when: int) -> Vector2:
+	## Where a character was drawn on that tick (for the last Player.HISTORY
+	## ticks): a shot is judged against what the shooter saw, not against
+	## where things are by the time the click arrives.
+	if when >= tick or tick - when >= Player.HISTORY or when <= 0:
+		return Mover.visual_pos(q.st, tick)
+	return q.history[when % Player.HISTORY]
+
+
+func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
+	## A click with the thing in the hand: a pistol shoots there (or is
+	## reloaded when empty), a baton strikes the cell next to us that way, a
+	## patch for wounds is put on ourselves or on the one next to us.
+	if p.cond != Net.COND_OK or p.corpse or tick < p.ready_tick:
+		return
+	var item := p.in_hand()
+	var rounds := Items.rounds(item)
+	if rounds > 0:
+		p.slots[p.hand] = item - 1
+		p.ready_tick = tick + SHOT_TICKS
+		_shoot(p, clampi(seen_tick, tick - Player.HISTORY + 1, tick), at)
+	elif rounds == 0:
+		var mag := p.slots.find(Net.ITEM_MAG)
+		if mag >= 0:
+			p.slots[mag] = Net.ITEM_NONE
+			p.slots[p.hand] = Net.ITEM_PISTOL + Net.PISTOL_ROUNDS
+			p.ready_tick = tick + RELOAD_TICKS
+	elif Items.INFO.has(item) and Items.INFO[item].has("blow"):
+		p.ready_tick = tick + BLOW_TICKS
+		_strike(p, at, int(Items.INFO[item]["blow"]))
+	elif Items.INFO.has(item) and Items.INFO[item].has("heal"):
+		var who := _beside(p, at, true)
+		if who != null:
+			who.health = minf(who.health + float(Items.INFO[item]["heal"]), Net.HEALTH_FULL)
+			p.slots[p.hand] = Net.ITEM_NONE
+			if who != p:
+				_ship_says("%s заклеивает раны: %s." % [p.name, who.name])
+
+
+func _stops_shot(x: int, y: int) -> bool:
+	## A bullet stops at anything that cannot be walked through: walls, windows, shut doors.
+	if not map.walkable(x, y):
+		return true
+	var d := map.door_at(x, y)
+	return d >= 0 and doors.is_shut(d)
+
+
+func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
+	var from := Vector2(p.st.x, p.st.y)
+	var way := at - from
+	if way.length() < 0.1:
+		return
+	way = way.normalized()
+	var start := Vector2i(p.st.x, p.st.y)
+	var reach := float(Items.PISTOL_RANGE)
+	var t := 0.3
+	while t < reach:
+		var c := from + way * t
+		var cell := Vector2i(roundi(c.x), roundi(c.y))
+		if cell != start and (_stops_shot(cell.x, cell.y) or map.deck_of(cell.y) != map.deck_of(start.y)):
+			reach = t
+			break
+		t += 0.1
+	var hit: Player = null
+	var best := reach
+	for q: Player in players:
+		if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or map.deck_of(q.st.y) != map.deck_of(p.st.y):
+			continue
+		var pos := place_at(q, seen_tick)
+		var along := (pos - from).dot(way)
+		if along <= 0.2 or along >= best:
+			continue
+		if (pos - (from + way * along)).length() <= HIT_RADIUS:
+			best = along
+			hit = q
+	var end := from + way * best
+	_tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y)
+	sound(Net.SOUND_SHOT, p.st.x, p.st.y, p.slot)
+	if hit != null:
+		hurt(hit, Items.PISTOL_DAMAGE, p)
+
+
+func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
+	## The character in our own cell (if `self_too` and the click was on us) or
+	## in the cell next to us in the direction of the click; null if nobody.
+	var from := Vector2(p.st.x, p.st.y)
+	var way := at - from
+	if self_too and way.length() < 0.5:
+		return p
+	var step := Vector2i(signi(roundi(way.x)) if absf(way.x) >= absf(way.y) else 0,
+		signi(roundi(way.y)) if absf(way.y) > absf(way.x) else 0)
+	var cell := Vector2i(p.st.x, p.st.y) + step
+	for q: Player in players:
+		if q != null and q != p and not q.corpse and q.cond != Net.COND_DEAD and q.st.x == cell.x and q.st.y == cell.y:
+			return q
+	return null
+
+
+func _strike(p: Player, at: Vector2, damage: int) -> void:
+	var q := _beside(p, at, false)
+	var to := at if q == null else Vector2(q.st.x, q.st.y)
+	_tell_shot(Net.SHOT_BLOW, q != null, Vector2(p.st.x, p.st.y), to, p.st.y)
+	sound(Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
+	if q != null:
+		hurt(q, damage, p)
+
+
+func hurt(q: Player, damage: int, by: Player) -> void:
+	## A wound. What it does to the body is worked out with everything else in
+	## _update_vitals on the next tick.
+	if q.cond == Net.COND_OK:
+		sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
+	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
+	q.health = maxf(q.health - damage, Net.HEALTH_DEAD - 1.0)
+	if q.pirate and by != null:
+		pirates.attacked(q, by)
+
+
+func _tell_shot(kind: int, hit: bool, from: Vector2, to: Vector2, row: int) -> void:
+	var msg := PackedByteArray([Net.S_SHOT, kind, 1 if hit else 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	msg.encode_s16(3, roundi(from.x * 16.0))
+	msg.encode_s16(5, roundi(from.y * 16.0))
+	msg.encode_s16(7, roundi(to.x * 16.0))
+	msg.encode_s16(9, roundi(to.y * 16.0))
+	for q: Player in players:
+		if q != null and q.peer != null and map.deck_of(q.st.y) == map.deck_of(row) \
+				and Vector2(q.st.x, q.st.y).distance_to(from) <= SHOT_SEEN:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func weapons_aboard() -> int:
+	## Weapons the crew could lay hands on: in the locker and in its pockets.
+	var n: int = store.get(Net.ITEM_PISTOL, 0) + store.get(Net.ITEM_BATON, 0)
+	for q: Player in players:
+		if q != null and not q.pirate and not q.corpse:
+			for v in q.slots:
+				if Items.is_weapon(v):
+					n += 1
+	return n
 
 
 func _floor_record(cell: int) -> void:
