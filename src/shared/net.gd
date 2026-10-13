@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 14
+const PROTOCOL := 15
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -113,6 +113,7 @@ const S_POWER := 21                 # u8 on: the ship has power (1) or every sys
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry
+const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
                                     # many of it the locker holds
@@ -131,6 +132,19 @@ const PRICE_AIR := 5                # for AIR_LOT cells' worth
 const AIR_LOT := 10.0
 const EXPLORE_REWARD := 15          # credits for the first visit to a sector
 const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
+
+# Sounds. Each is heard this far, in cells, on its own deck; through air only:
+# where either the one who hears or the sound itself is in a vacuum, only what
+# happens right next to them is heard (through the suit and the floor).
+const SOUND_STEP := 1               # footsteps
+const SOUND_DOOR := 2               # a door sliding open
+const SOUND_HISS := 3               # air rushing out of a hole in the hull
+const SOUND_THUD := 4               # somebody falling
+const SOUND_DROP := 5               # a thing put down
+const SOUND_LADDER := 6             # somebody on a ladder
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7]
+const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
+const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 
 const ADMIN_BREACH := 1             # tear a hole in the hull near the player who asked (tests)
 const ADMIN_SEAL := 2               # close every hole (tests)

@@ -32,14 +32,26 @@ const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's
 const BEAM_HEIGHT := 18.0                        # how far above the feet a beam starts, in pixels
 const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
+const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
+const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
+# The mask has two pictures in one: red is where light falls, green is what our
+# eyes reach. Seen = lit and looked at; lit but out of sight = fog; unlit = black.
 const DARK_SHADER := """
 shader_type canvas_item;
 uniform sampler2D mask : filter_linear;
 uniform vec4 dark;
+uniform float fog;
 void fragment() {
-	COLOR = vec4(dark.rgb, dark.a * (1.0 - texture(mask, SCREEN_UV).r));
+	vec4 m = texture(mask, SCREEN_UV);
+	float lit = clamp(m.r, 0.0, 1.0);
+	float seen = clamp(m.g, 0.0, 1.0);
+	COLOR = vec4(dark.rgb, dark.a * (1.0 - lit * (1.0 - fog * (1.0 - seen))));
 }
 """
+const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
+const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница"]
+const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0.4, 0.9, 0.85), Color(0.6, 0.85, 1.0),
+	Color(1.0, 0.4, 0.35), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.9)]
 
 
 class DeckView:
@@ -88,7 +100,10 @@ var _beams: Array = []               # the beams on the deck shown: [polygon, co
 # Darkness is a black sheet over the screen with holes where light falls. The holes
 # are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
 var _mask_view: SubViewport
-var _mask: Node2D
+var _mask: Node2D                    # draws where light falls (red)
+var _look: Node2D                    # draws what our eyes reach (green)
+var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
+var _sound_pen: Node2D               # draws them over everything, in screen space
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
 var _dark_sheet: ColorRect
@@ -173,11 +188,19 @@ func setup(p_client: GameClient) -> void:
 	add_child(_shade)
 	_mask_view = SubViewport.new()
 	_mask_view.disable_3d = true
-	_mask_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_mask_view.transparent_bg = true
+	_mask_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_mask_view)
+	var adding := CanvasItemMaterial.new()
+	adding.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_mask = Node2D.new()
+	_mask.material = adding
 	_mask.draw.connect(_draw_mask)
 	_mask_view.add_child(_mask)
+	_look = Node2D.new()
+	_look.material = adding
+	_look.draw.connect(_draw_look)
+	_mask_view.add_child(_look)
 	_mask_camera = Camera2D.new()
 	_mask_view.add_child(_mask_camera)
 	_mask_camera.enabled = true
@@ -192,8 +215,8 @@ func setup(p_client: GameClient) -> void:
 	var sheet_material := ShaderMaterial.new()
 	sheet_material.shader = sheet_shader
 	sheet_material.set_shader_parameter("mask", _mask_view.get_texture())
+	sheet_material.set_shader_parameter("fog", FOG)
 	_dark_sheet.material = sheet_material
-	_dark_sheet.visible = false
 	_dark_layer.add_child(_dark_sheet)
 
 	_ghost = Sprite2D.new()
@@ -213,6 +236,10 @@ func setup(p_client: GameClient) -> void:
 	_label_layer = CanvasLayer.new()
 	_label_layer.layer = 2
 	add_child(_label_layer)
+	_sound_pen = Node2D.new()
+	_sound_pen.draw.connect(_draw_sounds)
+	_label_layer.add_child(_sound_pen)
+	client.heard.connect(_on_heard)
 
 	# a fixed scatter of stars around the ship
 	var rng := RandomNumberGenerator.new()
@@ -325,11 +352,14 @@ func _update_ship(delta: float) -> void:
 	_lit = client.lit_cells()
 	_beams = _find_beams()
 	_shade.queue_redraw()
-	_dark_sheet.visible = _dark > 0.0
-	_mask_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _dark > 0.0 else SubViewport.UPDATE_DISABLED
-	if _dark > 0.0:
-		(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", Color(DARK, DARK.a * _dark))
-		_mask.queue_redraw()
+	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
+	_mask.queue_redraw()
+	_look.queue_redraw()
+	for i in range(_sounds.size() - 1, -1, -1):
+		_sounds[i][3] -= delta
+		if float(_sounds[i][3]) <= 0.0:
+			_sounds.remove_at(i)
+	_sound_pen.queue_redraw()
 
 
 func _draw_things(d: int) -> void:
@@ -412,48 +442,160 @@ func _draw_shade() -> void:
 
 
 func _draw_mask() -> void:
-	## Where the dark sheet has holes: white is seen, black is dark. Space
-	## outside the ship is not dark, the ship is, and light opens it up.
+	## Red where light falls. Space outside the ship is never dark; the ship is
+	## lit while it has power, and in the dark only flashlights and the cells
+	## right around our own character are.
 	var map := client.map
-	_mask.draw_rect(Rect2(_camera.position - Vector2(8000, 8000), Vector2(16000, 16000)), Color.WHITE)
+	var red := Color(1, 0, 0, 1)
+	var size := Vector2(map.width, map.deck_height) * _tile
+	var far := 8000.0
+	_mask.draw_rect(Rect2(-far, -far, size.x + 2 * far, far), red)                       # above the ship
+	_mask.draw_rect(Rect2(-far, size.y, size.x + 2 * far, far), red)                     # below it
+	_mask.draw_rect(Rect2(-far, 0, far, size.y), red)                                    # to its left
+	_mask.draw_rect(Rect2(size.x, 0, far, size.y), red)                                  # to its right
+	var ship := Color(1, 0, 0, 1.0 - _dark)
 	for y in map.deck_height:
 		var row := (_deck_shown * _stride + y) * map.width
 		var x := 0
 		while x < map.width:
-			if map.cells[row + x] < 0:
-				x += 1
-				continue
+			var inside := map.cells[row + x] >= 0
 			var run := x
-			while run < map.width and map.cells[row + run] >= 0:
+			while run < map.width and (map.cells[row + run] >= 0) == inside:
 				run += 1
-			_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(run - x, 1) * _tile), Color.BLACK)
+			var rect := Rect2(Vector2(x, y) * _tile, Vector2(run - x, 1) * _tile)
+			if not inside:
+				_mask.draw_rect(rect, red)
+			elif _dark > 0.0:
+				if ship.a > 0.0:
+					_mask.draw_rect(rect, ship)
+			else:
+				_mask.draw_rect(rect, red)
 			x = run
+	if _dark <= 0.0:
+		return
 	# right around our own character: a little seen even in the dark
 	var me: Sprite2D = _views.get(client.my_id)
 	if me != null and me.get_parent() == _decks[_deck_shown].chars:
-		var mid := me.position + Vector2(0, -12)
-		_mask.draw_circle(mid, NEAR_SEEN * _tile, Color.WHITE)
-		var ring := 24
-		for k in ring:
-			var a0 := TAU * k / ring
-			var a1 := TAU * (k + 1) / ring
-			var inner0 := mid + Vector2.RIGHT.rotated(a0) * NEAR_SEEN * _tile
-			var inner1 := mid + Vector2.RIGHT.rotated(a1) * NEAR_SEEN * _tile
-			var outer0 := mid + Vector2.RIGHT.rotated(a0) * NEAR_FADE * _tile
-			var outer1 := mid + Vector2.RIGHT.rotated(a1) * NEAR_FADE * _tile
-			_mask.draw_polygon(PackedVector2Array([inner0, outer0, outer1, inner1]),
-				PackedColorArray([Color.WHITE, Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color.WHITE]))
+		_soft_circle(_mask, me.position + Vector2(0, -12), NEAR_SEEN * _tile, NEAR_FADE * _tile, red)
 	for b: Array in _beams:
-		_mask.draw_polygon(b[0], b[1])
+		var reds := PackedColorArray()
+		for c: Color in b[1]:
+			reds.append(Color(1, 0, 0, c.a))
+		_mask.draw_polygon(b[0], reds)
+
+
+func _soft_circle(pen: Node2D, mid: Vector2, full: float, gone: float, colour: Color) -> void:
+	## A disc in full colour out to `full`, fading to nothing by `gone`.
+	pen.draw_circle(mid, full, colour)
+	var ring := 24
+	var none := Color(colour, 0.0)
+	for k in ring:
+		var a0 := Vector2.RIGHT.rotated(TAU * k / ring)
+		var a1 := Vector2.RIGHT.rotated(TAU * (k + 1) / ring)
+		pen.draw_polygon(PackedVector2Array([mid + a0 * full, mid + a0 * gone, mid + a1 * gone, mid + a1 * full]),
+			PackedColorArray([colour, none, none, colour]))
+
+
+func _draw_look() -> void:
+	## Green where our eyes reach: a cone from each eye, cut short by walls and
+	## shut doors, and our own cell (somebody right behind us is felt, not seen).
+	var me: Sprite2D = _views.get(client.my_id)
+	if me == null or me.get_parent() != _decks[_deck_shown].chars or client.my_cond != Net.COND_OK:
+		if me != null and client.my_cond != Net.COND_DEAD:
+			_look.draw_circle(me.position + Vector2(0, -12), _tile * 0.6, Color(0, 1, 0, 1))
+		return
+	var s := client.sample(client.my_id)
+	if s.is_empty():
+		return
+	var facing: int = s[1]
+	var green := Color(0, 1, 0, 1)
+	var origin := me.position + Vector2(0, -12)
+	_look.draw_circle(origin, _tile * 0.6, green)
+	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
+	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
+	var reach := float(Sight.SIGHT_REACH) * _tile
+	for arc: Array in Sight.eye_arcs(_dark >= 0.5):
+		var points := PackedVector2Array([origin])
+		for k in LOOK_RAYS + 1:
+			var way := ahead.rotated(deg_to_rad(lerpf(float(arc[0]), float(arc[1]), float(k) / LOOK_RAYS)))
+			var t := 0.0
+			while t < reach:
+				var at := origin + way * t
+				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
+				if c != start_cell and Sight.blocks(client.map, client.doors, c.x, c.y + _deck_shown * _stride):
+					t += 6.0                 # the face of the wall is seen
+					break
+				t += 4.0
+			points.append(origin + way * minf(t, reach))
+		_look.draw_colored_polygon(points, green)
+
+
+func can_see(x: int, y: int) -> bool:
+	## Can our character make out somebody at this cell (a cell on any deck:
+	## one seen through a see-through floor counts as the cell above it)?
+	var map := client.map
+	var me := Vector2(client.pred.x, client.pred.y)
+	var its_deck := map.deck_of(y)
+	var on_ours := Vector2i(x, y - (its_deck - _deck_shown) * _stride)
+	var dark := _dark >= 0.5
+	var arcs := Sight.eye_arcs(dark)
+	if not dark:
+		return Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
+	if Vector2(on_ours).distance_to(me) <= Sight.DARK_REACH + 0.5 \
+			and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.DARK_REACH):
+		return true
+	return _lit.has(y * map.width + x) and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
+
+
+func _on_heard(kind: int, x: int, y: int) -> void:
+	## A sound reached us. If we can see where it came from, there is nothing to
+	## mark; otherwise its mark appears there, the less exactly the further off.
+	var map := client.map
+	if kind <= 0 or kind >= SOUND_LOOK.size() or can_see(x, y):
+		return
+	var far := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y))
+	var spread := far / 5.0
+	var at := Vector2(x + randf_range(-spread, spread), map.local_y(y) + randf_range(-spread, spread))
+	_sounds.append([kind, _feet(at) + Vector2(0, -14), map.deck_of(y), SOUND_SECONDS])
+	if _sounds.size() > 24:
+		_sounds.pop_front()
+
+
+func _draw_sounds() -> void:
+	## Each mark: rings spreading from where the sound was, and what it was.
+	## A sound off the screen is marked at its edge, pointing the way.
+	var font := ThemeDB.fallback_font
+	var screen := get_viewport_rect().size
+	var zoom := _camera.zoom.x
+	for snd: Array in _sounds:
+		if int(snd[2]) != _deck_shown:
+			continue
+		var kind: int = snd[0]
+		var age := 1.0 - float(snd[3]) / SOUND_SECONDS
+		var colour := SOUND_COLOUR[kind]
+		var spot: Vector2 = (snd[1] - _camera.position) * zoom + screen * 0.5
+		var margin := 34.0
+		var inside := Rect2(Vector2(margin, margin + 40), screen - Vector2(2 * margin, 2 * margin + 140))
+		var edge := spot.clamp(inside.position, inside.end)
+		var off := not edge.is_equal_approx(spot)
+		var fade := 1.0 - age
+		for r in 2:
+			var grow := fposmod(age * 1.6 + r * 0.5, 1.0)
+			_sound_pen.draw_arc(edge, 6.0 + grow * 22.0, 0.0, TAU, 28, Color(colour, (1.0 - grow) * 0.8 * fade), 2.0)
+		if off:
+			var way := (spot - edge).normalized()
+			var tip := edge + way * 16.0
+			_sound_pen.draw_colored_polygon(PackedVector2Array([tip, edge + way.rotated(2.5) * 9.0, edge + way.rotated(-2.5) * 9.0]),
+				Color(colour, 0.85 * fade))
+		var word: String = SOUND_LOOK[kind]
+		_sound_pen.draw_string_outline(font, edge + Vector2(-60, 26), word, HORIZONTAL_ALIGNMENT_CENTER, 120, 12, 4, Color(0, 0, 0, 0.8 * fade))
+		_sound_pen.draw_string(font, edge + Vector2(-60, 26), word, HORIZONTAL_ALIGNMENT_CENTER, 120, 12, Color(colour, fade))
 
 
 func lit(cell: int) -> bool:
-	## Can a character in this cell be made out: the lights are on, or a light falls on it.
-	if _dark < 0.5 or _lit.has(cell):
-		return true
-	var mine: GameClient.Ent = client.ents.get(client.my_id)
+	## Can a character in this cell be made out by us (see can_see)?
 	var map := client.map
-	return mine != null and Vector2(mine.x, mine.y).distance_to(Vector2(cell % map.width, cell / map.width)) <= NEAR_FADE
+	return can_see(cell % map.width, cell / map.width)
 
 
 func _draw_fx(d: int) -> void:
@@ -639,7 +781,8 @@ func _process(delta: float) -> void:
 		var cell_y := its_deck * _stride + clampi(roundi(pos.y), 0, map.deck_height - 1)
 		var seen := client.seen_from(my_deck, cell_x, cell_y)
 		_seen[id] = seen
-		sprite.visible = its_deck > my_deck or seen
+		# out of our field of view (or in the dark) nobody is seen
+		sprite.visible = id == client.my_id or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id))
 		if cond == Net.COND_OK:

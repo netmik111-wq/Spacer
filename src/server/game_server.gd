@@ -98,6 +98,7 @@ var _store_told := PackedByteArray()   # the supplies as clients were last told
 var _power_out_until := 0              # a passing power failure lasts until this tick
 var _power_told := true                # the state of the power as clients were last told
 var director := Director.new()
+var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
 var packets_in := 0
@@ -610,6 +611,43 @@ func _chat(p: Player, raw: String) -> void:
 	log_line.emit("[чат] %s: %s" % [p.name, text])
 
 
+func _air_for_sound(x: int, y: int) -> float:
+	## The air a sound at this cell travels in: a wall cell (a hole) takes the
+	## thickest air next to it.
+	var best := air.air[y * map.width + x] if map.walkable(x, y) else 0.0
+	if not map.walkable(x, y):
+		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if map.walkable(x + d.x, y + d.y):
+				best = maxf(best, air.air[(y + d.y) * map.width + x + d.x])
+	return best
+
+
+func hears(q: Player, kind: int, x: int, y: int) -> bool:
+	## Does this character hear a sound of that kind made at x, y?
+	if q.corpse or q.cond == Net.COND_DEAD or map.deck_of(q.st.y) != map.deck_of(y):
+		return false
+	var d := Vector2(q.st.x - x, q.st.y - y).length()
+	if d > Net.SOUND_RANGE[kind]:
+		return false
+	if d <= Net.SOUND_CONTACT:
+		return true
+	return _air_for_sound(x, y) >= Net.SOUND_AIR and air.air[q.st.y * map.width + q.st.x] >= Net.SOUND_AIR
+
+
+func sound(kind: int, x: int, y: int, made_by: int = -1) -> void:
+	## Something was heard at x, y: everyone in earshot is told where (but not who).
+	var msg := PackedByteArray([Net.S_SOUND, kind, 0, 0, 0, 0])
+	msg.encode_s16(2, x)
+	msg.encode_s16(4, y)
+	for q: Player in players:
+		if q == null or q.slot == made_by or not hears(q, kind, x, y):
+			continue
+		if keep_heard:
+			q.heard.append([kind, x, y])
+		if q.peer != null:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
 func _ship_says(text: String) -> void:
 	## A line in everybody's chat from the ship itself.
 	var body := text.to_utf8_buffer()
@@ -1118,6 +1156,9 @@ func _tick() -> void:
 		var was_y := p.st.y
 		if Mover.step(p.st, map, doors, tick):
 			p.self_dirty = true
+			p.steps += 1
+			if p.steps % 2 == 0:
+				sound(Net.SOUND_STEP, p.st.x, p.st.y, p.slot)
 			if p.dragging >= 0:
 				_haul(p, was_x, was_y)
 		if p.climb_tick >= 0 and tick >= p.climb_tick:
@@ -1140,6 +1181,9 @@ func _tick() -> void:
 		_update_shutters()
 	if tick % Net.AIR_SEND_EVERY == 0:
 		_collect_air()
+	if tick % Net.TICK_HZ == 0:
+		for cell: int in air.holes.keys():
+			sound(Net.SOUND_HISS, cell % map.width, cell / map.width)
 	_send_world()
 
 
@@ -1161,6 +1205,8 @@ func _update_vitals(p: Player) -> void:
 	var cond := Vitals.condition(p.health, p.cond)
 	if cond == p.cond:
 		return
+	if p.cond == Net.COND_OK:
+		sound(Net.SOUND_THUD, p.st.x, p.st.y, p.slot)
 	if cond == Net.COND_CRIT:
 		_ship_says("%s теряет сознание." % p.name)
 	elif cond == Net.COND_DEAD:
@@ -1306,6 +1352,7 @@ func _put_down(p: Player) -> bool:
 	floor_things[cell] = things
 	p.slots[p.hand] = Net.ITEM_NONE
 	_floor_record(cell)
+	sound(Net.SOUND_DROP, p.st.x, p.st.y, p.slot)
 	return true
 
 
@@ -1344,9 +1391,11 @@ func _climb(p: Player) -> bool:
 		return false
 	# Only the place changes: a key the player holds goes on being held, so the
 	# client's replay of its unconfirmed inputs still matches.
+	sound(Net.SOUND_LADDER, p.st.x, p.st.y, p.slot)
 	p.st.place(to % map.width, to / map.width)
 	p.self_dirty = true
 	p.climbs += 1
+	sound(Net.SOUND_LADDER, p.st.x, p.st.y, p.slot)
 	_record(p)
 	if p.dragging >= 0:
 		var body: Player = players[p.dragging]
@@ -1530,6 +1579,8 @@ func _update_shutters() -> void:
 func _update_doors() -> void:
 	# doors pushed this tick stay open for a while
 	for d in doors.bumped:
+		if _door_sent[d] == Doors.CLOSED and _door_hold[d] < tick:
+			sound(Net.SOUND_DOOR, map.doors[d].x, map.doors[d].y)
 		_door_hold[d] = tick + Doors.HOLD_TICKS
 	doors.bumped.clear()
 	# a door does not close on somebody standing in it

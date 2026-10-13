@@ -17,6 +17,7 @@ signal lost(reason: String)          # dropped while playing
 signal roster_changed
 signal chat(from_id: int, text: String)
 signal notice(text: String)
+signal heard(kind: int, x: int, y: int)   # a sound reached our character (see Net.SOUND_*)
 signal arrived                       # the ship has just landed in another sector
 
 const Net := preload("res://src/shared/net.gd")
@@ -772,6 +773,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			# without power doors open by hand: that is part of the walking rule we predict
 			doors.manual = not _power
 			_rebuild_prediction()
+		Net.S_SOUND:
+			if pkt.size() >= 6:
+				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))
 		Net.S_CHAT:
 			var n := pkt.decode_u16(3)
 			chat.emit(pkt.decode_u16(1), pkt.slice(5, 5 + n).get_string_from_utf8())

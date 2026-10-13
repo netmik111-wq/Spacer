@@ -44,6 +44,8 @@ var work_cell := -1
 var work_total := 1                  # ticks the job in hand takes (the progress shown is work / work_total)
 var vitals_sent := -1                # health, tank, supply and work as last told to the client, packed
 var died_tick := 0
+var heard: Array = []                # sounds sent to it, [kind, x, y] (kept only for tests: see GameServer.keep_heard)
+var steps := 0                       # steps taken (every other one is heard)
 var climbs := 0                      # times it has gone up or down a ladder (for tests)
 var climb_tick := -1                 # a press of "use" waiting for its tick, in case it is on a ladder (-1 = none)
 
