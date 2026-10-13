@@ -26,8 +26,6 @@ const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
 const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
 const DARK := Color(0.0, 0.0, 0.01, 1.0)          # the ship without power and without light: pitch black
-const NEAR_SEEN := 1.0                            # without light our own character still makes out this many
-const NEAR_FADE := 2.0                            # cells around it in full, fading out by this many
 const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's light
 const BEAM_HEIGHT := 18.0                        # how far above the feet a beam starts, in pixels
 const BEAM_START_WIDTH := 26.0                    # and how wide it is there
@@ -498,8 +496,8 @@ func _draw_shade() -> void:
 
 func _draw_mask() -> void:
 	## Red where light falls. Space outside the ship is never dark; the ship is
-	## lit while it has power, and in the dark only flashlights and the cells
-	## right around our own character are.
+	## lit while it has power, and in the dark only flashlights and
+	## muzzle flashes are.
 	var map := client.map
 	var red := Color(1, 0, 0, 1)
 	var size := Vector2(map.width, map.deck_height) * _tile
@@ -526,10 +524,8 @@ func _draw_mask() -> void:
 			x = run
 	if _dark <= 0.0 and not client.other_here():
 		return
-	# right around our own character: a little seen even in the dark
-	var me: Sprite2D = _views.get(client.my_id)
-	if me != null and me.get_parent() == _decks[_deck_shown].chars:
-		_soft_circle(_mask, me.position + Vector2(0, -12), NEAR_SEEN * _tile, NEAR_FADE * _tile, red)
+	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
+	# no glow around our own character)
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(1, 0, 0, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
