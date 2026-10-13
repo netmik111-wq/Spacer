@@ -295,8 +295,9 @@ func _frame(facing: int, moving: bool, pos_tiles: Vector2, colour: int) -> Rect2
 	return _cell(column, colour)
 
 
-func _cell(column: int, colour: int) -> Rect2:
-	return Rect2(column * (CHAR_W + 2 * CHAR_PAD) + CHAR_PAD, colour * (CHAR_H + 2 * CHAR_PAD) + CHAR_PAD, CHAR_W, CHAR_H)
+func _cell(column: int, row: int) -> Rect2:
+	## A frame of the character sheet; a row is a colour and a way of being dressed (see Net.LOOKS).
+	return Rect2(column * (CHAR_W + 2 * CHAR_PAD) + CHAR_PAD, row * (CHAR_H + 2 * CHAR_PAD) + CHAR_PAD, CHAR_W, CHAR_H)
 
 
 func _update_ship(delta: float) -> void:
@@ -858,7 +859,7 @@ func _process(delta: float) -> void:
 		var hauled := client.dragging() and id == client.drag_id
 		sprite.visible = id == client.my_id or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
-		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id))
+		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 		if cond == Net.COND_OK:
 			sprite.rotation = 0.0
 			sprite.modulate = Color.WHITE
@@ -931,4 +932,4 @@ func _process(delta: float) -> void:
 	_ghost.visible = show_ghost and mine != null and map.deck_of(mine.y) == my_deck
 	if _ghost.visible:
 		_ghost.position = _feet(Vector2(mine.x, map.local_y(mine.y)))
-		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), client.player_colour(client.my_id))
+		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), client.player_colour(client.my_id) * Net.LOOKS + client.look_of(client.my_id))

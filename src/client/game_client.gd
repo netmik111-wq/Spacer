@@ -83,6 +83,9 @@ var parts := 0                       # and spare parts
 var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
 var search_hurt := 0                 # how hurt they look (see GameServer.hurt_level)
 var search_slots := PackedByteArray()  # what they carry
+var search_worn := PackedByteArray()   # and what they wear
+var worn := PackedByteArray()        # what our character wears (Net.WEAR_*)
+var looks := {}                      # id -> how that character is dressed (Net.LOOKS); not there = in a suit
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
@@ -219,6 +222,8 @@ func close() -> void:
 	parts = 0
 	slots = PackedByteArray()
 	slots.resize(Net.SLOTS)
+	worn.resize(Net.WORN)
+	looks.clear()
 	search_id = -1
 	drag_id = -1
 	bytes_in = 0
@@ -306,6 +311,29 @@ func in_hand() -> int:
 func stock(item: int) -> int:
 	## How many of that thing the supply locker holds.
 	return int(store.get(item, 0))
+
+
+func usable(at: int) -> bool:
+	## Is this slot of ours there: pockets with a jumpsuit, the last ones with a backpack (as Player.usable).
+	if at < Net.BASE_SLOTS:
+		return true
+	if at < Net.BASE_SLOTS + Net.POCKETS:
+		return worn.size() > Net.WEAR_JUMPSUIT and worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE
+	return worn.size() > Net.WEAR_PACK and worn[Net.WEAR_PACK] != Net.ITEM_NONE
+
+
+func has_suit() -> bool:
+	return worn.size() > 0 and worn[Net.WEAR_SUIT] != Net.ITEM_NONE
+
+
+func look_of(id: int) -> int:
+	return int(looks.get(id, 0))
+
+
+func send_wear(wear: int) -> void:
+	## Asks to take off what we wear there.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_WEAR, wear]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func carried(item: int) -> int:
@@ -835,7 +863,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			var who := pkt.decode_u16(1)
 			search_id = -1 if who == Net.NOBODY else who
 			search_slots = pkt.slice(3, 3 + Net.SLOTS)
-			search_hurt = pkt[3 + Net.SLOTS] if pkt.size() > 3 + Net.SLOTS else 0
+			search_worn = pkt.slice(3 + Net.SLOTS, 3 + Net.SLOTS + Net.WORN)
+			search_hurt = pkt[3 + Net.SLOTS + Net.WORN] if pkt.size() > 3 + Net.SLOTS + Net.WORN else 0
+		Net.S_OUTFIT:
+			if pkt.size() >= 4:
+				looks[pkt.decode_u16(1)] = pkt[3]
 		Net.S_STORE:
 			store_air = pkt.decode_u16(1) / 10.0
 			credits = pkt.decode_u16(3)
@@ -927,6 +959,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			supply = (pkt[pos + 3] & 1) != 0
 			work = pkt[pos + 4]
 			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
+			worn = pkt.slice(pos + 5 + Net.SLOTS, pos + 5 + Net.SLOTS + Net.WORN)
 			patches = carried(Net.ITEM_PATCH)
 			parts = carried(Net.ITEM_PART)
 			pos += Net.VITALS_BYTES

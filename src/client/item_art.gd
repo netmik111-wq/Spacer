@@ -30,7 +30,31 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(3.5 + k * 2.2, 14.5) * u, Vector2(1.4, 1.2) * u),
 				Color(0.4, 0.9, 0.5) if k < item - Net.ITEM_MEDKIT else Color(0.25, 0.25, 0.3))
 		return
+	if item >= Net.ITEM_SUIT and item <= Net.ITEM_SUIT + Net.SUIT_TANK_STEPS:
+		# a helmet with its orange visor, and a gauge of the oxygen left in the tank
+		canvas.draw_rect(Rect2(at + Vector2(3, 2) * u, Vector2(11, 11) * u), Color(0.15, 0.15, 0.19))
+		canvas.draw_rect(Rect2(at + Vector2(4, 3) * u, Vector2(9, 9) * u), Color(0.42, 0.43, 0.5))
+		canvas.draw_rect(Rect2(at + Vector2(5, 5) * u, Vector2(7, 3) * u), Color(0.95, 0.5, 0.18))
+		canvas.draw_rect(Rect2(at + Vector2(6, 9) * u, Vector2(5, 3) * u), Color(0.25, 0.25, 0.3))
+		var left := float(item - Net.ITEM_SUIT) / Net.SUIT_TANK_STEPS
+		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
+		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
+		return
 	match item:
+		Net.ITEM_JUMPSUIT:
+			# a folded jumpsuit with a collar and a pocket
+			canvas.draw_rect(Rect2(at + Vector2(3, 3) * u, Vector2(11, 11) * u), Color(0.15, 0.15, 0.19))
+			canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(9, 9) * u), Color(0.35, 0.45, 0.62))
+			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 2) * u), Color(0.5, 0.6, 0.78))
+			canvas.draw_rect(Rect2(at + Vector2(8, 6) * u, Vector2(1, 7) * u), Color(0.2, 0.26, 0.38))
+			canvas.draw_rect(Rect2(at + Vector2(10, 8) * u, Vector2(2, 2) * u), Color(0.2, 0.26, 0.38))
+		Net.ITEM_BACKPACK:
+			# a backpack with a flap and two straps
+			canvas.draw_rect(Rect2(at + Vector2(4, 3) * u, Vector2(9, 12) * u), Color(0.2, 0.15, 0.1))
+			canvas.draw_rect(Rect2(at + Vector2(5, 4) * u, Vector2(7, 10) * u), Color(0.48, 0.36, 0.2))
+			canvas.draw_rect(Rect2(at + Vector2(5, 4) * u, Vector2(7, 3) * u), Color(0.35, 0.25, 0.13))
+			canvas.draw_rect(Rect2(at + Vector2(7, 9) * u, Vector2(3, 2) * u), Color(0.35, 0.25, 0.13))
+			canvas.draw_rect(Rect2(at + Vector2(6, 1.5) * u, Vector2(5, 1.5) * u), Color(0.35, 0.25, 0.13))
 		Net.ITEM_PATCH:
 			# a plate of hull metal with a rivet in each corner
 			canvas.draw_rect(Rect2(at + Vector2(3, 3) * u, Vector2(11, 11) * u), Color(0.2, 0.21, 0.27))

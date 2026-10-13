@@ -40,7 +40,9 @@ var cond := 0                        # Net.COND_*
 var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
 var supply := false                  # breathing from the tank instead of the air around
 var slots := PackedByteArray()       # what it carries: one item per slot (Net.ITEM_*), Net.SLOTS of them
-var slots_sent := PackedByteArray()  # the same as last told to its client
+var slots_sent := PackedByteArray()  # the same as last told to its client (with what it wears after)
+var worn := PackedByteArray()        # what it wears (Net.WEAR_*); a worn suit is ITEM_SUIT and its oxygen is `tank`
+var look_sent := -1                  # how it was last shown dressed (see Net.LOOKS)
 var hand := 0                        # the slot whose thing is in the hand (its player chooses it)
 var dragging := -1                   # the slot of the lying character it hauls along (-1 = nobody)
 var dragged_by := -1                 # the slot of whoever hauls it
@@ -72,13 +74,18 @@ const HISTORY := 32
 
 func _init() -> void:
 	slots.resize(Net.SLOTS)
+	worn.resize(Net.WORN)
 	history.resize(HISTORY)
 
 
 func count(item: int) -> int:
 	## How many of that thing it carries (in any state).
 	if item == Net.ITEM_NONE:
-		return slots.count(Net.ITEM_NONE)
+		var free := 0                        # free slots, of those it has
+		for i in Net.SLOTS:
+			if usable(i) and slots[i] == Net.ITEM_NONE:
+				free += 1
+		return free
 	var n := 0
 	for v in slots:
 		if v != Net.ITEM_NONE and Items.kind_of(v) == Items.kind_of(item):
@@ -90,13 +97,81 @@ func in_hand() -> int:
 	return slots[hand]
 
 
+func usable(at: int) -> bool:
+	## Is this slot there at all: pockets come with a jumpsuit, the last slots with a backpack.
+	if at < Net.BASE_SLOTS:
+		return true
+	if at < Net.BASE_SLOTS + Net.POCKETS:
+		return worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE
+	return worn[Net.WEAR_PACK] != Net.ITEM_NONE
+
+
 func add(item: int, to_hand: bool = false) -> bool:
 	## Puts a thing into the first free slot (into the hand if asked and it is
 	## free). False if there is no room.
-	var at := hand if to_hand and slots[hand] == Net.ITEM_NONE else slots.find(Net.ITEM_NONE)
+	var at := hand if to_hand and usable(hand) and slots[hand] == Net.ITEM_NONE else -1
+	if at < 0:
+		for i in Net.SLOTS:
+			if usable(i) and slots[i] == Net.ITEM_NONE:
+				at = i
+				break
 	if at < 0:
 		return false
 	slots[at] = item
+	return true
+
+
+func dress() -> void:
+	## A fresh crew member: a spacesuit with a full tank and a jumpsuit, no backpack.
+	worn.fill(Net.ITEM_NONE)
+	worn[Net.WEAR_SUIT] = Net.ITEM_SUIT
+	worn[Net.WEAR_JUMPSUIT] = Net.ITEM_JUMPSUIT
+	tank = 1.0
+
+
+func has_suit() -> bool:
+	return worn[Net.WEAR_SUIT] != Net.ITEM_NONE
+
+
+func look() -> int:
+	## How it is dressed, as a row of the sheet (see Net.LOOKS).
+	var outfit := Net.OUTFIT_SUIT if has_suit() else (Net.OUTFIT_JUMPSUIT if worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE else Net.OUTFIT_BARE)
+	return outfit * 2 + (1 if worn[Net.WEAR_PACK] != Net.ITEM_NONE else 0)
+
+
+func holds_in(wear: int) -> bool:
+	## Is anything kept in what is worn there (a jumpsuit's pockets, a backpack)?
+	var from := Net.BASE_SLOTS if wear == Net.WEAR_JUMPSUIT else (Net.BASE_SLOTS + Net.POCKETS if wear == Net.WEAR_PACK else 0)
+	var to := Net.BASE_SLOTS + Net.POCKETS if wear == Net.WEAR_JUMPSUIT else (Net.SLOTS if wear == Net.WEAR_PACK else 0)
+	for i in range(from, to):
+		if slots[i] != Net.ITEM_NONE:
+			return true
+	return false
+
+
+func take_off(wear: int) -> int:
+	## Takes off what is worn there, as an item (a suit keeps its oxygen); ITEM_NONE
+	## if nothing is, or things are still kept in it.
+	var item := worn[wear]
+	if item == Net.ITEM_NONE or holds_in(wear):
+		return Net.ITEM_NONE
+	worn[wear] = Net.ITEM_NONE
+	if wear == Net.WEAR_SUIT:
+		item = Items.suit_with(tank)
+		supply = false
+		tank = 0.0
+	return item
+
+
+func put_on(item: int) -> bool:
+	## Puts it on, if that place is free.
+	var wear := Items.worn_as(item)
+	if wear < 0 or worn[wear] != Net.ITEM_NONE:
+		return false
+	if wear == Net.WEAR_SUIT:
+		tank = float(Items.tank_of(item)) / Net.SUIT_TANK_STEPS
+		item = Net.ITEM_SUIT
+	worn[wear] = item
 	return true
 
 

@@ -595,9 +595,22 @@ def shade(c, f):
     return tuple(max(0, min(255, int(v * f))) for v in c) + (255,)
 
 
-def draw_char(colour, direction, pose):
+OUTFITS = 3                  # 0 = spacesuit, 1 = jumpsuit only, 2 = neither (a grey undersuit); see Net.OUTFIT_*
+SKIN = (222, 178, 138, 255)
+SKIN_D = (180, 136, 100, 255)
+HAIR = (62, 42, 30, 255)
+PACK = (122, 92, 52, 255)
+PACK_D = (88, 64, 34, 255)
+UNDERSUIT = (138, 140, 146)
+SHOE = (44, 40, 40, 255)
+
+
+def draw_char(colour, direction, pose, outfit=0, pack=False):
     im = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
     px = im.load()
+    suited = outfit == 0
+    if outfit == 2:
+        colour = UNDERSUIT
     base = colour + (255,)
     dark = shade(colour, 0.72)
     lite = shade(colour, 1.22)
@@ -610,14 +623,17 @@ def draw_char(colour, direction, pose):
 
     bob = 1 if pose != 0 else 0          # body dips a pixel while stepping
     top = 7 + bob
+    stripe = STRIPE if suited else base
+    glove = GLOVE if suited else SKIN
+    boot = BOOT if suited else SHOE
     if direction in (0, 1):               # facing the camera / away from it
         # legs
         l_up = 2 if pose == 1 else 0
         r_up = 2 if pose == 2 else 0
         rect(11, 33, 15, 42 - l_up, base); rect(11, 33, 12, 42 - l_up, dark)
         rect(17, 33, 21, 42 - r_up, base); rect(20, 33, 21, 42 - r_up, dark)
-        rect(11, 39 - l_up, 15, 39 - l_up, STRIPE); rect(17, 39 - r_up, 21, 39 - r_up, STRIPE)
-        rect(10, 43 - l_up, 15, 45 - l_up, BOOT); rect(17, 43 - r_up, 22, 45 - r_up, BOOT)
+        rect(11, 39 - l_up, 15, 39 - l_up, stripe); rect(17, 39 - r_up, 21, 39 - r_up, stripe)
+        rect(10, 43 - l_up, 15, 45 - l_up, boot); rect(17, 43 - r_up, 22, 45 - r_up, boot)
         # torso
         rect(10, top + 12, 22, top + 25, base)
         rect(10, top + 12, 11, top + 25, dark); rect(21, top + 12, 22, top + 25, dark)
@@ -627,13 +643,34 @@ def draw_char(colour, direction, pose):
         ra = 1 if pose == 1 else 0
         rect(7, top + 13, 9, top + 22 - la, base); rect(7, top + 13, 7, top + 22 - la, dark)
         rect(23, top + 13, 25, top + 22 - ra, base); rect(25, top + 13, 25, top + 22 - ra, dark)
-        rect(7, top + 16, 9, top + 16, STRIPE); rect(23, top + 16, 25, top + 16, STRIPE)
-        rect(7, top + 23 - la, 9, top + 24 - la, GLOVE); rect(23, top + 23 - ra, 25, top + 24 - ra, GLOVE)
+        rect(7, top + 16, 9, top + 16, stripe); rect(23, top + 16, 25, top + 16, stripe)
+        rect(7, top + 23 - la, 9, top + 24 - la, glove); rect(23, top + 23 - ra, 25, top + 24 - ra, glove)
         # head
-        rect(11, top, 21, top + 10, HELM)
-        rect(11, top, 21, top + 1, HELM_L)
-        rect(11, top + 9, 21, top + 10, HELM_D)
-        if direction == 0:
+        if not suited:
+            rect(12, top + 1, 20, top + 10, SKIN)
+            rect(12, top + 9, 20, top + 10, SKIN_D)
+            if direction == 0:
+                rect(12, top + 1, 20, top + 3, HAIR)
+                rect(14, top + 5, 14, top + 6, OUTLINE); rect(18, top + 5, 18, top + 6, OUTLINE)
+                rect(15, top + 8, 17, top + 8, SKIN_D)
+                if pack:
+                    rect(10, top + 12, 11, top + 20, PACK_D); rect(21, top + 12, 22, top + 20, PACK_D)   # straps
+            else:
+                rect(12, top + 1, 20, top + 8, HAIR)
+                if pack:
+                    rect(11, top + 13, 21, top + 24, PACK); rect(11, top + 13, 21, top + 14, PACK_D)
+                    rect(13, top + 18, 19, top + 19, PACK_D)
+        elif direction == 0 and pack:
+            rect(10, top + 12, 11, top + 20, PACK_D); rect(21, top + 12, 22, top + 20, PACK_D)
+        if not suited:
+            pass
+        elif True:
+            rect(11, top, 21, top + 10, HELM)
+            rect(11, top, 21, top + 1, HELM_L)
+            rect(11, top + 9, 21, top + 10, HELM_D)
+        if not suited:
+            pass
+        elif direction == 0:
             rect(13, top + 13, 19, top + 13, lite)                    # collar
             rect(12, top + 3, 20, top + 5, VISOR); rect(12, top + 3, 20, top + 3, VISOR_L)
             rect(14, top + 7, 18, top + 10, HELM_D)                    # mask
@@ -644,36 +681,49 @@ def draw_char(colour, direction, pose):
             rect(12, top + 14, 20, top + 22, TANK)                    # air tank
             rect(12, top + 14, 13, top + 22, TANK_D); rect(12, top + 22, 20, top + 22, TANK_D)
             rect(15, top + 12, 17, top + 13, TANK_D)
+            if pack:
+                rect(11, top + 15, 21, top + 25, PACK); rect(11, top + 15, 21, top + 16, PACK_D)
+                rect(13, top + 20, 19, top + 21, PACK_D)
     else:                                  # profile, drawn facing left
         # legs: scissor while stepping
         if pose == 0:
             rect(13, 33, 18, 42, base); rect(17, 33, 18, 42, dark)
-            rect(13, 39, 18, 39, STRIPE)
-            rect(12, 43, 18, 45, BOOT)
+            rect(13, 39, 18, 39, stripe)
+            rect(12, 43, 18, 45, boot)
         else:
             f = -3 if pose == 1 else 3     # front leg offset
-            rect(13 + f, 33, 17 + f, 41, base); rect(13 + f, 38, 17 + f, 38, STRIPE)
-            rect(12 + f, 42, 17 + f, 44, BOOT)
+            rect(13 + f, 33, 17 + f, 41, base); rect(13 + f, 38, 17 + f, 38, stripe)
+            rect(12 + f, 42, 17 + f, 44, boot)
             rect(14 - f, 33, 18 - f, 42, dark)
-            rect(13 - f, 43, 18 - f, 45, BOOT)
+            rect(13 - f, 43, 18 - f, 45, boot)
             rect(13, 33, 18, 35, base)
         # torso
         rect(12, top + 12, 19, top + 25, base)
         rect(18, top + 12, 19, top + 25, dark)
         rect(12, top + 25, 19, top + 25, shade(colour, 0.55))
-        rect(20, top + 14, 22, top + 22, TANK); rect(22, top + 14, 22, top + 22, TANK_D)   # tank on the back
+        if suited:
+            rect(20, top + 14, 22, top + 22, TANK); rect(22, top + 14, 22, top + 22, TANK_D)   # tank on the back
+        if pack:
+            rect(20, top + 13, 24, top + 24, PACK); rect(24, top + 13, 24, top + 24, PACK_D)
+            rect(20, top + 13, 24, top + 14, PACK_D)
         # near arm
         sw = 0 if pose == 0 else (-2 if pose == 1 else 2)
         rect(14 - sw, top + 13, 16 - sw, top + 22, base); rect(16 - sw, top + 13, 16 - sw, top + 22, dark)
-        rect(14 - sw, top + 16, 16 - sw, top + 16, STRIPE)
-        rect(14 - sw, top + 23, 16 - sw, top + 24, GLOVE)
+        rect(14 - sw, top + 16, 16 - sw, top + 16, stripe)
+        rect(14 - sw, top + 23, 16 - sw, top + 24, glove)
         # head
-        rect(11, top, 20, top + 10, HELM)
-        rect(11, top, 20, top + 1, HELM_L)
-        rect(11, top + 9, 20, top + 10, HELM_D)
-        rect(10, top + 3, 15, top + 5, VISOR); rect(10, top + 3, 15, top + 3, VISOR_L)
-        rect(9, top + 7, 13, top + 10, HELM_D)                         # mask snout
-        rect(16, top + 6, 18, top + 8, HELM_D)                         # side filter
+        if suited:
+            rect(11, top, 20, top + 10, HELM)
+            rect(11, top, 20, top + 1, HELM_L)
+            rect(11, top + 9, 20, top + 10, HELM_D)
+            rect(10, top + 3, 15, top + 5, VISOR); rect(10, top + 3, 15, top + 3, VISOR_L)
+            rect(9, top + 7, 13, top + 10, HELM_D)                         # mask snout
+            rect(16, top + 6, 18, top + 8, HELM_D)                         # side filter
+        else:
+            rect(11, top + 1, 19, top + 10, SKIN)
+            rect(11, top + 9, 19, top + 10, SKIN_D)
+            rect(13, top + 1, 19, top + 4, HAIR); rect(16, top + 1, 19, top + 8, HAIR)
+            rect(12, top + 5, 12, top + 6, OUTLINE)
     # outline around the silhouette
     solid = [[px[x, y][3] > 0 for x in range(CHAR_W)] for y in range(CHAR_H)]
     for y in range(CHAR_H):
@@ -699,17 +749,22 @@ def draw_char(colour, direction, pose):
 
 
 def build_chars():
-    sheet = Image.new("RGBA", (CELL_W * 12, CELL_H * len(SUIT_COLOURS)), (0, 0, 0, 0))
-    for row, (_, colour) in enumerate(SUIT_COLOURS):
-        for d in range(4):
-            for pose in range(3):
-                sheet.paste(draw_char(colour, d, pose), ((d * 3 + pose) * CELL_W + CHAR_PAD, row * CELL_H + CHAR_PAD))
+    # one row per colour, outfit and backpack: row = colour * OUTFITS * 2 + outfit * 2 + (1 with a backpack)
+    rows = len(SUIT_COLOURS) * OUTFITS * 2
+    sheet = Image.new("RGBA", (CELL_W * 12, CELL_H * rows), (0, 0, 0, 0))
+    for ci, (_, colour) in enumerate(SUIT_COLOURS):
+        for outfit in range(OUTFITS):
+            for pack in (False, True):
+                row = ci * OUTFITS * 2 + outfit * 2 + (1 if pack else 0)
+                for d in range(4):
+                    for pose in range(3):
+                        sheet.paste(draw_char(colour, d, pose, outfit, pack), ((d * 3 + pose) * CELL_W + CHAR_PAD, row * CELL_H + CHAR_PAD))
     sheet.save(os.path.join(OUT, "chars.png"))
     prev = sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
     bg = Image.new("RGBA", prev.size, (74, 78, 88, 255))
     bg.alpha_composite(prev)
     bg.save(os.path.join(ROOT, "tools", "preview", "chars.png"))
-    print(f"chars: {len(SUIT_COLOURS)} colours x 12 frames -> assets/chars.png")
+    print(f"chars: {len(SUIT_COLOURS)} colours x {OUTFITS * 2} outfits x 12 frames -> assets/chars.png")
 
 
 # -------------------------------------------------------------------- HUD

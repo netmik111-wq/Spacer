@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 20
+const PROTOCOL := 21
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -88,9 +88,22 @@ const SEC_FLOOR := 10               # u16 count, then FLOOR_BYTES-byte records: 
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
                                     # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100),
-                                    # then SLOTS bytes: what it carries, one item per slot (ITEM_*)
-const SLOTS := 6                    # how many things a character can carry
-const VITALS_BYTES := 5 + SLOTS
+                                    # then SLOTS bytes: what it carries, one item per slot (ITEM_*),
+                                    # then WORN bytes: what it wears (WEAR_*)
+const SLOTS := 12                   # slots for things: BASE_SLOTS always, POCKETS with a jumpsuit, PACK_SLOTS with a backpack
+const BASE_SLOTS := 6
+const POCKETS := 2                  # slots BASE_SLOTS .. BASE_SLOTS + POCKETS - 1
+const PACK_SLOTS := 4               # the last ones
+const WORN := 3                     # what is worn, one thing each:
+const WEAR_SUIT := 0                #   a spacesuit (helmet and oxygen tank): without it there is no supply
+const WEAR_JUMPSUIT := 1            #   a jumpsuit: its pockets
+const WEAR_PACK := 2                #   a backpack
+const VITALS_BYTES := 5 + SLOTS + WORN
+# how a character looks (S_OUTFIT): outfit * 2 + 1 with a backpack; a row of assets/chars.png per colour and look
+const OUTFIT_SUIT := 0
+const OUTFIT_JUMPSUIT := 1
+const OUTFIT_BARE := 2
+const LOOKS := 6
 
 # things that can be carried
 const ITEM_NONE := 0
@@ -103,6 +116,10 @@ const ITEM_BATON := 6
 const ITEM_MEDPATCH := 7            # a patch that closes wounds at once
 const ITEM_MEDKIT := 20             # a first-aid kit with no uses left; ITEM_MEDKIT + n has n left
 const MEDKIT_USES := 5
+const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT + n has n tenths of a tank
+const SUIT_TANK_STEPS := 10
+const ITEM_JUMPSUIT := 41
+const ITEM_BACKPACK := 42
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -123,7 +140,10 @@ const S_DEVICES := 20               # u8 count, then per thing out of order (a b
 const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
-                                    # SLOTS bytes: what they carry, then u8 how hurt they are (0 = unhurt .. 4 = dying)
+                                    # SLOTS bytes: what they carry, WORN bytes: what they wear,
+                                    # then u8 how hurt they are (0 = unhurt .. 4 = dying)
+const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed
+const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
 const SHOT_BULLET := 1

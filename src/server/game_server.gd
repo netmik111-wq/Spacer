@@ -347,8 +347,8 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 				_press(p)
 		p.using = held
 	elif kind == Net.C_SUIT:
-		if p.cond == Net.COND_OK and pkt.size() > 1:
-			p.supply = pkt[1] != 0 and p.tank > 0.0
+		if pkt.size() > 1:
+			set_supply(p, pkt[1] != 0)
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
 			_respawn(p)
@@ -358,6 +358,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HELM:
 		if pkt.size() > 3:
 			_helm_asked(p, pkt[1] != 0, Vector2(pkt[2], pkt[3]))
+	elif kind == Net.C_WEAR:
+		if pkt.size() > 1 and pkt[1] < Net.WORN:
+			_take_off(p, pkt[1])
 	elif kind == Net.C_DOCK:
 		if pkt.size() > 1 and _at_console(p, map.helm):
 			var why := derelict.dock(pkt[1] != 0)
@@ -453,6 +456,9 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, _nav_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _helm_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, derelict.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	for q: Player in players:
+		if q != null and q != p:
+			peer.send(0, _look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, PackedByteArray([Net.S_POWER, 1 if _power_told else 0]), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, _store_packet(), ENetPacketPeer.FLAG_RELIABLE)
@@ -471,6 +477,7 @@ func _alloc(player_name: String) -> Player:
 		p.slot = _free.pop_back()
 		players[p.slot] = p
 	p.name = player_name
+	p.dress()                            # everybody comes in a spacesuit and a jumpsuit
 	return p
 
 
@@ -589,6 +596,8 @@ func _leave_body(p: Player) -> void:
 	c.health = Net.HEALTH_DEAD
 	c.wounds = p.wounds
 	c.slots = p.slots.duplicate()
+	c.worn = p.worn.duplicate()
+	c.tank = p.tank
 	c.hand = p.hand
 	for q: Player in players:
 		if q == null:
@@ -1328,7 +1337,20 @@ func _tick() -> void:
 	if tick % Net.TICK_HZ == 0:
 		for cell: int in air.holes.keys():
 			sound(Net.SOUND_HISS, cell % map.width, cell / map.width)
+	_tell_looks()
 	_send_world()
+
+
+func _look_packet(p: Player) -> PackedByteArray:
+	return PackedByteArray([Net.S_OUTFIT, p.slot & 0xFF, p.slot >> 8, p.look()])
+
+
+func _tell_looks() -> void:
+	## Tells everyone how a character is dressed when that changes.
+	for p: Player in players:
+		if p != null and p.look() != p.look_sent:
+			p.look_sent = p.look()
+			_to_all(_look_packet(p))
 
 
 func _update_vitals(p: Player) -> void:
@@ -1419,7 +1441,7 @@ func _update_work(p: Player) -> void:
 			doors.locked[door] = 0
 			_forced_until[door] = tick + Net.FORCED_OPEN_TICKS
 			_ship_says("%s вручную поднимает аварийный шлюз." % p.name)
-	elif cell >= 0 and map.oxygen.has(cell) and powered():
+	elif cell >= 0 and map.oxygen.has(cell) and powered() and p.has_suit():
 		p.work = 0
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
 	else:
@@ -1515,9 +1537,46 @@ func _put_down(p: Player) -> bool:
 	return true
 
 
+func set_supply(p: Player, on: bool) -> void:
+	## The oxygen supply on or off: it needs a suit, and oxygen in its tank.
+	if p.cond == Net.COND_OK:
+		p.supply = on and p.tank > 0.0 and p.has_suit()
+
+
+func _take_off(p: Player, wear: int) -> bool:
+	## Takes off what is worn there, into the hand (or a free slot). Not while
+	## things are kept in it, and not without room for it.
+	if p.cond != Net.COND_OK or p.corpse:
+		return false
+	var keep_tank := p.tank
+	var keep_supply := p.supply
+	var item := p.take_off(wear)
+	if item == Net.ITEM_NONE:
+		return false
+	if not p.add(item, true):
+		p.put_on(item)                       # nowhere to put it: it stays on
+		p.tank = keep_tank
+		p.supply = keep_supply
+		return false
+	return true
+
+
 func _act(p: Player) -> bool:
-	## Uses the thing in the hand by itself: switches a flashlight on or off.
+	## Uses the thing in the hand by itself: switches a flashlight on or off, or
+	## puts on something to wear (what was worn there comes off into the hand).
 	var item := p.in_hand()
+	if p.cond == Net.COND_OK and not p.corpse and Items.worn_as(item) >= 0:
+		var wear := Items.worn_as(item)
+		p.slots[p.hand] = Net.ITEM_NONE
+		var old := Net.ITEM_NONE
+		if p.worn[wear] != Net.ITEM_NONE:
+			old = p.take_off(wear)
+			if old == Net.ITEM_NONE:
+				p.slots[p.hand] = item           # things are still kept in the old one
+				return false
+		p.put_on(item)
+		p.slots[p.hand] = old
+		return true
 	if p.cond != Net.COND_OK or p.corpse or Items.switched(item) == Net.ITEM_NONE:
 		return false
 	p.slots[p.hand] = Items.switched(item)
@@ -1874,21 +1933,41 @@ func _update_hands(p: Player) -> void:
 		else:
 			var other: Player = players[p.searching]
 			var seen_now := other.slots.duplicate()
+			seen_now.append_array(_worn_shown(other))
 			seen_now.append(hurt_level(other))
 			if seen_now != p.search_sent:
 				p.search_sent = seen_now
 				if p.peer != null:
 					var msg := PackedByteArray([Net.S_SEARCH, p.searching & 0xFF, p.searching >> 8])
 					msg.append_array(other.slots)
+					msg.append_array(_worn_shown(other))
 					msg.append(hurt_level(other))
 					p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+func _worn_shown(p: Player) -> PackedByteArray:
+	## What it wears, as things: a suit shows how much oxygen is left in it.
+	var out := p.worn.duplicate()
+	if p.has_suit():
+		out[Net.WEAR_SUIT] = Items.suit_with(p.tank)
+	return out
+
+
 func _loot_asked(p: Player, theirs: bool, index: int) -> void:
 	## While searching: take the thing in one of their slots, or give them one of ours.
-	if p.searching < 0 or index >= Net.SLOTS or not _can_reach(p, p.searching):
+	if p.searching < 0 or index >= Net.SLOTS + Net.WORN or not _can_reach(p, p.searching):
 		return
 	var other: Player = players[p.searching]
+	if index >= Net.SLOTS:
+		# what they wear can be taken off them (not given: they cannot be dressed)
+		if not theirs:
+			return
+		var keep_tank := other.tank
+		var worn_item := other.take_off(index - Net.SLOTS)
+		if worn_item != Net.ITEM_NONE and not p.add(worn_item):
+			other.put_on(worn_item)
+			other.tank = keep_tank
+		return
 	var from := other if theirs else p
 	var to := p if theirs else other
 	var item := from.slots[index]
@@ -1901,11 +1980,11 @@ func _loot_asked(p: Player, theirs: bool, index: int) -> void:
 func _respawn(p: Player) -> void:
 	## A dead character comes back as a fresh crew member at a spawn point; the body stays.
 	_leave_body(p)
-	p.tank = 1.0
 	p.supply = false
 	p.using = false
 	p.work = 0
-	p.slots.fill(Net.ITEM_NONE)          # what the dead one carried stays with the body (see _leave_body)
+	p.slots.fill(Net.ITEM_NONE)
+	p.dress()                            # (the old suit and clothes stay on the body)          # what the dead one carried stays with the body (see _leave_body)
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
@@ -2250,9 +2329,11 @@ func _send_world() -> void:
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / maxi(p.work_total, 1)
 		var vitals := ((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)
-		if vitals != p.vitals_sent or p.slots != p.slots_sent:
+		var carried := p.slots.duplicate()
+		carried.append_array(p.worn)
+		if vitals != p.vitals_sent or carried != p.slots_sent:
 			p.vitals_sent = vitals
-			p.slots_sent = p.slots.duplicate()
+			p.slots_sent = carried
 			var ov := out.size()
 			out.resize(ov + 1 + Net.VITALS_BYTES)
 			out.encode_u8(ov, Net.SEC_VITALS)
@@ -2262,6 +2343,8 @@ func _send_world() -> void:
 			out.encode_u8(ov + 5, work_now)
 			for k in Net.SLOTS:
 				out.encode_u8(ov + 6 + k, p.slots[k])
+			for k in Net.WORN:
+				out.encode_u8(ov + 6 + Net.SLOTS + k, p.worn[k])
 		if p.self_dirty or tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)

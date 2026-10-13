@@ -51,7 +51,7 @@ func _initialize() -> void:
 	_expect(p.slots[2] == Net.ITEM_PATCH and p.slots[0] == Net.ITEM_FLASHLIGHT, "what is taken goes into an empty hand, else into the first free slot")
 	_expect(int(server.store[Net.ITEM_FLASHLIGHT]) == Items.stock(Net.ITEM_FLASHLIGHT) - 1, "and the locker has one flashlight less")
 	server._store_asked(p, Net.STORE_TAKE, 99)
-	_expect(p.count(Net.ITEM_NONE) == Net.SLOTS - 2, "a thing the locker does not keep cannot be taken")
+	_expect(p.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS - 2, "a thing the locker does not keep cannot be taken")
 
 	print("a flashlight")
 	p.hand = 0
@@ -64,7 +64,7 @@ func _initialize() -> void:
 	_expect(server._act(p) and p.slots[0] == Net.ITEM_FLASHLIGHT, "and Z switches it off again")
 	server._act(p)
 	server._store_asked(p, Net.STORE_PUT_BACK, 0)
-	_expect(p.count(Net.ITEM_NONE) == Net.SLOTS and int(server.store[Net.ITEM_FLASHLIGHT]) == Items.stock(Net.ITEM_FLASHLIGHT)
+	_expect(p.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS and int(server.store[Net.ITEM_FLASHLIGHT]) == Items.stock(Net.ITEM_FLASHLIGHT)
 		and int(server.store[Net.ITEM_PATCH]) == Items.stock(Net.ITEM_PATCH), "everything goes back into the locker, a lit flashlight as a flashlight")
 
 	print("putting down and picking up")

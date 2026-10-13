@@ -275,10 +275,11 @@ func _initialize() -> void:
 	_expect(q.count(Net.ITEM_PATCH) == 2 and q.count(Net.ITEM_PART) == 2, "at the locker a crew member takes patches and parts into their slots")
 	for i in 5:
 		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
-	_expect(q.count(Net.ITEM_NONE) == 0 and q.count(Net.ITEM_PATCH) == Net.SLOTS - 2, "but no more than there are slots for (%d)" % Net.SLOTS)
+	var open := Net.BASE_SLOTS + Net.POCKETS             # a jumpsuit, no backpack
+	_expect(q.count(Net.ITEM_NONE) == 0 and q.count(Net.ITEM_PATCH) == open - 2, "but no more than there are slots for (%d)" % open)
 	_expect(server.store[Net.ITEM_PATCH] == had_patches - q.count(Net.ITEM_PATCH) and server.store[Net.ITEM_PART] == had_parts - 2, "and the locker has that much less")
 	server._store_asked(q, Net.STORE_PUT_BACK, 0)
-	_expect(q.count(Net.ITEM_NONE) == Net.SLOTS and server.store[Net.ITEM_PATCH] == had_patches and server.store[Net.ITEM_PART] == had_parts, "everything can be put back")
+	_expect(q.count(Net.ITEM_NONE) == open and server.store[Net.ITEM_PATCH] == had_patches and server.store[Net.ITEM_PART] == had_parts, "everything can be put back")
 
 	# a hole needs a patch
 	_give(p, 0, 0)
@@ -432,7 +433,7 @@ func _initialize() -> void:
 	var carried := q.count(Net.ITEM_PATCH)
 	server._respawn(q)
 	var body: RefCounted = server.players[p.dragging] if p.dragging >= 0 else null
-	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_NONE) == Net.SLOTS, "the one who comes back has empty slots")
+	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS, "the one who comes back has empty slots")
 	_expect(body != null and body.corpse and body.count(Net.ITEM_PATCH) == carried and carried > 0, "the body keeps what they carried (%d patches)" % carried)
 	_expect(p.searching == body.slot if body != null else false, "and whoever was hauling and searching goes on with the body")
 	server._loot_asked(p, true, body.slots.find(Net.ITEM_PATCH))

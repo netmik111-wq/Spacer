@@ -18,6 +18,8 @@ const SLOT_PX := 34.0                # a slot of the inventory on screen
 const SLOT_GAP := 4.0
 const BIG_SLOT_PX := 60.0            # and in the search panel
 const BIG_SLOT_GAP := 8.0
+const WORN_GAP := 12.0               # between what is worn (on the left) and the slots
+const WORN_MARKS := ["С", "К", "Р"]  # an empty place for a suit, a jumpsuit, a backpack
 const HINT_LEFT := 550.0             # the hint line keeps clear of the chat (this far from the left edge)
 const HINT_RIGHT := 250.0            # and of the instruments (this far from the right edge)
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
@@ -190,12 +192,12 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_slots_view = Control.new()
 	_slots_view.mouse_filter = Control.MOUSE_FILTER_STOP
 	_slots_view.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	var slots_wide := Net.SLOTS * SLOT_PX + (Net.SLOTS - 1) * SLOT_GAP
+	var slots_wide := _bar_width(SLOT_PX, SLOT_GAP)
 	_slots_view.offset_right = -14 - 192 - 10 - 12 - 12
 	_slots_view.offset_left = _slots_view.offset_right - slots_wide
 	_slots_view.offset_bottom = -14
 	_slots_view.offset_top = -14 - SLOT_PX
-	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, SLOT_PX, SLOT_GAP, client.hand))
+	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, client.worn, SLOT_PX, SLOT_GAP, client.hand))
 	_slots_view.gui_input.connect(_on_slots_input)
 	root.add_child(_slots_view)
 	_hand_label = _text(root, 14)
@@ -377,6 +379,7 @@ func _open_console(kind: int) -> void:
 	_store_buttons.clear()
 	_chart.visible = kind != 12
 	_jump_box.visible = true
+	_jump_box.columns = 3 if kind == 12 else 2           # the locker has many buttons
 	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else "Шкаф снабжения")
 	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")
 
@@ -391,12 +394,15 @@ func _update_store() -> void:
 		held.append("%s: %d" % [Items.name_of(item).to_lower(), client.stock(item)])
 	lines.append("В шкафу: %s. Воздух для установки: %d из %d. Кредиты: %d." % [
 		", ".join(held), int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
-	var free := client.slots.count(Net.ITEM_NONE)
-	lines.append("Свободных слотов у вас: %d из %d. Взятое ложится в руку, если она пуста." % [free, Net.SLOTS])
-	var about := PackedStringArray()
-	for item in kept:
-		about.append("%s: %s" % [Items.name_of(item), Items.about(item).to_lower()])
-	lines.append("\n".join(about))
+	var free := 0
+	var open := 0
+	for i in Net.SLOTS:
+		if client.usable(i):
+			open += 1
+			if client.slots[i] == Net.ITEM_NONE:
+				free += 1
+	lines.append("Свободных слотов у вас: %d из %d. Взятое ложится в руку, если она пуста." % [free, open])
+	lines.append("Что вещь умеет, видно, когда она в руке.")
 	if trading:
 		lines.append("Торговец на связи.")
 	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
@@ -556,10 +562,54 @@ func _update_helm() -> void:
 	_chart.queue_redraw()
 
 
-func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, px: float, gap: float, hand: int = -1) -> void:
-	## A row of inventory slots with what is in them; the one in the hand is lit up.
-	for i in slots.size():
-		var cell := Rect2(origin + Vector2(i * (px + gap), 0), Vector2(px, px))
+func _bar_width(px: float, gap: float) -> float:
+	return (Net.WORN + Net.SLOTS) * px + (Net.WORN + Net.SLOTS - 1) * gap + WORN_GAP
+
+
+func _bar_cell(origin: Vector2, k: int, px: float, gap: float) -> Rect2:
+	## Cell k of a row: first what is worn (0 .. WORN - 1), then the slots.
+	var x := k * (px + gap) + (WORN_GAP if k >= Net.WORN else 0.0)
+	return Rect2(origin + Vector2(x, 0), Vector2(px, px))
+
+
+func _bar_at(origin: Vector2, at: Vector2, px: float, gap: float) -> int:
+	## Which cell of a row a point falls in, or -1.
+	for k in Net.WORN + Net.SLOTS:
+		if _bar_cell(origin, k, px, gap).has_point(at):
+			return k
+	return -1
+
+
+static func _slot_open(worn: PackedByteArray, at: int) -> bool:
+	## Is that slot there for whoever wears this (the same rule as Player.usable)?
+	if at < Net.BASE_SLOTS:
+		return true
+	if worn.size() < Net.WORN:
+		return false
+	if at < Net.BASE_SLOTS + Net.POCKETS:
+		return worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE
+	return worn[Net.WEAR_PACK] != Net.ITEM_NONE
+
+
+func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, worn: PackedByteArray, px: float, gap: float, hand: int = -1) -> void:
+	## A row: what is worn, then the slots with what is in them; the one in the hand is lit up.
+	## Pockets and backpack slots show only faintly while there is no jumpsuit or backpack.
+	var font := ThemeDB.fallback_font
+	for k in Net.WORN + Net.SLOTS:
+		var cell := _bar_cell(origin, k, px, gap)
+		if k < Net.WORN:
+			var thing := worn[k] if k < worn.size() else Net.ITEM_NONE
+			canvas.draw_rect(cell, Color(0.1, 0.09, 0.07, 0.9))
+			canvas.draw_rect(cell, Color(0.7, 0.6, 0.4, 0.9), false, 1.0)
+			if thing == Net.ITEM_NONE:
+				canvas.draw_string(font, cell.position + Vector2(0, px * 0.62), WORN_MARKS[k], HORIZONTAL_ALIGNMENT_CENTER, px, int(px * 0.4), Color(0.7, 0.6, 0.4, 0.5))
+			else:
+				ItemArt.draw(canvas, cell, Net.ITEM_SUIT + Net.SUIT_TANK_STEPS if k == Net.WEAR_SUIT else thing)
+			continue
+		var i := k - Net.WORN
+		if not _slot_open(worn, i):
+			canvas.draw_rect(cell, Color(0.05, 0.05, 0.07, 0.35))
+			continue
 		canvas.draw_rect(cell, Color(0.07, 0.08, 0.12, 0.88) if i != hand else Color(0.14, 0.15, 0.1, 0.92))
 		if i == hand:
 			canvas.draw_rect(cell.grow(1.0), Color(0.98, 0.82, 0.35), false, 2.0)
@@ -571,9 +621,14 @@ func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, px: f
 
 
 
+func _search_px() -> float:
+	## The size of a cell in the search panel: as big as fits.
+	return minf(BIG_SLOT_PX, (_chart.size.x - 20.0 - WORN_GAP) / (Net.WORN + Net.SLOTS) - BIG_SLOT_GAP)
+
+
 func _search_row(mine: bool) -> Vector2:
 	## Where a row of slots starts in the search panel: theirs above, ours below.
-	var wide := Net.SLOTS * BIG_SLOT_PX + (Net.SLOTS - 1) * BIG_SLOT_GAP
+	var wide := _bar_width(_search_px(), BIG_SLOT_GAP)
 	return Vector2((_chart.size.x - wide) * 0.5, 190.0 if mine else 60.0)
 
 
@@ -583,15 +638,17 @@ func _draw_search() -> void:
 	var theirs := _search_row(false)
 	var ours := _search_row(true)
 	_chart.draw_string(font, theirs + Vector2(0, -12), "У лежащего:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
-	_draw_slots(_chart, theirs, client.search_slots, BIG_SLOT_PX, BIG_SLOT_GAP)
+	var px := _search_px()
+	_draw_slots(_chart, theirs, client.search_slots, client.search_worn, px, BIG_SLOT_GAP)
 	_chart.draw_string(font, ours + Vector2(0, -12), "У вас:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
-	_draw_slots(_chart, ours, client.slots, BIG_SLOT_PX, BIG_SLOT_GAP)
-	for row: Array in [[theirs, client.search_slots], [ours, client.slots]]:
-		var things: PackedByteArray = row[1]
-		for i in things.size():
-			if things[i] != Net.ITEM_NONE:
-				_chart.draw_string(font, row[0] + Vector2(i * (BIG_SLOT_PX + BIG_SLOT_GAP), BIG_SLOT_PX + 14), Items.name_of(things[i]),
-					HORIZONTAL_ALIGNMENT_CENTER, BIG_SLOT_PX, 10, Color(0.75, 0.85, 0.8))
+	_draw_slots(_chart, ours, client.slots, client.worn, px, BIG_SLOT_GAP)
+	for row: Array in [[theirs, client.search_slots, client.search_worn], [ours, client.slots, client.worn]]:
+		var things: PackedByteArray = row[2] + row[1]
+		for k in things.size():
+			if things[k] != Net.ITEM_NONE:
+				var cell := _bar_cell(row[0], k, px, BIG_SLOT_GAP)
+				_chart.draw_string(font, cell.position + Vector2(0, px + 14), Items.name_of(things[k]),
+					HORIZONTAL_ALIGNMENT_CENTER, px, 10, Color(0.75, 0.85, 0.8))
 
 
 func _update_search() -> void:
@@ -600,7 +657,7 @@ func _update_search() -> void:
 	var dead := client.ents.has(client.search_id) and (client.ents[client.search_id] as GameClient.Ent).cond == Net.COND_DEAD
 	var state := "тело" if dead else "без сознания, %s" % ["не ранен", "ранен легко", "ранен тяжело", "ранен очень тяжело", "при смерти"][clampi(client.search_hurt, 0, 4)]
 	_console_title.text = "Обыск: %s (%s)" % [who, state]
-	_console_text.text = "Щёлкните по вещи лежащего, чтобы забрать её. Щёлкните по своей, чтобы положить ему."
+	_console_text.text = "Щёлкните по вещи лежащего, чтобы забрать её (и одежду: скафандр, комбинезон, рюкзак — слева). Щёлкните по своей, чтобы положить ему."
 	if _jump_buttons_for != 13000:
 		_jump_buttons_for = 13000
 		for old in _jump_box.get_children():
@@ -621,11 +678,13 @@ func _on_chart_input(event: InputEvent) -> void:
 	if _console_kind == 13:
 		if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 			for mine: bool in [false, true]:
-				var from := click.position - _search_row(mine)
-				var index := int(floorf(from.x / (BIG_SLOT_PX + BIG_SLOT_GAP)))
-				if from.y >= 0.0 and from.y < BIG_SLOT_PX and index >= 0 and index < Net.SLOTS \
-						and from.x - index * (BIG_SLOT_PX + BIG_SLOT_GAP) < BIG_SLOT_PX:
-					client.send_loot(not mine, index)
+				var k := _bar_at(_search_row(mine), click.position, _search_px(), BIG_SLOT_GAP)
+				if k < 0:
+					continue
+				if k >= Net.WORN:
+					client.send_loot(not mine, k - Net.WORN)
+				elif not mine:
+					client.send_loot(true, Net.SLOTS + k)        # take off what they wear
 		return
 	if _console_kind != 4:
 		return
@@ -858,10 +917,11 @@ func _on_slots_input(event: InputEvent) -> void:
 	## A click on a slot takes what is in it into the hand.
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		var x := (event as InputEventMouseButton).position.x
-		var i := int(floorf(x / (SLOT_PX + SLOT_GAP)))
-		if i >= 0 and i < Net.SLOTS and x - i * (SLOT_PX + SLOT_GAP) < SLOT_PX:
-			client.send_hand(i)
+		var k := _bar_at(Vector2.ZERO, (event as InputEventMouseButton).position, SLOT_PX, SLOT_GAP)
+		if k >= 0 and k < Net.WORN:
+			client.send_wear(k)                                      # take it off, into the hand
+		elif k >= Net.WORN and client.usable(k - Net.WORN):
+			client.send_hand(k - Net.WORN)
 		_slots_view.accept_event()
 
 
@@ -876,7 +936,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN:
-			client.send_hand(posmod(client.hand + (-1 if button == MOUSE_BUTTON_WHEEL_UP else 1), Net.SLOTS))
+			var next := client.hand
+			for step in Net.SLOTS:
+				next = posmod(next + (-1 if button == MOUSE_BUTTON_WHEEL_UP else 1), Net.SLOTS)
+				if client.usable(next):
+					break
+			client.send_hand(next)
 			get_viewport().set_input_as_handled()
 			return
 	if free_hands:
@@ -1036,7 +1101,9 @@ func _process(delta: float) -> void:
 	elif target == 14:
 		var cell := client.floor_cell()
 		var more: int = Net.FLOOR_STACK - (client.floor_things[cell] as PackedByteArray).count(Net.ITEM_NONE) - 1
-		var room := client.slots.count(Net.ITEM_NONE) > 0
+		var room := false
+		for i in Net.SLOTS:
+			room = room or (client.usable(i) and client.slots[i] == Net.ITEM_NONE)
 		_hint.text = "На полу: %s%s.  %s" % [Items.name_of(client.top_thing(cell)).to_lower(),
 			(" и ещё %d" % more) if more > 0 else "", "E: поднять" if room else "Некуда взять: все слоты заняты"]
 	elif target == 13:
@@ -1107,11 +1174,11 @@ func _process(delta: float) -> void:
 	_lamp("kpa_low1", alive and here >= Net.AIR_FULL * PRESSURE_MIN and here < Net.AIR_FULL * PRESSURE_WARN)
 	_lamp("kpa_low2", alive and here >= 0 and here < Net.AIR_FULL * PRESSURE_MIN)
 	_lamp("o2_on", alive and client.supply)
-	_lamp("o2_off", alive and not client.supply)
-	_tank_bar.visible = alive
+	_lamp("o2_off", alive and client.has_suit() and not client.supply)
+	_tank_bar.visible = alive and client.has_suit()          # the tank is the suit's
 	_slots_view.visible = alive
-	if client.slots != _slots_shown or client.hand != _hand_shown:
-		_slots_shown = client.slots.duplicate()
+	if client.slots + client.worn != _slots_shown or client.hand != _hand_shown:
+		_slots_shown = client.slots + client.worn
 		_hand_shown = client.hand
 		_slots_view.queue_redraw()
 		var item := client.in_hand()
@@ -1135,6 +1202,10 @@ func _process(delta: float) -> void:
 				extra = "    Щелчок рядом: удар"
 			elif info.has("heal"):
 				extra = "    Щелчок по себе или соседу: заклеить раны"
+			elif Items.worn_as(item) >= 0:
+				if Items.tank_of(item) >= 0:
+					what += " (кислорода %d%%)" % (Items.tank_of(item) * 100 / Net.SUIT_TANK_STEPS)
+				extra = "    Z: надеть"
 			elif Items.uses(item) > 0:
 				what += " (%d из %d)" % [Items.uses(item), Net.MEDKIT_USES]
 				extra = "    Щелчок по себе или соседу: лечить, 3 с не двигаясь"

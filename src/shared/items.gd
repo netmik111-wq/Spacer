@@ -24,7 +24,11 @@ const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. П�
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
 const MEDKIT_HEAL := 30
 
+const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Z: надеть."
+
 const INFO := {
+	Net.ITEM_JUMPSUIT: {"name": "Комбинезон", "about": "Два кармана. Z: надеть.", "price": 8, "stock": 2, "wear": Net.WEAR_JUMPSUIT},
+	Net.ITEM_BACKPACK: {"name": "Рюкзак", "about": "Четыре места для вещей. Z: надеть.", "price": 15, "stock": 2, "wear": Net.WEAR_PACK},
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
 		"price": 5, "stock": 8},
 	Net.ITEM_PART: {"name": "Запчасть", "about": "Ускоряет ремонт машин и дверей втрое.",
@@ -46,6 +50,18 @@ const INFO := {
 	Net.ITEM_MEDKIT + 3: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 3, "treat": MEDKIT_HEAL},
 	Net.ITEM_MEDKIT + 4: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 4, "treat": MEDKIT_HEAL},
 	Net.ITEM_MEDKIT + 5: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 5, "treat": MEDKIT_HEAL, "price": 15, "stock": 2},
+	# a spacesuit carries what is left in its tank, in tenths
+	Net.ITEM_SUIT + 0: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 0},
+	Net.ITEM_SUIT + 1: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 1},
+	Net.ITEM_SUIT + 2: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 2},
+	Net.ITEM_SUIT + 3: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 3},
+	Net.ITEM_SUIT + 4: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 4},
+	Net.ITEM_SUIT + 5: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 5},
+	Net.ITEM_SUIT + 6: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 6},
+	Net.ITEM_SUIT + 7: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 7},
+	Net.ITEM_SUIT + 8: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 8},
+	Net.ITEM_SUIT + 9: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 9},
+	Net.ITEM_SUIT + 10: {"name": "Скафандр", "about": SUIT_ABOUT, "wear": Net.WEAR_SUIT, "tank": 10, "price": 40, "stock": 2},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -72,8 +88,23 @@ static func uses(item: int) -> int:
 
 
 static func whole(item: int) -> bool:
-	## Is it as it came from the locker (a kit not started on)? Only such things go back in.
-	return uses(item) < 0 or uses(item) == Net.MEDKIT_USES
+	## Is it as it came from the locker (a kit not started on, a suit with a full tank)? Only such things go back in.
+	return (uses(item) < 0 or uses(item) == Net.MEDKIT_USES) and (tank_of(item) < 0 or tank_of(item) == Net.SUIT_TANK_STEPS)
+
+
+static func worn_as(item: int) -> int:
+	## Where it is worn (Net.WEAR_*), or -1 if it is not something to wear.
+	return int(INFO[item].get("wear", -1)) if INFO.has(item) else -1
+
+
+static func tank_of(item: int) -> int:
+	## Tenths of a tank in a spacesuit; -1 if it is not one.
+	return int(INFO[item].get("tank", -1)) if INFO.has(item) else -1
+
+
+static func suit_with(tank: float) -> int:
+	## A spacesuit, as an item, holding that much oxygen (0..1).
+	return Net.ITEM_SUIT + clampi(roundi(tank * Net.SUIT_TANK_STEPS), 0, Net.SUIT_TANK_STEPS)
 
 
 static func is_weapon(item: int) -> bool:
