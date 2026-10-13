@@ -19,6 +19,17 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(9 + (k % 4) * 1.6, 9 + (k / 4) * 2.2) * u, Vector2(1, 1.4) * u),
 				Color(0.95, 0.75, 0.25) if k < n else Color(0.25, 0.25, 0.3))
 		return
+	if item > Net.ITEM_MEDKIT and item <= Net.ITEM_MEDKIT + Net.MEDKIT_USES:
+		# a first-aid kit: a white box with a red cross, and a pip for every use left
+		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.15, 0.15, 0.18))
+		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.9, 0.9, 0.88))
+		canvas.draw_rect(Rect2(at + Vector2(6, 2.5) * u, Vector2(5, 2) * u), Color(0.15, 0.15, 0.18))
+		canvas.draw_rect(Rect2(at + Vector2(7.5, 6) * u, Vector2(2, 6) * u), Color(0.85, 0.15, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(5.5, 8) * u, Vector2(6, 2) * u), Color(0.85, 0.15, 0.15))
+		for k in Net.MEDKIT_USES:
+			canvas.draw_rect(Rect2(at + Vector2(3.5 + k * 2.2, 14.5) * u, Vector2(1.4, 1.2) * u),
+				Color(0.4, 0.9, 0.5) if k < item - Net.ITEM_MEDKIT else Color(0.25, 0.25, 0.3))
+		return
 	match item:
 		Net.ITEM_PATCH:
 			# a plate of hull metal with a rivet in each corner

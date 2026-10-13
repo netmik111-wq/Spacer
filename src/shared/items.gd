@@ -21,6 +21,8 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
+const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
+const MEDKIT_HEAL := 30
 
 const INFO := {
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
@@ -38,6 +40,12 @@ const INFO := {
 		"heal": 40},
 	# a pistol's rounds are part of what it is: one number per load, so a pistol
 	# keeps its rounds in a pocket, on the floor and on a body alike
+	# a first-aid kit counts its uses the same way
+	Net.ITEM_MEDKIT + 1: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 1, "treat": MEDKIT_HEAL},
+	Net.ITEM_MEDKIT + 2: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 2, "treat": MEDKIT_HEAL},
+	Net.ITEM_MEDKIT + 3: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 3, "treat": MEDKIT_HEAL},
+	Net.ITEM_MEDKIT + 4: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 4, "treat": MEDKIT_HEAL},
+	Net.ITEM_MEDKIT + 5: {"name": "Аптечка", "about": MEDKIT_ABOUT, "kind": Net.ITEM_MEDKIT + Net.MEDKIT_USES, "uses": 5, "treat": MEDKIT_HEAL, "price": 15, "stock": 2},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -56,6 +64,16 @@ const PISTOL_RANGE := 14
 static func rounds(item: int) -> int:
 	## Rounds in a pistol; -1 if it is not one.
 	return int(INFO[item].get("rounds", -1)) if INFO.has(item) else -1
+
+
+static func uses(item: int) -> int:
+	## Uses left in a first-aid kit; -1 if it is not one.
+	return int(INFO[item].get("uses", -1)) if INFO.has(item) else -1
+
+
+static func whole(item: int) -> bool:
+	## Is it as it came from the locker (a kit not started on)? Only such things go back in.
+	return uses(item) < 0 or uses(item) == Net.MEDKIT_USES
 
 
 static func is_weapon(item: int) -> bool:

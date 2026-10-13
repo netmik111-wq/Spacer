@@ -34,6 +34,7 @@ const BOT_RESPAWN_TICKS := 300      # a dead bot is replaced after 15 s
 const MAX_CORPSES := 30             # the oldest body is cleared away when there are more
 const HAND_SEARCH := 1              # what a press of "search" or "drag" asks for (Player.want_kind)
 const HAND_DRAG := 2
+const TREAT_TICKS := 60             # one use of a first-aid kit takes 3 s
 const SHOT_TICKS := 6                # a pistol fires at most this often
 const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
 const BLOW_TICKS := 16               # a blow with a baton
@@ -530,7 +531,8 @@ func _remove(p: Player) -> void:
 	msg.encode_u8(0, Net.S_LEAVE)
 	msg.encode_u16(1, p.slot)
 	for q: Player in players:
-		if q != null and q.peer != null:
+		# (a player leaving at the same moment may already be past sending to)
+		if q != null and q.peer != null and q.peer.get_state() == ENetPacketPeer.STATE_CONNECTED:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
@@ -557,6 +559,7 @@ func _leave_body(p: Player) -> void:
 	c.st.down = true
 	c.cond = Net.COND_DEAD
 	c.health = Net.HEALTH_DEAD
+	c.wounds = p.wounds
 	c.slots = p.slots.duplicate()
 	c.hand = p.hand
 	for q: Player in players:
@@ -947,7 +950,7 @@ func _store_asked(p: Player, action: int, item: int) -> void:
 		Net.STORE_PUT_BACK:
 			for at in Net.SLOTS:
 				var kind := Items.kind_of(p.slots[at])
-				if p.slots[at] != Net.ITEM_NONE and store.has(kind):
+				if p.slots[at] != Net.ITEM_NONE and store.has(kind) and Items.whole(p.slots[at]):
 					store[kind] += 1
 					p.slots[at] = Net.ITEM_NONE
 		Net.STORE_BUY:
@@ -1220,7 +1223,7 @@ func _update_vitals(p: Player) -> void:
 			breathes = 1.0
 		else:
 			p.supply = false
-	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC)
+	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds)
 	var cond := Vitals.condition(p.health, p.cond)
 	if cond == p.cond:
 		return
@@ -1252,6 +1255,8 @@ func _update_work(p: Player) -> void:
 	## Holding "use" on what the character faces: a hole, a broken machine or a
 	## door that has gone wrong is mended, an emergency shutter is forced up, an
 	## oxygen station fills the tank.
+	if _update_treatment(p):
+		return
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
 		return
@@ -1427,10 +1432,63 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 	elif Items.INFO.has(item) and Items.INFO[item].has("heal"):
 		var who := _beside(p, at, true)
 		if who != null:
-			who.health = minf(who.health + float(Items.INFO[item]["heal"]), Net.HEALTH_FULL)
+			heal(who, float(Items.INFO[item]["heal"]))
 			p.slots[p.hand] = Net.ITEM_NONE
 			if who != p:
 				_ship_says("%s заклеивает раны: %s." % [p.name, who.name])
+	elif Items.uses(item) > 0:
+		# a first-aid kit: the treatment takes a while, and both must keep still for it
+		var who := _beside(p, at, true)
+		if who != null and who.wounds > 0.0:
+			p.treating = who.slot
+			p.work = 0
+			p.work_cell = -2
+			p.work_total = TREAT_TICKS
+
+
+func hurt_level(q: Player) -> int:
+	## How hurt somebody looks: 0 unhurt, 1 lightly, 2 badly, 3 gravely, 4 dying.
+	if q.health >= 95.0:
+		return 0
+	if q.health >= 60.0:
+		return 1
+	if q.health >= 20.0:
+		return 2
+	if q.health >= -40.0:
+		return 3
+	return 4
+
+
+func heal(q: Player, amount: float) -> void:
+	## Closes wounds: health comes back as far as the wounds healed.
+	var closed := minf(amount, q.wounds)
+	q.wounds -= closed
+	q.health = minf(q.health + closed, Net.HEALTH_FULL)
+
+
+func _update_treatment(p: Player) -> bool:
+	## A treatment with a first-aid kit in progress. It stops if either moves
+	## away, the kit leaves the hand, or the one treating falls. True while it goes on.
+	if p.treating < 0:
+		return false
+	var q: Player = players[p.treating] if p.treating < players.size() else null
+	var kit := p.in_hand()
+	if q == null or q.corpse or q.cond == Net.COND_DEAD or p.cond != Net.COND_OK or Items.uses(kit) <= 0 \
+			or p.st.cd > 0 or p.st.dir != Net.DIR_NONE or absi(q.st.x - p.st.x) > 1 or absi(q.st.y - p.st.y) > 1 \
+			or q.wounds <= 0.0:
+		p.treating = -1
+		p.work = 0
+		return false
+	p.work += 1
+	if p.work >= TREAT_TICKS:
+		heal(q, float(Items.MEDKIT_HEAL))
+		p.slots[p.hand] = kit - 1 if Items.uses(kit) > 1 else Net.ITEM_NONE
+		p.work = 0
+		if q != p:
+			_ship_says("%s перевязывает раны: %s." % [p.name, q.name])
+		if q.wounds <= 0.0 or p.slots[p.hand] == Net.ITEM_NONE:
+			p.treating = -1
+	return true
 
 
 func _stops_shot(x: int, y: int) -> bool:
@@ -1513,6 +1571,7 @@ func hurt(q: Player, damage: int, by: Player) -> void:
 		sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
 	q.health = maxf(q.health - damage, Net.HEALTH_DEAD - 1.0)
+	q.wounds = minf(q.wounds + damage, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
 	if q.pirate and by != null:
 		pirates.attacked(q, by)
 
@@ -1687,11 +1746,14 @@ func _update_hands(p: Player) -> void:
 			_stop_search(p)
 		else:
 			var other: Player = players[p.searching]
-			if other.slots != p.search_sent:
-				p.search_sent = other.slots.duplicate()
+			var seen_now := other.slots.duplicate()
+			seen_now.append(hurt_level(other))
+			if seen_now != p.search_sent:
+				p.search_sent = seen_now
 				if p.peer != null:
 					var msg := PackedByteArray([Net.S_SEARCH, p.searching & 0xFF, p.searching >> 8])
 					msg.append_array(other.slots)
+					msg.append(hurt_level(other))
 					p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
@@ -1723,6 +1785,8 @@ func _respawn(p: Player) -> void:
 	p.st.down = false
 	p.st.facing = Net.DIR_DOWN
 	p.health = Net.HEALTH_FULL
+	p.wounds = 0.0
+	p.treating = -1
 	p.cond = Net.COND_OK
 	p.inputs.clear()
 	p.self_dirty = true

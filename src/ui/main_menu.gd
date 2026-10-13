@@ -47,7 +47,7 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	var sub := Label.new()
-	sub.text = "Оружие и пираты"
+	sub.text = "Раны и лечение"
 	sub.add_theme_font_size_override("font_size", 14)
 	sub.modulate = Color(1, 1, 1, 0.6)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

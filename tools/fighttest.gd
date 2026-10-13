@@ -88,14 +88,53 @@ func _initialize() -> void:
 	_expect(b.health == 100.0, "and nobody further off")
 	a.slots[0] = Net.ITEM_MEDPATCH
 	a.health = 30.0
+	a.wounds = 70.0
 	_run(GameServer.BLOW_TICKS)
 	server.use_at(a, server.tick, Vector2(8, 4))
 	_expect(a.health >= 70.0 and a.slots[0] == Net.ITEM_NONE, "a patch on oneself closes wounds and is used up")
 	a.slots[0] = Net.ITEM_MEDPATCH
 	b.st.place(9, 4)
 	b.health = 20.0
+	b.wounds = 80.0
 	server.use_at(a, server.tick, Vector2(9, 4))
 	_expect(b.health >= 60.0, "or on the one next to us")
+
+	print("wounds and healing")
+	a.st.place(8, 4)
+	b.st.place(9, 4)
+	b.health = 100.0
+	b.wounds = 0.0
+	server.hurt(b, 50, a)
+	_run(10 * Net.TICK_HZ)
+	_expect(b.health <= 50.5 and b.wounds == 50.0, "wounds do not close by themselves (health %d)" % int(b.health))
+	b.health = 30.0
+	_run(5 * Net.TICK_HZ)
+	_expect(b.health >= 34.0 and b.health <= 50.0, "but what thin air took comes back, up to what the wounds allow")
+	a.slots[0] = Net.ITEM_MEDKIT + Net.MEDKIT_USES
+	a.hand = 0
+	server.use_at(a, server.tick, Vector2(9, 4))
+	_run(GameServer.TREAT_TICKS / 2)
+	_expect(b.wounds == 50.0, "a first-aid kit takes its time")
+	_run(GameServer.TREAT_TICKS / 2 + 2)
+	_expect(b.wounds == 50.0 - Items.MEDKIT_HEAL and a.slots[0] == Net.ITEM_MEDKIT + Net.MEDKIT_USES - 1,
+		"and closes %d of the wounds per use (%d uses left)" % [Items.MEDKIT_HEAL, a.slots[0] - Net.ITEM_MEDKIT])
+	_run(GameServer.TREAT_TICKS / 2)
+	b.st.place(12, 4)
+	_run(GameServer.TREAT_TICKS)
+	_expect(b.wounds == 50.0 - Items.MEDKIT_HEAL, "the treatment stops when the patient walks off")
+	b.st.place(9, 4)
+	b.health = -30.0
+	b.wounds = 130.0
+	b.cond = Net.COND_CRIT
+	b.st.down = true
+	_run(5 * Net.TICK_HZ)
+	_expect(b.cond == Net.COND_CRIT and b.health <= -29.0, "badly wounded, one lying unconscious does not come round")
+	for i in 5:
+		server.use_at(a, server.tick, Vector2(9, 4))
+		_run(GameServer.TREAT_TICKS + 2)
+	_run(2 * Net.TICK_HZ)
+	_expect(b.cond == Net.COND_OK, "treated, they come round (health %d)" % int(b.health))
+	_expect(a.slots[0] == Net.ITEM_NONE or Items.uses(a.slots[0]) > 0, "a used-up kit is gone")
 
 	print("pirates")
 	b.st.place(2, 7)

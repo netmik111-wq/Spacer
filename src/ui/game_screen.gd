@@ -577,7 +577,8 @@ func _update_search() -> void:
 	## Going through somebody's pockets: their slots and ours; a click moves a thing across.
 	var who := client.player_name(client.search_id)
 	var dead := client.ents.has(client.search_id) and (client.ents[client.search_id] as GameClient.Ent).cond == Net.COND_DEAD
-	_console_title.text = "Обыск: %s (%s)" % [who, "тело" if dead else "без сознания"]
+	var state := "тело" if dead else "без сознания, %s" % ["не ранен", "ранен легко", "ранен тяжело", "ранен очень тяжело", "при смерти"][clampi(client.search_hurt, 0, 4)]
+	_console_title.text = "Обыск: %s (%s)" % [who, state]
 	_console_text.text = "Щёлкните по вещи лежащего, чтобы забрать её. Щёлкните по своей, чтобы положить ему."
 	if _jump_buttons_for != 13000:
 		_jump_buttons_for = 13000
@@ -1038,7 +1039,7 @@ func _process(delta: float) -> void:
 			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить%s" % no_part
 		else:
 			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить%s" % no_part
-	_work_bar.visible = (target == 1 or target == 5 or target >= 9) and client.work > 0
+	_work_bar.visible = (target == 1 or target == 5 or target >= 9 or Items.uses(client.in_hand()) > 0) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
 	_work_bar.offset_left = shift - 110.0
@@ -1091,9 +1092,12 @@ func _process(delta: float) -> void:
 				extra = "    Щелчок рядом: удар"
 			elif info.has("heal"):
 				extra = "    Щелчок по себе или соседу: заклеить раны"
+			elif Items.uses(item) > 0:
+				what += " (%d из %d)" % [Items.uses(item), Net.MEDKIT_USES]
+				extra = "    Щелчок по себе или соседу: лечить, 3 с не двигаясь"
 			_hand_label.text = "В руке: %s%s    G: положить" % [what, extra]
 		# a weapon in the hand shows a sight instead of the arrow
-		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") else Input.CURSOR_ARROW)
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") or Items.uses(item) > 0 else Input.CURSOR_ARROW)
 	_hand_label.visible = alive
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))

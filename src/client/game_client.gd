@@ -81,6 +81,7 @@ var hand := 0                        # the slot whose thing is in the hand (we c
 var patches := 0                     # of that, hull patches
 var parts := 0                       # and spare parts
 var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
+var search_hurt := 0                 # how hurt they look (see GameServer.hurt_level)
 var search_slots := PackedByteArray()  # what they carry
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
@@ -778,6 +779,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			var who := pkt.decode_u16(1)
 			search_id = -1 if who == Net.NOBODY else who
 			search_slots = pkt.slice(3, 3 + Net.SLOTS)
+			search_hurt = pkt[3 + Net.SLOTS] if pkt.size() > 3 + Net.SLOTS else 0
 		Net.S_STORE:
 			store_air = pkt.decode_u16(1) / 10.0
 			credits = pkt.decode_u16(3)

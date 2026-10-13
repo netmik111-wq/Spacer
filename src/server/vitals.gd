@@ -31,15 +31,18 @@ static func harm(air: float) -> float:
 	return loss
 
 
-static func advance(health: float, cond: int, air: float, seconds: float) -> float:
-	## Health after `seconds` in that air.
+static func advance(health: float, cond: int, air: float, seconds: float, wounds: float = 0.0) -> float:
+	## Health after `seconds` in that air. Good air only gives back what thin air
+	## took: `wounds` (cuts, bruises, bullet holes) do not close by themselves,
+	## so health does not climb back above HEALTH_FULL - wounds.
 	if cond == Net.COND_DEAD:
 		return health
 	var loss := harm(air)
 	if loss > 0.0:
 		return maxf(health - loss * seconds, Net.HEALTH_DEAD)
-	if health < Net.HEALTH_FULL:
-		return minf(health + (RECOVERY if cond == Net.COND_OK else CRIT_RECOVERY) * seconds, Net.HEALTH_FULL)
+	var ceiling := Net.HEALTH_FULL - wounds
+	if health < ceiling:
+		return minf(health + (RECOVERY if cond == Net.COND_OK else CRIT_RECOVERY) * seconds, ceiling)
 	return health
 
 

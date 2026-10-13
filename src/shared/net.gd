@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 16
+const PROTOCOL := 17
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -100,6 +100,8 @@ const ITEM_FLASHLIGHT_ON := 4       # the same, switched on (what things are and
 const ITEM_MAG := 5                 # a pistol magazine
 const ITEM_BATON := 6
 const ITEM_MEDPATCH := 7            # a patch that closes wounds at once
+const ITEM_MEDKIT := 20             # a first-aid kit with no uses left; ITEM_MEDKIT + n has n left
+const MEDKIT_USES := 5
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -120,7 +122,7 @@ const S_DEVICES := 20               # u8 count, then per thing out of order (a b
 const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
-                                    # SLOTS bytes: what they carry
+                                    # SLOTS bytes: what they carry, then u8 how hurt they are (0 = unhurt .. 4 = dying)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
 const SHOT_BULLET := 1

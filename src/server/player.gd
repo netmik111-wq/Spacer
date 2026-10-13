@@ -33,6 +33,8 @@ var rep_look := -1
 var left_chunk := -1                 # the chunk it last moved out of, and the send that happened in
 var left_window := -1                # (see GameServer._record)
 
+var wounds := 0.0                    # of the health lost, what wounds took: it does not come back by itself
+var treating := -1                   # the slot of the one it is treating with a first-aid kit (-1 = nobody)
 var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; Net.HEALTH_DEAD = dead
 var cond := 0                        # Net.COND_*
 var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
