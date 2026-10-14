@@ -25,7 +25,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 
-	var p := server._new_player("Тест")
+	var p := server.crew.new_player("Тест")
 	p.slots.fill(Net.ITEM_NONE)
 	p.hand = 0
 	_expect(p.has_suit() and p.worn[Net.WEAR_JUMPSUIT] == Net.ITEM_JUMPSUIT and p.worn[Net.WEAR_PACK] == Net.ITEM_NONE,
@@ -35,10 +35,10 @@ func _initialize() -> void:
 
 	# the suit
 	p.tank = 0.5
-	_expect(server._take_off(p, Net.WEAR_SUIT) and p.slots[0] == Net.ITEM_SUIT + 5 and not p.has_suit(),
+	_expect(server.inventory.take_off(p, Net.WEAR_SUIT) and p.slots[0] == Net.ITEM_SUIT + 5 and not p.has_suit(),
 		"the suit comes off into the hand with half a tank in it")
 	_expect(p.look() == Net.OUTFIT_JUMPSUIT * 2, "and then the jumpsuit shows")
-	server.set_supply(p, true)
+	server.inventory.set_supply(p, true)
 	_expect(not p.supply, "without a suit there is no oxygen supply")
 	p.st.place(2, 7)
 	for c in server.air.air.size():
@@ -49,33 +49,33 @@ func _initialize() -> void:
 	_expect(p.health < before, "and vacuum hurts")
 	server.air.refill()
 	p.health = 100.0
-	_expect(server._act(p) and p.has_suit() and absf(p.tank - 0.5) < 0.01 and p.slots[0] == Net.ITEM_NONE,
+	_expect(server.inventory.act(p) and p.has_suit() and absf(p.tank - 0.5) < 0.01 and p.slots[0] == Net.ITEM_NONE,
 		"Z puts it back on with its oxygen")
-	server.set_supply(p, true)
+	server.inventory.set_supply(p, true)
 	_expect(p.supply, "and the supply works again")
 
 	# pockets and a backpack
 	p.slots[0] = Net.ITEM_BACKPACK
-	_expect(server._act(p) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK and p.count(Net.ITEM_NONE) == Net.SLOTS,
+	_expect(server.inventory.act(p) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK and p.count(Net.ITEM_NONE) == Net.SLOTS,
 		"a backpack goes on: %d slots now" % Net.SLOTS)
 	_expect(p.look() == Net.OUTFIT_SUIT * 2 + 1, "and shows")
 	p.slots[Net.SLOTS - 1] = Net.ITEM_PATCH
-	_expect(not server._take_off(p, Net.WEAR_PACK) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK, "it does not come off with things in it")
+	_expect(not server.inventory.take_off(p, Net.WEAR_PACK) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK, "it does not come off with things in it")
 	p.slots[Net.SLOTS - 1] = Net.ITEM_NONE
-	_expect(server._take_off(p, Net.WEAR_PACK) and p.slots[0] == Net.ITEM_BACKPACK, "empty, it does")
+	_expect(server.inventory.take_off(p, Net.WEAR_PACK) and p.slots[0] == Net.ITEM_BACKPACK, "empty, it does")
 	p.slots[0] = Net.ITEM_JUMPSUIT
-	_expect(server._act(p) and p.worn[Net.WEAR_JUMPSUIT] == Net.ITEM_JUMPSUIT and p.slots[0] == Net.ITEM_JUMPSUIT,
+	_expect(server.inventory.act(p) and p.worn[Net.WEAR_JUMPSUIT] == Net.ITEM_JUMPSUIT and p.slots[0] == Net.ITEM_JUMPSUIT,
 		"putting on a jumpsuit over one swaps them")
 	p.slots[0] = Net.ITEM_NONE
 	p.slots[Net.BASE_SLOTS] = Net.ITEM_PART
-	_expect(not server._take_off(p, Net.WEAR_JUMPSUIT), "a jumpsuit does not come off with something in its pockets")
+	_expect(not server.inventory.take_off(p, Net.WEAR_JUMPSUIT), "a jumpsuit does not come off with something in its pockets")
 	p.slots[Net.BASE_SLOTS] = Net.ITEM_NONE
 
 	# the oxygen station fills only a suit that is worn
 	_expect(p.has_suit(), "(still suited)")
 
 	# a body
-	var q := server._new_player("Павший")
+	var q := server.crew.new_player("Павший")
 	q.slots.fill(Net.ITEM_NONE)
 	q.st.place(p.st.x + 1, p.st.y)
 	q.tank = 0.8
@@ -83,7 +83,7 @@ func _initialize() -> void:
 	q.cond = Net.COND_DEAD
 	q.st.down = true
 	q.died_tick = server.tick - Net.RESPAWN_TICKS
-	server._respawn(q)
+	server.crew.respawn(q)
 	var body = null
 	for r in server.players:
 		if r != null and r.corpse and r.name == "Павший":
@@ -93,12 +93,12 @@ func _initialize() -> void:
 	p.st.facing = Net.DIR_RIGHT
 	p.searching = body.slot
 	p.slots.fill(Net.ITEM_NONE)
-	server._loot_asked(p, true, Net.SLOTS + Net.WEAR_SUIT)
+	server.looting.loot_asked(p, true, Net.SLOTS + Net.WEAR_SUIT)
 	_expect(not body.has_suit() and Items.tank_of(p.slots[0]) == 8, "a suit can be taken off a body, with what is left in its tank")
-	server._loot_asked(p, false, 0)
+	server.looting.loot_asked(p, false, 0)
 	_expect(p.slots[0] == Net.ITEM_NONE and body.count(Net.ITEM_SUIT) == 1 and not body.has_suit(),
 		"given back to the dead, it goes into their pockets")
-	var out := server._new_player("Обморок")
+	var out := server.crew.new_player("Обморок")
 	out.st.place(p.st.x + 1, p.st.y)
 	out.take_off(Net.WEAR_SUIT)
 	out.supply = false
@@ -107,12 +107,12 @@ func _initialize() -> void:
 	out.st.down = true
 	p.searching = out.slot
 	p.slots[0] = Net.ITEM_SUIT + Net.SUIT_TANK_STEPS
-	server._loot_asked(p, false, 0)
+	server.looting.loot_asked(p, false, 0)
 	_expect(p.slots[0] == Net.ITEM_NONE and out.has_suit() and out.supply,
 		"a suit given to somebody out cold goes onto them, with the oxygen on")
 
 	# the locker keeps them
-	_expect(int(server.store.get(Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, 0)) == 2 and int(server.store.get(Net.ITEM_BACKPACK, 0)) == 2,
+	_expect(int(server.ship.store.get(Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, 0)) == 2 and int(server.ship.store.get(Net.ITEM_BACKPACK, 0)) == 2,
 		"the locker holds spare suits and backpacks")
 
 	server.stop()

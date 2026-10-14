@@ -33,10 +33,10 @@ func _initialize() -> void:
 	_expect(d.possible(), "the ship has room for a derelict over its airlock")
 
 	# it comes when the ship is near one
-	server.sectors.kind[server.sector] = Sectors.DERELICT
-	server.sectors.reach[server.sector] = Sectors.DOCK_RANGE
-	server.ship_pos = server.sectors.spot[server.sector]
-	server.ship_dest = server.ship_pos
+	server.sectors.kind[server.ship.sector] = Sectors.DERELICT
+	server.sectors.reach[server.ship.sector] = Sectors.DOCK_RANGE
+	server.ship.pos = server.sectors.spot[server.ship.sector]
+	server.ship.dest = server.ship.pos
 	_run(1)
 	_expect(d.here and map.other_at != ShipMap.NO_OTHER, "a derelict comes alongside (at %s)" % map.other_at)
 	var loot := 0
@@ -54,7 +54,7 @@ func _initialize() -> void:
 	var pump: int = map.lock_pump.keys()[0]
 	var outer: int = map.lock_pump[pump]["outer"]
 	var ours: Vector2i = map.doors[outer]
-	var p := server._new_player("Тест")
+	var p := server.crew.new_player("Тест")
 	p.slots.fill(Net.ITEM_NONE)
 	p.supply = true
 	p.tank = 1.0
@@ -90,12 +90,12 @@ func _initialize() -> void:
 	_expect(d.dock(false) == "" and not d.docked, "it is drawn off again")
 	var left := loot
 	_expect(d.holds_ship() == "", "with everybody aboard the ship may go")
-	server.ship_pos = server.sectors.spot[server.sector] + Vector2(40, 0)
-	server.ship_dest = server.ship_pos
+	server.ship.pos = server.sectors.spot[server.ship.sector] + Vector2(40, 0)
+	server.ship.dest = server.ship.pos
 	_run(1)
 	_expect(not d.here and map.other_at == ShipMap.NO_OTHER and map.cells[there.y * map.width + there.x] < 0, "and leaves it behind")
-	server.ship_pos = server.sectors.spot[server.sector]
-	server.ship_dest = server.ship_pos
+	server.ship.pos = server.sectors.spot[server.ship.sector]
+	server.ship.dest = server.ship.pos
 	_run(1)
 	var again := 0
 	for c in map.other_cells:
@@ -104,8 +104,8 @@ func _initialize() -> void:
 	_expect(again == left, "coming back, what was left on it is still there (%d)" % again)
 
 	# a pirate ship: shows up, docks by force, breaks the airlock open, sends its crew
-	server.ship_pos = server.sectors.spot[server.sector] + Vector2(40, 0)
-	server.ship_dest = server.ship_pos
+	server.ship.pos = server.sectors.spot[server.ship.sector] + Vector2(40, 0)
+	server.ship.dest = server.ship.pos
 	_run(1)
 	_expect(not d.here and d.pirates_can_come(), "with nothing alongside, pirates can come")
 	var before_pirates := server.pirates.aboard()

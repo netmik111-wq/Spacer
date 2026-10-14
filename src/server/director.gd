@@ -130,7 +130,7 @@ func _watch_fuel(now: int) -> void:
 	## A ship with not a single can of fuel left could be stuck for good: no
 	## jump, and no trader or nothing to pay one with. Space is cruel, but not
 	## a dead end: after a while a drifting container of fuel turns up.
-	if server.fuel_aboard() > 0:
+	if server.supplies.fuel_aboard() > 0:
 		_dry_until = -1
 	elif _dry_until < 0:
 		_dry_until = now + int(RESCUE_SECONDS * Net.TICK_HZ)
@@ -149,9 +149,9 @@ func assess() -> Dictionary:
 			crew += 1
 			if p.cond == Net.COND_OK:
 				crew_up += 1
-	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.danger_kind(),
-		"broken": server.broken.size(), "engine_down": server.engine_down(), "patches": server.patches_aboard(),
-		"weapons": server.weapons_aboard(), "pirates": server.pirates.aboard(), "fuel": server.fuel_aboard()}
+	return {"crew": crew, "crew_up": crew_up, "holes": server.air.holes.size(), "sector": server.navigation.danger_kind(),
+		"broken": server.ship.broken.size(), "engine_down": server.engine_down(), "patches": server.supplies.patches_aboard(),
+		"weapons": server.supplies.weapons_aboard(), "pirates": server.pirates.aboard(), "fuel": server.supplies.fuel_aboard()}
 
 
 func fire(event_id: int) -> bool:
@@ -171,23 +171,23 @@ func _run(event_id: int) -> void:
 		MICROMETEORITE:
 			_do("hole")
 		CONSOLE_FAULT:
-			server.break_console()
+			server.systems.break_console()
 		ENGINE_FAULT:
-			server.break_engine()
+			server.systems.break_engine()
 		AIR_PLANT_FAULT:
-			server.break_air_plant()
+			server.systems.break_air_plant()
 		DOOR_JAM:
-			server.jam_door()
+			server.systems.jam_door()
 		SHUTTER_FAULT:
-			server.fault_shutter()
+			server.systems.fault_shutter()
 		POWER_GLITCH:
-			server.power_glitch()
+			server.systems.power_glitch()
 		BOARDING:
 			server.pirates.board(_party())
 		PIRATE_SHIP:
 			server.derelict.pirates_come(_party())
 		FUEL_DRIFT:
-			server.find_fuel(RESCUE_FUEL)
+			server.supplies.find_fuel(RESCUE_FUEL)
 		METEOR_VOLLEY:
 			# three hits a second and a half apart
 			for i in 3:
@@ -197,7 +197,7 @@ func _run(event_id: int) -> void:
 
 func _do(what: String) -> void:
 	if what == "hole":
-		server.breach_random()
+		server.systems.breach_random()
 
 
 func _can_happen(e: Dictionary, here: int) -> bool:
@@ -206,17 +206,17 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 		return false
 	match int(e["id"]):
 		CONSOLE_FAULT:
-			return server.can_break("console")
+			return server.systems.can_break("console")
 		ENGINE_FAULT:
-			return server.can_break("engine")
+			return server.systems.can_break("engine")
 		AIR_PLANT_FAULT:
-			return server.can_break("air_plant")
+			return server.systems.can_break("air_plant")
 		DOOR_JAM:
-			return server.can_break("door")
+			return server.systems.can_break("door")
 		SHUTTER_FAULT:
-			return server.can_break("shutter")
+			return server.systems.can_break("shutter")
 		POWER_GLITCH:
-			return server.can_break("power")
+			return server.systems.can_break("power")
 		BOARDING:
 			return server.pirates.aboard() == 0
 		PIRATE_SHIP:
@@ -228,7 +228,7 @@ func _party() -> int:
 	## How many pirates come: more crew, more pirates; an unarmed crew meets fewer of them.
 	var crew := maxi(int(assess()["crew"]), 1)
 	var party := clampi(1 + crew / 2, 1, 4)
-	if server.weapons_aboard() == 0:
+	if server.supplies.weapons_aboard() == 0:
 		party = maxi(party - 1, 1)
 	return party
 
@@ -239,16 +239,16 @@ func _weight(e: Dictionary, here: int) -> int:
 		return 0
 	var w := int(e["weight"])
 	# a crew with no weapons at all is boarded half as often
-	if (int(e["id"]) == BOARDING or int(e["id"]) == PIRATE_SHIP) and server.weapons_aboard() == 0:
+	if (int(e["id"]) == BOARDING or int(e["id"]) == PIRATE_SHIP) and server.supplies.weapons_aboard() == 0:
 		w = maxi(w / 2, 1)
 	# a crew with nothing left to close a hole with gets holes three times as rarely
-	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.patches_aboard() == 0:
+	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.supplies.patches_aboard() == 0:
 		w = maxi(w / 3, 1)
 	return w
 
 
 func _pick() -> Dictionary:
-	var here: int = server.danger_kind()
+	var here: int = server.navigation.danger_kind()
 	var total := 0
 	for e: Dictionary in EVENTS:
 		total += _weight(e, here)
@@ -266,7 +266,7 @@ func _pick() -> Dictionary:
 func _schedule(at_least: float) -> void:
 	## Sets when the next automatic event may come: this sector's pace, sooner
 	## with a bigger crew, never sooner than `at_least` seconds.
-	var here: int = server.danger_kind()
+	var here: int = server.navigation.danger_kind()
 	var wait := 600.0
 	if PACE.has(here):
 		var span: Array = PACE[here]

@@ -20,6 +20,7 @@ extends Node
 ## path=DIR:SECONDS,... (scripted walk), trace=FILE (positions every frame),
 ## say=TEXT (send a chat line), --debug (show the F3 overlay),
 ## quit_after=SECONDS, shot=FILE.png with shot_after=SECONDS, stats=FILE.json,
+## bench=FILE.json (dedicated server: every tick's length, written on quit_after; see tools/bench.sh),
 ## breach_after=SECONDS / seal_after=SECONDS (the host's test tools; on a
 ## dedicated server breach_after tears a random hole), suit_after=SECONDS (turn
 ## the oxygen supply on), use_after=SECONDS (hold the "use" key from then on),
@@ -144,6 +145,7 @@ func _ready() -> void:
 		_server.shutdown_token = str(_opt.get("token", ""))
 		_server.director.auto = not _flags.has("no-events")
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
+		_server.measure = _opt.has("bench")
 		var problem := _server.start(port, "ship02", bots)
 		if problem == "":
 			problem = _open_campaign(_server, str(_opt.get("campaign", "continue")))
@@ -387,12 +389,12 @@ func _process(_delta: float) -> void:
 	# test helpers; unused in normal play
 	if _opt.has("derelict_after") and not _derelicted and _server != null and t >= float(_opt["derelict_after"]):
 		_derelicted = true
-		_server.sectors.kind[_server.sector] = Sectors.DERELICT
-		_server.sectors.reach[_server.sector] = Sectors.DOCK_RANGE
-		_server.ship_pos = _server.sectors.spot[_server.sector]
-		_server.ship_dest = _server.ship_pos
-		_server.ship_moving = false
-		_server._to_all(_server._helm_packet())
+		_server.sectors.kind[_server.ship.sector] = Sectors.DERELICT
+		_server.sectors.reach[_server.ship.sector] = Sectors.DOCK_RANGE
+		_server.ship.pos = _server.sectors.spot[_server.ship.sector]
+		_server.ship.dest = _server.ship.pos
+		_server.ship.moving = false
+		_server.to_all(_server.ship.helm_packet(_server.tick))
 	if _opt.has("derelict_after") and _derelicted and not _dockship and not _flags.has("nodock") and _server != null and _server.derelict.here:
 		_dockship = true
 		_server.derelict.dock(true)
@@ -405,7 +407,7 @@ func _process(_delta: float) -> void:
 	if _opt.has("breach_after") and not _breached and t >= float(_opt["breach_after"]):
 		if _flags.has("server") and _server != null:
 			_breached = true
-			_server.breach_random()
+			_server.systems.breach_random()
 		elif _screen != null:
 			_breached = true
 			_client.send_admin(Net.ADMIN_BREACH)
@@ -459,12 +461,12 @@ func _process(_delta: float) -> void:
 		_warped = true
 		for i in _server.sectors.count:
 			if _server.sectors.kind[i] == int(_opt.get("warp_kind", 1)):
-				_server.start_jump(i, "Тест")
+				_server.navigation.start_jump(i, "Тест")
 				break
 	if _opt.has("break_helm_after") and not _helm_broken and _server != null and _screen != null and t >= float(_opt["break_helm_after"]):
 		_helm_broken = true
-		_server.broken[_server.map.helm.keys()[0]] = true
-		_server._to_all(_server._devices_packet())
+		_server.ship.broken[_server.map.helm.keys()[0]] = true
+		_server.to_all(_server.ship.devices_packet())
 	if _opt.has("faint_after") and not _fainted and _server != null and _screen != null and t >= float(_opt["faint_after"]):
 		_fainted = true
 		var me = _server.players[_client.my_id]
@@ -515,10 +517,10 @@ func _process(_delta: float) -> void:
 		_client.send_use(false)
 	if _opt.has("dock_after") and not _docked and _server != null and _screen != null and t >= float(_opt["dock_after"]):
 		_docked = true
-		_server.ship_pos = _server.sectors.spot[_server.sector]
-		_server.ship_dest = _server.ship_pos
-		_server.ship_moving = false
-		_server._to_all(_server._helm_packet())
+		_server.ship.pos = _server.sectors.spot[_server.ship.sector]
+		_server.ship.dest = _server.ship.pos
+		_server.ship.moving = false
+		_server.to_all(_server.ship.helm_packet(_server.tick))
 	if _opt.has("place_after") and not _placed and _server != null and _screen != null and t >= float(_opt["place_after"]):
 		_placed = true
 		var xy := str(_opt.get("place", "0,0")).split(",")
@@ -592,6 +594,11 @@ func _process(_delta: float) -> void:
 	if _opt.has("demo_until") and _screen != null and t >= float(_opt["demo_until"]):
 		_screen.demo_walk = false
 	if _opt.has("quit_after") and t >= float(_opt["quit_after"]):
+		if _opt.has("bench") and _server != null:
+			var bf := FileAccess.open(str(_opt["bench"]), FileAccess.WRITE)
+			if bf != null:
+				bf.store_string(JSON.stringify(_server.bench_report()))
+				bf.close()
 		if _opt.has("stats") and _client != null:
 			var f := FileAccess.open(str(_opt["stats"]), FileAccess.WRITE)
 			var mine: GameClient.Ent = _client.ents.get(_client.my_id)
@@ -616,6 +623,7 @@ func _process(_delta: float) -> void:
 					"sector_kind": _client.sectors.kind[_client.sector] if _client.sectors.count > 0 else -1,
 					"bodies": _client.roster.size() - _client.crew_count(),
 					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
+					"login_ms": _client.login_ms, "in_world_ms": _client.in_world_ms,
 				}))
 		if _client != null:
 			_client.stop_server_and_close(_server_token if _server_pid > 0 else "")

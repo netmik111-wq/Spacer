@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 24
+const PROTOCOL := 25
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -58,7 +58,7 @@ const C_DOCK := 19                  # u8 on: bring the derelict alongside up aga
 const C_ACT := 17                   # nothing else: use the thing in the hand by itself (switch a flashlight)
 
 # --- packets, server -> client ---
-const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u8 name length, map name
+const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u16 id of your ship, u8 name length, map name
 const S_REJECT := 11                # u8 reason
 const S_ROSTER := 12                # u16 count, then roster entries: u16 id, u8 colour, u8 kind (KIND_*), u8 job, u8 name length, name
 const S_JOIN := 13                  # one roster entry
@@ -66,12 +66,15 @@ const S_LEAVE := 14                 # u16 id
 const S_WORLD := 15                 # u32 tick, then sections
 const S_CHAT := 16                  # u16 from id, u8 channel (CHAT_*), u16 length, text
 const S_SECTORS := 17               # the part of space around the ship (see Sectors.pack); sent anew on every arrival
+# Packets about one ship (S_NAV, S_HELM, S_DEVICES, S_POWER, S_STORE, S_GUNS) carry its id
+# (u16) right after the packet's kind; the layouts below are what follows the id.
 const S_NAV := 18                   # u8 sector the ship is in, u8 sector it is jumping to (NO_SECTOR = none),
                                     # both as numbers in the window last sent; u32 tick the jump lands on,
                                     # u32 tick the drive is ready from
 
 # --- sections inside S_WORLD ---
-const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (255 = gone; see pack_look)
+const SEC_ENT := 1                  # u16 count, then 7-byte records: u16 id, s16 x, s16 y, u8 look (see pack_look;
+                                    # FACING_GONE = gone, FACING_HIDDEN = out of sight now: x, y is where it was last seen)
 const SEC_DOOR := 2                 # u16 count, then 7-byte records: u16 door, s32 tick it is passable from (-1 = shut),
                                     # u8 flags (bit 0: its emergency shutter is down, bit 1: the door is
                                     # jammed open, bit 2: the shutter is faulty; see Doors.flags)
@@ -127,6 +130,7 @@ const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
 
 const FACING_GONE := 255
+const FACING_HIDDEN := 254
 const ENT_BYTES := 7
 const SELF_BYTES := 17
 const DOOR_BYTES := 7
@@ -154,8 +158,13 @@ const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
 const SHOT_CANNON := 3              # a ship's gun firing, or the enemy's shot landing on us
-const S_OTHER := 26                 # s16 x, s16 y of the other ship's corner in the grid (-9999 = none here),
-                                    # u8 docked, u8 kind (OTHER_*): a ship alongside (see ShipMap.place_other)
+const S_SHIPS := 26                 # every ship in the world: u8 count, then per ship u16 id, u8 kind (SHIP_*),
+                                    # u8 docked, s16 x, s16 y of its corner in the grid, u8 name length, name.
+                                    # A ship other than the client's own is the one alongside (see ShipMap.place_other).
+const CREW_SHIP := 1                # the network id of the crew's own ship (another ship gets a new one each time)
+const SHIP_CREW := 0                # kinds of ship
+const SHIP_DERELICT := 1
+const SHIP_PIRATE := 2
 # the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)
 const OTHER_DERELICT := 0
 const OTHER_PIRATE := 1

@@ -21,6 +21,7 @@ const Items := preload("res://src/shared/items.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const Ship := preload("res://src/server/ship.gd")
 
 const PIRATE_WARNING_TICKS := 40 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const GAP := 3                       # cells of open space between it and our airlock while not docked
@@ -39,6 +40,7 @@ const LOOT := [
 var server: Node
 var map: ShipMap
 var here := false                    # a ship lies alongside now
+var ship: Ship = null                # and that is it, with its own network id (see GameServer.ships_packet)
 var kind := Net.OTHER_DERELICT       # which kind it is (Net.OTHER_*)
 var docked := false
 var _spots := {}                     # kind -> [where its corner lies alongside, where docked], for the kinds that fit
@@ -53,6 +55,7 @@ func setup(p_server: Node) -> void:
 	map = server.map
 	here = false
 	docked = false
+	ship = null
 	_left.clear()
 	_rng.randomize()
 	_spots = {}
@@ -79,13 +82,22 @@ func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
 	return _spots.has(of_kind)
 
 
-func packet() -> PackedByteArray:
-	var out := PackedByteArray([Net.S_OTHER, 0, 0, 0, 0, 0, 0])
-	out.encode_s16(1, map.other_at.x)
-	out.encode_s16(3, map.other_at.y)
-	out.encode_u8(5, 1 if docked else 0)
-	out.encode_u8(6, kind)
-	return out
+func _comes(of_kind: int) -> void:
+	## A ship of that kind comes alongside: it gets a network id of its own.
+	kind = of_kind
+	here = true
+	docked = false
+	ship = Ship.new()
+	ship.id = server.new_ship_id()
+	ship.kind = Net.SHIP_PIRATE if of_kind == Net.OTHER_PIRATE else Net.SHIP_DERELICT
+	ship.name = "Пиратский корабль" if of_kind == Net.OTHER_PIRATE else "Брошенный корабль"
+	ship.map = map
+
+
+func _set_docked(on: bool) -> void:
+	docked = on
+	if ship != null:
+		ship.docked = on
 
 
 func pirates_can_come() -> bool:
@@ -97,9 +109,7 @@ func pirates_come(party: int) -> bool:
 	## A pirate ship shows up off the airlock; it will dock by force before long.
 	if not pirates_can_come():
 		return false
-	kind = Net.OTHER_PIRATE
-	here = true
-	docked = false
+	_comes(Net.OTHER_PIRATE)
 	_place(_spots[kind][0])
 	for c in map.other_cells:
 		if map.walk[c] == 1:
@@ -109,9 +119,8 @@ func pirates_come(party: int) -> bool:
 	for i in _rng.randi_range(2, 4):
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
-	server._to_all(packet())
 	server.gunnery.enemy_arrives()
-	server._ship_says("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
+	server.chat.say("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
 	return true
 
 
@@ -144,7 +153,7 @@ func update() -> void:
 		return
 	if not possible():
 		return
-	var want: bool = server.sector_kind() == Sectors.DERELICT and server.in_reach
+	var want: bool = server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach
 	if want and not here:
 		_arrive()
 	elif not want and here and holds_ship() == "":
@@ -162,8 +171,7 @@ func dock(on: bool) -> String:
 	if _anyone_in_way(from, to):
 		return "Стыковка невозможна: между кораблями кто-то есть." if on else "Расстыковка невозможна: рядом кто-то есть."
 	_move(from, to)
-	docked = on
-	server._to_all(packet())
+	_set_docked(on)
 	return ""
 
 
@@ -183,7 +191,7 @@ func _pirates_board() -> void:
 		return                               # it waits until the way is clear
 	_pirates_dock_at = -1
 	_move(from, to)
-	docked = true
+	_set_docked(true)
 	var lock: Dictionary = map.lock_pump.values()[0]
 	for d: int in [int(lock["inner"]), int(lock["outer"])]:
 		server.doors.jammed[d] = 1
@@ -196,8 +204,7 @@ func _pirates_board() -> void:
 	for i in mini(_pirates_party, server.pirates.MAX_ABOARD):
 		var at := theirs - Vector2i(0, i % 2)
 		server.pirates.spawn(at.x + i / 2, at.y, _rng.randf() < 0.6)
-	server._to_all(packet())
-	server._ship_says("Пиратский корабль пристыковался силой и вскрыл обе двери шлюза! Пираты идут на борт (их %d). Двери шлюза заклинило: чинить, как обычную дверь." % mini(_pirates_party, server.pirates.MAX_ABOARD))
+	server.chat.say("Пиратский корабль пристыковался силой и вскрыл обе двери шлюза! Пираты идут на борт (их %d). Двери шлюза заклинило: чинить, как обычную дверь." % mini(_pirates_party, server.pirates.MAX_ABOARD))
 
 
 func _drop(cells: PackedInt32Array, table: Array) -> void:
@@ -210,15 +217,13 @@ func _drop(cells: PackedInt32Array, table: Array) -> void:
 		return
 	things[at] = _loot(table)
 	server.floor_things[c] = things
-	server._floor_record(c)
+	server.replication.floor_record(c)
 
 
 func _arrive() -> void:
-	kind = Net.OTHER_DERELICT
-	here = true
-	docked = false
+	_comes(Net.OTHER_DERELICT)
 	_place(_spots[kind][0])
-	var key := Sectors.key(server.sectors.cell[server.sector])
+	var key := Sectors.key(server.sectors.cell[server.ship.sector])
 	var cells := _floor_cells()
 	# air: room by room, some empty, the rest thin
 	for room: Array in _rooms():
@@ -231,7 +236,7 @@ func _arrive() -> void:
 		if not hull.is_empty():
 			var c: int = hull[_rng.randi_range(0, hull.size() - 1)]
 			server.air.set_hole(c, true)
-			server._hull_record(c, 1)
+			server.replication.hull_record(c, 1)
 	# what lies about: made up the first time, as it was left after that
 	if _left.has(key):
 		for e: Array in _left[key]:
@@ -240,14 +245,13 @@ func _arrive() -> void:
 		for i in _rng.randi_range(5, 8):
 			_drop(cells, LOOT)
 	server.air.wake()
-	server._to_all(packet())
-	server._ship_says("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
+	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 
 
 func _leave(quiet: bool = false) -> void:
 	# what is left on a derelict is remembered for this sector
 	if kind == Net.OTHER_DERELICT:
-		var key := Sectors.key(server.sectors.cell[server.sector])
+		var key := Sectors.key(server.sectors.cell[server.ship.sector])
 		var kept := []
 		for c in map.other_cells:
 			if server.floor_things.has(c):
@@ -256,15 +260,15 @@ func _leave(quiet: bool = false) -> void:
 	# whoever lies on it (pirates struck down on their own ship) goes with it
 	for p in server.players:
 		if p != null and map.is_other(p.st.y * map.width + p.st.x) and (p.corpse or p.pirate):
-			server._remove(p)
+			server.crew.remove(p)
 	_clear_region()
 	here = false
-	docked = false
+	_set_docked(false)
 	_place(ShipMap.NO_OTHER)
-	server._to_all(packet())
+	ship = null
 	server.gunnery.enemy_gone()
 	if not quiet:
-		server._ship_says("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else "Пиратский корабль отошёл от шлюза и ушёл.")
+		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else "Пиратский корабль отошёл от шлюза и ушёл.")
 
 
 func _move(from: Vector2i, to: Vector2i) -> void:
@@ -294,22 +298,23 @@ func _move(from: Vector2i, to: Vector2i) -> void:
 	for k: int in holes:
 		var c := _cell(to, k)
 		server.air.set_hole(c, true)
-		server._hull_record(c, 1)
+		server.replication.hull_record(c, 1)
 	for p in aboard:
 		p.st.place(p.st.x + shift.x, p.st.y + shift.y)
 		p.self_dirty = true
-		server._record(p)
 	server.air.wake()
 
 
 func _place(at: Vector2i) -> void:
 	## Lays it into the grid there, and sets everything that depends on the shape of the ship.
 	map.place_other(at, kind)
+	if ship != null:
+		ship.at = at
 	for d in range(map.other_first_door, map.doors.size()):
 		server.doors.ready[d] = Doors.CLOSED
 		server.doors.set_flags(d, 0)
 		server.doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0     # a pirate ship has power
-	server._index_doors()
+	server.replication.index_doors()
 	server.air.reshape()
 
 
@@ -318,16 +323,16 @@ func _clear_region() -> void:
 	for c in map.other_cells:
 		if server.floor_things.has(c):
 			server.floor_things.erase(c)
-			server._floor_record(c)
+			server.replication.floor_record(c)
 		if server.air.holes.has(c):
 			server.air.set_hole(c, false)
-			server._hull_record(c, 0)
+			server.replication.hull_record(c, 0)
 
 
 func _put(at: Vector2i, local: int, things: PackedByteArray) -> void:
 	var c := _cell(at, local)
 	server.floor_things[c] = things.duplicate()
-	server._floor_record(c)
+	server.replication.floor_record(c)
 
 
 func _local(cell: int, at: Vector2i) -> int:

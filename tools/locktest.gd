@@ -34,7 +34,7 @@ func _initialize() -> void:
 	_run(4)
 	_expect(server.doors.locked[outer] == 1 and server.doors.locked[inner] == 0, "with air inside the outer door is sealed, the inner one is not")
 
-	var p := server._new_player("Тест")
+	var p := server.crew.new_player("Тест")
 	p.slots.fill(Net.ITEM_NONE)
 	var in_door: Vector2i = map.doors[inner]
 	p.st.place(in_door.x, in_door.y + 1)
@@ -53,42 +53,42 @@ func _initialize() -> void:
 	var px := pump % map.width
 	p.st.place(px, pump / map.width + 1)
 	p.st.facing = Net.DIR_UP
-	var store := server.store_air
-	server.store_air = 10.0
-	server._press(p)
-	_expect(int(server.pumps.get(pump, 0)) == GameServer.PUMP_OUT, "the pump starts taking the air out")
+	var store := server.ship.store_air
+	server.ship.store_air = 10.0
+	server.repairs.press(p)
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_OUT, "the pump starts taking the air out")
 	_run(8 * Net.TICK_HZ)
-	_expect(server.lock_air(pump) < 0.01 and server.pumps.is_empty(), "and stops when the chamber is empty (%.3f)" % server.lock_air(pump))
-	_expect(server.store_air > 15.0, "the air went into the ship's store (%.1f)" % server.store_air)
+	_expect(server.systems.lock_air(pump) < 0.01 and server.ship.pumps.is_empty(), "and stops when the chamber is empty (%.3f)" % server.systems.lock_air(pump))
+	_expect(server.ship.store_air > 15.0, "the air went into the ship's store (%.1f)" % server.ship.store_air)
 	_expect(server.doors.locked[outer] == 0 and server.doors.locked[inner] == 1, "now the outer door is free and the inner one sealed")
 	var corridor := (in_door.y + 1) * map.width + in_door.x
 	var door_cell: int = map.doors[outer].y * map.width + map.doors[outer].x
 	server.doors.bump(outer, server.tick)
 	_run(20)
 	_expect(not server.doors.is_shut(outer) and server.air.air[door_cell] < 0.05, "the outer door opens and its doorway empties into space")
-	server._press(p)
-	_expect(server.pumps.is_empty(), "the pump does not start with a door open")
+	server.repairs.press(p)
+	_expect(server.ship.pumps.is_empty(), "the pump does not start with a door open")
 	_run(Doors.HOLD_TICKS + 20)
 	_expect(server.air.air[corridor] > 0.99, "the ship keeps its air (%.3f)" % server.air.air[corridor])
-	server._press(p)
-	_expect(int(server.pumps.get(pump, 0)) == GameServer.PUMP_IN, "the pump fills the chamber back")
+	server.repairs.press(p)
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_IN, "the pump fills the chamber back")
 	_run(8 * Net.TICK_HZ)
 	_run(4)
-	_expect(server.lock_air(pump) > 0.99 and server.doors.locked[inner] == 0 and server.doors.locked[outer] == 1,
+	_expect(server.systems.lock_air(pump) > 0.99 and server.doors.locked[inner] == 0 and server.doors.locked[outer] == 1,
 		"full again: the inner door is free, the outer one sealed")
-	server.store_air = 0.0
-	server.lock_air(pump)
+	server.ship.store_air = 0.0
+	server.systems.lock_air(pump)
 	for c in (lock["chamber"] as PackedInt32Array):
 		server.air.air[c] = 0.0
-	server._press(p)
-	_expect(server.pumps.is_empty(), "with no air in store there is nothing to fill it with")
-	server.store_air = store
+	server.repairs.press(p)
+	_expect(server.ship.pumps.is_empty(), "with no air in store there is nothing to fill it with")
+	server.ship.store_air = store
 
 	# the outer door stuck open must not lock the crew out of the airlock
 	server.doors.jammed[outer] = 1
 	server.doors.ready[outer] = server.tick
 	_run(4)
-	var crew := server._new_player("Ремонтник")
+	var crew := server.crew.new_player("Ремонтник")
 	crew.st.place(in_door.x, in_door.y + 1)
 	crew.st.facing = Net.DIR_UP
 	crew.st.dir = Net.DIR_UP

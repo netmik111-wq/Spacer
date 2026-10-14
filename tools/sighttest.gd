@@ -4,6 +4,8 @@ extends SceneTree
 ## Sight: a cone ahead made of two eyes, 160 degrees in the light and 60 in
 ## the dark, stopped by walls and shut doors. Sound: heard within its range on
 ## its own deck, through air only; in a vacuum only right next to it.
+## Who a client is told about: only the characters its own one sees, feels
+## right next to it, or sees by their flashlight (Replication).
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
@@ -48,31 +50,31 @@ func _initialize() -> void:
 		and not Sight.sees(map, doors, me, Net.DIR_RIGHT, Vector2i(12, 4), dark, Sight.DARK_REACH), "and only %d cells are made out without light" % Sight.DARK_REACH)
 
 	print("what is heard")
-	var a := server._new_player("Слушатель")
-	var b := server._new_player("Ходок")
+	var a := server.crew.new_player("Слушатель")
+	var b := server.crew.new_player("Ходок")
 	a.st.place(8, 4)
 	b.st.place(12, 4)
 	server.air.refill()
-	server.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
+	server.chat.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
 	_expect(a.heard.size() == 1 and b.heard.is_empty(), "footsteps 4 cells off are heard (not by the one walking)")
 	a.heard.clear()
-	server.sound(Net.SOUND_STEP, 18, 4)
+	server.chat.sound(Net.SOUND_STEP, 18, 4)
 	_expect(a.heard.is_empty(), "10 cells off they are not")
-	server.sound(Net.SOUND_HISS, 18, 4)
+	server.chat.sound(Net.SOUND_HISS, 18, 4)
 	_expect(a.heard.size() == 1, "but air rushing out is")
 	a.heard.clear()
-	server.sound(Net.SOUND_STEP, 8, 20)
+	server.chat.sound(Net.SOUND_STEP, 8, 20)
 	_expect(a.heard.is_empty(), "a sound on the other deck is not heard")
 	for i in server.air.air.size():
 		server.air.air[i] = 0.0
-	server.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
+	server.chat.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
 	_expect(a.heard.is_empty(), "in a vacuum nothing is heard")
-	server.sound(Net.SOUND_STEP, 9, 4)
+	server.chat.sound(Net.SOUND_STEP, 9, 4)
 	_expect(a.heard.size() == 1, "except right next to one (felt through the suit)")
 	a.heard.clear()
 	server.air.refill()
 	server.air.air[a.st.y * map.width + a.st.x] = 0.0
-	server.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
+	server.chat.sound(Net.SOUND_STEP, b.st.x, b.st.y, b.slot)
 	_expect(a.heard.is_empty(), "standing in a vacuum oneself, too")
 	server.air.refill()
 	a.heard.clear()
@@ -86,10 +88,51 @@ func _initialize() -> void:
 		door_heard = door_heard or int(h[0]) == Net.SOUND_DOOR
 	_expect(door_heard, "a door is heard opening")
 
+	print("who the server tells about whom")
+	b.st.dir = Net.DIR_NONE
+	a.st.dir = Net.DIR_NONE
+	a.st.place(8, 4)
+	a.st.facing = Net.DIR_RIGHT
+	_expect(_told(a, b, 14, 4) == "seen", "one ahead along the corridor is sent")
+	_expect(a.known.has(a.slot), "and so is one's own character")
+	_expect(_told(a, b, 6, 4) == "hidden", "one behind is not: the client is told it went out of sight")
+	_expect(_told(a, b, 9, 2) == "", "nor is one behind a wall")
+	_expect(_told(a, b, 7, 4) == "seen", "one right behind is felt, so sent")
+	server.ship.power_out_until = server.tick + 1000
+	server.replication.sight_changed()
+	_expect(not server.powered() and _told(a, b, 13, 4) == "hidden", "in the dark one 5 cells ahead is not sent")
+	b.slots[0] = Net.ITEM_FLASHLIGHT_ON
+	b.hand = 0
+	_expect(_told(a, b, 6, 4) == "seen", "unless their flashlight gives them away")
+	b.slots[0] = Net.ITEM_NONE
+	server.ship.power_out_until = 0
+	server.replication.sight_changed()
+	a.cond = Net.COND_CRIT
+	_expect(_told(a, b, 14, 4) == "hidden" and a.known.size() == 1, "one out cold is told about nobody but itself")
+	a.cond = Net.COND_OK
+
 	server.stop()
 	server.free()
 	print("SIGHTTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
 	quit(1 if failed > 0 else 0)
+
+
+func _told(viewer, other, x: int, y: int) -> String:
+	## Puts `other` at x, y and lets the server work out what it tells viewer's
+	## client now (as a send would): "seen", "hidden" (just went out of sight) or "".
+	other.st.place(x, y)
+	viewer.view_cx = viewer.st.x >> Net.CHUNK_SHIFT
+	viewer.view_cy = server.map.local_y(viewer.st.y) >> Net.CHUNK_SHIFT
+	var said := ""
+	for i in 2 + server.replication.SEEN_GRACE:
+		server.tick += 1
+		var recs: PackedByteArray = server.replication._characters(viewer, false)
+		for o in range(0, recs.size(), Net.ENT_BYTES):
+			if recs.decode_u16(o) == other.slot:
+				said = "hidden" if recs[o + 6] == Net.FACING_HIDDEN else "seen"
+	if said == "" and viewer.known.has(other.slot):
+		said = "seen"                        # (already known and unchanged)
+	return said
 
 
 func _expect(ok: bool, what: String) -> void:

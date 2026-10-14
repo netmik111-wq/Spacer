@@ -31,9 +31,9 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	var map := server.map
-	var p := server._new_player("Капитан")
+	var p := server.crew.new_player("Капитан")
 	p.take_job(Net.JOB_CAPTAIN)
-	var q := server._new_player("Матрос")
+	var q := server.crew.new_player("Матрос")
 	q.take_job(Net.JOB_CREWMAN)
 
 	print("spawn points")
@@ -47,7 +47,7 @@ func _initialize() -> void:
 	q.health = -150.0
 	_run(2)
 	_expect(q.cond == Net.COND_DEAD, "(the sailor is dead)")
-	server._respawn_from_reserve(q)
+	server.crew.respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_OK and server.reserve == Net.START_RESERVE - 1, "coming back takes one from the reserve")
 	_expect(q.job == Net.JOB_CREWMAN and q.st.access == Net.JOB_ACCESS[Net.JOB_CREWMAN], "in the same job")
 	var empty := true
@@ -57,21 +57,21 @@ func _initialize() -> void:
 	server.reserve = 0
 	q.health = -150.0
 	_run(2)
-	server._respawn_from_reserve(q)
+	server.crew.respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_DEAD, "with nobody in reserve nobody comes back")
 	_expect(server.over == Net.OVER_NONE, "while somebody is alive the campaign goes on")
 	_face(p, map.locker.keys()[0])
-	server.credits = Net.PRICE_CREW * 2
-	server._store_asked(p, Net.STORE_HIRE, 0)
+	server.ship.credits = Net.PRICE_CREW * 2
+	server.supplies.store_asked(p, Net.STORE_HIRE, 0)
 	_expect(server.reserve == 0, "nobody can be hired with no trader alongside")
-	var here := server.sector
+	var here := server.ship.sector
 	server.sectors.kind[here] = Sectors.TRADER
-	server.sectors.spot[here] = server.ship_pos
+	server.sectors.spot[here] = server.ship.pos
 	server.sectors.reach[here] = Sectors.DOCK_RANGE
 	_run(2)
-	server._store_asked(p, Net.STORE_HIRE, 0)
-	_expect(server.reserve == 1 and server.credits == Net.PRICE_CREW, "a trader hires one for %d credits" % Net.PRICE_CREW)
-	server._respawn_from_reserve(q)
+	server.supplies.store_asked(p, Net.STORE_HIRE, 0)
+	_expect(server.reserve == 1 and server.ship.credits == Net.PRICE_CREW, "a trader hires one for %d credits" % Net.PRICE_CREW)
+	server.crew.respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_OK and server.reserve == 0, "and the dead one comes back")
 
 	print("things on walls")
@@ -94,15 +94,15 @@ func _initialize() -> void:
 	_expect(reach_ok and from_behind > 0, "a thing on a wall is used from its room, from in front or a cell aside, not through the wall")
 
 	print("the hull")
-	_expect(server.hull == Net.HULL_MAX, "the hull starts whole")
+	_expect(server.ship.hull == Net.HULL_MAX, "the hull starts whole")
 	var cell: int = map.hull[0]
-	server.breach(cell)
-	_expect(server.hull == Net.HULL_MAX - Net.HULL_PER_HOLE, "a hole costs %d of it" % Net.HULL_PER_HOLE)
+	server.systems.breach(cell)
+	_expect(server.ship.hull == Net.HULL_MAX - Net.HULL_PER_HOLE, "a hole costs %d of it" % Net.HULL_PER_HOLE)
 	server.air.set_hole(cell, false)
 	server.air.refill()
-	server.credits = Net.PRICE_HULL
-	server._store_asked(p, Net.STORE_BUY_HULL, 0)
-	_expect(server.hull == Net.HULL_MAX - Net.HULL_PER_HOLE + Net.HULL_LOT or server.hull == Net.HULL_MAX, "a trader patches it for credits")
+	server.ship.credits = Net.PRICE_HULL
+	server.supplies.store_asked(p, Net.STORE_BUY_HULL, 0)
+	_expect(server.ship.hull == Net.HULL_MAX - Net.HULL_PER_HOLE + Net.HULL_LOT or server.ship.hull == Net.HULL_MAX, "a trader patches it for credits")
 	server.sectors.kind[here] = Sectors.EMPTY
 	_run(2)
 
@@ -133,13 +133,13 @@ func _initialize() -> void:
 	_run(2)
 	_expect(not server.powered(), "(no power)")
 	_expect(_walk_through(q, bridge, outside, 80), "without power its lock does not work: it is pushed open by hand")
-	server.broken.clear()
-	server._power_changed()
+	server.ship.broken.clear()
+	server.systems.power_changed()
 	q.st.place(outside.x, outside.y)
 	_run(Doors.HOLD_TICKS * 2 + 20)
 
 	print("skills")
-	var e := server._new_player("Инженер")
+	var e := server.crew.new_player("Инженер")
 	e.take_job(Net.JOB_ENGINEER)
 	_expect(e.skills[Net.SKILL_REPAIR] == Net.JOB_START_SKILL and e.skills[Net.SKILL_MEDICINE] == 0, "an engineer starts knowing repairs, nothing of medicine")
 	_expect(e.st.access & Net.ACCESS_ENGINE != 0 and e.st.access & Net.ACCESS_BRIDGE == 0, "with access to the engine room, not the bridge")
@@ -179,12 +179,12 @@ func _initialize() -> void:
 	_expect(_heard(e) == Net.CHAT_INTERCOM and _heard(q) == Net.CHAT_INTERCOM, "into an intercom: heard by every panel")
 	_say(q, "! а я далеко")
 	_expect(_heard(e) < 0, "only right by a panel")
-	server.broken[map.engine.keys()[0]] = true
-	server._power_changed()
+	server.ship.broken[map.engine.keys()[0]] = true
+	server.systems.power_changed()
 	_say(p, "! без питания")
 	_expect(_heard(e) < 0, "and only with power")
-	server.broken.clear()
-	server._power_changed()
+	server.ship.broken.clear()
+	server.systems.power_changed()
 	server.air.air[q.st.y * map.width + q.st.x] = 0.0
 	_say(p, "а в вакууме?")
 	_expect(_heard(q) < 0, "a vacuum carries no voice")
@@ -200,7 +200,7 @@ func _initialize() -> void:
 	_run(2)
 	_say(q, "я умер")
 	_expect(_heard(p) < 0, "the dead are not heard by the living")
-	var r := server._new_player("Ещё")
+	var r := server.crew.new_player("Ещё")
 	r.health = -150.0
 	_run(2)
 	r.said.clear()
@@ -212,22 +212,22 @@ func _initialize() -> void:
 	server.reserve = 0
 	for who in [p, q, e]:
 		who.health = -150.0
-	server._new_player("Бот").bot = true
+	server.crew.new_player("Бот").bot = true
 	_run(Net.TICK_HZ + 2)
 	_expect(server.over == Net.OVER_CREW_LOST, "the whole crew dead and nobody in reserve: the campaign is over")
-	server._respawn_from_reserve(q)
+	server.crew.respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_DEAD, "nobody comes back after it")
 	_face(p, map.chart.keys()[0])
-	server._jump_asked(p, server.sectors.neighbours(server.sector)[0])
-	_expect(server.jump_to == Net.NO_SECTOR, "and the ship jumps nowhere")
-	_expect(GameServer.voyage_text(Net.TICK_HZ * 60 * 75) == "1 ч 15 мин", "the summary tells how long it held out")
+	server.navigation.jump_asked(p, server.sectors.neighbours(server.ship.sector)[0])
+	_expect(server.ship.jump_to == Net.NO_SECTOR, "and the ship jumps nowhere")
+	_expect(GameServer.Crew.voyage_text(Net.TICK_HZ * 60 * 75) == "1 ч 15 мин", "the summary tells how long it held out")
 
 	print("a hull worn through")
 	server.over = Net.OVER_NONE
-	server.hull = Net.HULL_PER_HOLE
+	server.ship.hull = Net.HULL_PER_HOLE
 	var other: int = map.hull[map.hull.size() / 2]
-	server.breach(other)
-	_expect(server.hull == 0 and server.over == Net.OVER_WRECKED, "the hull worn to nothing ends the campaign")
+	server.systems.breach(other)
+	_expect(server.ship.hull == 0 and server.over == Net.OVER_WRECKED, "the hull worn to nothing ends the campaign")
 
 	print("CREWTEST %s" % ("ok" if failed == 0 else "FAILED: %d" % failed))
 	quit(0 if failed == 0 else 1)
@@ -316,15 +316,15 @@ func _face_door(who: RefCounted, door: int, from: Vector2i) -> void:
 func _mend_time(who: RefCounted) -> int:
 	## How long somebody with a spare part takes to mend the broken engine.
 	var engine: int = server.map.engine.keys()[0]
-	server.broken[engine] = true
-	server._power_changed()
+	server.ship.broken[engine] = true
+	server.systems.power_changed()
 	who.slots.fill(Net.ITEM_NONE)
 	who.add(Net.ITEM_PART)
 	who.add(Net.ITEM_PART)
 	_face(who, engine)
 	who.using = true
 	var n := 0
-	while server.broken.has(engine) and n < 2000:
+	while server.ship.broken.has(engine) and n < 2000:
 		server._tick()
 		n += 1
 	who.using = false
@@ -353,7 +353,7 @@ func _face(p: RefCounted, wall_cell: int) -> void:
 
 func _say(who: RefCounted, text: String) -> void:
 	who.chat_times.clear()               # (not the flood guard being tried here)
-	server._chat(who, text)
+	server.chat.talk(who, text)
 
 
 func _heard(who: RefCounted) -> int:

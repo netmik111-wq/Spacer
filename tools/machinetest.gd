@@ -38,26 +38,26 @@ func _initialize() -> void:
 	_expect(map.engine.size() == 1 and map.air_plant.size() == 1, "the ship has an engine and an air plant")
 	var engine: int = map.engine.keys()[0]
 	var plant: int = map.air_plant.keys()[0]
-	var p := server._new_player("Проверка")
+	var p := server.crew.new_player("Проверка")
 	_give(p, 3, 3)                       # the first tester is restocked before every part; supplies are tried at the end
 
 	print("the engine")
 	_face(p, map.helm.keys()[0])
-	server._helm_asked(p, true, Vector2(150, 150))
-	_expect(server.ship_moving, "with the engine running the helm sets a course")
+	server.navigation.helm_asked(p, true, Vector2(150, 150))
+	_expect(server.ship.moving, "with the engine running the helm sets a course")
 	_expect(server.director.fire(Director.ENGINE_FAULT) and server.engine_down(), "the director can stop the engine")
-	_expect(not server.ship_moving, "the ship stops when the engine does")
-	server._helm_asked(p, true, Vector2(150, 150))
-	_expect(not server.ship_moving, "the helm does nothing without the engine")
+	_expect(not server.ship.moving, "the ship stops when the engine does")
+	server.navigation.helm_asked(p, true, Vector2(150, 150))
+	_expect(not server.ship.moving, "the helm does nothing without the engine")
 	_face(p, map.chart.keys()[0])
-	var target: int = server.sectors.neighbours(server.sector)[0]
-	server._jump_asked(p, target)
-	_expect(server.jump_to == Net.NO_SECTOR, "no jump without the engine")
-	_expect(not server.break_console(), "a bridge console does not break while the engine is out")
+	var target: int = server.sectors.neighbours(server.ship.sector)[0]
+	server.navigation.jump_asked(p, target)
+	_expect(server.ship.jump_to == Net.NO_SECTOR, "no jump without the engine")
+	_expect(not server.systems.break_console(), "a bridge console does not break while the engine is out")
 
 	print("no power: every system stands still, none is broken")
 	_give(p, 3, 3)
-	_expect(server.broken.size() == 1, "only the engine itself is out of order")
+	_expect(server.ship.broken.size() == 1, "only the engine itself is out of order")
 	var air := server.air
 	var out_cell: int = map.air_plant[plant]
 	air.air[out_cell] = 0.5
@@ -80,7 +80,7 @@ func _initialize() -> void:
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
 	p.using = false
-	_expect(not server.engine_down() and server.broken.is_empty(), "holding use in front of the engine mends it")
+	_expect(not server.engine_down() and server.ship.broken.is_empty(), "holding use in front of the engine mends it")
 	before = air.total()
 	_run(5 * Net.TICK_HZ)
 	_expect(air.total() > before + 0.05, "the air plant makes air again")
@@ -92,11 +92,11 @@ func _initialize() -> void:
 	var quick := _ticks_through_a_door(p)
 	_expect(quick < Doors.OPEN_TICKS + 12, "doors open by themselves again: %.1f s to get through" % (quick / float(Net.TICK_HZ)))
 	_face(p, map.chart.keys()[0])
-	server._jump_asked(p, target)
-	_expect(server.jump_to == target, "the jump starts")
-	_expect(server.break_engine() and server.jump_to == Net.NO_SECTOR, "an engine failure breaks off a jump being charged")
+	server.navigation.jump_asked(p, target)
+	_expect(server.ship.jump_to == target, "the jump starts")
+	_expect(server.systems.break_engine() and server.ship.jump_to == Net.NO_SECTOR, "an engine failure breaks off a jump being charged")
 	_mend_all()
-	_expect(server.break_console() and not server.break_engine(), "the engine does not break while a bridge console is out")
+	_expect(server.systems.break_console() and not server.systems.break_engine(), "the engine does not break while a bridge console is out")
 	_mend_all()
 
 	print("the air plant")
@@ -130,7 +130,7 @@ func _initialize() -> void:
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
 	p.using = false
-	_expect(server.broken.is_empty(), "holding use in front of the plant mends it")
+	_expect(server.ship.broken.is_empty(), "holding use in front of the plant mends it")
 	air.refill()
 	_run(20 * Net.TICK_HZ)
 	var top := 0.0
@@ -150,7 +150,7 @@ func _initialize() -> void:
 			break
 	var door_down := map.door_at(7, 3)
 	var door_side := map.door_at(10, 1)
-	server.breach(hole)
+	server.systems.breach(hole)
 	var dropped := -1
 	for t in 20 * Net.TICK_HZ:
 		server._tick()
@@ -176,21 +176,21 @@ func _initialize() -> void:
 	p.st.dir = Net.DIR_NONE
 	_run(Net.FORCED_OPEN_TICKS + 2 * Net.TICK_HZ)
 	_expect(server.doors.is_sealed(door_down), "left alone, a forced shutter drops again and the door shuts")
-	server.seal_all()
+	server.systems.seal_all()
 	air.refill()
 	_run(2 * Net.TICK_HZ)
 	_expect(_sealed().is_empty(), "when the pressure evens out the shutters lift by themselves")
 
 	# without power nothing drops
-	server.break_engine()
-	server.breach(hole)
+	server.systems.break_engine()
+	server.systems.breach(hole)
 	_run(15 * Net.TICK_HZ)
 	_expect(_sealed().is_empty(), "without power no shutter drops")
 	_mend_all()
 	_run(Net.TICK_HZ)
 	_expect(_sealed().has(door_down), "with the power back they drop where they should")
-	server.break_engine()
-	server.seal_all()
+	server.systems.break_engine()
+	server.systems.seal_all()
 	air.refill()
 	_run(5 * Net.TICK_HZ)
 	_expect(_sealed().has(door_down), "and one that is down stays down while there is no power")
@@ -233,7 +233,7 @@ func _initialize() -> void:
 	_expect(server.doors.faulty[door_down] == 0 and server.doors.locked[door_down] == 0, "mended, it lifts by itself")
 	# one that will not drop: a breach on the other side leaves the door unguarded
 	server.doors.faulty[door_down] = 1
-	server.breach(hole)
+	server.systems.breach(hole)
 	_run(10 * Net.TICK_HZ)
 	_expect(server.doors.locked[door_down] == 0 and server.doors.locked[door_side] == 1, "a faulty shutter does not drop at a breach; its neighbour does")
 	p.tank = 1.0
@@ -243,8 +243,8 @@ func _initialize() -> void:
 	p.using = false
 	_run(Net.TICK_HZ)
 	_expect(server.doors.locked[door_down] == 1, "mended, it drops as it should")
-	_expect(server.director.fire(Director.SHUTTER_FAULT) and server._count(server.doors.faulty) == 1, "the director can make a shutter fail")
-	server.seal_all()
+	_expect(server.director.fire(Director.SHUTTER_FAULT) and server.systems._count(server.doors.faulty) == 1, "the director can make a shutter fail")
+	server.systems.seal_all()
 	air.refill()
 	for d in server.doors.faulty.size():
 		server.doors.faulty[d] = 0
@@ -254,38 +254,38 @@ func _initialize() -> void:
 	print("a passing power failure")
 	_give(p, 3, 3)
 	_face(p, map.helm.keys()[0])
-	server._helm_asked(p, true, Vector2(150, 150))
+	server.navigation.helm_asked(p, true, Vector2(150, 150))
 	_expect(server.director.fire(Director.POWER_GLITCH) and not server.powered(), "the director can cut the power for a moment")
-	_expect(server.broken.is_empty() and not server.engine_down(), "nothing is broken by it")
-	_expect(not server.ship_moving and server.doors.manual, "the ship stops and doors go manual, as with the engine out")
+	_expect(server.ship.broken.is_empty() and not server.engine_down(), "nothing is broken by it")
+	_expect(not server.ship.moving and server.doors.manual, "the ship stops and doors go manual, as with the engine out")
 	_run(16 * Net.TICK_HZ)
 	_expect(server.powered() and not server.doors.manual, "the power comes back by itself within 15 s")
-	server._helm_asked(p, true, Vector2(150, 150))
-	_expect(server.ship_moving, "and the helm works again")
+	server.navigation.helm_asked(p, true, Vector2(150, 150))
+	_expect(server.ship.moving, "and the helm works again")
 
 	print("supplies")
-	var q := server._new_player("Кладовщик")
+	var q := server.crew.new_player("Кладовщик")
 	_expect(q.count(Net.ITEM_PATCH) == 0 and q.count(Net.ITEM_PART) == 0 and map.locker.size() == 1, "the ship has a supply locker")
-	var had_patches: int = server.store[Net.ITEM_PATCH]
-	var had_parts: int = server.store[Net.ITEM_PART]
-	server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
+	var had_patches: int = server.ship.store[Net.ITEM_PATCH]
+	var had_parts: int = server.ship.store[Net.ITEM_PART]
+	server.supplies.store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
 	_expect(q.count(Net.ITEM_PATCH) == 0, "nothing can be taken from across the ship")
 	_face(q, map.locker.keys()[0])
 	for i in 2:
-		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
-		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PART)
+		server.supplies.store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
+		server.supplies.store_asked(q, Net.STORE_TAKE, Net.ITEM_PART)
 	_expect(q.count(Net.ITEM_PATCH) == 2 and q.count(Net.ITEM_PART) == 2, "at the locker a crew member takes patches and parts into their slots")
 	for i in 5:
-		server._store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
+		server.supplies.store_asked(q, Net.STORE_TAKE, Net.ITEM_PATCH)
 	var open := Net.BASE_SLOTS + Net.POCKETS             # a jumpsuit, no backpack
 	_expect(q.count(Net.ITEM_NONE) == 0 and q.count(Net.ITEM_PATCH) == open - 2, "but no more than there are slots for (%d)" % open)
-	_expect(server.store[Net.ITEM_PATCH] == had_patches - q.count(Net.ITEM_PATCH) and server.store[Net.ITEM_PART] == had_parts - 2, "and the locker has that much less")
-	server._store_asked(q, Net.STORE_PUT_BACK, 0)
-	_expect(q.count(Net.ITEM_NONE) == open and server.store[Net.ITEM_PATCH] == had_patches and server.store[Net.ITEM_PART] == had_parts, "everything can be put back")
+	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches - q.count(Net.ITEM_PATCH) and server.ship.store[Net.ITEM_PART] == had_parts - 2, "and the locker has that much less")
+	server.supplies.store_asked(q, Net.STORE_PUT_BACK, 0)
+	_expect(q.count(Net.ITEM_NONE) == open and server.ship.store[Net.ITEM_PATCH] == had_patches and server.ship.store[Net.ITEM_PART] == had_parts, "everything can be put back")
 
 	# a hole needs a patch
 	_give(p, 0, 0)
-	server.breach(hole)
+	server.systems.breach(hole)
 	p.tank = 1.0
 	p.supply = true
 	p.st.place(hole % map.width, 1)
@@ -303,22 +303,22 @@ func _initialize() -> void:
 	_run(2 * Net.TICK_HZ)
 
 	# a machine without a spare part: slower, but possible
-	server.break_air_plant()
+	server.systems.break_air_plant()
 	_give(p, 0, 0)
 	_face(p, plant)
 	p.using = true
 	_run(Net.REPAIR_TICKS + 5)
-	_expect(not server.broken.is_empty(), "without a spare part a repair is not done in the usual time")
+	_expect(not server.ship.broken.is_empty(), "without a spare part a repair is not done in the usual time")
 	_run(Net.REPAIR_TICKS * (Net.NO_PART_SLOWER - 1))
-	_expect(server.broken.is_empty(), "but it is done in %d times as long" % Net.NO_PART_SLOWER)
-	server.break_air_plant()
+	_expect(server.ship.broken.is_empty(), "but it is done in %d times as long" % Net.NO_PART_SLOWER)
+	server.systems.break_air_plant()
 	_give(p, 0, 2)
 	_run(Net.REPAIR_TICKS + 5)
 	p.using = false
-	_expect(server.broken.is_empty() and p.count(Net.ITEM_PART) == 1, "with a spare part it is quick, and the part is used up")
+	_expect(server.ship.broken.is_empty() and p.count(Net.ITEM_PART) == 1, "with a spare part it is quick, and the part is used up")
 
 	# the air plant has only so much air to give
-	server.store_air = 0.5
+	server.ship.store_air = 0.5
 	for tester: RefCounted in [p, q]:    # both breathe from their tanks while the ship is empty
 		tester.tank = 1.0
 		tester.supply = true
@@ -326,67 +326,67 @@ func _initialize() -> void:
 		air.air[i] = 0.0
 	air.wake()
 	_run(20 * Net.TICK_HZ)
-	_expect(server.store_air == 0.0 and absf(air.total() - 0.5) < 0.01, "the air plant stops when its store is empty (gave %.2f)" % air.total())
+	_expect(server.ship.store_air == 0.0 and absf(air.total() - 0.5) < 0.01, "the air plant stops when its store is empty (gave %.2f)" % air.total())
 	air.refill()
 
 	# a trader sells, a station restocks
-	var here := server.sector
-	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
-	_expect(server.store[Net.ITEM_PATCH] == had_patches, "nothing can be bought with no trader alongside")
+	var here := server.ship.sector
+	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches, "nothing can be bought with no trader alongside")
 	server.sectors.kind[here] = Sectors.TRADER
-	server.sectors.spot[here] = server.ship_pos
+	server.sectors.spot[here] = server.ship.pos
 	server.sectors.reach[here] = Sectors.DOCK_RANGE
 	_run(2)
-	_expect(server.can_trade(), "docked with a trader, the ship can trade")
-	var money := server.credits
-	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
-	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PART)
-	server._store_asked(q, Net.STORE_BUY_AIR, 0)
-	_expect(server.store[Net.ITEM_PATCH] == had_patches + 1 and server.store[Net.ITEM_PART] == had_parts + 1 and server.store_air == Net.AIR_LOT
-		and server.credits == money - Items.price(Net.ITEM_PATCH) - Items.price(Net.ITEM_PART) - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.credits)
-	server.credits = 0
-	server._store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
-	_expect(server.store[Net.ITEM_PATCH] == had_patches + 1, "and not without credits")
+	_expect(server.supplies.can_trade(), "docked with a trader, the ship can trade")
+	var money := server.ship.credits
+	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PART)
+	server.supplies.store_asked(q, Net.STORE_BUY_AIR, 0)
+	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches + 1 and server.ship.store[Net.ITEM_PART] == had_parts + 1 and server.ship.store_air == Net.AIR_LOT
+		and server.ship.credits == money - Items.price(Net.ITEM_PATCH) - Items.price(Net.ITEM_PART) - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.ship.credits)
+	server.ship.credits = 0
+	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
+	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches + 1, "and not without credits")
 	server.sectors.kind[here] = Sectors.STATION
-	server.in_reach = false
+	server.ship.in_reach = false
 	_run(2)
-	_expect(server.store_air == Net.STORE_AIR_FULL, "docking at a supply station restocks the air plant")
+	_expect(server.ship.store_air == Net.STORE_AIR_FULL, "docking at a supply station restocks the air plant")
 	server.sectors.kind[here] = Sectors.EMPTY
 	server.sectors.reach[here] = 0
 	_run(2)
-	target = server.sectors.neighbours(server.sector)[0]
+	target = server.sectors.neighbours(server.ship.sector)[0]
 	var target_cell: Vector2i = server.sectors.cell[target]
-	server.start_jump(target, "Проверка")
+	server.navigation.start_jump(target, "Проверка")
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.sectors.cell[server.sector] == target_cell and server.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
+	_expect(server.sectors.cell[server.ship.sector] == target_cell and server.ship.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
 
 	print("fuel")
-	_expect(server.fuel() == Items.stock(Net.ITEM_FUEL) - 1, "the jump burned one can of fuel (%d left)" % server.fuel())
+	_expect(server.ship.fuel() == Items.stock(Net.ITEM_FUEL) - 1, "the jump burned one can of fuel (%d left)" % server.ship.fuel())
 	_run(Net.DRIVE_REST_TICKS + 2)
 	_face(q, map.chart.keys()[0])
-	target = server.sectors.neighbours(server.sector)[0]
-	var stayed := server.sector
-	server.store[Net.ITEM_FUEL] = 0
-	server._jump_asked(q, target)
-	_expect(server.jump_to == Net.NO_SECTOR, "no jump with no fuel in the locker")
-	server.store[Net.ITEM_FUEL] = 1
-	server._jump_asked(q, target)
-	_expect(server.jump_to == target, "with a can in the locker the jump starts")
-	server.store[Net.ITEM_FUEL] = 0                  # somebody takes it out while the drive charges
+	target = server.sectors.neighbours(server.ship.sector)[0]
+	var stayed := server.ship.sector
+	server.ship.store[Net.ITEM_FUEL] = 0
+	server.navigation.jump_asked(q, target)
+	_expect(server.ship.jump_to == Net.NO_SECTOR, "no jump with no fuel in the locker")
+	server.ship.store[Net.ITEM_FUEL] = 1
+	server.navigation.jump_asked(q, target)
+	_expect(server.ship.jump_to == target, "with a can in the locker the jump starts")
+	server.ship.store[Net.ITEM_FUEL] = 0                  # somebody takes it out while the drive charges
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.jump_to == Net.NO_SECTOR and server.sector == stayed, "a jump whose last can was taken out of the locker fails")
+	_expect(server.ship.jump_to == Net.NO_SECTOR and server.ship.sector == stayed, "a jump whose last can was taken out of the locker fails")
 	server.director._watch_fuel(server.tick)
-	_expect(server.fuel() == 0, "a ship with no fuel aboard does not find some at once")
+	_expect(server.ship.fuel() == 0, "a ship with no fuel aboard does not find some at once")
 	server.director._watch_fuel(server.tick + int(Director.RESCUE_SECONDS * Net.TICK_HZ))
-	_expect(server.fuel() == Director.RESCUE_FUEL, "but after %d s a drifting container brings %d cans" % [int(Director.RESCUE_SECONDS), Director.RESCUE_FUEL])
-	server.store[Net.ITEM_FUEL] = 0
-	here = server.sector
+	_expect(server.ship.fuel() == Director.RESCUE_FUEL, "but after %d s a drifting container brings %d cans" % [int(Director.RESCUE_SECONDS), Director.RESCUE_FUEL])
+	server.ship.store[Net.ITEM_FUEL] = 0
+	here = server.ship.sector
 	server.sectors.kind[here] = Sectors.STATION
-	server.sectors.spot[here] = server.ship_pos
+	server.sectors.spot[here] = server.ship.pos
 	server.sectors.reach[here] = Sectors.DOCK_RANGE
-	server.in_reach = false
+	server.ship.in_reach = false
 	_run(2)
-	_expect(server.fuel() == Net.STATION_FUEL, "a supply station tops the fuel up to %d cans" % Net.STATION_FUEL)
+	_expect(server.ship.fuel() == Net.STATION_FUEL, "a supply station tops the fuel up to %d cans" % Net.STATION_FUEL)
 	server.sectors.kind[here] = Sectors.EMPTY
 	server.sectors.reach[here] = 0
 	_run(2)
@@ -403,30 +403,30 @@ func _initialize() -> void:
 	q.st.place(9, 4)
 	_give(p, 0, 0)
 	_give(q, 2, 1)
-	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_SEARCH, q.slot, server.tick)
 	_run(1)
 	_expect(p.searching < 0, "somebody on their feet cannot be searched")
-	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, q.slot, server.tick)
 	_run(1)
 	_expect(p.dragging < 0, "nor hauled")
 	q.health = -40.0                     # unconscious now
 	_run(2)
 	_expect(q.cond == Net.COND_CRIT, "(the other tester is unconscious)")
-	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_SEARCH, q.slot, server.tick)
 	_run(1)
 	_expect(p.searching == q.slot, "somebody unconscious next to us can be searched")
-	server._loot_asked(p, true, q.slots.find(Net.ITEM_PART))
+	server.looting.loot_asked(p, true, q.slots.find(Net.ITEM_PART))
 	_expect(p.count(Net.ITEM_PART) == 1 and q.count(Net.ITEM_PART) == 0, "a thing is taken from their slot into ours")
-	server._loot_asked(p, false, p.slots.find(Net.ITEM_PART))
+	server.looting.loot_asked(p, false, p.slots.find(Net.ITEM_PART))
 	_expect(p.count(Net.ITEM_PART) == 0 and q.count(Net.ITEM_PART) == 1, "and can be put back")
 	p.st.place(6, 4)
 	_run(1)
 	_expect(p.searching < 0, "the search ends when we are no longer next to them")
-	server._loot_asked(p, true, 0)
+	server.looting.loot_asked(p, true, 0)
 	_expect(p.count(Net.ITEM_PATCH) == 0, "and nothing can be taken from a distance")
 
 	p.st.place(8, 4)
-	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, q.slot, server.tick)
 	_run(1)
 	_expect(p.dragging == q.slot and q.dragged_by == p.slot, "somebody unconscious next to us can be taken hold of")
 	p.st.dir = Net.DIR_LEFT
@@ -442,12 +442,12 @@ func _initialize() -> void:
 	p.st.dir = Net.DIR_NONE
 	_run(Net.DRAG_TICKS)
 	_expect(p.st.x == 5 and p.st.y == 5 and p.dragging == q.slot, "(we are on the ladder with them in tow)")
-	server._climb(p)
+	server.movement.climb(p)
 	_expect(map.deck_of(p.st.y) == 1 and q.st.x == p.st.x and q.st.y == p.st.y, "they come down a ladder with us")
-	server._hands_asked(p, GameServer.HAND_DRAG, Net.NOBODY, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, Net.NOBODY, server.tick)
 	_run(1)
 	_expect(p.dragging < 0 and q.dragged_by < 0 and not p.st.slow, "letting go frees both")
-	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, q.slot, server.tick)
 	_run(1)
 	q.health = 60.0                      # they come round
 	_run(2)
@@ -458,19 +458,19 @@ func _initialize() -> void:
 	_run(2)
 	_expect(q.cond == Net.COND_DEAD, "(the other tester is dead)")
 	p.st.place(q.st.x, q.st.y)
-	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
-	server._hands_asked(p, GameServer.HAND_SEARCH, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_SEARCH, q.slot, server.tick)
 	_run(1)
-	server._hands_asked(p, GameServer.HAND_DRAG, q.slot, server.tick)
+	server.looting.hands_asked(p, GameServer.Looting.HAND_DRAG, q.slot, server.tick)
 	_run(1)
 	var carried := q.count(Net.ITEM_PATCH)
-	server._respawn(q)
+	server.crew.respawn(q)
 	var body: RefCounted = server.players[p.dragging] if p.dragging >= 0 else null
 	_expect(q.cond == Net.COND_OK and q.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS,
 		"the one who comes back has nothing (only the first crew comes with gear)")
 	_expect(body != null and body.corpse and body.count(Net.ITEM_PATCH) == carried and carried > 0, "the body keeps what they carried (%d patches)" % carried)
 	_expect(p.searching == body.slot if body != null else false, "and whoever was hauling and searching goes on with the body")
-	server._loot_asked(p, true, body.slots.find(Net.ITEM_PATCH))
+	server.looting.loot_asked(p, true, body.slots.find(Net.ITEM_PATCH))
 	_expect(p.count(Net.ITEM_PATCH) == 1, "a body can be robbed")
 
 	server.stop()
@@ -499,8 +499,8 @@ func _give(who: RefCounted, patches: int, parts: int) -> void:
 
 
 func _mend_all() -> void:
-	server.broken.clear()
-	server._power_changed()
+	server.ship.broken.clear()
+	server.systems.power_changed()
 
 
 func _sealed() -> Array:

@@ -528,7 +528,7 @@ func _leave_afterimage(id: int, sprite: Sprite2D, _at: Vector2i) -> void:
 	ghost.modulate = Color(0.75, 0.8, 0.9, 0.55)
 	sprite.get_parent().add_child(ghost)
 	var s := client.sample(id)
-	var cell := Vector2i(roundi(float(s[0].x)), roundi(float(s[0].y))) if not s.is_empty() else Vector2i(-1, -1)
+	var cell: Vector2i = Vector2i(roundi(float(s[0].x)), roundi(float(s[0].y))) if not s.is_empty() else client.hidden.get(id, Vector2i(-1, -1))
 	_afterimages[id] = [ghost, AFTERIMAGE_SECONDS, cell]
 
 
@@ -540,7 +540,7 @@ func _fade_afterimages(delta: float) -> void:
 		a[1] = float(a[1]) - delta
 		var cell: Vector2i = a[2]
 		var view: Sprite2D = _views.get(id)
-		var gone := float(a[1]) <= 0.0 or (view != null and view.visible) or not client.ents.has(id)
+		var gone := float(a[1]) <= 0.0 or (view != null and view.visible) or not (client.ents.has(id) or client.hidden.has(id))
 		if not gone and cell.x >= 0 and can_see(cell.x, cell.y):
 			gone = true                      # we look there now: what is there is seen as it is
 		var ghost: Sprite2D = a[0]
@@ -1058,6 +1058,10 @@ func _process(delta: float) -> void:
 	_fade_afterimages(delta)
 	for id: int in _views.keys():
 		if not client.ents.has(id):
+			if bool(_shown.get(id, false)) and client.hidden.has(id) and id != client.my_id:
+				# the server stopped telling us about it the moment we lost sight of it
+				var gone_sprite: Sprite2D = _views[id]
+				_leave_afterimage(id, gone_sprite, Vector2i(roundi(gone_sprite.position.x), roundi(gone_sprite.position.y)))
 			_shown.erase(id)
 			(_views[id] as Sprite2D).queue_free()
 			(_labels[id] as Label).queue_free()

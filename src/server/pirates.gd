@@ -59,11 +59,11 @@ func board(how_many: int) -> bool:
 	if ways.is_empty() or how_many <= 0:
 		return false
 	var way: Array = ways[_rng.randi_range(0, ways.size() - 1)]
-	server.breach(way[0])
+	server.systems.breach(way[0])
 	var inside: Vector2i = way[1]
 	for i in mini(how_many, MAX_ABOARD):
 		spawn(inside.x, inside.y, _rng.randf() < 0.6)
-	server._ship_says("Тревога! Абордаж: пираты прорезали обшивку и идут на борт (%s, их %d)." % [
+	server.chat.say("Тревога! Абордаж: пираты прорезали обшивку и идут на борт (%s, их %d)." % [
 		map.deck_names[map.deck_of(inside.y)].to_lower(), mini(how_many, MAX_ABOARD)])
 	return true
 
@@ -72,7 +72,7 @@ func spawn(x: int, y: int, gunner: bool):
 	## One pirate in that cell: a gunner with a pistol and a spare magazine, or
 	## a brawler with a baton. Either may carry a patch for wounds.
 	count += 1
-	var p = server._alloc("Пират %d" % count)
+	var p = server.crew.alloc("Пират %d" % count)
 	p.pirate = true
 	p.colour = Net.SUIT_COLOURS + _rng.randi_range(0, Net.PIRATE_COLOURS - 1)
 	p.st.place(x, y)
@@ -84,8 +84,7 @@ func spawn(x: int, y: int, gunner: bool):
 	if _rng.randf() < 0.5:
 		p.add(Net.ITEM_MEDPATCH)
 	p.ai_fire_tick = server.tick + _rng.randi_range(10, 30)
-	server._record(p)
-	server._announce_join(p, null)
+	server.crew.announce_join(p, null)
 	return p
 
 
@@ -154,7 +153,7 @@ func think(p) -> void:
 		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
 		if patch >= 0 and now >= p.ready_tick:
 			p.hand = patch
-			server.use_at(p, now, here)
+			server.combat.use_at(p, now, here)
 			return
 		if target != null:
 			_step_away(p, Vector2(target.st.x, target.st.y))
@@ -165,7 +164,7 @@ func think(p) -> void:
 		var rounds: int = Items.rounds(item)
 		if rounds == 0 and p.slots.has(Net.ITEM_MAG):
 			_stop(p)
-			server.use_at(p, now, there)                  # reload
+			server.combat.use_at(p, now, there)                  # reload
 			return
 		if rounds > 0 and dist <= SHOOT_FROM:
 			_stop(p)
@@ -173,7 +172,7 @@ func think(p) -> void:
 			if now >= p.ai_fire_tick and now >= p.ready_tick:
 				p.ai_fire_tick = now + _rng.randi_range(FIRE_GAP[0], FIRE_GAP[1])
 				var aim: Vector2 = there + Vector2(_rng.randf_range(-AIM_SPREAD, AIM_SPREAD), _rng.randf_range(-AIM_SPREAD, AIM_SPREAD))
-				server.use_at(p, now, aim)
+				server.combat.use_at(p, now, aim)
 			return
 		if rounds <= 0 and absi(target.st.x - p.st.x) + absi(target.st.y - p.st.y) == 1:
 			_stop(p)
@@ -181,7 +180,7 @@ func think(p) -> void:
 			if p.slots.has(Net.ITEM_BATON):
 				p.hand = p.slots.find(Net.ITEM_BATON)
 			if now >= p.ready_tick and Items.INFO.has(p.in_hand()) and Items.INFO[p.in_hand()].has("blow"):
-				server.use_at(p, now, there)
+				server.combat.use_at(p, now, there)
 			return
 	# otherwise walk: to the one it hunts, to where it heard something, or about the ship
 	if p.ai_goal == Vector2i(p.st.x, p.st.y) or p.ai_goal.x < 0:
@@ -195,7 +194,7 @@ func think(p) -> void:
 		return
 	if p.ai_step == -1:
 		_stop(p)
-		server._climb(p)
+		server.movement.climb(p)
 		p.ai_plan_tick = 0
 	else:
 		p.st.dir = p.ai_step

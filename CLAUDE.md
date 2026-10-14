@@ -113,6 +113,7 @@ new items for slots (tools, medkit, spare tank).
 
 ## Checks before shipping
 
+    tools/runtests.sh          (all 13 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -138,6 +139,14 @@ no errors in the logs. Corrected steps: 0–0.3% direct, up to 1% with 2% loss
 (since v35 closed doors added rare corrections near them), up to 2–3% with 5% loss and 210 ms ping. The test breaches the hull itself at the sixth second;
 the director is off in it.
 
+Load benchmark (not needed for every build; rerun after changes to networking or the tick):
+`GODOT=... tools/bench.sh 32 60` starts a server and 32 windowless clients, and prints how long
+logging in takes and how long a server tick takes (the budget is 50 ms). With `PIN=1` (default)
+the server gets CPU 0 to itself. Results are in `docs/BENCHMARK.md`.
+
+GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
+request. A red check on GitHub means one of the 13 scripts failed; its log is attached to the run.
+
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
 message; a killed game does not leave the server running forever; creating a game again works.
@@ -150,8 +159,23 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - Our own binary protocol on top of `ENetConnection` (`src/shared/net.gd`); Godot's high-level networking
   is not used. When the packet format changes, increase `PROTOCOL`.
 - The world is sent in 16×16-tile chunks; the client gets the 3×3 chunks around itself: full
-  contents when a chunk enters view, then only changes. Characters, doors, breaches
-  and air all travel this way. Every 2 seconds the server sends checksums, and the client compares.
+  contents when a chunk enters view, then only changes. Doors, breaches, things on the floor
+  and air travel this way. Characters inside those chunks are sent per client, only those it may
+  see (see "The server decides who each client sees"). Every 2 seconds the server sends checksums,
+  and the client compares.
+- **The server is split by topic** (since v39). `src/server/game_server.gd` keeps the state of the
+  world, the network loop and the order of a tick; everything else is in parts it keeps one of each:
+  `chat`, `crew`, `movement`, `inventory`, `looting`, `combat`, `repairs`, `systems`, `navigation`,
+  `supplies`, `replication` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`).
+  A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
+  parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
+- **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
+  `GameServer.ship` (id `Net.CREW_SHIP`): its place in space and course, power, breakdowns, pumps,
+  supplies, money, hull. Another ship alongside is `Derelict.ship` with a fresh id each time one comes.
+  `S_SHIPS` lists the ships (replaced `S_OTHER`); every packet about one ship (`S_NAV`, `S_HELM`,
+  `S_DEVICES`, `S_POWER`, `S_STORE`, `S_GUNS`) carries its id after the kind byte, and the client
+  takes those about the ship it is on (`GameClient.my_ship`, from `S_WELCOME`). This is groundwork for
+  several crewed ships in one world (the vision's scale); there is still one now.
 - Decks lie in one grid, one below another (`ShipMap`): deck 0 is the top and starts
   at row 0, the next at row `deck_stride` (a multiple of 16; there is always an
   empty row between decks). So a tile is given by x and y everywhere, and movement, doors, breaches
@@ -192,7 +216,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **The space suit** (until build v29 it was always worn) is now clothing, but everyone arrives in it.
   Only the oxygen supply is controlled, like "internals" in SS13: the author has lamps
   `o2_on` and `o2_off` for this. The supply protects against both suffocation and pressure, and
-  doesn't turn on without a suit (`GameServer.set_supply`). There is deliberately no automation.
+  doesn't turn on without a suit (`Inventory.set_supply`). There is deliberately no automation.
 - **Clothing is three places** (`Player.worn`, `Net.WEAR_*`), separate from slots. There are now
   12 slots: 6 always, 2 pockets with a jumpsuit, 4 with a backpack (`Player.usable`; the client repeats
   the rule in `GameClient.usable`). A worn suit is stored as `ITEM_SUIT`, with oxygen
@@ -203,7 +227,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **The oxygen rack** is a red box on the wall (`console_2` from the mockup), digit 2 in the map.
 - **One action key.** The client sends only "pressed/released"; the server looks at the tile
   in front of the character: a breach gets repaired, a rack refills. Add new objects there too
-  (`GameServer._update_work`), and the hint in `GameClient.use_target`.
+  (`Repairs.update`), and the hint in `GameClient.use_target`.
 - **A body is a separate record** with its own number and the kind "body" in the crew list.
 - **Bridge consoles are wall tiles:** the green screen (`console_1`, digit 1 in the map) is
   the sector map, the panel with lights (`console_3`, digit 3) is ship control.
@@ -212,13 +236,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   and a radius: a meteor stream's circle or docking range. The ship moves in a straight line
   at constant speed, so the server sends its position only when the course changes,
   and the client computes the rest (`GameClient.ship_pos`). Sector danger for the director
-  takes the ship's position into account (`GameServer.danger_kind`).
+  takes the ship's position into account (`Navigation.danger_kind`).
 - **An ordered jump cancels the in-sector course** (the author's remark): a moving ship
-  coasts straight until the jump rather than toward the old point (`start_jump` moves the target
+  coasts straight until the jump rather than toward the old point (`Navigation.start_jump` moves the target
   to the sector's edge), the course line from the control console disappears, the helm doesn't respond.
-- **Everything broken** (consoles, engine, air plant) lives in `GameServer.broken`
+- **Everything broken** (consoles, engine, air plant) lives in `Ship.broken`
   keyed by wall tile and is sent in full on change. Repaired with the action key, like a breach.
-  The "not both at once" rule is in `can_break`: bridge consoles and the engine break one at a time.
+  The "not both at once" rule is in `Systems.can_break`: bridge consoles and the engine break one at a time.
   For the consoles, this guarantees an escape route from the author's vision.
 - **The engine powers the whole ship** (tile `engine`, digit 6 in the map). The author's word: when
   the engine shuts down, absolutely all systems stop working, but don't break.
@@ -240,12 +264,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   open would be the same to the player as a fallen faulty shutter.
 - **The server tells the client about power** (`S_POWER`); the client doesn't infer it from the
   engine's state: power can be lost with an intact engine (the "Power failure" event).
-  The server checks it every tick in `_power_changed`.
+  The server checks it every tick in `Systems.power_changed`.
 - **The shutter slams an open door early.** This breaks the "Pitfalls" rule about
   `Doors.HOLD_TICKS`: a player walking into the door at that moment gets a one-step correction.
   Accepted: it happens only with a fresh breach.
 - **The air plant** (tile `air_plant`, digit 7) adds air to the tile in front of it
-  (`Air.PLANT_PER_STEP`), not above normal, and spends the ship's store on it (`store_air`).
+  (`Air.PLANT_PER_STEP`), not above normal, and spends the ship's store on it (`Ship.store_air`).
 - **Inventory is six slots, one item per slot** (`Player.slots`, `Net.ITEM_*`). Slots
   travel to the client in the wellbeing record. An item lies in a slot (of a living person or a body), as a count
   in a locker, or on the floor (`GameServer.floor_things`: tile → up to `Net.FLOOR_STACK` items,
@@ -258,7 +282,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **The hand is chosen by the client** (`C_HAND`); the server only follows it and doesn't send it back:
   otherwise fast switching would flicker. A taken item goes into the hand if it's empty (`Player.add`).
 - **E first targets the object on the wall ahead, then a downed person, then an item on the floor, then a ladder**
-  (`GameServer._press`, `_pick_up`; the client uses the same order in `use_target`). You can't pick up
+  (`Repairs.press`, `Inventory.pick_up`; the client uses the same order in `use_target`). You can't pick up
   an item a person is lying on: E then opens the search.
 - **Light is computed per tile** (`Sight.cone`): a tile is lit if it falls into the cone
   even by an edge and the straight line to it doesn't pass through a wall or closed door. That's how tiles
@@ -271,21 +295,30 @@ The parameters for these checks are described in the header of `src/main.gd`.
   blue is flashlights and flashes (they light only where green is, i.e. where we look), green is
   the field of view. Warm beam light (`_shade`) is also drawn only within the field of view. Whoever disappears
   from view leaves a silhouette for 10 s (`_afterimages`, the author's request, build v30).
-- **The field of view is so far only on the client's screen.** The server still sends everyone in the chunk
-  view, and the client hides those who can't be seen (`WorldView.can_see`). A cunning player could
-  peek at this; real protection (the server not sending invisible ones) is postponed until playing with strangers.
-  Sight and light are computed by the shared `Sight` code, which pirates will also use.
-- **Sound travels through air** (I proposed it, the author accepted "silence in vacuum"): `GameServer.hears`
+- **The server decides who each client sees** (since v39, the author's request). A client is sent
+  only the characters its own one sees by the same rules the client draws by (`Replication.sees`
+  repeats `WorldView.can_see`: the cone, walls and shut doors, the dark, see-through floors), those
+  right next to it (felt: searching and dragging need them, as with pirates), and those on its deck
+  with a lit flashlight (the beam is seen from anywhere, and the client draws beams from characters
+  it knows). The server's cone is 12° wider each side and a character stays sent 4 ticks after going
+  out of sight: the client judges sight on its own predicted clock, so without the margin people
+  would pop in late at the edge. One going out of sight is sent as `Net.FACING_HIDDEN` with the cell
+  where it was last seen, and the client leaves the silhouette there (`GameClient.hidden`). Bodies are
+  characters too and follow the same rule. Shots (`S_SHOT`) and sounds still reach everyone in range:
+  they are heard, not seen. Sight is cached per pair until either moves or turns or
+  `Replication.sight_changed()` is called; in the dark it is worked out every tick.
+  Sight and light are computed by the shared `Sight` code, which pirates also use.
+- **Sound travels through air** (I proposed it, the author accepted "silence in vacuum"): `Chat.hears`
   requires air at the source and at the listener, except very close (`SOUND_CONTACT`).
   A sound doesn't say who made it; your own sounds aren't sent. Only your own deck is heard.
-- **A shot is instant, with time rewind** (`GameServer.use_at`, `_shoot`, `place_at`):
+- **A shot is instant, with time rewind** (`Combat.use_at`, `Combat._shoot`, `Combat.place_at`):
   the client sends the tick at which it saw the others, and the server checks the hit at that position.
-  Bullets are stopped by any impassable tile, including a window (`_stops_shot`).
+  Bullets are stopped by any impassable tile, including a window (`Combat._stops_shot`).
 - **A fatal wound takes health one below −100**, otherwise the next breath of good
   air would "resurrect" the dead. A pirate killed in this tick no longer thinks.
 - **Wounds are separate from health** (`Player.wounds`, groundwork for the author's item 2.1: damage types).
   Health rises by itself only up to `100 − wounds`; wounds are closed only by healing
-  (`GameServer.heal`). The medkit heals with a delay (`_update_treatment`, progress shows as
+  (`Combat.heal`). The medkit heals with a delay (`Combat.update_treatment`, progress shows as
   the work bar); its charges are part of the item number, like ammo. Only whole items
   go back into the locker (`Items.whole`), so a used medkit can't be swapped for a new one.
 - **Pirates are ordinary Players with the `pirate` flag** (kind in the list `KIND_PIRATE`, colors are three
@@ -295,15 +328,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
   half as often and with one pirate fewer.
 - **Searching and dragging** work only with a downed person (unconscious or dead) in your own
   or a neighboring tile. Presses carry the client's tick number, like the ladder
-  (`GameServer._hands_asked`). A search works as a subscription: the server sends the downed person's slots while
+  (`Looting.hands_asked`). A search works as a subscription: the server sends the downed person's slots while
   the searcher is near (`S_SEARCH`), and closes it itself.
 - **The dragger walks half as fast** (`Mover.State.slow`, `Net.DRAG_TICKS`): this is part of the movement
   rule, and the client predicts it. The flag travels in the character's look byte (`LOOK_SLOW`),
   so others' steps are drawn at the right length too. The body moves into the tile the dragger
-  left (`_haul`); on the dragger's screen it is drawn in step with their own steps
+  left (`Looting.haul`); on the dragger's screen it is drawn in step with their own steps
   (`GameClient.sample`), otherwise it would lag by the ping.
 - **The ship's store is shared and lives in the supply locker** (tile `locker`, digit 8): patches,
-  spare parts, air for the plant, credits (`GameServer.store_*`, `credits`). The locker opens with a panel, like consoles, but without power; buying from the trader goes through
+  spare parts, air for the plant, credits (`Ship.store`, `Ship.store_air`, `Ship.credits`). The locker opens with a panel, like consoles, but without power; buying from the trader goes through
   the same panel and requires power. I designed this; the author approved the step's whole concept.
 - **Without a spare part you can repair, but three times slower**, and without a patch a breach can't be sealed.
   So a ship with a dead engine and an empty locker doesn't hit a dead end, while losing
@@ -311,15 +344,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **Fuel is an item in the supply locker** (`Net.ITEM_FUEL`), not a separate number: that way the trader
   sells it automatically, it lies as loot on other ships, it can be carried away and put
   back. A jump checks for a canister when ordered and burns it at the moment of the jump
-  (`GameServer._update_jump`); if the last one is removed during charging, the jump fails.
+  (`Navigation.update_jump`); if the last one is removed during charging, the jump fails.
   No dead end: with not a single canister aboard, after 2 minutes the director itself gives the event
   «Дрейфующее топливо» ("Drifting fuel") (`Director._watch_fuel`); a station tops up to 3. I decided this.
-- **Crew reserve** (`GameServer.reserve`): R costs a person (`_respawn_from_reserve`);
+- **Crew reserve** (`GameServer.reserve`): R costs a person (`Crew.respawn_from_reserve`);
   a dead player who left and came back under the same name also costs one (`_dead_names`, the check
-  in `_hello`). If the reserve is empty and there are living crew, they aren't let in (`REJECT_NO_CREW`): otherwise
+  in `Crew.hello`). If the reserve is empty and there are living crew, they aren't let in (`REJECT_NO_CREW`): otherwise
   leaving and rejoining would bypass the reserve. New names come free. I decided this.
-- **Campaign end** (`_end_campaign`): hull at zero or all players dead with an empty
-  reserve (`_check_crew`, once per second). The game freezes: the director is silent, no jumps,
+- **Campaign end** (`Crew.end_campaign`): hull at zero or all players dead with an empty
+  reserve (`Crew.check_crew`, once per second). The game freezes: the director is silent, no jumps,
   everyone gets the summary screen. There is no live restart: the host creates a new game. It's simpler
   and more honest; I decided this.
 - **Jobs and access**: access is a bitmask (`Net.ACCESS_*`, `Net.JOB_ACCESS`); a
@@ -329,9 +362,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   work (the escape-route rule); a lock is hacked in 5 s with a ship-wide announcement.
   Spawn points are moved out of locked compartments (checked by `crewtest`).
   Bots and pirates go everywhere. I invented the skill numbers.
-- **Speech** (`GameServer._chat`, `hears_said`): the channel is chosen by a sign at the start of the line
+- **Speech** (`Chat.talk`, `Chat.hears_said`): the channel is chosen by a sign at the start of the line
   (`;` radio, `!` intercom), to avoid multiplying keys; `S_CHAT` carries the channel number.
-  Spoken aloud — by the same air rules as sounds (`hears_voice`). The dead talk among themselves.
+  Spoken aloud — by the same air rules as sounds (`Chat.hears_voice`). The dead talk among themselves.
 - **Saving** (`src/server/campaign.gd`): one JSON in `user://`, written to a temporary file
   and renamed. Characters are stored by player name (`saved_crew`); the living character of a player
   who left also goes there, so you can leave and rejoin the same evening. Another ship
@@ -378,7 +411,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   should be tied to it too.
 - **The director** is in `src/server/director.gd`. A new event: a line in `EVENTS`, a branch
   in `_run` and a branch in `_can_happen` (an event isn't chosen if it would change nothing;
-  limits are in `GameServer.can_break`). "Scanning" the ship and crew is the `assess` function; add there
+  limits are in `Systems.can_break`). "Scanning" the ship and crew is the `assess` function; add there
   what the director looks at. Pacing is checked by `tools/directortest.gd` without waiting.
 - **The game host is also the GM:** commands to the director use the same secret pass
   as stopping the server.
@@ -395,7 +428,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a jammed outer door locked the chamber forever (softlock, found by the author in v32).
   There's no separate locking logic: emergency shutters treat space as pressure 0, so they
   hold the outer door themselves when there's air in the chamber and the inner one in vacuum. The pump
-  (`GameServer.toggle_pump`, `_run_pumps`) moves air into the ship's store and back;
+  (`Systems.toggle_pump`, `Systems.run_pumps`) moves air into the ship's store and back;
   its operation travels in `S_DEVICES` after the list of broken things. An open outer door
   vents the air in its doorway (`Air.VENT`).
 
@@ -441,15 +474,16 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `OS.is_process_running()` on Windows only knows processes the game created itself.
 - The client clock for prediction takes the freshest of recent readings, not the average:
   a delayed packet otherwise slows the clock, and commands start arriving late.
-- A character record goes into the change list of its chunk, and on a chunk change also
-  into the list of the chunk it left. A client seeing both chunks reads both lists in its own order,
-  so the left chunk must also receive all following records of the same broadcast
-  (`GameServer._record`, `left_chunk`). Otherwise, after a ladder and a step in one tick, other
-  players saw the character stay on the old tile until it moved.
+- Characters are not sent through per-chunk change lists any more (since v39): each client has its
+  own list of what it was told (`Player.known`), and the server sends the difference every tick
+  (`Replication._characters`). The old pitfall (a ladder and a step in one tick left others seeing
+  the character on the old tile) cannot happen this way. Doors, holes, floor and air still go by chunk.
+- Whatever changes what blocks sight must call `Replication.sight_changed()` (doors opening and
+  shutting, power, the other ship moving already do): who sees whom is cached until then.
 - A node with a negative `z_index` is drawn under what its parent draws itself (the stars
   in `WorldView._draw`). So decks are ordered with non-negative numbers.
 - Air falls asleep (`Air.settled`) while a door is still opening: it must also be woken
-  on the tick the door became passable (`_update_doors`), otherwise air won't flow through it.
+  on the tick the door became passable (`Systems.update_doors`), otherwise air won't flow through it.
 - A test that crashed with a script error doesn't exit by itself and hangs until the timeout, and its output
   through a pipe is lost. Run with `timeout` and output to a file.
 - A door must stay open longer than the stretch the client replays
