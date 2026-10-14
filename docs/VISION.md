@@ -147,6 +147,16 @@ Things to remember:
 - Item 5 will require redrawing the ship.
 - From SS13 builds we take ideas and how mechanics work, but not code: SS13 has its own license.
 
+## Pirate ships: boarding and a fight in space (14 October 2026)
+
+The author's words (build v44): split the pirate ship into two events. One is boarding, when the enemy
+ship tries to board us (as it worked before). The other is a fight with the enemy ship in space;
+after we kill the ship, we can go over to it and take things from its interior. The enemy ship should
+fight us with a smarter AI: when it is too damaged it tries to escape, 20 seconds to start a hyperdrive
+jump; if we knock out its engine or jump drive it cannot escape, and if we damage the jump drive it needs
+more time to charge the jump. After we board a damaged ship there are three possible scenarios: all its
+crew dead (70% chance), the enemy tries to fight, or the enemy joins us as crew.
+
 ## What of this is already in the game
 
 - Air without hints, the author's instruments, bodies of the dead.

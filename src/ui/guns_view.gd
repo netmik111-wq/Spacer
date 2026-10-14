@@ -20,10 +20,11 @@ const BAD := Color(0.92, 0.32, 0.28)
 const AIM := Color(1.0, 0.92, 0.35)
 const GUN_PLACES: Array[String] = ["левый борт у носа", "правый борт у носа", "днище"]
 const SYSTEM_ABOUT: Array[String] = [
-	"Выбить орудия: пираты перестанут стрелять.",
+	"Выбить орудия: пираты перестанут стрелять. Повреждённые орудия стреляют реже.",
 	"Выбить рубку: пираты будут промахиваться вдвое чаще, а наши попадания станут почти верными.",
-	"Выбить двигатель: пираты не смогут подойти к шлюзу, отсчёт до стыковки встанет.",
-	"Бить по кубрику: каждые два попадания убивают одного абордажника; перебьём всех, и пираты уйдут ни с чем.",
+	"Выбить двигатель: пираты не смогут ни подойти к шлюзу (отсчёт до стыковки встанет), ни уйти прыжком.",
+	"Бить по кубрику: каждые два попадания убивают одного пирата; перебьём всех абордажников, и пираты уйдут ни с чем, перебьём весь экипаж, и корабль станет мёртвыми обломками.",
+	"Бить по гипердвигателю: повреждённый, он дольше заряжает прыжок; выбитый, не даёт пиратам уйти.",
 ]
 
 var client: GameClient
@@ -107,11 +108,18 @@ func refresh(delta: float) -> void:
 	_time += delta
 	var fighting := client.enemy_full > 0 and client.enemy_sys.size() == Net.ESYS_COUNT
 	if fighting:
-		_status.text = "Корпус пиратского корабля: %d из %d попаданий до разрушения. Пристыкуется силой через %d с%s." % [
-			client.enemy_hull, client.enemy_full, client.enemy_docks_in,
-			" (двигатель выбит: стоит на месте)" if client.enemy_sys[Net.ESYS_ENGINE] == 0 else ""]
+		var what := ""
+		if client.enemy_flags & Net.ENEMY_FLEEING:
+			what = "Пираты заряжают прыжок, чтобы уйти: %s." % ("прыжок сорван, пока не починят" if client.enemy_jumps_in == 65535
+				else "уйдут через %d с" % client.enemy_jumps_in)
+		elif client.enemy_flags & Net.ENEMY_RAID:
+			what = "Пираты ведут бой на расстоянии."
+		else:
+			what = "Пристыкуется силой через %d с%s." % [client.enemy_docks_in,
+				" (двигатель выбит: стоит на месте)" if client.enemy_sys[Net.ESYS_ENGINE] == 0 else ""]
+		_status.text = "Корпус пиратского корабля: %d из %d попаданий до разрушения. %s" % [client.enemy_hull, client.enemy_full, what]
 	else:
-		_status.text = "Целей нет. Орудия бьют по кораблю, который нападает на нас, пока он не пристыковался."
+		_status.text = "Целей нет. Орудия бьют по пиратскому кораблю, пока он не пристыковался."
 	_update_guns(fighting)
 	for which: int in _aim_buttons.keys():
 		var b: Button = _aim_buttons[which]
@@ -245,7 +253,13 @@ func _draw_plan() -> void:
 			lo = lo.min(v)
 			hi = hi.max(v + Vector2.ONE)
 		var box := Rect2(at + lo * px, (hi - lo) * px)
-		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 - 2), Net.ESYS_NAMES[k], HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 13, INK)
+		var name := Net.ESYS_NAMES[k]
+		var size := 13
+		while size > 10 and font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
+			size -= 1
+		if font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
+			name = "Прыжок"                  # (a small room: the jump drive's short name)
+		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 - 2), name, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, size, INK)
 		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 + 14), _state(k), HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 11, INK)
 		if k == client.gun_aim:
 			var aim := Color(AIM, 0.5 + 0.5 * pulse)

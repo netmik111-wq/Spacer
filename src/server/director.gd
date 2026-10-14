@@ -32,6 +32,7 @@ const POWER_GLITCH := 8
 const BOARDING := 9
 const PIRATE_SHIP := 10
 const FUEL_DRIFT := 11
+const PIRATE_RAID := 12
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -56,7 +57,10 @@ const EVENTS: Array[Dictionary] = [
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.STATION], "weight": 0},
 	{"id": BOARDING, "name": "Абордаж", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
-	{"id": PIRATE_SHIP, "name": "Пиратский корабль", "size": BIG,
+	{"id": PIRATE_SHIP, "name": "Пиратский корабль: абордаж", "size": BIG,
+		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+	# (v44, the author's request) a pirate ship that fights at a distance and does not board; wrecked, it can be searched
+	{"id": PIRATE_RAID, "name": "Пиратский корабль: бой", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
 ]
 
@@ -186,6 +190,8 @@ func _run(event_id: int) -> void:
 			server.pirates.board(_party())
 		PIRATE_SHIP:
 			server.derelict.pirates_come(_party())
+		PIRATE_RAID:
+			server.derelict.pirates_come(_party(), true)
 		FUEL_DRIFT:
 			server.supplies.find_fuel(RESCUE_FUEL)
 		METEOR_VOLLEY:
@@ -219,7 +225,7 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 			return server.systems.can_break("power")
 		BOARDING:
 			return server.pirates.aboard() == 0
-		PIRATE_SHIP:
+		PIRATE_SHIP, PIRATE_RAID:
 			return server.pirates.aboard() == 0 and server.derelict.pirates_can_come()
 	return true
 

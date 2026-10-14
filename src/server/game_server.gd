@@ -394,7 +394,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			if why != "":
 				chat.say(why)
 			elif derelict.here:
-				chat.say("%s: %s." % [p.name, "стыковка с брошенным кораблём" if derelict.docked else "расстыковка"])
+				chat.say("%s: %s." % [p.name, ("стыковка: " + derelict.ship.name.to_lower()) if derelict.docked else "расстыковка"])
 	elif kind == Net.C_STORE:
 		if pkt.size() > 2:
 			supplies.store_asked(p, pkt[1], pkt[2])

@@ -571,9 +571,15 @@ func _update_helm() -> void:
 		lines.append("Корабль идёт заданным курсом, осталось %d." % int(ceil(at.distance_to(client.ship_dest))))
 	else:
 		lines.append("Корабль стоит. Щёлкните по карте, чтобы задать курс.")
-	if client.pirates_alongside():
+	if client.pirates_alongside() and client.enemy_flags & Net.ENEMY_RAID and not client.other_docked:
+		lines.append("У шлюза пиратский корабль: он ведёт бой на расстоянии. Бить его с пульта орудий.")
+	elif client.pirates_alongside():
 		lines.append("У шлюза пиратский корабль%s. Расстыковавшись, он уйдёт, но заклинившие двери шлюза выпустят воздух." %
 			(", пристыкован силой" if client.other_docked else ", сейчас пристыкуется"))
+	elif client.other_here() and client.other_wreck:
+		lines.append("Разбитый пиратский корабль пристыкован к шлюзу." if client.other_docked else
+			"Над шлюзом разбитый пиратский корабль. До него можно добраться через открытый космос или пристыковаться.")
+		lines.append("Пока кто-то снаружи или корабли состыкованы, корабль не тронется и не прыгнет. Тронемся, и обломки останутся позади.")
 	match sectors.kind[here]:
 		Sectors.METEORS:
 			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
@@ -583,7 +589,7 @@ func _update_helm() -> void:
 			var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
 			lines.append("До %s %d." % [what, int(ceil(gap))] if gap > 0.0 else "Корабль у %s." % what)
 		Sectors.DERELICT:
-			if client.other_here() and not client.pirates_alongside():
+			if client.other_here() and not client.pirates_alongside() and not client.other_wreck:
 				lines.append("Брошенный корабль пристыкован к шлюзу." if client.other_docked else
 					"Брошенный корабль рядом, над шлюзом. До него можно добраться через открытый космос или пристыковаться.")
 				lines.append("Пока кто-то снаружи или корабли состыкованы, корабль не тронется и не прыгнет.")
@@ -593,8 +599,8 @@ func _update_helm() -> void:
 		_:
 			lines.append("В этом секторе идти некуда: вокруг пусто.")
 	_console_text.text = "\n".join(lines)
-	var buttons_key := Sectors.key(sectors.cell[here]) * 16 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
-		+ (8 if client.pirates_alongside() else 0)
+	var buttons_key := Sectors.key(sectors.cell[here]) * 64 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
+		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0)
 	if _jump_buttons_for != buttons_key:
 		_jump_buttons_for = buttons_key
 		for old in _jump_box.get_children():
@@ -607,7 +613,7 @@ func _update_helm() -> void:
 		if client.other_here() and (client.other_docked or not client.pirates_alongside()):
 			var dock := Button.new()
 			dock.text = ("Расстыковаться с пиратским кораблём" if client.pirates_alongside() else "Расстыковаться") \
-				if client.other_docked else "Пристыковаться к брошенному кораблю"
+				if client.other_docked else ("Пристыковаться к разбитому кораблю" if client.other_wreck else "Пристыковаться к брошенному кораблю")
 			dock.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			var on := not client.other_docked
 			dock.pressed.connect(func() -> void: client.send_dock(on))

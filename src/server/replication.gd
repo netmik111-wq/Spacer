@@ -257,8 +257,8 @@ func _append_records(out: PackedByteArray, section: int, records: PackedByteArra
 # ------------------------------------------------------------- characters
 
 func _dark_cell(cell: int) -> bool:
-	## A cell on a derelict, which has no light of its own (a pirate ship is lit).
-	return server.map.is_other(cell) and server.derelict.here and server.derelict.kind == Net.OTHER_DERELICT
+	## A cell on a derelict or a wreck, which have no light of their own (a pirate ship is lit).
+	return server.map.is_other(cell) and server.derelict.dark()
 
 
 func _lit_cells() -> Dictionary:
