@@ -1,6 +1,6 @@
 # Spacer — summary for continuing the work
 
-State as of build **v40 (version 0.33)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
+State as of build **v41 (version 0.34)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
 check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION.md` (the author's vision).
 
 ## Links
@@ -11,13 +11,24 @@ check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION
   https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — read `ArtifactData get survey/answers` and build the fourth plan.
 
 ## Key decisions
-- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 26), the server decides everything,
+- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 27), the server decides everything,
   20 ticks/s, one thread; the client predicts movement and doors (`src/shared/`), checked against checksums.
 - Builds for Windows only (the author plays over Radmin VPN); the exe is split into two archives, `play.bat` joins them.
 - Everything on GitHub (docs, notes, code comments, commit messages) is in English. What the player sees in the game stays in Russian; the author chose this on 2026-10-14 ("GitHub only").
 - The author's rules: air is not highlighted; bodies stay; the engine powers everything; it is silent in vacuum;
   in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
 - Atmosphere with gases, fire and electricity only after asking the author in detail.
+
+## v41 (ship's store, gun targeting, holomap; the author's request)
+- The supply locker opens a "ship's store" window (`src/ui/store_view.gd`): resources across the top, every
+  item as a card with its count, take with a click, buy with a right click, put back one thing by its slot
+  (`Net.STORE_PUT_ONE`).
+- The gun console (`src/ui/guns_view.gd`) shows the pirate ship's plan by rooms; the guns aim at one of its
+  four systems (weapons, bridge, engine, quarters; `Net.ESYS_*`, rooms named by `%` lines in `maps/pirate01.txt`).
+  Hits wear a system down and knock it out; its crew mends it. Server side in `src/server/gunnery.gd`.
+- Holomap monitors ('M' in the map) on the bridge and in the engine room (`src/server/holomap.gd`,
+  `src/ui/holo_view.gd`): the whole ship's air, breaches, broken machines and doors, sent only to whoever
+  watches. New test `tools/holotest.gd` (15 tests now).
 
 ## v40 (friendly interfaces, the author's request)
 - Inventory window (I/Tab, `src/ui/inventory_panel.gd`), settings window with sound, picture and keys

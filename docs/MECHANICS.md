@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v40 (version 0.33).
+Last updated: build v41 (version 0.34).
 
 Contents:
 
@@ -207,6 +207,14 @@ Contents:
 - **Bridge consoles** break (short circuit): dark screen and sparks.
 - The "not both at once" rule: while a console is broken, the engine doesn't break, and vice versa. So the
   crew always has a way to escape.
+- **Holomap** — a monitor with a blue screen on the bridge wall and in the engine room (top wall). E opens
+  the whole ship deck by deck: every floor cell coloured by pressure (blue normal, from 76%; yellow
+  lowered; red dangerous, below 20%; dark red vacuum), breaches blinking red, machines and consoles
+  (green working, red "!" broken), doors (closed, emergency shutter down in yellow, jammed in orange)
+  and a dot where you stand. Above the plan: hull integrity, number of breaches, what is broken,
+  how many compartments have lowered pressure or almost no air, shutters down, jammed doors. The mouse
+  over a cell shows its pressure in kPa and what is there. Updated twice a second; needs power.
+  This is the only place the game shows air in rooms you are not in (the author asked for it).
 - **Repair**: face the broken thing and hold E. With a **spare part** 6 s (the part is used up),
   without one 18 s. That is for a person without skill; the repair skill cuts the time by up to half
   (with skill 50 — 4.5 s, with skill 100 — 3 s; see section 21).
@@ -247,8 +255,17 @@ Contents:
 
 ## 10. Supply locker, trader, credits
 
-- The **supply locker** is a yellow locker in a lower-deck wall. E opens a panel: the ship's
-  supplies, take an item, put everything back. The locker doesn't need power.
+- The **supply locker** is a yellow locker in a lower-deck wall. E opens the **ship's store** window
+  (the locker doesn't need power):
+  - across the top: credits, fuel canisters, air for the plant (bar), hull integrity (bar),
+    crew reserve (bar);
+  - every item the locker keeps as a card with its picture, how many are in the locker and how many you
+    carry, grouped: repair and fuel, equipment, medicine, weapons. Left click on a card takes one
+    (into the hand if it is empty); right click buys one when a trader is in reach (the price shows on
+    the card); hovering shows what the item does;
+  - your own slots underneath: click one to put that item back (only whole items; the frame is green
+    on those that can go back), or "put everything back";
+  - at a trader, buttons for air (+10), hull (+10) and hiring a person into the reserve.
 - Only whole items go back: a used medkit can't be swapped for a new one, a loaded
   pistol goes back empty, a spacesuit only with a full tank.
 - The ship sets out with **30 credits** and a full air reserve for the plant.
@@ -397,11 +414,23 @@ Contents:
   ready ones. Hit chance **75%**.
 - The only target is the pirate ship, until it docks. It withstands **6 hits**;
   once wrecked, it leaves with its crew, and the ship is credited **25 credits** and **1** fuel canister.
+- **Aiming at its systems.** The console shows the pirate ship's plan with four compartments, each with
+  a system; a click on a compartment (or its button) aims all guns there, "Куда попадёт" ("wherever it
+  lands") hits a random compartment. The aim is shared by everyone at the console. Every hit takes 1
+  from its hull, makes a breach in its hull next to that compartment and hits the system there:
+  | Compartment | Strength | When knocked out |
+  |---|---|---|
+  | Weapons (Орудия) | 2 hits | it stops shooting |
+  | Bridge (Рубка) | 2 hits | its shots hit half as often (35%), ours hit **95%** |
+  | Engine (Двигатель) | 2 hits | it can't close in: the countdown to docking stands still |
+  | Quarters (Кубрик) | 2 hits per boarder | every 2 hits kill one boarder; with none left it breaks off and leaves (no reward) |
+- Its crew repairs one point of the most worn system (not the quarters) every **15 s**, so a system
+  knocked out comes back after 15 s with 1 point unless it is hit again.
 - The pirate ship fires once every **9–13 s**, hitting with 70% chance: in 60% of cases it
   breaches the hull, otherwise it disables a gun or a bridge console. A broken gun
   is repaired like machines (E, 6 s with a spare part).
-- The hint at a gun shows its charge; the console shows the target, the enemy's hull and the time
-  until it docks.
+- The hint at a gun shows its charge; the console shows each gun's charge bar, the enemy's hull, the
+  time until it docks, its systems and what knocking each out does.
 
 ## 18. Bridge and flight within a sector
 
@@ -581,7 +610,7 @@ Contents:
 | Key | Action |
 |---|---|
 | WASD, arrows | walk |
-| E | action: console, locker, ladder, repair, search, pick up item, hack lock, intercom |
+| E | action: console, locker, holomap, ladder, repair, search, pick up item, hack lock, intercom |
 | F | drag a person lying down / let go |
 | Q | oxygen supply |
 | 1–6, mouse wheel | what's in hand |

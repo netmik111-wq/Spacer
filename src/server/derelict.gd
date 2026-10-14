@@ -119,7 +119,7 @@ func pirates_come(party: int) -> bool:
 	for i in _rng.randi_range(2, 4):
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
-	server.gunnery.enemy_arrives()
+	server.gunnery.enemy_arrives(party)
 	server.chat.say("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
 	return true
 

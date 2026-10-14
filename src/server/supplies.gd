@@ -71,10 +71,10 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.ship.store[item] -= 1
 		Net.STORE_PUT_BACK:
 			for at in Net.SLOTS:
-				var kind := Items.kind_of(p.slots[at])
-				if p.slots[at] != Net.ITEM_NONE and server.ship.store.has(kind) and Items.whole(p.slots[at]):
-					server.ship.store[kind] += 1
-					p.slots[at] = Net.ITEM_NONE
+				_put_back(p, at)
+		Net.STORE_PUT_ONE:
+			if item < Net.SLOTS:
+				_put_back(p, item)
 		Net.STORE_BUY:
 			var price := Items.price(item)
 			if can_trade() and server.ship.store.has(item) and price > 0 and server.ship.credits >= price:
@@ -94,6 +94,14 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.ship.credits -= Net.PRICE_HULL
 				server.ship.hull = mini(server.ship.hull + Net.HULL_LOT, Net.HULL_MAX)
 	tell_store()
+
+
+func _put_back(p: Player, at: int) -> void:
+	## The thing in that slot goes back into the locker, if the locker keeps it and it is whole.
+	var kind := Items.kind_of(p.slots[at])
+	if p.slots[at] != Net.ITEM_NONE and server.ship.store.has(kind) and Items.whole(p.slots[at]):
+		server.ship.store[kind] += 1
+		p.slots[at] = Net.ITEM_NONE
 
 
 func weapons_aboard() -> int:

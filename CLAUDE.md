@@ -96,6 +96,10 @@ inventory window, settings (sound, picture, every key rebindable with Ctrl/Shift
 panel in tabs for the host and the admins the host names, and the fix for own footsteps heard in
 space. The author also allowed merging pull requests without asking.
 
+Build v41 (0.34) was again the author's own request, as one build: a good window for the ship's store,
+an interface for the guns with zones of the enemy ship to aim at (knocking out its systems), and
+holomap monitors on the bridge and in the engine room (the ship's damage and pressure).
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -118,7 +122,7 @@ new items for slots (tools, medkit, spare tank).
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 14 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 15 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -133,6 +137,7 @@ new items for slots (tools, medkit, spare tank).
     godot --headless --path . --script res://tools/crewtest.gd
     godot --headless --path . --script res://tools/savetest.gd
     godot --headless --path . --script res://tools/admintest.gd
+    godot --headless --path . --script res://tools/holotest.gd
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -151,7 +156,7 @@ logging in takes and how long a server tick takes (the budget is 50 ms). With `P
 the server gets CPU 0 to itself. Results are in `docs/BENCHMARK.md`.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 14 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 15 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -172,7 +177,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **The server is split by topic** (since v39). `src/server/game_server.gd` keeps the state of the
   world, the network loop and the order of a tick; everything else is in parts it keeps one of each:
   `chat`, `crew`, `movement`, `inventory`, `looting`, `combat`, `repairs`, `systems`, `navigation`,
-  `supplies`, `replication` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`).
+  `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -456,6 +461,22 @@ The parameters for these checks are described in the header of `src/main.gd`.
   in the `S_GUNS` packet on change. Combat happens only while the pirate ship stands alongside
   and isn't docked (`fighting`): it shoots at us, we at it; 6 hits and it's wrecked
   (`Derelict.pirates_wrecked`), 25 credits. This is the second source of credits after exploration.
+- **Aiming at the enemy's systems** (v41, the author's request). The pirate ship's rooms are named by
+  lines `% deck x y system` in its map (`ShipMap.zones`, `Net.ESYS_*`): weapons, bridge, engine, quarters.
+  The aim is one per ship (`Gunnery.aim`, `C_AIM`), not per gun, so everyone at the console sees the same.
+  A hit takes 1 from its hull and 1 from the system in the room it lands in (a random room without aim),
+  and holes its hull next to that room. Effects: weapons out = it does not shoot; bridge out = it hits
+  half as often and we hit 95%; engine out = the docking countdown stands still; quarters: every 2 hits
+  kill a boarder, none left = it breaks off unpaid. Its crew mends the worst system by 1 every 15 s.
+  I chose these numbers and effects; there are no shields in the game, so no shield system.
+- **The holomap** (v41, tile `holo`, sign `M`) is the one exception to "lack of air is not drawn": the
+  author asked for a monitor that shows where the pressure is. It is a console one must stand at, with
+  power. A client knows the air only around itself, so the server sends `S_HOLO` (air of every floor cell
+  of our ship in `ShipMap.on_ship` order, holes, door states) twice a second only to those watching
+  (`Holomap.watching`), and stops when they step away or the power goes. No new gas mechanics.
+- **The ship's store window** (`StoreView`) and the gun and holomap screens (`GunsView`, `HoloView`) live
+  inside the console frame of `GameScreen` (shown instead of its chart, text and buttons), so the old
+  rules for consoles hold: E or Esc closes, stepping away or losing power closes.
 - **Open space is passable** (`ShipMap.floats`, `Mover`): within the grid and deck rows,
   a step takes twice as long, there's no air. While someone alive is outside or the ships are docked,
   the ship doesn't move or jump (`Derelict.holds_ship`), and a started jump fails.
@@ -547,4 +568,4 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - The map is drawn by decks, the top one first; each starts with a line `= name`.
   New signs: `g` glass, `c` catwalks, `H` ladder (in one tile of two adjacent decks),
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
-  `I` intercom. A line `@ deck x y access` makes a compartment locked.
+  `I` intercom, `M` holomap. A line `% deck x y system` names the room of an enemy ship's system. A line `@ deck x y access` makes a compartment locked.

@@ -87,6 +87,7 @@ TILES.append(("locker", None, "wall"))
 TILES.append(("lock_pump", None, "wall"))
 TILES.append(("gun", None, "wall"))
 TILES.append(("intercom", None, "wall"))
+TILES.append(("holo", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -299,6 +300,19 @@ def make_machine(wall, what):
             rect(13, y, 18, y, mid)
         rect(12, 18, 15, 20, (200, 70, 50, 255))       # the talk button
         rect(18, 18, 19, 19, (90, 220, 110, 255))      # the lamp
+    elif what == "holo":
+        # the holomap: a wide dark screen with the ship's outline in cyan and a red spot of trouble
+        rect(3, 4, 28, 24, mid); rect(4, 5, 27, 23, body); rect(4, 5, 27, 6, cap)
+        rect(6, 8, 25, 21, (12, 24, 36, 255))
+        line = (70, 200, 230, 255)
+        for x in range(9, 23):
+            o[x, 11] = line; o[x, 18] = line
+        for y in range(11, 19):
+            o[9, y] = line; o[22, y] = line
+        for x in range(12, 20):
+            o[x, 14] = (40, 130, 160, 255); o[x, 15] = (40, 130, 160, 255)
+        rect(19, 12, 20, 13, (240, 80, 60, 255))
+        rect(14, 22, 17, 22, (90, 220, 110, 255))      # a lamp under the screen
     elif what == "lock_pump":
         # the airlock pump: a panel with a gauge and two lamps (pump out, pump in)
         rect(6, 4, 25, 24, body); rect(6, 4, 25, 5, cap); rect(6, 24, 25, 24, mid)
@@ -352,6 +366,7 @@ def build_tiles():
         "lock_pump": lambda: make_machine(images["wall_h"], "lock_pump"),
         "gun": lambda: make_machine(images["wall_h"], "gun"),
         "intercom": lambda: make_machine(images["wall_h"], "intercom"),
+        "holo": lambda: make_machine(images["wall_h"], "holo"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -385,11 +400,17 @@ def build_tiles():
 #   'T'  a ship's gun in the hull (fired from the gun console, '4' on the bridge)
 #   '9'  wall with an airlock pump in it: the floor in front is the chamber; its outer 'D' opens into space
 #   'I'  wall with an intercom panel on it
+#   'M'  wall with a holomap monitor on it (the whole ship: air, holes, what is broken)
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
 # x, y is any floor cell of the room (counted in the deck's drawing, first row 0). Every door of
 # that room then opens only for those whose job gives that access (see Net.ACCESS_*).
+#
+# A ship others fight (the pirate ship) names the rooms its systems stand in, the same way:
+#   % <deck number, from 1> <x> <y> <system>
+# where system is one of SYSTEMS below; the room's floor cells become that system's zone, where
+# the crew's guns can aim (see Gunnery).
 #
 # A ship with several decks is drawn deck by deck, the top one first. Each
 # deck starts with a line "= its name"; all are laid over one another from
@@ -400,8 +421,9 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TI")
+BAND_CHARS = set("#DW<>123456789TIM")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
+SYSTEMS = ["weapons", "helm", "engine", "crew"]                                    # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -488,7 +510,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
@@ -523,7 +545,7 @@ def read_decks(name, lines):
     """Splits a drawing into decks: [(deck name, lines)], top deck first."""
     decks = []
     for l in lines:
-        if l.startswith("@"):
+        if l.startswith("@") or l.startswith("%"):
             continue
         if l.startswith("="):
             decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
@@ -583,9 +605,30 @@ def resolve_ship(name, lines, ids):
                     for k, (dx2, dy2, _) in enumerate(doors):
                         if dx2 == x + dx and dy2 == y + dy + d * stride:
                             door_access[k] |= ACCESS_BITS[parts[3]]
+    zones = []
+    for l in lines:
+        if not l.startswith("%"):
+            continue
+        parts = l[1:].split()
+        if len(parts) != 4 or parts[3] not in SYSTEMS:
+            raise MapError(f"{name}: bad system line '{l}'")
+        d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        rows = [r.ljust(w) for r in decks[d][1]]
+        def at(x, y):
+            return rows[y][x] if 0 <= y < len(rows) and 0 <= x < w else " "
+        if at(x0, y0) not in FLOOR_CHARS:
+            raise MapError(f"{name}: system line '{l}' does not point at a floor cell")
+        seen, todo = {(x0, y0)}, [(x0, y0)]
+        while todo:
+            x, y = todo.pop()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                if at(x + dx, y + dy) in FLOOR_CHARS and (x + dx, y + dy) not in seen:
+                    seen.add((x + dx, y + dy))
+                    todo.append((x + dx, y + dy))
+        zones.append([SYSTEMS.index(parts[3]), sorted((y + d * stride) * w + x for x, y in seen)])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
-            "door_access": door_access}
+            "door_access": door_access, "zones": zones}
 
 
 def build_maps(images, ids):
