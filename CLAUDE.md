@@ -105,6 +105,10 @@ a corridor was left dark), the pirate ship split into two events (boarding as be
 space whose wreck can be boarded and looted), a smarter enemy that runs on its jump drive when beaten,
 and three outcomes on boarding a wreck (70% all dead, fight, join).
 
+Build v45 (0.38) was the author's own request, as one build: the dark no longer pitch black (the room in
+view dimly seen, the flashlight brighter; on wrecks, derelicts and our ship without power) and the left
+mouse button working as E on what it clicks (items on the floor, consoles, machines, repairs).
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -297,6 +301,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   says what the item counts as (a lit flashlight in the locker and in counts is a flashlight).
 - **The hand is chosen by the client** (`C_HAND`); the server only follows it and doesn't send it back:
   otherwise fast switching would flicker. A taken item goes into the hand if it's empty (`Player.add`).
+- **A left click is E on what was clicked** (v45, the author's request): `GameClient.click_facing`
+  finds the facing for which `use_target` reaches the clicked cell (current facing first); the screen
+  turns the character (`GameClient.face`, a predicted turn), waits until the prediction shows the turn
+  (so the press carries a tick after it), then opens the console like the key (`GameScreen._use_screen`)
+  or holds "use" while the button is held. A weapon or medical item clicked at a person (or ourselves)
+  still fires (`GameScreen._fires_at`); anywhere else the click is the old `send_fire`. No protocol change.
+  Test helper: `click=X,Y click_after=S` in `main.gd`.
 - **E first targets the object on the wall ahead, then a downed person, then an item on the floor, then a ladder**
   (`Repairs.press`, `Inventory.pick_up`; the client uses the same order in `use_target`). You can't pick up
   an item a person is lying on: E then opens the search.
@@ -304,9 +315,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
   even by an edge and the straight line to it doesn't pass through a wall or closed door. That's how tiles
   are lit in SS13, and the same will be used for the field of view. The server doesn't use light yet,
   and the client uses tiles only to decide whether a name is visible. Light is drawn smoothly: the beam is a polygon
-  of rays cut off at walls (`WorldView._find_beams`). Without power the ship is pitch
-  dark (the author's request): a black cover with a shader and an image mask where white marks
-  the beam (the author asked to remove light around yourself, build v27); space outside doesn't darken.
+  of rays cut off at walls (`WorldView._find_beams`). Without power the ship is dark: a black cover
+  with a shader and an image mask where red marks light; space outside doesn't darken.
+- **Darkness is dim, not pitch black** (v45, the author's screenshot; it replaces the v27–v44 rule
+  "only the flashlight gives light"). In the dark a red glow `DIM` (0.34) around our character, full to
+  `DIM_NEAR` cells and gone by `DIM_FAR`, goes into the mask (`WorldView._draw_mask`, a radial
+  `GradientTexture2D`); like any light it shows only where we look, so the room is made out dimly in
+  the field of view and the flashlight is clearly brighter. The look (green) is always the full 160°
+  cone now. People in the dark are still judged by the old rule (60°, 2 cells or a light: `can_see`,
+  `Replication.sees`), so the dark keeps hiding them.
 - **Cells are seen whole** (v42–v43, the author's request): `WorldView._draw_look` keeps the smooth cone
   (rays now stop exactly at a wall's face) and paints as a full tile of green every cell a ray passes or
   stops at whose middle lies inside an eye's arc; our own cell is a square (a disc used to poke into the

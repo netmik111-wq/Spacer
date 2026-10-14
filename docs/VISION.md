@@ -157,6 +157,15 @@ jump; if we knock out its engine or jump drive it cannot escape, and if we damag
 more time to charge the jump. After we board a damaged ship there are three possible scenarios: all its
 crew dead (70% chance), the enemy tries to fight, or the enemy joins us as crew.
 
+## Darkness and the mouse (14 October 2026)
+
+The author's words (build v45): deep darkness on damaged ships after a fight (the wreck we shot down) and
+on our own ship after an engine failure is a bug. His screenshot shows how it should look: the room
+around you in the field of view stays dimly visible, and the flashlight cone is brighter. This replaces
+the earlier rule "pitch darkness, only the flashlight gives light". Interaction should work with the
+left mouse button: take things from the floor, and use all the ship's machinery (maps, the targeting
+computer, the engine and so on).
+
 ## What of this is already in the game
 
 - Air without hints, the author's instruments, bodies of the dead.
