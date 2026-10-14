@@ -620,7 +620,7 @@ func _draw_mask() -> void:
 				continue
 			if _faces_space(map, x, y):
 				_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile)), star)
-	if _dark <= 0.0 and not (client.other_here() and client.map.other_kind == Net.OTHER_DERELICT):
+	if _dark <= 0.0 and not client.other_dark():
 		return
 	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
 	# no glow around our own character)
@@ -704,14 +704,92 @@ func _draw_look() -> void:
 		_look.draw_colored_polygon(points, green)
 	# As in SS13, a cell whose middle is in the cone is seen whole: floor right up
 	# to the walls, and the walls themselves; one off the edge of the cone (beside
-	# or behind us) is seen only as far as the cone itself reaches into it.
-	for c: Vector2i in cells:
-		var to_mid := (Vector2(c) + Vector2(0.5, 0.5)) * _tile - origin
-		var angle := rad_to_deg(ahead.angle_to(to_mid))
-		for arc: Array in arcs:
-			if angle >= minf(arc[0], arc[1]) and angle <= maxf(arc[0], arc[1]):
-				_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+	# or behind us) is seen only as far as the cone itself reaches into it. The
+	# rays above are too sparse to touch every wall seen nearly edge on (a wall
+	# far along a corridor), so every cell in the cone is also checked on its own:
+	# floor whose middle can be seen, and a wall with a face turned to us on a
+	# floor cell that is seen (v44, the author's screenshot).
+	var at_t := origin / _tile
+	var dy := _deck_shown * _stride
+	var map := client.map
+	var r := Sight.SIGHT_REACH
+	var seen := {}                           # floor (and anything else see-through) seen
+	var walls: Array[Vector2i] = []
+	for y in range(start_cell.y - r, start_cell.y + r + 1):
+		for x in range(start_cell.x - r, start_cell.x + r + 1):
+			var c := Vector2i(x, y)
+			var mid := Vector2(c) + Vector2(0.5, 0.5)
+			if mid.distance_to(at_t) > r + 0.5 or not _in_arcs(ahead, (mid - at_t), arcs):
+				continue
+			if x < 0 or y < 0 or x >= map.width or y + dy >= map.height:
+				continue
+			if Sight.blocks(client.map, client.doors, x, y + dy):
+				walls.append(c)
+			elif cells.has(c) or (map.cells[(y + dy) * map.width + x] >= 0 and _clear_to(at_t, start_cell, c)):
+				seen[c] = true
+	var walls_seen: Array[Vector2i] = []
+	for c: Vector2i in walls:
+		if cells.has(c):
+			walls_seen.append(c)
+			continue
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			# the face between the wall and that floor cell is turned towards our eye
+			var n := c + d
+			var faces := false
+			if d.x > 0:
+				faces = at_t.x >= n.x
+			elif d.x < 0:
+				faces = at_t.x <= n.x + 1
+			elif d.y > 0:
+				faces = at_t.y >= n.y
+			else:
+				faces = at_t.y <= n.y + 1
+			if faces and (seen.has(n) or (cells.has(n) and not Sight.blocks(map, client.doors, n.x, n.y + dy))):
+				walls_seen.append(c)
 				break
+	for c: Vector2i in seen:
+		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+	for c: Vector2i in walls_seen:
+		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+
+
+static func _in_arcs(ahead: Vector2, v: Vector2, arcs: Array) -> bool:
+	var angle := rad_to_deg(ahead.angle_to(v))
+	for arc: Array in arcs:
+		if angle >= minf(arc[0], arc[1]) and angle <= maxf(arc[0], arc[1]):
+			return true
+	return false
+
+
+func _clear_to(from: Vector2, start: Vector2i, to: Vector2i) -> bool:
+	## Can the eye at `from` (in cells of the deck shown) see the middle of the
+	## cell `to`: does the straight line between them cross no wall or shut
+	## door? (Cell by cell, so a line cannot slip between two cells' checks.)
+	var target := Vector2(to) + Vector2(0.5, 0.5)
+	var d := target - from
+	var c := start
+	var step := Vector2i(int(signf(d.x)), int(signf(d.y)))
+	var t_max := Vector2(INF, INF)
+	var t_delta := Vector2(INF, INF)
+	if d.x != 0.0:
+		t_max.x = ((c.x + (1 if d.x > 0.0 else 0)) - from.x) / d.x
+		t_delta.x = 1.0 / absf(d.x)
+	if d.y != 0.0:
+		t_max.y = ((c.y + (1 if d.y > 0.0 else 0)) - from.y) / d.y
+		t_delta.y = 1.0 / absf(d.y)
+	var dy := _deck_shown * _stride
+	for i in 64:
+		if c == to:
+			return true
+		if t_max.x < t_max.y:
+			c.x += step.x
+			t_max.x += t_delta.x
+		else:
+			c.y += step.y
+			t_max.y += t_delta.y
+		if c != to and Sight.blocks(client.map, client.doors, c.x, c.y + dy):
+			return false
+	return false
 
 
 func _my_dark() -> bool:

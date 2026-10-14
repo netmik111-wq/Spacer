@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 27
+const PROTOCOL := 28
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -153,7 +153,9 @@ const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a charact
 const S_GUNS := 28                  # u8 count, per gun u8 charge (0..100, 255 = broken), then u8 enemy hull
                                     # left, u8 enemy hull full (0 = no enemy), u16 seconds until it docks (0 = not coming),
                                     # u8 where the guns aim (ESYS_* or AIM_ANY), u8 count of the enemy's systems
-                                    # (0 = no enemy), then per system u8 strength left, u8 strength when whole
+                                    # (0 = no enemy), then per system u8 strength left, u8 strength when whole,
+                                    # then u8 ENEMY_* flags, u16 seconds until it jumps away (while it flees;
+                                    # 65535 = its jump cannot charge now)
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
 const C_AIM := 22                   # u8 ESYS_* or AIM_ANY: where on the enemy the guns aim, from the gun console
 const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at
@@ -165,10 +167,13 @@ const S_HOLO := 31                  # the holomap (only to those watching it), a
 # there wears it down; at nothing it stops working until the enemy's crew mends it.
 const ESYS_WEAPONS := 0             # its guns: down, it does not shoot
 const ESYS_HELM := 1                # its bridge: down, it shoots wide and cannot dodge
-const ESYS_ENGINE := 2              # its engine: down, it cannot close in to dock
-const ESYS_CREW := 3                # the quarters of its boarding party: every hit there kills one of them
-const ESYS_COUNT := 4
-const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик"]
+const ESYS_ENGINE := 2              # its engine: down, it cannot close in to dock, nor jump away
+const ESYS_CREW := 3                # its quarters: every few hits there kill one of its crew
+const ESYS_JUMP := 4                # its jump drive: worn, it charges a jump slower; down, it cannot jump away
+const ESYS_COUNT := 5
+const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель"]
+const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
+const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const AIM_ANY := 255                # the guns hit wherever they hit
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
@@ -183,6 +188,7 @@ const CREW_SHIP := 1                # the network id of the crew's own ship (ano
 const SHIP_CREW := 0                # kinds of ship
 const SHIP_DERELICT := 1
 const SHIP_PIRATE := 2
+const SHIP_WRECK := 3               # a pirate ship our guns have wrecked: dark and dead, but it can be boarded
 # the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)
 const OTHER_DERELICT := 0
 const OTHER_PIRATE := 1

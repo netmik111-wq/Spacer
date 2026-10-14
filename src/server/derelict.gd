@@ -1,10 +1,15 @@
 extends RefCounted
 ## Another ship alongside: a derelict, or a pirate ship. Server only.
 ##
-## A pirate ship comes as an event: it shows up off the airlock, and after a
-## warning it docks by force, breaks both doors of the airlock open and sends
-## its pirates aboard. Its own ship is lit and has air. Once it is drawn off
-## again (from the ship's controls) it leaves.
+## A pirate ship comes as one of two events (v44). Boarding: it shows up off
+## the airlock, and after a warning it docks by force, breaks both doors of the
+## airlock open and sends its pirates aboard; once it is drawn off again (from
+## the ship's controls) it leaves. A raid: it stays off the airlock and fights
+## at a distance (Gunnery). Its own ship is lit and has air. A raider our guns
+## wreck stays alongside, dark and dead, until our ship moves on: the crew can
+## board it and take what is left. What they find there is settled when it is
+## wrecked: most often its crew all dead (WRECK_ALL_DEAD), else the survivors
+## fight, or give up and join our crew (into the reserve).
 ##
 ## A sector may hold a derelict. When our ship comes near it, it is laid into
 ## the grid over our own ship, a few cells of open space away from our
@@ -27,6 +32,8 @@ const PIRATE_WARNING_TICKS := 40 * Net.TICK_HZ    # from showing up to docking b
 const GAP := 3                       # cells of open space between it and our airlock while not docked
 const VACUUM_ROOM := 0.4             # share of its rooms with no air left at all
 const HOLE_CHANCE := 0.5             # chance that a hole in its hull still leaks
+const WRECK_ALL_DEAD := 0.7          # chance that nobody aboard a wreck is alive (the author's number)
+const WRECK_FIGHT := 0.5             # of the rest: the survivors fight (else they join us)
 # what pirates keep on their ship: [thing, weight]
 const PIRATE_LOOT := [
 	[Net.ITEM_MAG, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_PATCH, 2], [-Net.ITEM_PISTOL, 2], [Net.ITEM_BATON, 2], [Net.ITEM_FUEL, 3],
@@ -45,7 +52,13 @@ var kind := Net.OTHER_DERELICT       # which kind it is (Net.OTHER_*)
 var docked := false
 var _spots := {}                     # kind -> [where its corner lies alongside, where docked], for the kinds that fit
 var _pirates_dock_at := -1           # the tick a pirate ship alongside docks by force (-1 = it has)
-var _pirates_party := 0
+var _pirates_party := 0             # its crew (or boarding party) still alive
+var raid := false                    # (a pirate ship) it came to fight at a distance, not to board
+var wreck := false                   # (a pirate ship) our guns wrecked it: no power, no light, no fight
+var _crew_total := 0                 # its crew when it came
+var _outcome := ""                   # (a wreck) what the first of us aboard finds: "dead", "fight" or "join"
+var _boarded := false                # somebody of our crew has set foot on the wreck
+var _came_in := 0                    # the sector it came in (Sectors.key): it does not follow a jump
 var _left := {}                      # sector key -> [[cell inside it, things], ...]: what was left on it
 var _rng := RandomNumberGenerator.new()
 
@@ -87,6 +100,11 @@ func _comes(of_kind: int) -> void:
 	kind = of_kind
 	here = true
 	docked = false
+	raid = false
+	wreck = false
+	_boarded = false
+	_outcome = ""
+	_came_in = Sectors.key(server.sectors.cell[server.ship.sector])
 	ship = Ship.new()
 	ship.id = server.new_ship_id()
 	ship.kind = Net.SHIP_PIRATE if of_kind == Net.OTHER_PIRATE else Net.SHIP_DERELICT
@@ -105,22 +123,28 @@ func pirates_can_come() -> bool:
 	return possible(Net.OTHER_PIRATE) and not here and not someone_outside()
 
 
-func pirates_come(party: int) -> bool:
-	## A pirate ship shows up off the airlock; it will dock by force before long.
+func pirates_come(party: int, p_raid: bool = false) -> bool:
+	## A pirate ship shows up off the airlock: to dock by force before long, or
+	## (a raid) to fight it out at a distance.
 	if not pirates_can_come():
 		return false
 	_comes(Net.OTHER_PIRATE)
+	raid = p_raid
 	_place(_spots[kind][0])
 	for c in map.other_cells:
 		if map.walk[c] == 1:
 			server.air.air[c] = 1.0
-	_pirates_dock_at = server.tick + PIRATE_WARNING_TICKS
+	_pirates_dock_at = -1 if raid else server.tick + PIRATE_WARNING_TICKS
 	_pirates_party = party
+	_crew_total = party
 	for i in _rng.randi_range(2, 4):
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
-	server.gunnery.enemy_arrives(party)
-	server.chat.say("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
+	server.gunnery.enemy_arrives(party, raid)
+	if raid:
+		server.chat.say("Тревога! Пиратский корабль выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать.")
+	else:
+		server.chat.say("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
 	return true
 
 
@@ -146,9 +170,20 @@ func update() -> void:
 	## Brings a derelict alongside when the ship is near it, and takes it away
 	## when not; docks a pirate ship when its time comes, and lets it go.
 	if here and kind == Net.OTHER_PIRATE:
+		var free := holds_ship() == ""
+		if free and Sectors.key(server.sectors.cell[server.ship.sector]) != _came_in:
+			# our ship has jumped away: it is left behind
+			_leave(true)
+			server.chat.say("Пиратский корабль остался позади, в другом секторе.")
+			return
+		if wreck:
+			_watch_boarding()
+			if free and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
+				_leave()                     # we move on: the hulk stays where it drifts
+			return
 		if _pirates_dock_at >= 0 and server.tick >= _pirates_dock_at:
 			_pirates_board()
-		elif _pirates_dock_at < 0 and not docked and holds_ship() == "":
+		elif _pirates_dock_at < 0 and not raid and not docked and free:
 			_leave()
 		return
 	if not possible():
@@ -164,7 +199,7 @@ func dock(on: bool) -> String:
 	## Brings it up against our airlock, or draws it off again. Returns what went wrong, or "".
 	if not here or on == docked:
 		return ""
-	if kind == Net.OTHER_PIRATE and on:
+	if kind == Net.OTHER_PIRATE and on and not wreck:
 		return "Стыковаться с пиратами по своей воле никто не станет."
 	var from: Vector2i = map.other_at
 	var to: Vector2i = _spots[kind][1] if on else _spots[kind][0]
@@ -181,6 +216,89 @@ func pirates_wrecked() -> void:
 	## Our guns have wrecked the pirate ship before it docked: it goes, with its crew.
 	_pirates_dock_at = -1
 	_leave(true)
+
+
+func pirates_escaped() -> void:
+	## It has jumped away.
+	_pirates_dock_at = -1
+	_leave(true)
+
+
+func dark() -> bool:
+	## Is the ship alongside without light of its own (a derelict, or a wreck)?
+	return here and (kind == Net.OTHER_DERELICT or wreck)
+
+
+func becomes_wreck() -> void:
+	## Our guns have wrecked a raider: it stays alongside, dead. Who is aboard it
+	## and alive is settled now and found out when the first of us comes aboard.
+	_pirates_dock_at = -1
+	raid = false
+	wreck = true
+	ship.kind = Net.SHIP_WRECK
+	ship.name = "Разбитый пиратский корабль"
+	for d in range(map.other_first_door, map.doors.size()):
+		server.doors.dead[d] = 1
+	var alive := _pirates_party
+	if alive <= 0 or _rng.randf() < WRECK_ALL_DEAD:
+		_outcome = "dead"
+		alive = 0
+	else:
+		_outcome = "fight" if _rng.randf() < WRECK_FIGHT else "join"
+	_pirates_party = alive
+	# the dead lie where they fell, with what they carried
+	var cells := _floor_cells()
+	for i in maxi(_crew_total - alive, 0):
+		if cells.is_empty():
+			break
+		var c: int = cells[_rng.randi_range(0, cells.size() - 1)]
+		var p = server.pirates.spawn(c % map.width, c / map.width, _rng.randf() < 0.6)
+		p.health = Net.HEALTH_DEAD
+		p.cond = Net.COND_DEAD
+		p.died_tick = server.tick
+		p.st.down = true
+		p.st.facing = _rng.randi_range(1, 4)
+		server.crew.becomes_corpse(p)
+	for i in _rng.randi_range(1, 3):
+		_drop(cells, PIRATE_LOOT)
+	server.replication.sight_changed()
+
+
+func _watch_boarding() -> void:
+	## The first of our crew to set foot on the wreck finds out who is left aboard.
+	if _boarded:
+		return
+	var first = null
+	for p in server.players:
+		if p != null and not p.pirate and not p.corpse and not p.bot and p.cond != Net.COND_DEAD \
+				and map.is_other(p.st.y * map.width + p.st.x):
+			first = p
+			break
+	if first == null:
+		return
+	_boarded = true
+	match _outcome:
+		"dead":
+			server.chat.say("%s поднимается на борт разбитого корабля. Живых здесь нет." % first.name)
+		"fight":
+			# they hid as far from the way in as they could, and come out armed
+			var cells := _floor_cells()
+			var here_at := Vector2(first.st.x, first.st.y)
+			var sorted := Array(cells)
+			sorted.sort_custom(func(a: int, b: int) -> bool:
+				return Vector2(a % map.width, a / map.width).distance_squared_to(here_at) \
+					> Vector2(b % map.width, b / map.width).distance_squared_to(here_at))
+			for i in mini(_pirates_party, sorted.size()):
+				var c: int = sorted[i]
+				var p = server.pirates.spawn(c % map.width, c / map.width, _rng.randf() < 0.6)
+				server.pirates.heard(p, first.st.x, first.st.y)
+			server.chat.say("На разбитом корабле выжившие пираты (%d)! Они не сдаются и хватаются за оружие." % _pirates_party)
+		"join":
+			var before: int = server.reserve
+			server.reserve = mini(server.reserve + _pirates_party, Net.RESERVE_MAX)
+			server.chat.say("На разбитом корабле выжившие пираты (%d). Они сдаются и просятся в экипаж: резерв экипажа %d (+%d)." % [
+				_pirates_party, server.reserve, server.reserve - before])
+	_pirates_party = 0
 
 
 func _pirates_board() -> void:
@@ -249,6 +367,7 @@ func _arrive() -> void:
 
 
 func _leave(quiet: bool = false) -> void:
+	var was_wreck := wreck
 	# what is left on a derelict is remembered for this sector
 	if kind == Net.OTHER_DERELICT:
 		var key := Sectors.key(server.sectors.cell[server.ship.sector])
@@ -263,12 +382,15 @@ func _leave(quiet: bool = false) -> void:
 			server.crew.remove(p)
 	_clear_region()
 	here = false
+	raid = false
+	wreck = false
 	_set_docked(false)
 	_place(ShipMap.NO_OTHER)
 	ship = null
 	server.gunnery.enemy_gone()
 	if not quiet:
-		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else "Пиратский корабль отошёл от шлюза и ушёл.")
+		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else
+			("Разбитый пиратский корабль остался позади." if was_wreck else "Пиратский корабль отошёл от шлюза и ушёл."))
 
 
 func _move(from: Vector2i, to: Vector2i) -> void:
@@ -313,7 +435,7 @@ func _place(at: Vector2i) -> void:
 	for d in range(map.other_first_door, map.doors.size()):
 		server.doors.ready[d] = Doors.CLOSED
 		server.doors.set_flags(d, 0)
-		server.doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0     # a pirate ship has power
+		server.doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck else 0     # a pirate ship has power, a wreck not
 	server.replication.index_doors()
 	server.air.reshape()
 

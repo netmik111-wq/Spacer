@@ -95,11 +95,14 @@ var looks := {}                      # id -> how that character is dressed (Net.
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
+var other_wreck := false            # the ship alongside is a pirate ship our guns wrecked: dark and dead
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
 var gun_charge := PackedByteArray()  # per gun: 0..100, 255 = out of order (see Net.S_GUNS)
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var enemy_docks_in := 0              # seconds until it docks by force
+var enemy_flags := 0                 # Net.ENEMY_*: it came for a raid, it is running
+var enemy_jumps_in := 0              # (while it runs) seconds until it jumps away; 65535 = it cannot now
 var gun_aim := Net.AIM_ANY           # where our guns aim: Net.ESYS_* or Net.AIM_ANY
 var enemy_sys := PackedByteArray()   # per Net.ESYS_*: the strength the enemy's system has left (empty = no enemy)
 var enemy_sys_full := PackedByteArray()
@@ -474,12 +477,18 @@ func other_here() -> bool:
 
 
 func pirates_alongside() -> bool:
-	return other_here() and map.other_kind == Net.OTHER_PIRATE
+	## Is a pirate ship (still able to fight) alongside?
+	return other_here() and map.other_kind == Net.OTHER_PIRATE and not other_wreck
+
+
+func other_dark() -> bool:
+	## Is the ship alongside one without light of its own (a derelict, or a wreck)?
+	return other_here() and (map.other_kind == Net.OTHER_DERELICT or other_wreck)
 
 
 func dark_cell(cell: int) -> bool:
-	## Is this cell on a derelict, which has no light of its own? (A pirate ship is lit.)
-	return map.is_other(cell) and map.other_kind == Net.OTHER_DERELICT
+	## Is this cell on a derelict or a wreck, which have no light of their own? (A pirate ship is lit.)
+	return map.is_other(cell) and other_dark()
 
 
 func send_dock(on: bool) -> void:
@@ -976,6 +985,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in k:
 				enemy_sys.append(pkt[10 + n + i * 2])
 				enemy_sys_full.append(pkt[11 + n + i * 2])
+			var at: int = 10 + n + k * 2
+			enemy_flags = pkt[at] if pkt.size() > at else 0
+			enemy_jumps_in = pkt.decode_u16(at + 1) if pkt.size() > at + 2 else 0
 		Net.S_HOLO:
 			if not _ours(pkt):
 				return
@@ -1058,18 +1070,23 @@ func _on_ships(pkt: PackedByteArray) -> void:
 		pos += 9 + n
 	var at := ShipMap.NO_OTHER
 	var kind := Net.OTHER_DERELICT
+	var wreck := false
 	other_docked = false
 	for id: int in ships.keys():
 		if id != my_ship:
 			at = ships[id]["at"]
-			kind = Net.OTHER_PIRATE if int(ships[id]["kind"]) == Net.SHIP_PIRATE else Net.OTHER_DERELICT
+			wreck = int(ships[id]["kind"]) == Net.SHIP_WRECK
+			kind = Net.OTHER_PIRATE if int(ships[id]["kind"]) == Net.SHIP_PIRATE or wreck else Net.OTHER_DERELICT
 			other_docked = ships[id]["docked"]
-	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind):
-		map.place_other(at, kind)
+	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck:
+		if at != map.other_at or kind != map.other_kind:
+			map.place_other(at, kind)
+			for d in range(map.other_first_door, map.doors.size()):
+				doors.ready[d] = Doors.CLOSED
+				doors.set_flags(d, 0)
+		other_wreck = wreck
 		for d in range(map.other_first_door, map.doors.size()):
-			doors.ready[d] = Doors.CLOSED
-			doors.set_flags(d, 0)
-			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0
+			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck else 0
 		other_changes += 1
 		ship_changes += 1
 		_rebuild_prediction()
@@ -1113,6 +1130,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	pred_doors.partner = map.door_partner
 	pred_doors.dead = doors.dead
 	other_docked = false
+	other_wreck = false
 	pumps.clear()
 	air.resize(map.width * map.height)
 	air.fill(0)

@@ -100,6 +100,11 @@ Build v41 (0.34) was again the author's own request, as one build: a good window
 an interface for the guns with zones of the enemy ship to aim at (knocking out its systems), and
 holomap monitors on the bridge and in the engine room (the ship's damage and pressure).
 
+Build v44 (0.37) was the author's own request, as one build: the whole 160° cone seen (a wall far along
+a corridor was left dark), the pirate ship split into two events (boarding as before, and a fight in
+space whose wreck can be boarded and looted), a smarter enemy that runs on its jump drive when beaten,
+and three outcomes on boarding a wreck (70% all dead, fight, join).
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -307,6 +312,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   stops at whose middle lies inside an eye's arc; our own cell is a square (a disc used to poke into the
   wall beside us). A cell whose middle is outside (the wall right beside us) stays dark beyond the cone. The v38 rule "walls around you always visible" is gone: the author
   found it lit walls behind him and in the pitch dark.
+- **Every cell in the cone is checked on its own** (v44, the author's screenshot): the rays of
+  `_draw_look` were too sparse to touch a wall seen nearly edge on far down a corridor. Now floor whose
+  middle has a clear line (`_clear_to`, cell by cell) and a wall with a face turned to the eye on a seen
+  floor cell count too. A wall is never "seen" through another wall (that chained down whole columns
+  in a first try). It costs a few milliseconds a frame in software rendering.
 - **The light and sight mask** (`WorldView._draw_mask`, `_draw_look`): red is ship light,
   blue is flashlights and flashes (they light only where green is, i.e. where we look), green is
   the field of view. Warm beam light (`_shade`) is also drawn only within the field of view. Whoever disappears
@@ -467,13 +477,22 @@ The parameters for these checks are described in the header of `src/main.gd`.
   and isn't docked (`fighting`): it shoots at us, we at it; 6 hits and it's wrecked
   (`Derelict.pirates_wrecked`), 25 credits. This is the second source of credits after exploration.
 - **Aiming at the enemy's systems** (v41, the author's request). The pirate ship's rooms are named by
-  lines `% deck x y system` in its map (`ShipMap.zones`, `Net.ESYS_*`): weapons, bridge, engine, quarters.
+  lines `% deck x y system` in its map (`ShipMap.zones`, `Net.ESYS_*`): weapons, bridge, engine, quarters, jump drive (v44).
   The aim is one per ship (`Gunnery.aim`, `C_AIM`), not per gun, so everyone at the console sees the same.
   A hit takes 1 from its hull and 1 from the system in the room it lands in (a random room without aim),
   and holes its hull next to that room. Effects: weapons out = it does not shoot; bridge out = it hits
   half as often and we hit 95%; engine out = the docking countdown stands still; quarters: every 2 hits
   kill a boarder, none left = it breaks off unpaid. Its crew mends the worst system by 1 every 15 s.
   I chose these numbers and effects; there are no shields in the game, so no shield system.
+- **Two pirate-ship events** (v44, the author's request): `PIRATE_SHIP` boards as before; `PIRATE_RAID`
+  (`Derelict.raid`, `Gunnery.raid`) never docks. The enemy runs when its hull is at `FLEE_HULL` or its
+  guns are out at half hull: `Gunnery.flee` counts the jump charge, its pace is the jump drive's
+  strength share (`Net.ESYS_JUMP`, a fifth room in `pirate01`), nothing with the drive or engine out.
+  A wrecked raider stays as `Net.SHIP_WRECK` (dark, doors dead, `Derelict.dark()`), dockable, and leaves
+  when our ship moves. Who is aboard is rolled at wreck time (`Derelict.WRECK_ALL_DEAD` 70%, the rest
+  half fight, half join the reserve) and shown to the first of the crew aboard (`_watch_boarding`).
+  Defaults I chose: flee threshold, 50/50 for fight/join, joiners go into the reserve, worn drive =
+  slower charge in proportion. Either enemy is left behind when our ship jumps to another sector.
 - **The holomap** (v41, tile `holo`, sign `M`) is the one exception to "lack of air is not drawn": the
   author asked for a monitor that shows where the pressure is. It is a console one must stand at, with
   power. A client knows the air only around itself, so the server sends `S_HOLO` (air of every floor cell

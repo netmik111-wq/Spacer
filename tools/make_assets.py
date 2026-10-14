@@ -423,7 +423,7 @@ def build_tiles():
 
 BAND_CHARS = set("#DW<>123456789TIM")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
-SYSTEMS = ["weapons", "helm", "engine", "crew"]                                    # as Net.ESYS_*
+SYSTEMS = ["weapons", "helm", "engine", "crew", "jump"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 

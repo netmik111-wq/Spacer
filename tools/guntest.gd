@@ -7,6 +7,10 @@ extends SceneTree
 ## aim at its systems: with its guns out it does not shoot, with its engine out
 ## it cannot dock, its crew mends them, and with its boarders dead it breaks
 ## off. Left alone, it docks by force.
+## A raider (v44) fights at a distance and never docks; beaten badly it charges
+## its jump drive and runs in 20 s, slower with the drive worn, never with the
+## drive or its engine out. Wrecked, it stays alongside, dark, and can be docked
+## with; the first of the crew aboard finds its crew dead, fighting, or joining.
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
@@ -55,7 +59,7 @@ func _initialize() -> void:
 	g.aim_asked(p, Net.ESYS_HELM)
 	_expect(g.aim == Net.ESYS_HELM, "the gun console aims them at the enemy's bridge")
 	var pkt := g.packet()
-	_expect(pkt[pkt.size() - 1 - Net.ESYS_COUNT * 2] == Net.ESYS_COUNT and pkt[pkt.size() - 2 - Net.ESYS_COUNT * 2] == Net.ESYS_HELM,
+	_expect(pkt[pkt.size() - 4 - Net.ESYS_COUNT * 2] == Net.ESYS_COUNT and pkt[pkt.size() - 5 - Net.ESYS_COUNT * 2] == Net.ESYS_HELM,
 		"clients are told where the guns aim and how the enemy's systems are")
 	var credits := server.ship.credits
 	for i in 20:
@@ -110,6 +114,88 @@ func _initialize() -> void:
 	for t in (Derelict.PIRATE_WARNING_TICKS + 20):
 		server._tick()
 	_expect(d.docked and not g.fighting(), "left alone, it docks by force and the guns fall silent")
+	d.dock(false)
+	_run(2)
+	_expect(not d.here, "(drawn off, it goes)")
+	for q in server.players:
+		if q != null and q.pirate:
+			server.crew.remove(q)
+
+	# a raid: a fight at a distance
+	# (the gunner breathes from a tank and is patched up: the hull around the console may be holed by now)
+	p.supply = true
+	p.tank = 1.0e9
+	p.health = 100.0
+	p.wounds = 0.0
+	p.cond = Net.COND_OK
+	p.st.down = false
+	server.ship.broken.clear()
+	g.enemy_hit_chance = 0.0
+	_expect(d.pirates_come(2, true) and g.raid and d._pirates_dock_at < 0, "a raider comes, and does not mean to dock")
+	_run(Derelict.PIRATE_WARNING_TICKS + 40)
+	_expect(d.here and not d.docked and g.fighting(), "left alone, it keeps fighting at a distance")
+	g.enemy_hull = Gunnery.FLEE_HULL
+	_run(1)
+	_expect(g.fleeing() and g.jump_seconds_left() <= int(Gunnery.FLEE_SECONDS), "beaten badly, it charges its jump drive to run")
+	credits = server.ship.credits
+	_run(int(Gunnery.FLEE_SECONDS - 2.0) * Net.TICK_HZ)
+	_expect(d.here, "it is still here a little before its jump")
+	_run(3 * Net.TICK_HZ)
+	_expect(not d.here and server.ship.credits == credits, "and then it jumps away, unpaid")
+
+	_expect(d.pirates_come(2, true), "another raider")
+	g._mend_next = server.tick + 1000000
+	g.systems[Net.ESYS_ENGINE] = 0
+	g.enemy_hull = Gunnery.FLEE_HULL
+	_run(40 * Net.TICK_HZ)
+	_expect(d.here and g.fleeing() and g.jump_seconds_left() == 65535, "with its engine out it cannot jump away")
+	g.systems[Net.ESYS_ENGINE] = Gunnery.SYSTEM_STRENGTH
+	g.systems[Net.ESYS_JUMP] = 0
+	_run(40 * Net.TICK_HZ)
+	_expect(d.here and g.jump_seconds_left() == 65535, "nor with its jump drive out")
+	g.systems[Net.ESYS_JUMP] = 1
+	g.flee = 0.0
+	_run(25 * Net.TICK_HZ)
+	_expect(d.here and g.jump_seconds_left() > 10, "with the drive worn the jump takes longer (%d s left after 25 s)" % g.jump_seconds_left())
+	_run(20 * Net.TICK_HZ)
+	_expect(not d.here, "but in the end it goes")
+
+	# wrecked: a hulk to board
+	_expect(d.pirates_come(3, true), "and another")
+	credits = server.ship.credits
+	var bodies_before := server.corpses.size()
+	g.aim = Net.AIM_ANY
+	_shoot_until(p, func() -> bool: return not g.fighting())
+	_expect(d.here and d.wreck and server.ship.credits == credits + Gunnery.WRECK_REWARD, "wrecked, it stays alongside, and the ship is paid for it")
+	_expect(d.dark() and d.ship.kind == Net.SHIP_WRECK, "dark and dead, and clients are told it is a wreck")
+	var dead_aboard := server.corpses.size() - bodies_before
+	_expect(dead_aboard == d._crew_total - d._pirates_party, "its dead lie aboard (%d of %d)" % [dead_aboard, d._crew_total])
+	var why := d.dock(true)
+	_expect(why == "" and d.docked, "it can be docked with")
+	d._outcome = "fight"
+	d._pirates_party = 2
+	var boarder := server.crew.new_player("Абордажник")
+	var floor: int = d._floor_cells()[0]
+	boarder.st.place(floor % map.width, floor / map.width)
+	_run(1)
+	_expect(server.pirates.aboard() == 2, "survivors who fight come out when the crew boards")
+	for q in server.players:
+		if q != null and q.pirate and not q.corpse:
+			server.crew.remove(q)
+	d._boarded = false
+	d._outcome = "join"
+	d._pirates_party = 2
+	var reserve: int = server.reserve
+	_run(1)
+	_expect(server.reserve == mini(reserve + 2, Net.RESERVE_MAX), "survivors who give up join the reserve")
+	server.crew.remove(boarder)
+	d.dock(false)
+	server.ship.dest = server.ship.pos + Vector2(50, 0)
+	server.ship.moving = true
+	_run(2)
+	_expect(not d.here and server.pirates.aboard() == 0, "when the ship moves on the wreck stays behind, with its dead")
+	server.ship.moving = false
+
 
 	server.stop()
 	server.free()

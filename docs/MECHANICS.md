@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v43 (version 0.36).
+Last updated: build v44 (version 0.37).
 
 Contents:
 
@@ -302,6 +302,9 @@ Contents:
   **middle** is inside the cone is seen **whole** (v43): floor right up to the walls, walls as whole
   tiles. A cell at the edge of the cone whose middle is outside it (walls right beside you or behind
   you) is seen only as far as the cone itself reaches into it, the rest is darkened like anything out of sight.
+- Since v44 every cell in the cone is checked on its own, not only those a ray happens to touch: floor
+  whose middle can be seen in a straight line, and a wall whose face is turned to you on a floor cell you
+  see. So a wall far along a corridor, seen almost edge on, is no longer left dark.
 - What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.
@@ -398,8 +401,17 @@ Contents:
 
 ### Pirate ship
 
-- The **«Пиратский корабль»** ("Pirate ship") event (large; not in a meteor shower and not at a station; doesn't happen
-  while another ship is at the airlock, there are pirates on board or someone is outside).
+Since v44 a pirate ship comes as **two separate events** (same conditions: large; not in a meteor
+shower and not at a station; not while another ship is at the airlock, there are pirates on board or
+someone is outside):
+
+- **«Пиратский корабль: абордаж»** ("Pirate ship: boarding"): it comes to board us, as before (below).
+- **«Пиратский корабль: бой»** ("Pirate ship: fight"): a raid. It takes the same place above the airlock
+  but **never docks**: it fights at a distance until it is wrecked, runs, or we jump away. Its crew is
+  as large as a boarding party would be (1 + half the crew, no more than 4).
+
+The boarding ship:
+
 - A ship in brown, red and black colours takes position above the airlock, 3 cells of space away, and
   **opens fire** (see "Ship weapons"). After **40 s** it **docks by force** (waits if someone is between the ships), **breaks open both
   airlock doors** (they jam open; repair like a jammed door) and lands
@@ -409,6 +421,22 @@ Contents:
 - You can't dock with it of your own will. You can undock from the ship-control console: then
   it leaves, taking with it the pirates and bodies remaining on it. The broken-open airlock then vents
   air into space until the doors are repaired.
+- Either ship is left behind if our ship jumps to another sector before it is done with us.
+
+### Wrecked raider
+
+- A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a
+  dead hulk: no power, no light, doors open by hand. The ship is paid **25 credits** for it (no canister).
+- It can be reached through open space or **docked with** from the ship-control console
+  («Пристыковаться к разбитому кораблю»). Aboard: what it carried (2–4 things on the floor plus 1–3 more),
+  and the bodies of its dead with their weapons.
+- Who is aboard is settled when it is wrecked and found out when the first of our crew sets foot on it:
+  - **70%**: nobody alive, only bodies (always so if its quarters were shot empty);
+  - **15%**: its survivors **fight**: they come out armed from the far end of the wreck;
+  - **15%**: its survivors **give up and join us**: each one becomes +1 to the crew reserve (up to 9).
+- Bodies of crew killed by hits on its quarters lie aboard in every case.
+- It stays until our ship moves (a course or a jump); while someone is on it or it is docked, the ship
+  doesn't move, as with a derelict.
 
 ### Ship weapons
 
@@ -416,25 +444,33 @@ Contents:
   They are fired from the **gun console** on the bridge (E). The console and guns need power.
 - A gun recharges by itself: **8 s** after a shot. Buttons: fire one gun or a volley from all
   ready ones. Hit chance **75%**.
-- The only target is the pirate ship, until it docks. It withstands **6 hits**;
-  once wrecked, it leaves with its crew, and the ship is credited **25 credits** and **1** fuel canister.
-- **Aiming at its systems.** The console shows the pirate ship's plan with four compartments, each with
+- The only target is the pirate ship, until it docks. It withstands **6 hits**. A boarding ship, once
+  wrecked, leaves with its crew, and the ship is credited **25 credits** and **1** fuel canister; a raider
+  stays as a wreck (see "Wrecked raider").
+- **Aiming at its systems.** The console shows the pirate ship's plan with five compartments, each with
   a system; a click on a compartment (or its button) aims all guns there, "Куда попадёт" ("wherever it
   lands") hits a random compartment. The aim is shared by everyone at the console. Every hit takes 1
   from its hull, makes a breach in its hull next to that compartment and hits the system there:
   | Compartment | Strength | When knocked out |
   |---|---|---|
-  | Weapons (Орудия) | 2 hits | it stops shooting |
+  | Weapons (Орудия) | 2 hits | it stops shooting; worn to 1, it fires half as often |
   | Bridge (Рубка) | 2 hits | its shots hit half as often (35%), ours hit **95%** |
-  | Engine (Двигатель) | 2 hits | it can't close in: the countdown to docking stands still |
-  | Quarters (Кубрик) | 2 hits per boarder | every 2 hits kill one boarder; with none left it breaks off and leaves (no reward) |
-- Its crew repairs one point of the most worn system (not the quarters) every **15 s**, so a system
-  knocked out comes back after 15 s with 1 point unless it is hit again.
-- The pirate ship fires once every **9–13 s**, hitting with 70% chance: in 60% of cases it
-  breaches the hull, otherwise it disables a gun or a bridge console. A broken gun
+  | Engine (Двигатель) | 2 hits | it can't close in (the countdown to docking stands still) and can't jump away |
+  | Quarters (Кубрик) | 2 hits per crewman | every 2 hits kill one of its crew; a boarding ship with none left breaks off and leaves (no reward), a raider becomes a dead wreck |
+  | Jump drive (Гипердвигатель) | 2 hits | worn to 1, its jump charges twice as long; knocked out, it can't jump away |
+- **It runs when beaten** (v44): with its hull at **2** or less, or its guns knocked out and its hull at
+  half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**; with the
+  drive at 1 point, 40 s; with the drive or its engine knocked out, the charge stands still until it is
+  mended. A ship that gets away pays nothing. While it runs it doesn't close in to dock either.
+- Its crew repairs one point of a worn system (not the quarters) every **15 s**: a system knocked out
+  comes before one only worn; while it runs, the jump drive and engine first, otherwise its guns first.
+- The pirate ship fires once every **9–13 s**, hitting with 70% chance. While one of our guns works it
+  aims **55%** of its shots at our guns (75% while it runs, to cover its escape); of the rest, 60%
+  breach the hull, half of those next to a crew member, and the others disable a bridge console. A broken gun
   is repaired like machines (E, 6 s with a spare part).
 - The hint at a gun shows its charge; the console shows each gun's charge bar, the enemy's hull, the
-  time until it docks, its systems and what knocking each out does.
+  time until it docks (or that it fights at a distance), how long until it jumps away while it runs,
+  its systems and what knocking each out does.
 
 ## 18. Bridge and flight within a sector
 
@@ -502,7 +538,8 @@ Contents:
 | Emergency shutter failure | small | everywhere except a station |
 | Power failure | medium | everywhere except a station |
 | Boarding | large | everywhere except a station |
-| Pirate ship | large | calm space, trader, derelict ship |
+| Pirate ship: boarding | large | calm space, trader, derelict ship |
+| Pirate ship: fight | large | calm space, trader, derelict ship |
 | Drifting fuel (2 canisters) | small | by itself, only when there is no fuel on board |
 
 - Pace: once every 3–6 minutes in a calm sector and at a trader, once every 25–45 s in a meteor
