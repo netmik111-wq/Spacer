@@ -184,13 +184,14 @@ Checking machines, power, doors and shutters without network or window:
   **E** picks up the top item from the cell ahead, and if that's empty, from under your feet. An item
   on the wall ahead (console, locker, rack) and a person lying down take priority: E goes to them.
 - Items on the floor are sent by chunks, like breaches, and are part of the checksum.
-- A **flashlight** in hand shines a 35-degree cone for 9 cells. The beam is drawn
-  as a smooth cone, starts at chest level already as wide as the body and is cut off by walls. Walls and closed doors
-  stop it; windows and open doors let it through. Everyone sees that a flashlight is on:
-  the flag travels in the character's look byte (`Net.LOOK_LIGHT`), and the beam is computed by every
-  client. Without power the ship is dark: a black cover over the screen with
-  holes where light falls (the flashlight beam, and a dim glow around yourself that shows the room
-  in your field of view). The holes are drawn
+- A **flashlight** in hand lights a soft round pool of warm light (v46, as in SS13), its middle
+  1.5 cells ahead of the holder, fading out 6 cells from there (`Sight.glow`). Light is worked out
+  cell by cell and drawn smooth (`WorldView._draw_light`); walls and closed doors stop it, windows
+  and open doors let it through. Everyone sees that a flashlight is on:
+  the flag travels in the character's look byte (`Net.LOOK_LIGHT`), and the pool is computed by every
+  client. Without power the ship is dark: a near-black cover over the screen (unlit places stay
+  faintly readable) with holes where light falls (flashlights, and a dim glow around yourself that
+  shows the room). The holes are drawn
   into a separate mask image that follows the camera (`WorldView._draw_mask`). Light is computed in `src/shared/sight.gd`, which will also
   be the basis of the field of view.
 - A person lying down (unconscious or dead) can be **searched** with E: a panel shows their

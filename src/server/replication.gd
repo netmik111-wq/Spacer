@@ -267,11 +267,11 @@ func _lit_cells() -> Dictionary:
 		return _lit
 	_lit_tick = server.tick
 	_lit = {}
-	var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
+	var pool := Items.light(Net.ITEM_FLASHLIGHT_ON)
 	for q: Player in server.players:
 		if q == null or Items.light(q.in_hand()).is_empty():
 			continue
-		var cells := Sight.cone(server.map, server.doors, Vector2(q.st.x, q.st.y), q.st.facing, float(beam[0]), int(beam[1]))
+		var cells := Sight.glow(server.map, server.doors, Vector2(q.st.x, q.st.y), q.st.facing, float(pool[0]), float(pool[1]))
 		for cell: int in cells.keys():
 			_lit[cell] = true
 	return _lit

@@ -71,6 +71,80 @@ static func cone(map: ShipMap, doors: Doors, origin: Vector2, facing: int, width
 	return out
 
 
+static func glow(map: ShipMap, doors: Doors, origin: Vector2, facing: int, radius: float, ahead: float) -> Dictionary:
+	## A soft round pool of light, the way a flashlight lights in Space Station 13
+	## (v46, the author's screenshot): brightest around a spot `ahead` cells in
+	## front of `origin` (in cells; it may lie between cells), fading to nothing
+	## `radius` cells from that spot. Only cells with a clear line from the
+	## holder's own cell get any, so walls and shut doors cast shadows; the
+	## first wall is lit on its face. Stays on the deck it starts on.
+	## cell -> how strongly, 0..1.
+	var out := {}
+	var from := Vector2i(roundi(origin.x), roundi(origin.y))
+	if from.x < 0 or from.y < 0 or from.x >= map.width or from.y >= map.height:
+		return out
+	var deck := map.deck_of(from.y)
+	var top := deck * map.deck_stride
+	var bottom := top + map.deck_height - 1
+	var mid := origin
+	if facing >= 1 and facing <= 4 and ahead > 0.0:
+		# the spot moves ahead until a wall: facing a wall, the light pools at its face
+		var way := Vector2(Net.DX[facing], Net.DY[facing])
+		var gone := 0.0
+		while gone < ahead:
+			var step := minf(0.5, ahead - gone)
+			var next := mid + way * step
+			if blocks(map, doors, roundi(next.x), roundi(next.y)):
+				break
+			mid = next
+			gone += step
+	var r := ceili(radius)
+	var c := Vector2i(roundi(mid.x), roundi(mid.y))
+	var walls: Array[Vector2i] = []
+	for y in range(maxi(c.y - r, top), mini(c.y + r, bottom) + 1):
+		for x in range(maxi(c.x - r, 0), mini(c.x + r, map.width - 1) + 1):
+			var cell := y * map.width + x
+			if map.cells[cell] < 0:
+				continue
+			var d := Vector2(x, y).distance_to(mid)
+			if d >= radius:
+				continue
+			var here := Vector2i(x, y)
+			if here != from and blocks(map, doors, x, y):
+				walls.append(here)
+				continue
+			if here != from and not clear_line(map, doors, from, here):
+				continue
+			out[cell] = _fade(d, radius)
+	# A wall is lit on a face turned towards the light, next to a lit floor cell.
+	# (A straight line to a wall seen nearly edge on grazes the walls beside it,
+	# so the line alone would leave most of a long wall dark.)
+	for w: Vector2i in walls:
+		for k in range(1, 5):
+			var n := w + Vector2i(Net.DX[k], Net.DY[k])
+			if not out.has(n.y * map.width + n.x) or blocks(map, doors, n.x, n.y):
+				continue
+			var faces := false
+			if Net.DX[k] > 0:
+				faces = origin.x >= n.x - 0.5
+			elif Net.DX[k] < 0:
+				faces = origin.x <= n.x + 0.5
+			elif Net.DY[k] > 0:
+				faces = origin.y >= n.y - 0.5
+			else:
+				faces = origin.y <= n.y + 0.5
+			if faces:
+				out[w.y * map.width + w.x] = _fade(Vector2(w).distance_to(mid), radius)
+				break
+	return out
+
+
+static func _fade(d: float, radius: float) -> float:
+	## How strongly a pool of light lights a cell `d` cells from its middle:
+	## bright in the middle, then a soft fade that is long gone by the edge.
+	return pow(clampf(1.2 * (1.0 - d / radius), 0.0, 1.0), 1.3)
+
+
 # How a character sees: a cone ahead of it, made of two eyes whose fields
 # overlap in the middle (the author's numbers). In the light the whole field
 # is FIELD degrees wide; in the dark it narrows to DARK_FIELD and only lit
@@ -80,7 +154,7 @@ static func cone(map: ShipMap, doors: Doors, origin: Vector2, facing: int, width
 const FIELD := 160.0
 const DARK_FIELD := 60.0
 const EYES_OVERLAP := 10.0
-const SIGHT_REACH := 20                # cells: a lit ship is seen as far as the screen goes
+const SIGHT_REACH := 9                 # cells: how far the eyes reach (v46, the author: 9 cells, as in SS13)
 const DARK_REACH := 2                  # cells seen around oneself in pitch dark
 
 

@@ -166,6 +166,14 @@ the earlier rule "pitch darkness, only the flashlight gives light". Interaction 
 left mouse button: take things from the floor, and use all the ship's machinery (maps, the targeting
 computer, the engine and so on).
 
+## Light like SS13, vision 9 cells (14 October 2026)
+
+The author's words (build v46), with three screenshots from Space Station 13: light and darkness should
+look like those screenshots (a dark station with a glowing source lighting the tiles around it softly,
+the rest near black but faintly readable), and the flashlight should work like in the third one (a soft
+round pool of warm light around the player, not a beam). Vision should be 9 tiles, as in the second
+screenshot, where he counted the tiles from the player to the edge of the view.
+
 ## What of this is already in the game
 
 - Air without hints, the author's instruments, bodies of the dead.

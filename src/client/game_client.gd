@@ -468,8 +468,8 @@ func lit_cells() -> Dictionary:
 		var s := sample(id)
 		if s.is_empty():
 			continue
-		var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
-		var cells := Sight.cone(map, doors, s[0], s[1], float(beam[0]), int(beam[1]))
+		var pool := Items.light(Net.ITEM_FLASHLIGHT_ON)
+		var cells := Sight.glow(map, doors, s[0], s[1], float(pool[0]), float(pool[1]))
 		for cell: int in cells.keys():
 			out[cell] = maxf(float(out.get(cell, 0.0)), float(cells[cell]))
 	return out

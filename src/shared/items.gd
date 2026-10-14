@@ -37,10 +37,10 @@ const INFO := {
 		"price": 6, "stock": 4},
 	Net.ITEM_PART: {"name": "Запчасть", "about": "Ускоряет ремонт машин и дверей втрое.",
 		"price": 10, "stock": 5},
-	Net.ITEM_FLASHLIGHT: {"name": "Фонарик", "about": "Светит узким лучом. Свет видно издалека.",
+	Net.ITEM_FLASHLIGHT: {"name": "Фонарик", "about": "Светит мягким пятном вокруг и немного вперёд. Свет видно издалека.",
 		"price": 8, "stock": 4, "switch": Net.ITEM_FLASHLIGHT_ON},
-	Net.ITEM_FLASHLIGHT_ON: {"name": "Фонарик (горит)", "about": "Светит узким лучом. Свет видно издалека.",
-		"kind": Net.ITEM_FLASHLIGHT, "switch": Net.ITEM_FLASHLIGHT, "light": [35.0, 9]},
+	Net.ITEM_FLASHLIGHT_ON: {"name": "Фонарик (горит)", "about": "Светит мягким пятном вокруг и немного вперёд. Свет видно издалека.",
+		"kind": Net.ITEM_FLASHLIGHT, "switch": Net.ITEM_FLASHLIGHT, "light": [6.0, 1.5]},
 	Net.ITEM_MAG: {"name": "Магазин", "about": "Восемь патронов к пистолету.", "price": 6, "stock": 2},
 	Net.ITEM_BATON: {"name": "Дубинка", "about": "Бьёт того, кто рядом.", "price": 8, "stock": 1,
 		"blow": 15},
@@ -146,7 +146,7 @@ static func switched(item: int) -> int:
 
 
 static func light(item: int) -> Array:
-	## [cone width in degrees, reach in cells] of the light it gives, or [] if it gives none.
+	## [radius, cells ahead] of the pool of light it gives (Sight.glow), or [] if it gives none.
 	return INFO[item].get("light", []) if INFO.has(item) else []
 
 

@@ -26,19 +26,20 @@ const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
 const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
-const DARK := Color(0.0, 0.0, 0.01, 1.0)          # the ship without power and without light: pitch black
-const BEAM := Color(1.0, 0.93, 0.7)               # the colour of a flashlight's light
-const BEAM_HEIGHT := 18.0                        # how far above the feet a beam starts, in pixels
-const BEAM_START_WIDTH := 26.0                    # and how wide it is there
-const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
+# The ship without power and without light: near black, with a cold tinge, but
+# the walls can still be made out faintly (v46, as in the author's SS13 screenshots)
+const DARK := Color(0.0, 0.004, 0.025, 0.93)
+const BEAM := Color(1.0, 0.86, 0.6)               # the colour of a flashlight's light: warm
+const VIEW_CELLS := 9                             # cells seen either side of us across the screen
+const LIGHT_SUB := 4                              # pixels to a cell in the pictures of light (_draw_light)
+const FLASH := 0.95                               # how bright the middle of a flashlight's pool is
 const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
 const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
 # In the dark the eyes still make out the room around them, dimly (v45, the
-# author's screenshot): as much light as DIM within DIM_NEAR cells of our
-# character, fading out by DIM_FAR; only where we look, like any light.
-const DIM := 0.34
-const DIM_NEAR := 4.0
-const DIM_FAR := 8.5
+# author's screenshot; v46 dimmer and stopped by walls, like the SS13 shots):
+# at most DIM of full light around our character, gone DIM_RADIUS cells off.
+const DIM := 0.3
+const DIM_RADIUS := 5.0
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
 # eyes reach. Seen = lit and looked at; lit but out of sight = fog; unlit = black.
@@ -116,12 +117,12 @@ var _ship_seen := -1                 # client.ship_changes when the hull and air
 var _floor_seen := -1                # client.floor_changes when the things on the floor were last redrawn
 var _shade: Node2D                   # the warm light of flashlights on the floor
 var _lit := {}                       # the cells lit right now (see GameClient.lit_cells): for names in the dark
-var _beams: Array = []               # the beams on the deck shown: [polygon, colours], in its pixels
+var _dim := {}                       # the dim light around us in the dark: cell -> how strongly (Sight.glow)
+var _light_textures := {}            # the pictures of light drawn last, one per pen (see _draw_light)
 # Darkness is a black sheet over the screen with holes where light falls. The holes
 # are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
 var _mask_view: SubViewport
 var _mask: Node2D                    # draws where light falls (red)
-var _dim_glow: GradientTexture2D     # the dim light around us in the dark: full in the middle, fading out
 var _look: Node2D                    # draws what our eyes reach (green)
 var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
 var _audio: Sounds                   # what is heard (see Sounds)
@@ -204,6 +205,7 @@ func setup(p_client: GameClient) -> void:
 
 	_shade = Node2D.new()
 	_shade.z_index = map.deck_count + 3
+	_shade.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	_shade.draw.connect(_draw_shade)
 	add_child(_shade)
 	_mask_view = SubViewport.new()
@@ -215,6 +217,7 @@ func setup(p_client: GameClient) -> void:
 	adding.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_mask = Node2D.new()
 	_mask.material = adding
+	_mask.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR     # light is drawn as small pictures, smoothed
 	_mask.draw.connect(_draw_mask)
 	_mask_view.add_child(_mask)
 	_look = Node2D.new()
@@ -397,7 +400,7 @@ func _update_ship(delta: float) -> void:
 	# light and dark change with every step anybody holding a flashlight takes
 	_dark = move_toward(_dark, 0.0 if client.powered() else 1.0, delta * 2.5)
 	_lit = client.lit_cells()
-	_beams = _find_beams()
+	_dim = _find_dim()
 	_shade.queue_redraw()
 	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
 	_mask.queue_redraw()
@@ -434,53 +437,78 @@ func _draw_things(d: int) -> void:
 			ItemArt.draw(pen, Rect2(corner + spot, Vector2(14, 14)), here[k])
 
 
-func _find_beams() -> Array:
-	## The beam of every lit flashlight on the deck shown, as a polygon that
-	## follows the walls: rays go out from the holder until something stops them.
-	var out: Array = []
+func _find_dim() -> Dictionary:
+	## The dim light our eyes make out around us in the dark (only worked out
+	## when something is dark: it costs a few line checks).
+	if _dark <= 0.0 and not client.other_dark():
+		return {}
+	if client.my_cond != Net.COND_OK:
+		return {}
+	var s := client.sample(client.my_id)
+	if s.is_empty():
+		return {}
+	return Sight.glow(client.map, client.doors, s[0], 0, DIM_RADIUS, 0.0)
+
+
+func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) -> void:
+	## Light worked out cell by cell (cell -> 0..1), drawn smooth the way Space
+	## Station 13 draws it: the light blends evenly between the middles of
+	## neighbouring cells, so a pool of light fades out softly. A cell the light
+	## does not reach (one behind a wall) stays dark, so nothing leaks past walls.
+	## Drawn as a small picture, LIGHT_SUB pixels to a cell, stretched with
+	## smoothing over the deck. `tag` tells apart the pictures drawn by one pen.
 	var map := client.map
-	var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
-	var half := deg_to_rad(float(beam[0]) * 0.5)
-	var reach := float(beam[1]) * _tile
-	for id: int in client.ents.keys():
-		var e: GameClient.Ent = client.ents[id]
-		var lit := (not Items.light(client.in_hand()).is_empty() and client.my_cond != Net.COND_DEAD) if id == client.my_id else e.light
-		if not lit:
+	var top := _deck_shown * _stride
+	var lo := Vector2i(map.width, map.deck_height)
+	var hi := Vector2i(-1, -1)
+	var here := {}                           # cells on the deck shown -> how strongly
+	for cell: int in light.keys():
+		var v := float(light[cell])
+		var y := cell / map.width - top
+		if v <= 0.0 or y < 0 or y >= map.deck_height:
 			continue
-		var s := client.sample(id)
-		if s.is_empty() or int(s[1]) < 1 or int(s[1]) > 4:
-			continue
-		var pos: Vector2 = s[0]
-		var deck := map.deck_of(clampi(roundi(pos.y), 0, map.height - 1))
-		if deck != _deck_shown:
-			continue
-		# the beam leaves the character at chest height and already as wide as
-		# the body (the author drew it so), then widens at the cone's angle
-		var origin := _feet(Vector2(pos.x, pos.y - deck * _stride)) + Vector2(0, -BEAM_HEIGHT)
-		var ahead := Vector2(Net.DX[int(s[1])], Net.DY[int(s[1])])
-		if ahead.y != 0.0:
-			origin += ahead * 12.0           # looking up or down the beam starts past the head or the chest
-		var side := ahead.orthogonal() * BEAM_START_WIDTH * 0.5
-		var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
-		var points := PackedVector2Array([origin - side, origin + side])
-		var colours := PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 1)])
-		for k in range(BEAM_RAYS, -1, -1):
-			# ray N leaves the +side edge and leans that way (orthogonal() is a quarter turn back)
-			var from := origin - side + side * (2.0 * k / BEAM_RAYS)
-			var way := ahead.rotated(half - 2.0 * half * k / BEAM_RAYS)
-			var t := 0.0
-			while t < reach:
-				var at := from + way * t
-				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
-				if c != start_cell and Sight.blocks(map, client.doors, c.x, c.y + deck * _stride):
-					t += 5.0                 # the light falls on the face of the wall
-					break
-				t += 3.0
-			t = minf(t, reach)
-			points.append(from + way * t)
-			colours.append(Color(1, 1, 1, 1.0 - 0.75 * t / reach))
-		out.append([points, colours])
-	return out
+		var x := cell % map.width
+		here[Vector2i(x, y)] = v
+		lo = Vector2i(mini(lo.x, x), mini(lo.y, y))
+		hi = Vector2i(maxi(hi.x, x), maxi(hi.y, y))
+	if here.is_empty():
+		return
+	var w := (hi.x - lo.x + 1) * LIGHT_SUB
+	var h := (hi.y - lo.y + 1) * LIGHT_SUB
+	var data := PackedByteArray()
+	data.resize(w * h * 2)
+	var k := 0
+	for py in h:
+		var cy := lo.y + py / LIGHT_SUB
+		var gy := lo.y + (py + 0.5) / LIGHT_SUB - 0.5   # in cells, between the middles of cells
+		var y0 := floori(gy)
+		var fy := gy - y0
+		for px in w:
+			var cx := lo.x + px / LIGHT_SUB
+			var own: float = here.get(Vector2i(cx, cy), 0.0)
+			var v := 0.0
+			if own > 0.0:
+				var gx := lo.x + (px + 0.5) / LIGHT_SUB - 0.5
+				var x0 := floori(gx)
+				var fx := gx - x0
+				# a neighbour the light does not reach counts as this cell, so the
+				# edge of a lit place next to a wall stays lit right up to it
+				var a: float = here.get(Vector2i(x0, y0), own)
+				var b: float = here.get(Vector2i(x0 + 1, y0), own)
+				var c: float = here.get(Vector2i(x0, y0 + 1), own)
+				var d: float = here.get(Vector2i(x0 + 1, y0 + 1), own)
+				v = lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fy)
+			data[k] = 255
+			data[k + 1] = clampi(roundi(v * 255.0), 0, 255)
+			k += 2
+	var picture := Image.create_from_data(w, h, false, Image.FORMAT_LA8, data)
+	var texture: ImageTexture = _light_textures.get([pen.get_instance_id(), tag])
+	if texture == null or texture.get_size() != Vector2(w, h):
+		texture = ImageTexture.create_from_image(picture)
+		_light_textures[[pen.get_instance_id(), tag]] = texture
+	else:
+		texture.update(picture)
+	pen.draw_texture_rect(texture, Rect2(Vector2(lo) * _tile, Vector2(hi - lo + Vector2i.ONE) * _tile), false, colour)
 
 
 func _on_shot(kind: int, hit: bool, from: Vector2, to: Vector2) -> void:
@@ -578,11 +606,7 @@ func _draw_shade() -> void:
 			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
 		if bool(sh[1]):
 			_shade.draw_circle(b, 6.0 * left + 2.0, Color(0.9, 0.1, 0.1, 0.9 * left))
-	for b: Array in _beams:
-		var colours := PackedColorArray()
-		for c: Color in b[1]:
-			colours.append(Color(BEAM, c.a * (0.1 + 0.08 * _dark)))
-		_shade.draw_polygon(b[0], colours)
+	_draw_light(_shade, _lit, Color(BEAM, 0.16 + 0.16 * _dark), 0)
 
 
 func _draw_mask() -> void:
@@ -633,28 +657,11 @@ func _draw_mask() -> void:
 	# of the mask); flashlights and muzzle flashes light it fully.
 	var me: Sprite2D = _views.get(client.my_id)
 	if me != null and me.get_parent() == _decks[_deck_shown].chars and client.my_cond == Net.COND_OK:
-		if _dim_glow == null:
-			var fade := Gradient.new()
-			fade.set_color(0, Color(1, 1, 1, 1))
-			fade.set_color(1, Color(1, 1, 1, 0))
-			fade.add_point(DIM_NEAR / DIM_FAR, Color(1, 1, 1, 1))
-			_dim_glow = GradientTexture2D.new()
-			_dim_glow.gradient = fade
-			_dim_glow.fill = GradientTexture2D.FILL_RADIAL
-			_dim_glow.fill_from = Vector2(0.5, 0.5)
-			_dim_glow.fill_to = Vector2(1.0, 0.5)
-			_dim_glow.width = 128
-			_dim_glow.height = 128
-		var r := DIM_FAR * _tile
-		_mask.draw_texture_rect(_dim_glow, Rect2(me.position + Vector2(-r, -12 - r), Vector2(2 * r, 2 * r)), false, Color(1, 0, 0, DIM))
+		_draw_light(_mask, _dim, Color(1, 0, 0, DIM), 0)
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
-	for b: Array in _beams:
-		var reds := PackedColorArray()
-		for c: Color in b[1]:
-			reds.append(Color(0, 0, 1, c.a))
-		_mask.draw_polygon(b[0], reds)
+	_draw_light(_mask, _lit, Color(0, 0, 1, FLASH), 1)       # flashlights: soft round pools
 
 
 func _faces_space(map: ShipMap, x: int, y: int) -> bool:
@@ -1081,7 +1088,9 @@ func _process(delta: float) -> void:
 	if client == null or client.phase != GameClient.PLAYING:
 		return
 	var map := client.map
-	var zoom := clampf(floorf(get_viewport_rect().size.y / 230.0), 2.0, 6.0)
+	# The screen shows at least VIEW_CELLS cells either side of us across (v46,
+	# the author: 9, as in SS13), at a whole zoom so the pixels stay crisp.
+	var zoom := clampf(floorf(get_viewport_rect().size.x / ((2 * VIEW_CELLS + 1) * _tile)), 1.0, 6.0)
 	_camera.zoom = Vector2(zoom, zoom)
 	_update_ship(delta)
 	_update_audio(delta)
