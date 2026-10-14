@@ -32,7 +32,6 @@ const BEAM_HEIGHT := 18.0                        # how far above the feet a beam
 const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
 const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
-const NEAR_WALLS := 0.6                          # how plainly the walls right around our character show in the dark
 const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
@@ -621,8 +620,6 @@ func _draw_mask() -> void:
 				continue
 			if _faces_space(map, x, y):
 				_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile)), star)
-	for cell: int in _walls_by_me():
-		_mask.draw_rect(_cell_rect(cell), Color(1, 0, 0, NEAR_WALLS))
 	if _dark <= 0.0 and not (client.other_here() and client.map.other_kind == Net.OTHER_DERELICT):
 		return
 	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
@@ -635,32 +632,6 @@ func _draw_mask() -> void:
 		for c: Color in b[1]:
 			reds.append(Color(0, 0, 1, c.a))
 		_mask.draw_polygon(b[0], reds)
-
-
-func _walls_by_me() -> Array:
-	## The walls (and things on them) right around our character: these are
-	## always made out, even in the dark or behind us (the author's word), so
-	## the character never stands in a black void. The floor stays dark.
-	var out := []
-	if client.my_cond == Net.COND_DEAD or client.my_deck() != _deck_shown:
-		return out
-	var map := client.map
-	for dy in range(-1, 2):
-		for dx in range(-1, 2):
-			var x := client.pred.x + dx
-			var y := client.pred.y + dy
-			if x < 0 or y < 0 or x >= map.width or y >= map.height:
-				continue
-			var cell := y * map.width + x
-			if map.cells[cell] >= 0 and map.walk[cell] == 0:
-				out.append(cell)
-	return out
-
-
-func _cell_rect(cell: int) -> Rect2:
-	## A cell of the shown deck, in the deck's pixels.
-	var map := client.map
-	return Rect2(Vector2(cell % map.width, cell / map.width - _deck_shown * _stride) * _tile, Vector2(_tile, _tile))
 
 
 func _faces_space(map: ShipMap, x: int, y: int) -> bool:
@@ -705,15 +676,14 @@ func _draw_look() -> void:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
-	for cell: int in _walls_by_me():
-		_look.draw_rect(_cell_rect(cell), Color(0, 1, 0, 1))
 	var facing: int = s[1]
 	var green := Color(0, 1, 0, 1)
 	var origin := me.position + Vector2(0, -12)
-	_look.draw_circle(origin, _tile * 0.6, green)
 	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
+	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
 	var reach := float(Sight.SIGHT_REACH) * _tile
+	var faces := {}                          # walls and shut doors a look reaches: seen whole, as in SS13
 	for arc: Array in Sight.eye_arcs(_my_dark()):
 		var points := PackedVector2Array([origin])
 		for k in LOOK_RAYS + 1:
@@ -723,11 +693,13 @@ func _draw_look() -> void:
 				var at := origin + way * t
 				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
 				if c != start_cell and Sight.blocks(client.map, client.doors, c.x, c.y + _deck_shown * _stride):
-					t += 6.0                 # the face of the wall is seen
+					faces[c] = true
 					break
 				t += 4.0
 			points.append(origin + way * minf(t, reach))
 		_look.draw_colored_polygon(points, green)
+	for c: Vector2i in faces:
+		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
 
 
 func _my_dark() -> bool:
