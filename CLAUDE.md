@@ -506,6 +506,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   shutting, power, the other ship moving already do): who sees whom is cached until then.
 - A Control that draws on another one from a method named `_draw` also runs it for itself, and
   Godot complains ("Drawing is only allowed inside this node's `_draw()`"). Name it otherwise.
+- Pirates are Players too: whatever counts the crew must skip `p.pirate` (and `p.bot`, `p.corpse`).
+  The director counted boarders as crew until v40's fix, so it let holes pile up past its limit
+  after a boarding (`directortest` failed now and then).
 - A node with a negative `z_index` is drawn under what its parent draws itself (the stars
   in `WorldView._draw`). So decks are ordered with non-negative numbers.
 - Air falls asleep (`Air.settled`) while a door is still opening: it must also be woken
