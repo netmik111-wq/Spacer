@@ -70,8 +70,7 @@ func _initialize() -> void:
 	a.voyage_ticks = 123456
 	var health_was := p.health
 	var wounds_was := p.wounds
-	a.save_campaign()
-	_expect(Campaign.exists(PATH), "the campaign is saved")
+	_expect(a.save_campaign() and Campaign.exists(PATH), "the campaign is saved")
 	var hull_was: int = a.hull                   # (the hole took its share)
 	a.stop()
 	a.queue_free()
@@ -110,6 +109,7 @@ func _initialize() -> void:
 	b.hull = 1
 	b.hull_hit(5)
 	_expect(b.over == Net.OVER_WRECKED and not Campaign.exists(PATH), "a lost campaign leaves no save behind")
+	_expect(not b.save_campaign(), "and the host's save button saves nothing")
 	b.stop()
 	_expect(not Campaign.exists(PATH), "and stopping the server writes none")
 	Campaign.forget(PATH)

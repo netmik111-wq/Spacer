@@ -429,6 +429,13 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			elif pkt[1] == Net.ADMIN_AUTO:
 				director.auto = pkt[2] != 0
 				_ship_says("Ивентер: события идут сами." if director.auto else "Ивентер: события только вручную.")
+			elif pkt[1] == Net.ADMIN_SAVE:
+				if save_path == "":
+					_ship_says("Эта игра запущена без сохранения.")
+				elif over != Net.OVER_NONE:
+					_ship_says("Кампания окончена, сохранять нечего.")
+				else:
+					_ship_says("Кампания сохранена." if save_campaign() else "Не удалось сохранить кампанию.")
 
 
 func _reject(peer: ENetPacketPeer, reason: int) -> void:
@@ -586,10 +593,13 @@ func resume_campaign(path: String = Campaign.PATH) -> String:
 	return problem
 
 
-func save_campaign() -> void:
-	if save_path != "" and over == Net.OVER_NONE:
-		if not Campaign.write(self, save_path):
-			log_line.emit("Не удалось сохранить кампанию в %s." % save_path)
+func save_campaign() -> bool:
+	if save_path == "" or over != Net.OVER_NONE:
+		return false
+	if not Campaign.write(self, save_path):
+		log_line.emit("Не удалось сохранить кампанию в %s." % save_path)
+		return false
+	return true
 
 
 func _kit_out(p: Player) -> void:

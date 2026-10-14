@@ -899,6 +899,13 @@ func _build_pause(root: Control) -> void:
 		info.text = "Вы создали эту игру. Другие игроки в вашей сети подключаются по адресу: %s (порт %d).\nДля игры через интернет порт %d (UDP) нужно открыть на роутере." % [where, host_port, host_port]
 		box.add_child(info)
 	if client.admin_token != "":
+		# the campaign saves itself every minute and after jumps; this is for the host's peace of mind
+		var save := Button.new()
+		save.text = "Сохранить кампанию"
+		save.pressed.connect(func() -> void:
+			client.send_admin(Net.ADMIN_SAVE)
+			_set_pause(false))
+		box.add_child(save)
 		# the host is the game master: the director can be left to itself or driven by hand
 		var auto := CheckBox.new()
 		auto.text = "Ивентер ведёт события сам"

@@ -221,6 +221,7 @@ const ADMIN_BREACH := 1             # tear a hole in the hull near the player wh
 const ADMIN_SEAL := 2               # close every hole (tests)
 const ADMIN_EVENT := 3              # make the director fire the event whose id is the argument
 const ADMIN_AUTO := 4               # argument 1: the director runs events by itself; 0: only by hand
+const ADMIN_SAVE := 5               # save the campaign now and say so
 
 const NO_SECTOR := 255
 const JUMP_TICKS := 160             # a jump takes 8 s to charge
