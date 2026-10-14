@@ -174,6 +174,14 @@ the rest near black but faintly readable), and the flashlight should work like i
 round pool of warm light around the player, not a beam). Vision should be 9 tiles, as in the second
 screenshot, where he counted the tiles from the player to the edge of the view.
 
+## A clean screen and deep dark (14 October 2026)
+
+The author's words (build v47), with his screenshot of the game and one from Space Station 13: delete
+what is not needed on the screen (he crossed out the status lines in the top left and the key hints in
+the top right), make the dark "deep dark" as in the SS13 screenshot, and make the light and vision
+around the main character look like SS13 (there the player stands in a small soft pool of light, and
+everything else is black with only faint outlines).
+
 ## What of this is already in the game
 
 - Air without hints, the author's instruments, bodies of the dead.

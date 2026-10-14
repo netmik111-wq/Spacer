@@ -47,6 +47,7 @@ var _world: WorldView
 var _ui: CanvasLayer
 var _info: Label
 var _keys: Label
+var _info_on := false                # the status lines and the keys, shown by F1
 var _debug: Label
 var _monitor: TextureRect
 var _monitor_frames: Array = []       # per health state: Array[AtlasTexture]
@@ -143,6 +144,9 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_keys.offset_right = -14
 	_keys.offset_top = 34
 	_keys.modulate = Color(1, 1, 1, 0.75)
+	# Both are hidden until F1 (v47, the author's word: the screen is the ship and the dark, not text).
+	_info.visible = false
+	_keys.visible = false
 
 	_debug = _text(root, 13)
 	_debug.position = Vector2(14, 40)
@@ -347,7 +351,8 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		if Options.flash:
 			_flash.color.a = 0.9)
 	_rng.randomize()
-	_say("[color=#9aa3b5]Вы на борту. Нажмите Enter, чтобы написать в чат.[/color]")
+	_say("[color=#9aa3b5]Вы на борту. %s: чат, %s: сведения о корабле и подсказки клавиш.[/color]" % [
+		_escape(Options.key_text("chat")), _escape(Options.key_text("info"))])
 
 
 func _inventory_panel() -> InventoryPanel:
@@ -1083,6 +1088,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_pause(not _pause.visible)
 	elif typing:
 		done = false
+	elif Options.pressed(event, "info"):
+		_info_on = not _info_on
+		_keys.visible = _info_on
+		_info_timer = 0.0
 	elif Options.pressed(event, "debug"):
 		show_debug(not _debug.visible)
 	elif Options.pressed(event, "toggle_predict"):
@@ -1454,6 +1463,9 @@ func _process(delta: float) -> void:
 	_info_timer -= delta
 	if _info_timer <= 0.0:
 		_info_timer = 0.25
+		_info.visible = _info_on or Options.show_fps
+		_info.text = "Кадров: %d" % int(round(_fps_smooth))
+	if _info_timer <= 0.0 and _info_on:
 		_info.text = "На борту: %d     Резерв: %d     Обшивка: %d%%     Пинг: %d мс     Сектор: %s" % [client.crew_count(),
 			client.reserve, client.hull * 100 / Net.HULL_MAX, int(round(client.rtt_ms)),
 			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]

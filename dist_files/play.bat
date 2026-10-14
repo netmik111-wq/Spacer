@@ -9,7 +9,7 @@ goto missing
 :build
 copy /b /y "game.001"+"game.002" "SpacePrototype.exe" >nul
 if errorlevel 1 goto failed
-for %%F in ("SpacePrototype.exe") do if not "%%~zF"=="109817184" goto failed
+for %%F in ("SpacePrototype.exe") do if not "%%~zF"=="109813440" goto failed
 del "game.001" "game.002"
 :run
 start "" "SpacePrototype.exe"

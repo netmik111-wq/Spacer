@@ -27,33 +27,41 @@ const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
 const CEILING_TINT := Color(1, 1, 1, 0.38)       # the see-through floors of the deck above
 # The ship without power and without light: near black, with a cold tinge, but
-# the walls can still be made out faintly (v46, as in the author's SS13 screenshots)
-const DARK := Color(0.0, 0.004, 0.025, 0.93)
+# the walls can still be made out faintly (v46, as in the author's SS13 screenshots;
+# v47 deeper, his "deep dark")
+const DARK := Color(0.0, 0.002, 0.012, 0.955)
 const BEAM := Color(1.0, 0.86, 0.6)               # the colour of a flashlight's light: warm
 const VIEW_CELLS := 9                             # cells seen either side of us across the screen
 const LIGHT_SUB := 4                              # pixels to a cell in the pictures of light (_draw_light)
 const FLASH := 0.95                               # how bright the middle of a flashlight's pool is
-const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
+# A place out of sight is as dark as an unlit one, lit or not: only its outline
+# is remembered, faintly (v47, the author's "deep dark" as in SS13; it was 0.74 dark)
+const UNSEEN := 0.955
 const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
 # In the dark the eyes still make out the room around them, dimly (v45, the
 # author's screenshot; v46 dimmer and stopped by walls, like the SS13 shots):
 # at most DIM of full light around our character, gone DIM_RADIUS cells off.
 const DIM := 0.3
 const DIM_RADIUS := 5.0
+# Around our character, all the way round and in any light, a small soft pool
+# is made out (v47, the author: "light on the main character like in SS13"):
+# NEAR at our own cell, gone NEAR_RADIUS cells off, stopped by walls.
+const NEAR := 0.8
+const NEAR_RADIUS := 3.2
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
-# eyes reach. Seen = lit and looked at; lit but out of sight = fog; unlit = black.
+# eyes reach. Seen and lit = clear; out of sight or unlit = near black.
 const DARK_SHADER := """
 shader_type canvas_item;
 uniform sampler2D mask : filter_linear;
 uniform vec4 dark;
-uniform float fog;
+uniform float unseen;
 void fragment() {
 	vec4 m = texture(mask, SCREEN_UV);
 	float seen = clamp(m.g, 0.0, 1.0);
 	// red: the ship's own light; blue: flashlights and flashes, which light only what we look at
 	float lit = clamp(m.r + m.b * seen, 0.0, 1.0);
-	COLOR = vec4(dark.rgb, dark.a * (1.0 - lit * (1.0 - fog * (1.0 - seen))));
+	COLOR = vec4(dark.rgb, mix(unseen, dark.a * (1.0 - lit), seen));
 }
 """
 const SEEN_ONLY_SHADER := """
@@ -118,6 +126,7 @@ var _floor_seen := -1                # client.floor_changes when the things on t
 var _shade: Node2D                   # the warm light of flashlights on the floor
 var _lit := {}                       # the cells lit right now (see GameClient.lit_cells): for names in the dark
 var _dim := {}                       # the dim light around us in the dark: cell -> how strongly (Sight.glow)
+var _near := {}                      # the small pool around us seen all the way round (Sight.glow)
 var _light_textures := {}            # the pictures of light drawn last, one per pen (see _draw_light)
 # Darkness is a black sheet over the screen with holes where light falls. The holes
 # are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
@@ -222,6 +231,7 @@ func setup(p_client: GameClient) -> void:
 	_mask_view.add_child(_mask)
 	_look = Node2D.new()
 	_look.material = adding
+	_look.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR     # the pool around us is a small picture too
 	_look.draw.connect(_draw_look)
 	_mask_view.add_child(_look)
 	_mask_camera = Camera2D.new()
@@ -238,7 +248,7 @@ func setup(p_client: GameClient) -> void:
 	var sheet_material := ShaderMaterial.new()
 	sheet_material.shader = sheet_shader
 	sheet_material.set_shader_parameter("mask", _mask_view.get_texture())
-	sheet_material.set_shader_parameter("fog", FOG)
+	sheet_material.set_shader_parameter("unseen", UNSEEN)
 	_dark_sheet.material = sheet_material
 	# the warm light of flashlights and the traces of shots show only where we look
 	var seen_only := Shader.new()
@@ -401,6 +411,7 @@ func _update_ship(delta: float) -> void:
 	_dark = move_toward(_dark, 0.0 if client.powered() else 1.0, delta * 2.5)
 	_lit = client.lit_cells()
 	_dim = _find_dim()
+	_near = _find_near()
 	_shade.queue_redraw()
 	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
 	_mask.queue_redraw()
@@ -448,6 +459,16 @@ func _find_dim() -> Dictionary:
 	if s.is_empty():
 		return {}
 	return Sight.glow(client.map, client.doors, s[0], 0, DIM_RADIUS, 0.0)
+
+
+func _find_near() -> Dictionary:
+	## The small pool around us that is made out all the way round (NEAR).
+	if client.my_cond != Net.COND_OK:
+		return {}
+	var s := client.sample(client.my_id)
+	if s.is_empty():
+		return {}
+	return Sight.glow(client.map, client.doors, s[0], 0, NEAR_RADIUS, 0.0)
 
 
 func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) -> void:
@@ -658,6 +679,7 @@ func _draw_mask() -> void:
 	var me: Sprite2D = _views.get(client.my_id)
 	if me != null and me.get_parent() == _decks[_deck_shown].chars and client.my_cond == Net.COND_OK:
 		_draw_light(_mask, _dim, Color(1, 0, 0, DIM), 0)
+		_draw_light(_mask, _near, Color(1, 0, 0, NEAR * 0.5), 2)   # and a little more right around us
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
@@ -712,6 +734,7 @@ func _draw_look() -> void:
 	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
+	_draw_light(_look, _near, Color(0, 1, 0, NEAR), 0)       # and dimly all round us, as in SS13
 	var reach := float(Sight.SIGHT_REACH) * _tile
 	# the whole field of view, in the dark too: there it only lets flashlights
 	# and the dim light around us show (people in the dark: see can_see)
