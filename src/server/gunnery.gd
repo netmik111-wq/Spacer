@@ -34,6 +34,9 @@ extends RefCounted
 ## and runs (FLEE_SECONDS, longer with the drive worn; never with the drive or
 ## its engine knocked out). A raider our guns wreck stays alongside as a dead
 ## hulk the crew can board (Derelict.becomes_wreck).
+##
+## Our tractor beam (v50) holds it for a while: it cannot dodge, run or close
+## in (held()); our siphon beam drains its shield into ours.
 
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
@@ -68,6 +71,7 @@ var beam_left := PackedInt32Array()  # per mount: pulses still to come of a cutt
 var _beam_next := PackedInt32Array() # per mount: the tick of its next pulse
 var _beam_room := PackedInt32Array() # per mount: the room it burns while the guns aim anywhere
 var _beam_log: Array = []            # per mount: what its pulses did, told when it goes out
+var held_until := 0                  # the tick our tractor beam lets it go
 var enemy_hull := 0                  # damage the enemy can still take; 0 = no enemy
 var systems := PackedByteArray()     # per Net.ESYS_*: the strength the enemy's system has left
 var systems_full := PackedByteArray() # and when whole
@@ -138,6 +142,7 @@ func _loadout() -> PackedByteArray:
 func enemy_gone() -> void:
 	enemy_hull = 0
 	flee = -1.0
+	held_until = 0
 	systems = PackedByteArray()
 	systems_full = PackedByteArray()
 	systems_out = PackedInt32Array()
@@ -295,9 +300,9 @@ func tick() -> void:
 	if fighting():
 		if not fleeing() and (enemy_hull <= FLEE_HULL or (down(Net.ESYS_WEAPONS) and enemy_hull * 2 <= ENEMY_HULL)):
 			_starts_to_flee()
-		if (down(Net.ESYS_ENGINE) or fleeing()) and server.derelict._pirates_dock_at >= 0:
-			server.derelict._pirates_dock_at += 1          # it drifts, or runs: the time to fight it off stands still
-		if fleeing():
+		if (down(Net.ESYS_ENGINE) or fleeing() or held()) and server.derelict._pirates_dock_at >= 0:
+			server.derelict._pirates_dock_at += 1          # it drifts, runs or is held: the time to fight it off stands still
+		if fleeing() and not held():
 			flee += _jump_rate()
 			if flee >= FLEE_SECONDS * Net.TICK_HZ:
 				_escaped()
@@ -328,6 +333,11 @@ func _enemy_shield_tick() -> void:
 	elif server.tick >= systems_out[Net.ESYS_SHIELDS]:
 		enemy_shield = minf(enemy_shield + Weapons.SHIELD_REGEN / Net.TICK_HZ * systems[Net.ESYS_SHIELDS] / systems_full[Net.ESYS_SHIELDS],
 			Weapons.SHIELD_FULL)
+
+
+func held() -> bool:
+	## Does our tractor beam hold it now?
+	return fighting() and server.tick < held_until
 
 
 func _enemy_shield_up() -> bool:
@@ -371,7 +381,8 @@ func packet() -> PackedByteArray:
 			out.append(clampi(int(ceil(float(systems_out[i] - server.tick) / Net.TICK_HZ)), 0, 255))
 	else:
 		out.append(0)
-	out.append(((Net.ENEMY_RAID if raid else 0) | (Net.ENEMY_FLEEING if fleeing() else 0)) if fighting() else 0)
+	out.append(((Net.ENEMY_RAID if raid else 0) | (Net.ENEMY_FLEEING if fleeing() else 0) | (Net.ENEMY_HELD if held() else 0))
+		if fighting() else 0)
 	var jump := jump_seconds_left() if fighting() and fleeing() else 0
 	out.append(jump & 0xFF)
 	out.append(jump >> 8)
@@ -431,12 +442,14 @@ func fire(p, which: int) -> void:
 			server.supplies.tell_store()
 		charge[i] = 0.0
 		fired += 1
-		if Weapons.klass(w) == Weapons.CLASS_BEAM:
-			beam_left[i] = Weapons.BEAM_PULSES
+		if Weapons.klass(w) == Weapons.CLASS_BEAM or Weapons.klass(w) == Weapons.CLASS_SIPHON:
+			beam_left[i] = Weapons.BEAM_PULSES if Weapons.klass(w) == Weapons.CLASS_BEAM else Weapons.SIPHON_PULSES
 			_beam_next[i] = server.tick
 			_beam_room[i] = _rng.randi_range(0, Net.ESYS_COUNT - 1)
 			_beam_log[i] = [0, 0, PackedStringArray()]        # pulses that burned, pulses the shield stopped, what came of it
 			_beam_pulse(i)
+		elif Weapons.klass(w) == Weapons.CLASS_TRACTOR:
+			_tractor(i, w)
 		else:
 			_our_volley(i, w)
 		if not fighting() or _settle():
@@ -468,10 +481,28 @@ func _broken_off() -> void:
 
 
 func _hit_chance(w: int) -> float:
+	## Ours: better while its bridge is out (it cannot dodge) and while our tractor beam holds it.
 	var hit := float(Weapons.info(w)["hit"])
-	if down(Net.ESYS_HELM):
-		hit = maxf(hit, minf(hit + Weapons.BLIND_BONUS, Weapons.BEST_HIT))
+	var bonus := (Weapons.BLIND_BONUS if down(Net.ESYS_HELM) else 0.0) + (Weapons.TRACTOR_BONUS if held() else 0.0)
+	if bonus > 0.0:
+		hit = maxf(hit, minf(hit + bonus, Weapons.BEST_HIT))
 	return hit
+
+
+func _tractor(i: int, w: int) -> void:
+	## The tractor beam: it never misses; unless the shield stops it, it holds the ship.
+	var map = server.map
+	var cell: int = map.guns[i]
+	var at := Vector2(cell % map.width, cell / map.width)
+	server.combat.tell_shot(Net.SHOT_TRACTOR, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
+	if _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
+		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
+		server.chat.say("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
+		return
+	var hold := float(Weapons.info(w)["hold"]) if Weapons.info(w).has("hold") else Weapons.TRACTOR_HOLD
+	held_until = maxi(held_until, server.tick + roundi(hold * Net.TICK_HZ))
+	server.chat.say("Орудие %d (захватный луч): пиратский корабль схвачен на %d с: не уклоняется, не уходит прыжком и не подходит к шлюзу.%s" % [
+		i + 1, int(hold), _enemy_state()])
 
 
 func _our_volley(i: int, w: int) -> void:
@@ -522,6 +553,9 @@ func _beam_pulse(i: int) -> void:
 		beam_left[i] = 0
 		return
 	var w: int = server.ship.mounts[i]
+	if Weapons.klass(w) == Weapons.CLASS_SIPHON:
+		_siphon_pulse(i)
+		return
 	var cell: int = map.guns[i]
 	var at := Vector2(cell % map.width, cell / map.width)
 	server.combat.tell_shot(Net.SHOT_BEAM, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
@@ -547,6 +581,34 @@ func _beam_pulse(i: int) -> void:
 			"" if (log[2] as PackedStringArray).is_empty() else " " + " ".join(_unique(log[2])), _enemy_state()])
 	if fighting():
 		_settle()
+
+
+func _siphon_pulse(i: int) -> void:
+	## A siphon beam drinks a second more of the enemy's shield and pours it into ours.
+	var map = server.map
+	var ship = server.ship
+	var cell: int = map.guns[i]
+	var at := Vector2(cell % map.width, cell / map.width)
+	server.combat.tell_shot(Net.SHOT_SIPHON, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
+	var log: Array = _beam_log[i]
+	var take := minf(enemy_shield, Weapons.SIPHON_DRAIN)
+	enemy_shield -= take
+	log[0] += take
+	var gen := shield_cell()
+	if take > 0.0 and gen >= 0 and ship.shield_on and server.powered() and not ship.broken.has(gen) and not jammed(gen):
+		var room: float = Weapons.SHIELD_FULL - ship.shield
+		ship.shield = minf(ship.shield + take, Weapons.SHIELD_FULL)
+		log[1] += minf(take, room)
+	beam_left[i] -= 1
+	_beam_next[i] = server.tick + Weapons.BEAM_PULSE_TICKS
+	if beam_left[i] == 0:
+		var what := ""
+		if log[0] <= 0.0:
+			what = "у пиратов нет щита, тянуть нечего."
+		else:
+			what = "вытянул из щита пиратов %d, нашему щиту %s." % [roundi(log[0]),
+				("+%d" % roundi(log[1])) if log[1] > 0.0 else "ничего (генератор не работает или щит полон)"]
+		server.chat.say("Орудие %d (сифон): %s%s" % [i + 1, what, _enemy_state()])
 
 
 func _enemy_state() -> String:

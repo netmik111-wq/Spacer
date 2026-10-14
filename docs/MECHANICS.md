@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v49 (version 0.42).
+Last updated: build v50 (version 0.43).
 
 Contents:
 
@@ -479,7 +479,7 @@ The boarding ship:
 
 ### Ship weapons
 
-Since v49 (the author's request) guns can be changed, the ship has a shield, and there are ten kinds of ship weapon.
+Since v49 (the author's request) guns can be changed, the ship has a shield, and there are ten kinds of ship weapon; v50 added two more beams, the tractor and the siphon (the author chose them).
 
 - The ship has **3 gun mounts** in the hull: in compartments near the nose on the port and starboard sides and under
   the belly. They are worked from the **gun console** on the bridge (E). The console and guns need power.
@@ -506,6 +506,8 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | ЭМИ-установка (EMP launcher) | 12 s | 1 | 85% | 0 | 1 | 60 | ignores the shield (not a hardened one); puts the system it hits out for **6 s**; spends an EMP rocket (6 cr.) |
 | Ионная пушка (ion gun) | 7 s | 1 | 80% | 0 | 1 | 40 | takes 35 off a shield; through it, puts the system it hits out for **3 s** |
 | Ионное орудие (ion cannon) | 13 s | 1 | 75% | 0 | 2 | 70 | takes 70 off a shield; through it, puts a system out for **3 s** |
+| Захватный луч (tractor beam, v50) | 15 s | 1 | never misses | 0 | 2 | 60 | holds the enemy **8 s**: our shots hit **+25%** (up to 95%), its escape jump and its countdown to docking stand still; a shield at 50+ stops it (losing 10) |
+| Сифон (siphon beam, v50) | 12 s | 4 pulses, 1 a second | never misses | 0 | 2 | 65 | each pulse takes **12** from the enemy's shield and adds it to ours (if our generator works, up to 100); no hull damage |
 
 - **Shields** (the author's rule, not FTL's). A shield is a pool of **0–100** that refills **2.5 a second**.
   A shot that meets it at **50 or more** is stopped and takes **25 per point of its damage** away (ion: its own

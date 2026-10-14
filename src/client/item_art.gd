@@ -6,7 +6,8 @@ const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 
 # the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
-const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0)]
+const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0),
+	Color(0.55, 1.0, 0.7), Color(0.3, 0.95, 1.0)]
 
 
 static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
@@ -44,8 +45,8 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
 		return
-	if item > Net.ITEM_GUN and item < Net.ITEM_GUN + Weapons.COUNT:
-		_ship_gun(canvas, at, u, item - Net.ITEM_GUN)
+	if Weapons.of_item(item) != Weapons.NONE:
+		_ship_gun(canvas, at, u, Weapons.of_item(item))
 		return
 	if item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET:
 		# a rocket lying across: a grey body, a coloured nose, fins at the tail

@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 29
+const PROTOCOL := 30
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -126,10 +126,11 @@ const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT 
 const SUIT_TANK_STEPS := 10
 const ITEM_JUMPSUIT := 41
 const ITEM_BACKPACK := 42
-const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + Weapons.* (51..60); kept in the
+const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + Weapons.* (51..60; later ones ITEM_GUN_MORE); kept in the
                                     # supply locker only, never carried (Items "cargo")
 const ITEM_ROCKET := 61             # a rocket for the rocket launcher (cargo)
 const ITEM_EMP_ROCKET := 62         # an EMP rocket for the EMP launcher (cargo)
+const ITEM_GUN_MORE := 60           # (v50) weapons from Weapons.TRACTOR on: ITEM_GUN_MORE + Weapons.* (71, 72)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -167,7 +168,7 @@ const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (W
 const GUN_BROKEN := 255
 const GUN_JAMMED := 254             # put out for a few seconds by an enemy ion or EMP hit
 const GUNF_ARMED := 1               # it draws power and charges
-const GUNF_BEAM := 2                # (a cutting beam) it is burning now
+const GUNF_BEAM := 2                # (a cutting or siphon beam) it is burning now
 const GUNF_NO_AMMO := 4             # (a launcher) no rockets for it in the cargo
 const SHF_HAS := 1                  # the ship has a shield generator
 const SHF_ON := 2                   # it is switched on
@@ -198,6 +199,7 @@ const ESYS_COUNT := 6
 const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты"]
 const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
+const ENEMY_HELD := 4               # (v50) our tractor beam holds it
 const AIM_ANY := 255                # the guns hit wherever they hit
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
@@ -209,6 +211,8 @@ const SHOT_ION := 4                 # (v49) an ion shot: blue
 const SHOT_ROCKET := 5              # a rocket: a smoky trail
 const SHOT_PLASMA := 6              # a blaster's pellet: green
 const SHOT_BEAM := 7                # a pulse of the cutting beam: a thin white-violet line
+const SHOT_TRACTOR := 8             # (v50) the tractor beam: a pale green line
+const SHOT_SIPHON := 9              # (v50) a pulse of the siphon beam: a cyan line
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull)
 const S_SHIPS := 26                 # every ship in the world: u8 count, then per ship u16 id, u8 kind (SHIP_*),
                                     # u8 docked, s16 x, s16 y of its corner in the grid, u8 name length, name.

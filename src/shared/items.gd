@@ -81,6 +81,8 @@ const INFO := {
 	Net.ITEM_GUN + Weapons.EMP: {"gun": Weapons.EMP, "cargo": true},
 	Net.ITEM_GUN + Weapons.ION: {"gun": Weapons.ION, "cargo": true},
 	Net.ITEM_GUN + Weapons.ION_CANNON: {"gun": Weapons.ION_CANNON, "cargo": true},
+	Net.ITEM_GUN_MORE + Weapons.TRACTOR: {"gun": Weapons.TRACTOR, "cargo": true},
+	Net.ITEM_GUN_MORE + Weapons.SIPHON: {"gun": Weapons.SIPHON, "cargo": true},
 	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме.", "price": Weapons.ROCKET_PRICE, "cargo": true},
 	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме.", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
@@ -197,7 +199,8 @@ const CATEGORIES: Array = [
 	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON]],
 	["Корабельное оружие", [Net.ITEM_GUN + Weapons.LASER, Net.ITEM_GUN + Weapons.HEAVY, Net.ITEM_GUN + Weapons.SIEGE,
 		Net.ITEM_GUN + Weapons.RAPID, Net.ITEM_GUN + Weapons.BEAM, Net.ITEM_GUN + Weapons.BLASTER, Net.ITEM_GUN + Weapons.ROCKET,
-		Net.ITEM_GUN + Weapons.EMP, Net.ITEM_GUN + Weapons.ION, Net.ITEM_GUN + Weapons.ION_CANNON]],
+		Net.ITEM_GUN + Weapons.EMP, Net.ITEM_GUN + Weapons.ION, Net.ITEM_GUN + Weapons.ION_CANNON,
+		Net.ITEM_GUN_MORE + Weapons.TRACTOR, Net.ITEM_GUN_MORE + Weapons.SIPHON]],
 	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET]],
 ]
 

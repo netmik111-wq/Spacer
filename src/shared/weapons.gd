@@ -16,7 +16,9 @@ extends RefCounted
 ##   the blaster: half its pellets slip through as if there were no shield;
 ##   rockets: never, unless the shield is hardened (a rare upgrade);
 ##   ion: always, and it only wears the shield down; what gets through puts the
-##        system it lands on out for a few seconds instead of doing damage.
+##        system it lands on out for a few seconds instead of doing damage;
+##   the tractor beam: always, like the cutter (stopped, it takes BEAM_SHIELD);
+##   the siphon beam: it is not stopped, it feeds on the shield itself.
 
 const Net := preload("res://src/shared/net.gd")
 
@@ -31,13 +33,17 @@ const ROCKET := 7                    # a rocket launcher
 const EMP := 8                       # an EMP launcher
 const ION := 9                       # an ion gun
 const ION_CANNON := 10               # an ion cannon
-const COUNT := 11
+const TRACTOR := 11                  # (v50) the tractor beam: holds the enemy, no damage
+const SIPHON := 12                   # (v50) the siphon beam: drains the enemy's shield into ours
+const COUNT := 13
 
 const CLASS_LASER := 0
 const CLASS_BEAM := 1
 const CLASS_BLASTER := 2
 const CLASS_ROCKET := 3
 const CLASS_ION := 4
+const CLASS_TRACTOR := 5
+const CLASS_SIPHON := 6
 
 const REACTOR := 8                   # power the reactor gives the guns and the shield
 const SHIELD_POWER := 2
@@ -59,6 +65,18 @@ const SELL_SHARE := 0.5              # a trader buys things back at this share o
 const BEAM_PULSES := 4
 const BEAM_PULSE_TICKS := Net.TICK_HZ
 const BEAM_SHIELD := 10.0
+
+# The tractor and siphon beams (v50, the author chose both of my other beam
+# ideas). The tractor does no damage: it holds the enemy for TRACTOR_HOLD
+# seconds, and while it holds the enemy cannot dodge (our shots hit
+# TRACTOR_BONUS more often, up to BEST_HIT), cannot charge its jump to run and
+# cannot close in to dock. The siphon burns SIPHON_PULSES seconds like the
+# cutter, and each second takes SIPHON_DRAIN from the enemy's shield and puts it
+# into ours (if our generator works); it does nothing to the hull.
+const TRACTOR_HOLD := 8.0
+const TRACTOR_BONUS := 0.25
+const SIPHON_PULSES := 4
+const SIPHON_DRAIN := 12.0
 
 # name, short name, about, class, charge seconds, shots, hit chance, damage per hit,
 # power, price, ammo (Net.ITEM_* or 0), shield it takes when stopped (ion: its whole effect),
@@ -94,6 +112,12 @@ const INFO := {
 	ION_CANNON: {"name": "Ионное орудие", "short": "Ион. орудие", "class": CLASS_ION, "charge": 13.0, "shots": 1, "hit": 0.75, "damage": 0,
 		"power": 2, "price": 70, "shield": 70.0, "disable": 3.0,
 		"about": "Ионное орудие: снимает со щита 70. Если попало в корпус, на 3 с выключает систему. Корпусу урона нет."},
+	TRACTOR: {"name": "Захватный луч", "short": "Захват", "class": CLASS_TRACTOR, "charge": 15.0, "shots": 1, "hit": 1.0, "damage": 0,
+		"power": 2, "price": 60,
+		"about": "Луч без урона, не промахивается: держит корабль врага 8 с. Пока держит, враг не уклоняется (наши попадания +25%, до 95%), не заряжает прыжок, чтобы сбежать, и не подходит к шлюзу. Щит выше 50 его не пускает."},
+	SIPHON: {"name": "Сифон", "short": "Сифон", "class": CLASS_SIPHON, "charge": 12.0, "shots": 1, "hit": 1.0, "damage": 0,
+		"power": 2, "price": 65,
+		"about": "Луч-насос: 4 с тянет щит врага, по 12 в секунду, и отдаёт взятое нашему щиту (если наш генератор работает). Корпусу урона нет; по кораблю без щита бесполезен."},
 }
 
 const SHIELD_HARDEN_PRICE := 80      # the rare upgrade: the shield stops rockets too
@@ -136,14 +160,18 @@ static func klass(w: int) -> int:
 
 
 static func item_of(w: int) -> int:
-	## The thing a weapon off its mount is, in the cargo.
-	return Net.ITEM_GUN + w
+	## The thing a weapon off its mount is, in the cargo. The rockets took the
+	## numbers after the first ten, so the later weapons go on from Net.ITEM_GUN_MORE.
+	return Net.ITEM_GUN + w if w < TRACTOR else Net.ITEM_GUN_MORE + w
 
 
 static func of_item(item: int) -> int:
 	## The weapon a thing in the cargo is, or NONE.
 	var w := item - Net.ITEM_GUN
-	return w if INFO.has(w) else NONE
+	if w > NONE and w < TRACTOR:
+		return w
+	w = item - Net.ITEM_GUN_MORE
+	return w if w >= TRACTOR and INFO.has(w) else NONE
 
 
 static func shield_damage(w: int) -> float:
@@ -152,7 +180,7 @@ static func shield_damage(w: int) -> float:
 		return 0.0
 	if INFO[w].has("shield"):
 		return float(INFO[w]["shield"])
-	if klass(w) == CLASS_BEAM:
+	if klass(w) == CLASS_BEAM or klass(w) == CLASS_TRACTOR:
 		return BEAM_SHIELD
 	return SHIELD_PER_DAMAGE * maxf(float(INFO[w]["damage"]), 1.0)
 
