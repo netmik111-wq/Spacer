@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v45 (version 0.38).
+Last updated: build v46 (version 0.39).
 
 Contents:
 
@@ -252,7 +252,7 @@ Contents:
 | Radio | talk with «;» — everyone with a radio hears | 4 | 6 |
 | Fuel | a canister for one jump | 8 | 6 |
 | Spare part | repair three times faster | 5 | 10 |
-| Flashlight | 35° beam, 9 cells | 4 | 8 |
+| Flashlight | soft round pool, 6 cells | 4 | 8 |
 | Pistol | 8 rounds, damage 30 | 1 (empty) | 25 |
 | Magazine | 8 rounds | 2 | 6 |
 | Baton | damage 15 to a neighbour | 1 | 8 |
@@ -288,15 +288,21 @@ Contents:
 
 ## 11. Light and darkness
 
-- A **flashlight** in hand shines a smooth **35°** cone for **9 cells**. The beam starts at the chest,
-  right away as wide as the body. Walls and closed doors stop it; windows and open doors
-  let it through. Someone else's beam is visible from afar, but only where you are looking: outside the field of view
-  flashlight light is not visible.
+- Light works **as in SS13** (v46, the author's screenshots): it is worked out cell by cell and drawn
+  smooth, blending between the middles of cells, so it fades softly; a cell the light does not reach
+  (behind a wall or a closed door) stays dark, and a wall is lit on the face turned to the light.
+- A **flashlight** in hand (v46) lights a soft, warm **round pool** around its holder, its middle
+  **1.5 cells** ahead (it stops at a wall you face) and fading to nothing **6 cells** from there:
+  bright for about a cell, half at about 3 cells, faint at 5. Walls and closed doors stop it; windows
+  and open doors let it through. Someone else's light is visible from afar, but only where you are
+  looking: outside the field of view flashlight light is not visible. (Until v45 it was a narrow
+  35° beam 9 cells long.)
 - **Without power** the ship's lights go out. Space outside doesn't darken.
-- **In the dark your eyes still make out the room** (v45, the author's screenshot): within the field of
-  view everything up to **4 cells** away is dimly visible (about a third of full light), fading out by
-  **8.5 cells**; farther, and outside the field of view, it is black. The flashlight lights its cone
-  fully, so it is much brighter. The same goes for derelicts and wrecks. People in the dark are still
+- **The dark is near black but readable** (v46): unlit places keep **7%** of their light with a cold
+  tinge, so walls and rooms can be faintly made out, as in the author's SS13 screenshots.
+- **In the dark your eyes still make out the room around you** (v45, dimmer in v46): up to **30%** of
+  full light right around you, fading out by **5 cells**, stopped by walls; outside the field of view
+  it is fogged. The flashlight is much brighter. The same goes for derelicts and wrecks. People in the dark are still
   seen only within 2 cells or in a light (see "Field of view"). Until v45 there was pitch darkness
   outside the flashlight (build v27–v44).
 - **Starlight**: the outer hull of any ship (walls and doors facing open
@@ -310,6 +316,9 @@ Contents:
 
 - A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
   in the middle (later, losing an eye will remove its part of the cone).
+- The eyes reach **9 cells** (v46, the author: as in SS13; before it was 20). The screen is zoomed so
+  that at least 9 cells show on either side of you across it (19 cells in all, at a whole zoom so
+  pixels stay crisp: 2× in a 1280-wide window, 3× at 1920).
 - In the dark the room is still seen across the whole **160°** cone, dimly (see "Light and darkness"),
   but **people** only within a **60°** cone: where the flashlight shines, or right next to you, within
   2 cells (their name is visible).

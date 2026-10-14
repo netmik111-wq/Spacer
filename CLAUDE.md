@@ -109,6 +109,10 @@ Build v45 (0.38) was the author's own request, as one build: the dark no longer 
 view dimly seen, the flashlight brighter; on wrecks, derelicts and our ship without power) and the left
 mouse button working as E on what it clicks (items on the floor, consoles, machines, repairs).
 
+Build v46 (0.39) was the author's own request, as one build: light and darkness as in his SS13
+screenshots (soft per-cell light, near-black but readable dark, the flashlight a warm round pool instead
+of a beam) and vision of 9 cells (eyes and screen).
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -315,13 +319,23 @@ The parameters for these checks are described in the header of `src/main.gd`.
   even by an edge and the straight line to it doesn't pass through a wall or closed door. That's how tiles
   are lit in SS13, and the same will be used for the field of view. The server doesn't use light yet,
   and the client uses tiles only to decide whether a name is visible. Light is drawn smoothly: the beam is a polygon
-  of rays cut off at walls (`WorldView._find_beams`). Without power the ship is dark: a black cover
+  of rays cut off at walls (until v45; since v46 see "Light as in SS13"). Without power the ship is dark: a black cover
   with a shader and an image mask where red marks light; space outside doesn't darken.
 - **Darkness is dim, not pitch black** (v45, the author's screenshot; it replaces the v27–v44 rule
-  "only the flashlight gives light"). In the dark a red glow `DIM` (0.34) around our character, full to
-  `DIM_NEAR` cells and gone by `DIM_FAR`, goes into the mask (`WorldView._draw_mask`, a radial
-  `GradientTexture2D`); like any light it shows only where we look, so the room is made out dimly in
-  the field of view and the flashlight is clearly brighter. The look (green) is always the full 160°
+  "only the flashlight gives light"). In the dark a red glow `DIM` (0.3 since v46) around our character,
+  a `Sight.glow` pool of `DIM_RADIUS` cells, goes into the mask (`WorldView._draw_mask`), so the room is
+  made out dimly and the flashlight is clearly brighter. Since v46 the dark sheet itself is not opaque
+  (`DARK` alpha 0.93): unlit places stay faintly readable, as in SS13.
+- **Light as in SS13** (v46, the author's screenshots). A light is a set of cells with strengths
+  (`Sight.glow`: a round pool around a spot ahead of the holder, cells with a clear line from the
+  holder, walls lit on a face turned to the light; the old `Sight.cone` is only in tests now). The
+  client draws such a set (`WorldView._draw_light`) as a small picture, `LIGHT_SUB` pixels a cell,
+  blending between cell middles and zero in cells the light does not reach, stretched with linear
+  filtering: smooth falloff, no leaks past walls. The flashlight is `Items.light` = [radius, ahead];
+  the server (`Replication._lit_cells`) and the client (`GameClient.lit_cells`) use the same pool, so
+  people stood in it are seen. Add new light sources as more `_draw_light` sets.
+- **Vision 9 cells** (v46, the author): `Sight.SIGHT_REACH` is 9 (eyes, server visibility, pirates),
+  and the camera zoom is the whole number that shows at least `VIEW_CELLS` (9) cells either side across. The look (green) is always the full 160°
   cone now. People in the dark are still judged by the old rule (60°, 2 cells or a light: `can_see`,
   `Replication.sees`), so the dark keeps hiding them.
 - **Cells are seen whole** (v42–v43, the author's request): `WorldView._draw_look` keeps the smooth cone

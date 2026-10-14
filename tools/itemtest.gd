@@ -130,23 +130,21 @@ func _initialize() -> void:
 
 	print("light and sight")
 	var doors := server.doors
-	var beam := Items.light(Net.ITEM_FLASHLIGHT_ON)
-	var lit := Sight.cone(map, doors, Vector2(5, 4), Net.DIR_RIGHT, beam[0], beam[1])
-	_expect(lit.has(4 * map.width + 14) and not lit.has(4 * map.width + 15), "a flashlight reaches %d cells along the corridor" % int(beam[1]))
-	_expect(not lit.has(4 * map.width + 4), "and nothing behind its holder")
-	var wide := 0
-	for cell: int in lit.keys():
-		if cell % map.width == 13:
-			wide += 1
-	_expect(wide <= 3, "its cone is narrow: %d cells across eight cells off" % wide)
+	var pool := Items.light(Net.ITEM_FLASHLIGHT_ON)
+	var w := map.width
+	var lit := Sight.glow(map, doors, Vector2(5, 4), Net.DIR_RIGHT, pool[0], pool[1])
+	_expect(lit.has(4 * w + 10) and not lit.has(4 * w + 13), "a flashlight lights a round pool, not a long beam")
+	_expect(lit.has(5 * w + 8) and lit.has(5 * w + 5), "the pool is round: it spreads to the sides and around its holder")
+	_expect(float(lit.get(4 * w + 8, 0.0)) > float(lit.get(4 * w + 4, 0.0)), "and is brighter ahead than behind")
+	_expect(not lit.has(4 * w + 3), "the shut door behind its holder stops it")
 	var up := Sight.cone(map, doors, Vector2(5, 4), Net.DIR_UP, 160.0, 9)
 	_expect(up.has(3 * map.width + 5) and not up.has(2 * map.width + 5), "a wall is lit, and nothing behind it")
 	var door := map.door_at(4, 4)
 	_expect(door >= 0 and doors.is_shut(door), "(the door at 4,4 is shut)")
-	var through := Sight.cone(map, doors, Vector2(1, 4), Net.DIR_RIGHT, beam[0], beam[1])
+	var through := Sight.glow(map, doors, Vector2(1, 4), Net.DIR_RIGHT, pool[0], pool[1])
 	_expect(through.has(4 * map.width + 4) and not through.has(4 * map.width + 5), "a shut door stops the light")
 	doors.ready[door] = server.tick
-	through = Sight.cone(map, doors, Vector2(1, 4), Net.DIR_RIGHT, beam[0], beam[1])
+	through = Sight.glow(map, doors, Vector2(1, 4), Net.DIR_RIGHT, pool[0], pool[1])
 	_expect(through.has(4 * map.width + 5), "an open one lets it through")
 	var below := Sight.cone(map, doors, Vector2(5, 4), Net.DIR_DOWN, 160.0, 30)
 	var other_deck := false
