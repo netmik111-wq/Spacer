@@ -101,8 +101,10 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			server.chat.say("Администратор: воздух во всём корабле восстановлен.")
 		Net.ADMIN_RESTOCK:
 			for item in Items.kept_in_locker():
-				server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)), Items.stock(item))
-			server.chat.say("Администратор: шкаф снабжения пополнен.")
+				# the ship's weapons: one of each in the cargo; rockets: ten (for trying the guns out)
+				var least := Items.stock(item) if not Items.cargo(item) else (1 if Items.price(item) >= 20 else 10)
+				server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)), least)
+			server.chat.say("Администратор: шкаф снабжения пополнен (в трюме по одному корабельному орудию каждого вида и ракеты).")
 		Net.ADMIN_CREDITS:
 			server.ship.credits = mini(server.ship.credits + Net.ADMIN_CREDITS_GIVEN, 60000)
 		Net.ADMIN_HULL:

@@ -88,6 +88,7 @@ TILES.append(("lock_pump", None, "wall"))
 TILES.append(("gun", None, "wall"))
 TILES.append(("intercom", None, "wall"))
 TILES.append(("holo", None, "wall"))
+TILES.append(("shield", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -313,6 +314,24 @@ def make_machine(wall, what):
             o[x, 14] = (40, 130, 160, 255); o[x, 15] = (40, 130, 160, 255)
         rect(19, 12, 20, 13, (240, 80, 60, 255))
         rect(14, 22, 17, 22, (90, 220, 110, 255))      # a lamp under the screen
+    elif what == "shield":
+        # the shield generator: a housing with a blue emitter ring and coils either side
+        rect(4, 3, 27, 24, body); rect(4, 3, 27, 4, cap); rect(4, 24, 27, 24, mid)
+        rect(6, 6, 25, 22, dark)
+        for y in range(6, 22):
+            for x in range(9, 23):
+                d = ((x - 15.5) ** 2 + (y - 13.5) ** 2) ** 0.5
+                if 5.0 < d < 6.6:
+                    o[x, y] = (110, 170, 255, 255)
+                elif 3.4 < d <= 5.0:
+                    o[x, y] = (40, 80, 170, 255)
+                elif d <= 1.8:
+                    o[x, y] = (200, 230, 255, 255)
+        for y in range(8, 21, 2):                      # coils
+            rect(6, y, 8, y, (184, 120, 52, 255)); rect(23, y, 25, y, (184, 120, 52, 255))
+        rect(14, 22, 17, 22, (90, 220, 110, 255))      # a lamp
+        for x in range(6, 26):
+            o[x, 23] = HAZARD if (x // 2) % 2 == 0 else dark
     elif what == "lock_pump":
         # the airlock pump: a panel with a gauge and two lamps (pump out, pump in)
         rect(6, 4, 25, 24, body); rect(6, 4, 25, 5, cap); rect(6, 24, 25, 24, mid)
@@ -367,6 +386,7 @@ def build_tiles():
         "gun": lambda: make_machine(images["wall_h"], "gun"),
         "intercom": lambda: make_machine(images["wall_h"], "intercom"),
         "holo": lambda: make_machine(images["wall_h"], "holo"),
+        "shield": lambda: make_machine(images["wall_h"], "shield"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -401,6 +421,7 @@ def build_tiles():
 #   '9'  wall with an airlock pump in it: the floor in front is the chamber; its outer 'D' opens into space
 #   'I'  wall with an intercom panel on it
 #   'M'  wall with a holomap monitor on it (the whole ship: air, holes, what is broken)
+#   'Z'  wall with the shield generator in it
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -421,9 +442,9 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIM")
+BAND_CHARS = set("#DW<>123456789TIMZ")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
-SYSTEMS = ["weapons", "helm", "engine", "crew", "jump"]                                  # as Net.ESYS_*
+SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
 
@@ -510,7 +531,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

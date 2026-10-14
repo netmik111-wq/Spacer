@@ -14,11 +14,15 @@ extends RefCounted
 ##            counted, stored and sold as that
 ##   switch   what it turns into when used in the hand (Z)
 ##   light    [cone width in degrees, reach in cells]: it shines while in the hand
+##   cargo    true: kept in the supply locker as the ship's cargo, never carried
+##            (ship weapons and their rockets)
+##   gun      the ship weapon (Weapons.*) it is: its name, words and price come from there
 ## Later things will add their own properties here (damage, what it protects
 ## from, which layer of clothing it is), so a new kind of thing does not need
 ## new code where things are moved about.
 
 const Net := preload("res://src/shared/net.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
@@ -66,6 +70,19 @@ const INFO := {
 	Net.ITEM_SUIT + 8: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 8},
 	Net.ITEM_SUIT + 9: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 9},
 	Net.ITEM_SUIT + 10: {"name": "Скафандр", "about": SUIT_ABOUT, "wear": Net.WEAR_SUIT, "tank": 10, "price": 40, "stock": 2},
+	# the ship's weapons off their mounts, and rockets: cargo
+	Net.ITEM_GUN + Weapons.LASER: {"gun": Weapons.LASER, "cargo": true},
+	Net.ITEM_GUN + Weapons.HEAVY: {"gun": Weapons.HEAVY, "cargo": true},
+	Net.ITEM_GUN + Weapons.SIEGE: {"gun": Weapons.SIEGE, "cargo": true},
+	Net.ITEM_GUN + Weapons.RAPID: {"gun": Weapons.RAPID, "cargo": true},
+	Net.ITEM_GUN + Weapons.BEAM: {"gun": Weapons.BEAM, "cargo": true},
+	Net.ITEM_GUN + Weapons.BLASTER: {"gun": Weapons.BLASTER, "cargo": true},
+	Net.ITEM_GUN + Weapons.ROCKET: {"gun": Weapons.ROCKET, "cargo": true},
+	Net.ITEM_GUN + Weapons.EMP: {"gun": Weapons.EMP, "cargo": true},
+	Net.ITEM_GUN + Weapons.ION: {"gun": Weapons.ION, "cargo": true},
+	Net.ITEM_GUN + Weapons.ION_CANNON: {"gun": Weapons.ION_CANNON, "cargo": true},
+	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме.", "price": Weapons.ROCKET_PRICE, "cargo": true},
+	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме.", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -120,11 +137,22 @@ static func known(item: int) -> bool:
 
 
 static func name_of(item: int) -> String:
-	return str(INFO[item]["name"]) if INFO.has(item) else ""
+	if not INFO.has(item):
+		return ""
+	if INFO[item].has("gun"):
+		return Weapons.name_of(int(INFO[item]["gun"]))
+	return str(INFO[item]["name"])
 
 
 static func about(item: int) -> String:
+	if INFO.has(item) and INFO[item].has("gun"):
+		return str(Weapons.info(int(INFO[item]["gun"]))["about"]) + " Энергия: %d." % Weapons.power(int(INFO[item]["gun"]))
 	return str(INFO[item].get("about", "")) if INFO.has(item) else ""
+
+
+static func cargo(item: int) -> bool:
+	## Is it the ship's cargo (kept in the locker, never carried)?
+	return INFO.has(item) and bool(INFO[item].get("cargo", false))
 
 
 static func kind_of(item: int) -> int:
@@ -133,6 +161,8 @@ static func kind_of(item: int) -> int:
 
 
 static func price(item: int) -> int:
+	if INFO.has(item) and INFO[item].has("gun"):
+		return int(Weapons.info(int(INFO[item]["gun"]))["price"])
 	return int(INFO[item].get("price", 0)) if INFO.has(item) else 0
 
 
@@ -154,9 +184,30 @@ static func kept_in_locker() -> PackedInt32Array:
 	## The things the supply locker holds, in the order they are shown.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) == item and stock(item) > 0:
+		if kind_of(item) == item and (stock(item) > 0 or cargo(item)):
 			out.append(item)
 	return out
+
+
+# The kinds of thing, as the supply locker and the trader show them: caption, the things in it.
+const CATEGORIES: Array = [
+	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FUEL]],
+	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
+	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES]],
+	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON]],
+	["Корабельное оружие", [Net.ITEM_GUN + Weapons.LASER, Net.ITEM_GUN + Weapons.HEAVY, Net.ITEM_GUN + Weapons.SIEGE,
+		Net.ITEM_GUN + Weapons.RAPID, Net.ITEM_GUN + Weapons.BEAM, Net.ITEM_GUN + Weapons.BLASTER, Net.ITEM_GUN + Weapons.ROCKET,
+		Net.ITEM_GUN + Weapons.EMP, Net.ITEM_GUN + Weapons.ION, Net.ITEM_GUN + Weapons.ION_CANNON]],
+	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET]],
+]
+
+
+static func category_of(item: int) -> int:
+	## Its place in CATEGORIES, or -1.
+	for k in CATEGORIES.size():
+		if (CATEGORIES[k][1] as Array).has(kind_of(item)):
+			return k
+	return -1
 
 
 static func spawnable() -> PackedInt32Array:
@@ -164,7 +215,7 @@ static func spawnable() -> PackedInt32Array:
 	## tank full, a flashlight off): for the admin panel.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) != item or not light(item).is_empty():
+		if kind_of(item) != item or not light(item).is_empty() or cargo(item):
 			continue
 		out.append(item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item)
 	return out

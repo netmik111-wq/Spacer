@@ -382,6 +382,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_AIM:
 		if pkt.size() > 1:
 			gunnery.aim_asked(p, pkt[1])
+	elif kind == Net.C_GUNSET:
+		if pkt.size() > 3:
+			gunnery.setup_asked(p, pkt[1], pkt[2], pkt[3])
 	elif kind == Net.C_HOLO:
 		if pkt.size() > 1:
 			holomap.asked(p, pkt[1] != 0)

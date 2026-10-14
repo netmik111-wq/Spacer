@@ -97,7 +97,18 @@ var store := {}                      # the ship's supplies in the locker: thing 
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
 var other_wreck := false            # the ship alongside is a pirate ship our guns wrecked: dark and dead
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
-var gun_charge := PackedByteArray()  # per gun: 0..100, 255 = out of order (see Net.S_GUNS)
+var gun_weapon := PackedByteArray()  # per gun mount: the weapon on it (Weapons.*; see Net.S_GUNS)
+var gun_charge := PackedByteArray()  # per gun mount: 0..100, Net.GUN_BROKEN, Net.GUN_JAMMED
+var gun_flags := PackedByteArray()   # per gun mount: Net.GUNF_*
+var power_used := 0                  # power the armed guns and the shield draw
+var power_max := 0                   # and what the reactor gives
+var shield := 0                      # our shield, 0..100
+var shield_flags := 0                # Net.SHF_*
+var enemy_sys_out := PackedByteArray() # per Net.ESYS_*: seconds it is still put out by ion or EMP
+var enemy_shield := 0                # the enemy's shield, 0..100
+var enemy_weapons := PackedByteArray() # the enemy's guns (Weapons.*)
+var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
+var trade_flags := 0                 # Net.TRADE_*
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var enemy_docks_in := 0              # seconds until it docks by force
@@ -244,6 +255,7 @@ func close() -> void:
 	floor_things.clear()
 	hand = 0
 	store.clear()
+	trade.clear()
 	admin_token = ""
 	is_admin = false
 	is_host = false
@@ -411,6 +423,12 @@ func send_aim(which: int) -> void:
 	## Points the guns at one of the enemy's systems (Net.ESYS_*) or anywhere; only from the gun console.
 	if _peer != null:
 		_peer.send(0, PackedByteArray([Net.C_AIM, which]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_gunset(action: int, a: int, b: int) -> void:
+	## Sets the guns up (Net.GUNSET_*: power a gun, switch the shield, change a gun); only from the gun console.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_GUNSET, action, a, b]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_holo(on: bool) -> void:
@@ -1015,20 +1033,42 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if not _ours(pkt):
 				return
 			var n: int = pkt[3]
-			gun_charge = pkt.slice(4, 4 + n)
-			enemy_hull = pkt[4 + n]
-			enemy_full = pkt[5 + n]
-			enemy_docks_in = pkt.decode_u16(6 + n)
-			gun_aim = pkt[8 + n] if pkt.size() > 8 + n else Net.AIM_ANY
-			var k: int = pkt[9 + n] if pkt.size() > 9 + n else 0
+			gun_weapon = PackedByteArray()
+			gun_charge = PackedByteArray()
+			gun_flags = PackedByteArray()
+			for i in n:
+				gun_weapon.append(pkt[4 + i * 3])
+				gun_charge.append(pkt[5 + i * 3])
+				gun_flags.append(pkt[6 + i * 3])
+			var at: int = 4 + n * 3
+			power_used = pkt[at]
+			power_max = pkt[at + 1]
+			shield = pkt[at + 2]
+			shield_flags = pkt[at + 3]
+			at += 4
+			enemy_hull = pkt[at]
+			enemy_full = pkt[at + 1]
+			enemy_docks_in = pkt.decode_u16(at + 2)
+			gun_aim = pkt[at + 4]
+			var k: int = pkt[at + 5]
+			at += 6
 			enemy_sys = PackedByteArray()
 			enemy_sys_full = PackedByteArray()
+			enemy_sys_out = PackedByteArray()
 			for i in k:
-				enemy_sys.append(pkt[10 + n + i * 2])
-				enemy_sys_full.append(pkt[11 + n + i * 2])
-			var at: int = 10 + n + k * 2
-			enemy_flags = pkt[at] if pkt.size() > at else 0
-			enemy_jumps_in = pkt.decode_u16(at + 1) if pkt.size() > at + 2 else 0
+				enemy_sys.append(pkt[at + i * 3])
+				enemy_sys_full.append(pkt[at + i * 3 + 1])
+				enemy_sys_out.append(pkt[at + i * 3 + 2])
+			at += k * 3
+			enemy_flags = pkt[at]
+			enemy_jumps_in = pkt.decode_u16(at + 1)
+			enemy_shield = pkt[at + 3]
+			enemy_weapons = pkt.slice(at + 5, at + 5 + pkt[at + 4])
+		Net.S_TRADE:
+			trade.clear()
+			for i in pkt[1]:
+				trade[pkt[2 + i * 3]] = pkt.decode_u16(3 + i * 3)
+			trade_flags = pkt[2 + pkt[1] * 3] if pkt.size() > 2 + pkt[1] * 3 else 0
 		Net.S_HOLO:
 			if not _ours(pkt):
 				return

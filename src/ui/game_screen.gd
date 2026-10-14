@@ -17,6 +17,7 @@ const AdminPanel := preload("res://src/ui/admin_panel.gd")
 const InventoryPanel := preload("res://src/ui/inventory_panel.gd")
 const StoreView := preload("res://src/ui/store_view.gd")
 const GunsView := preload("res://src/ui/guns_view.gd")
+const TradeView := preload("res://src/ui/trade_view.gd")
 const HoloView := preload("res://src/ui/holo_view.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
@@ -77,6 +78,8 @@ var _console_shut: Button
 var _console_style: StyleBoxFlat
 var _store_view: StoreView           # the screens of the supply locker, the gun console and the holomap,
 var _guns_view: GunsView             # shown in the console's frame instead of its chart, text and buttons
+var _trade_view: TradeView           # the trader's screen, opened from the supply locker's
+var _trading := false                # the locker's frame shows the trader's screen
 var _holo_view: HoloView
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
@@ -440,9 +443,15 @@ func _build_console(root: Control) -> void:
 	_store_view = StoreView.new()
 	box.add_child(_store_view)
 	_store_view.setup(client)
+	_store_view.open_trade = func() -> void: _show_trade(true)
+	_trade_view = TradeView.new()
+	_trade_view.visible = false
+	box.add_child(_trade_view)
+	_trade_view.back = func() -> void: _show_trade(false)
 	_guns_view = GunsView.new()
-	box.add_child(_guns_view)
-	_guns_view.setup(client)
+	_guns_view.visible = false
+	box.add_child(_guns_view)              # (it and the trader's screen are set up when first shown:
+	                                       # building them at joining would knock the client's clock off)
 	_holo_view = HoloView.new()
 	box.add_child(_holo_view)
 	_holo_view.setup(client)
@@ -485,7 +494,11 @@ func _open_console(kind: int) -> void:
 	_close_chat()
 	_jump_buttons_for = -1
 	var own_view := kind == 12 or kind == 17 or kind == 20
+	_trading = false
+	if kind == 17 and _guns_view.client == null:
+		_guns_view.setup(client)
 	_store_view.visible = kind == 12
+	_trade_view.visible = false
 	_guns_view.visible = kind == 17
 	_holo_view.visible = kind == 20
 	_chart.visible = not own_view
@@ -500,6 +513,17 @@ func _open_console(kind: int) -> void:
 		_holo_view.opened()
 		client.send_holo(true)
 	_console_shut.text = Options.keyed("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))
+
+
+func _show_trade(on: bool) -> void:
+	## The supply locker's frame shows the trader's screen, or the locker's own.
+	_trading = on
+	if on and _trade_view.client == null:
+		_trade_view.setup(client)
+	_store_view.visible = not on
+	_trade_view.visible = on
+	_console_title.text = "Торговец" if on else "Склад корабля: шкаф снабжения"
+	_console.reset_size()
 
 
 func _update_console() -> void:
@@ -517,7 +541,12 @@ func _update_console() -> void:
 		_open_console(0)             # knocked out, pushed away from the console, or the power went
 		return
 	if _console_kind == 12:
-		_store_view.refresh()
+		if _trading and not client.can_trade():
+			_show_trade(false)               # the trader is out of reach, or the power went
+		if _trading:
+			_trade_view.refresh()
+		else:
+			_store_view.refresh()
 		return
 	if _console_kind == 17:
 		_guns_view.refresh(get_process_delta_time())
@@ -967,6 +996,9 @@ func open_panel(which: String) -> void:
 			_options_panel().show_tab(tab)
 		"pause":
 			_set_pause(true)
+		"trade":
+			if _console_kind == 12:
+				_show_trade(true)
 
 
 func show_pause(on: bool) -> void:

@@ -28,7 +28,7 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
 
-const PIRATE_WARNING_TICKS := 40 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
+const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const GAP := 3                       # cells of open space between it and our airlock while not docked
 const VACUUM_ROOM := 0.4             # share of its rooms with no air left at all
 const HOLE_CHANCE := 0.5             # chance that a hole in its hull still leaks

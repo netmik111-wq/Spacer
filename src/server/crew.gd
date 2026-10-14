@@ -102,6 +102,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.ship.devices_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.ship.power_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.ship.store_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.supplies.trade_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
 	peer.send(0, campaign_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	announce_join(p, peer)
@@ -485,7 +486,7 @@ func hull_hit(amount: int) -> void:
 	server.ship.hull = maxi(server.ship.hull - amount, 0)
 	if server.ship.hull == 0:
 		end_campaign(Net.OVER_WRECKED)
-	elif was > 30 and server.ship.hull <= 30:
+	elif was > 50 and server.ship.hull <= 50:
 		server.chat.say("Обшивка на пределе: прочность %d из %d. Залатать её могут на станции снабжения или у торговца." % [server.ship.hull, Net.HULL_MAX])
 
 

@@ -45,6 +45,7 @@ var intercom := {}                   # wall cells with an intercom panel
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
+var shield := {}                     # wall cells with the shield generator (see Gunnery)
 var zones: Array = []                # (a ship others fight) the rooms its systems stand in: per Net.ESYS_*,
                                      # the cells of its own drawing (see Gunnery); empty = none named
 var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
@@ -83,7 +84,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
-	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo"]
+	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -179,6 +180,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	locker = {}
 	intercom = {}
 	holo = {}
+	shield = {}
 	guns = PackedInt32Array()
 	gun_console = {}
 	zones = []
@@ -200,6 +202,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			intercom[i] = true
 		if cells[i] == tile_ids.get("holo", -1):
 			holo[i] = true
+		if cells[i] == tile_ids.get("shield", -1):
+			shield[i] = true
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
@@ -527,6 +531,8 @@ func device_name(cell: int) -> String:
 		return "пульт орудий"
 	if holo.has(cell):
 		return "голокарта"
+	if shield.has(cell):
+		return "генератор щита"
 	return ""
 
 

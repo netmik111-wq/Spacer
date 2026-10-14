@@ -7,8 +7,12 @@ const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
 var server: GameServer
+var _offers := {}                    # what the trader alongside sells: thing -> price ("harden" -> true if it offers that)
+var _offers_for := -1                # the place in space (Sectors.key) _offers were made for
+var _trade_told := PackedByteArray()
 
 
 func setup(p_server: GameServer) -> void:
@@ -21,6 +25,53 @@ func tell_store() -> void:
 	if now != server.ship.store_told:
 		server.ship.store_told = now
 		server.to_all(now)
+	var trade := trade_packet()
+	if trade != _trade_told:
+		_trade_told = trade
+		server.to_all(trade)
+
+
+func offers() -> Dictionary:
+	## What the trader alongside sells and for how much (empty while we cannot trade).
+	## Every trader has every plain thing and rockets; ship weapons only TRADER_WEAPONS
+	## kinds of them, and the shield hardening rarely: always the same at the same place.
+	if not can_trade():
+		return {}
+	var key := Sectors.key(server.sectors.cell[server.ship.sector])
+	if key == _offers_for:
+		return _offers
+	_offers_for = key
+	_offers = {}
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([server.space_seed, key, "trader"])
+	var guns: Array = []
+	for item in Items.kept_in_locker():
+		if Items.price(item) <= 0:
+			continue
+		if Weapons.of_item(item) != Weapons.NONE:
+			guns.append(item)
+		else:
+			_offers[item] = Items.price(item)
+	for k in mini(Weapons.TRADER_WEAPONS, guns.size()):
+		var pick: int = guns.pop_at(rng.randi_range(0, guns.size() - 1))
+		_offers[pick] = Items.price(pick)
+	if rng.randf() < Weapons.HARDEN_CHANCE:
+		_offers["harden"] = true
+	return _offers
+
+
+func trade_packet() -> PackedByteArray:
+	var now := offers()
+	var out := PackedByteArray([Net.S_TRADE, 0])
+	for item in now.keys():
+		if item is int:
+			var o := out.size()
+			out.resize(o + 3)
+			out.encode_u8(o, item)
+			out.encode_u16(o + 1, now[item])
+			out[1] += 1
+	out.append(Net.TRADE_HARDEN if now.has("harden") else 0)
+	return out
 
 
 func can_trade() -> bool:
@@ -67,7 +118,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 		return
 	match action:
 		Net.STORE_TAKE:
-			if int(server.ship.store.get(item, 0)) > 0 and p.add(item, true):
+			if int(server.ship.store.get(item, 0)) > 0 and not Items.cargo(item) and p.add(item, true):
 				server.ship.store[item] -= 1
 		Net.STORE_PUT_BACK:
 			for at in Net.SLOTS:
@@ -76,10 +127,21 @@ func store_asked(p: Player, action: int, item: int) -> void:
 			if item < Net.SLOTS:
 				_put_back(p, item)
 		Net.STORE_BUY:
-			var price := Items.price(item)
-			if can_trade() and server.ship.store.has(item) and price > 0 and server.ship.credits >= price:
+			var price: int = offers().get(item, 0)
+			if server.ship.store.has(item) and price > 0 and server.ship.credits >= price:
 				server.ship.credits -= price
 				server.ship.store[item] += 1
+		Net.STORE_SELL:
+			var price := Weapons.sell_price(Items.price(item))
+			if can_trade() and int(server.ship.store.get(item, 0)) > 0 and price > 0:
+				server.ship.store[item] -= 1
+				server.ship.credits = mini(server.ship.credits + price, 65535)
+				server.chat.say("%s продаёт торговцу: %s, +%d кр." % [p.name, Items.name_of(item).to_lower(), price])
+		Net.STORE_HARDEN:
+			if offers().has("harden") and not server.ship.hardened and server.ship.credits >= Weapons.SHIELD_HARDEN_PRICE:
+				server.ship.credits -= Weapons.SHIELD_HARDEN_PRICE
+				server.ship.hardened = true
+				server.chat.say("%s покупает закалку щита: теперь щит останавливает и ракеты." % p.name)
 		Net.STORE_BUY_AIR:
 			if can_trade() and server.ship.credits >= Net.PRICE_AIR and server.ship.store_air < Net.STORE_AIR_FULL:
 				server.ship.credits -= Net.PRICE_AIR

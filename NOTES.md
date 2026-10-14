@@ -1,6 +1,6 @@
 # Spacer — summary for continuing the work
 
-State as of build **v41 (version 0.34)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
+State as of build **v49 (version 0.42)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
 check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION.md` (the author's vision).
 
 ## Links
@@ -11,13 +11,22 @@ check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION
   https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — read `ArtifactData get survey/answers` and build the fourth plan.
 
 ## Key decisions
-- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 27), the server decides everything,
+- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 29), the server decides everything,
   20 ticks/s, one thread; the client predicts movement and doors (`src/shared/`), checked against checksums.
 - Builds for Windows only (the author plays over Radmin VPN); the exe is split into two archives, `play.bat` joins them.
 - Everything on GitHub (docs, notes, code comments, commit messages) is in English. What the player sees in the game stays in Russian; the author chose this on 2026-10-14 ("GitHub only").
 - The author's rules: air is not highlighted; bodies stay; the engine powers everything; it is silent in vacuum;
   in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
 - Atmosphere with gases, fire and electricity only after asking the author in detail.
+
+## v49 (shields, ship weapons, trader's window; the author's request)
+- Ship weapons are swapped on the gun console with the cargo (the supply locker); the reactor gives 8 power to
+  guns and shield. Ten weapons in `src/shared/weapons.gd` (all the numbers), shields by the author's rule
+  (holds at 50+, leaks below), the shield generator 'Z' on the lower deck, the pirates' sixth room "Щиты".
+- Our hull 200, pirates 12, pirates dock after 90 s. Enemy loadouts get a third gun 5 jumps out.
+- The trader's window (`src/ui/trade_view.gd`): categories, buy, sell at half price; offers from the server
+  (`S_TRADE`), 4 ship weapons per trader, the shield hardening at 1 in 3. Protocol 29.
+- The beam: three ideas went to the author (cutter, tractor beam, siphon); the cutter is built as the default.
 
 ## v41 (ship's store, gun targeting, holomap; the author's request)
 - The supply locker opens a "ship's store" window (`src/ui/store_view.gd`): resources across the top, every
