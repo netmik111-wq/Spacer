@@ -485,7 +485,8 @@ func _hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			job = Net.JOB_CREWMAN                # one captain to a ship
 			demoted = true
 		p.take_job(job)
-		_kit_out(p)
+		if not back_from_reserve:
+			_kit_out(p)                      # (somebody from the reserve comes with empty hands)
 	_pending.erase(peer)
 	_slot_of[peer] = p.slot
 
@@ -2326,9 +2327,10 @@ func _respawn(p: Player) -> void:
 	p.slots.fill(Net.ITEM_NONE)
 	p.dress()                            # (the old suit and clothes stay on the body; what the dead one carried stays with it)
 	if not p.bot:
-		p.skills.fill(0)                 # somebody new from the reserve, in the same job
+		# somebody new from the reserve, in the same job, dressed but with empty
+		# hands (the author's word: only the first crew comes aboard with gear)
+		p.skills.fill(0)
 		p.take_job(p.job)
-		_kit_out(p)
 	var spot := _spawn_point()
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE

@@ -32,6 +32,7 @@ const BEAM_HEIGHT := 18.0                        # how far above the feet a beam
 const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
 const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
+const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
 # eyes reach. Seen = lit and looked at; lit but out of sight = fog; unlit = black.
@@ -591,6 +592,20 @@ func _draw_mask() -> void:
 			elif kind == 1 and ship.a > 0.0:
 				_mask.draw_rect(rect, ship)
 			x = run
+	# Starlight: a ship's outer skin (the walls and doors that face open space)
+	# is never quite dark, so one out in space sees the hulls around them. The
+	# inside of a dark ship stays dark.
+	var star := Color(1, 0, 0, STARLIGHT)
+	for y in map.deck_height:
+		var row := (_deck_shown * _stride + y) * map.width
+		for x in map.width:
+			var cell := row + x
+			if map.cells[cell] < 0 or (map.opaque[cell] == 0 and map.door_of[cell] < 0):
+				continue
+			if _light_kind(map, cell) == 1 and ship.a >= 1.0:
+				continue
+			if _faces_space(map, x, y):
+				_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile)), star)
 	if _dark <= 0.0 and not (client.other_here() and client.map.other_kind == Net.OTHER_DERELICT):
 		return
 	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
@@ -603,6 +618,18 @@ func _draw_mask() -> void:
 		for c: Color in b[1]:
 			reds.append(Color(0, 0, 1, c.a))
 		_mask.draw_polygon(b[0], reds)
+
+
+func _faces_space(map: ShipMap, x: int, y: int) -> bool:
+	## Does this cell of the shown deck (x, y on the deck) touch open space?
+	for k in range(1, 5):
+		var nx := x + Net.DX[k]
+		var ny := y + Net.DY[k]
+		if nx < 0 or ny < 0 or nx >= map.width or ny >= map.deck_height:
+			return true
+		if map.cells[(_deck_shown * _stride + ny) * map.width + nx] < 0:
+			return true
+	return false
 
 
 func _light_kind(map: ShipMap, cell: int) -> int:

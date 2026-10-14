@@ -50,6 +50,10 @@ func _initialize() -> void:
 	server._respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_OK and server.reserve == Net.START_RESERVE - 1, "coming back takes one from the reserve")
 	_expect(q.job == Net.JOB_CREWMAN and q.st.access == Net.JOB_ACCESS[Net.JOB_CREWMAN], "in the same job")
+	var empty := true
+	for item in q.slots:
+		empty = empty and item == Net.ITEM_NONE
+	_expect(empty and q.has_suit(), "dressed, but with nothing in the hands or pockets")
 	server.reserve = 0
 	q.health = -150.0
 	_run(2)

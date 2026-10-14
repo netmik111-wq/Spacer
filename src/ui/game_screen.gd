@@ -833,7 +833,7 @@ func _draw_chart() -> void:
 	var sectors := client.sectors
 	if sectors.count == 0:
 		return
-	var area := Rect2(Vector2(30, 22), _chart.size - Vector2(60, 50))
+	var area := Rect2(Vector2(30, 22), _chart.size - Vector2(60, 68))
 	var place := func(id: int) -> Vector2:
 		return area.position + Vector2(sectors.pos[id].x / 100.0, sectors.pos[id].y / 60.0) * area.size
 	_chart.draw_rect(Rect2(Vector2.ZERO, _chart.size), Color(0.02, 0.05, 0.04))
@@ -843,7 +843,7 @@ func _draw_chart() -> void:
 	if client.jump_to != Net.NO_SECTOR:
 		_chart.draw_line(place.call(client.sector), place.call(client.jump_to), Color(1, 1, 1, 0.9), 3.0)
 	var font := ThemeDB.fallback_font
-	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8)]
+	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8), Color(0.78, 0.5, 0.88)]   # one per Sectors.KIND_NAMES
 	for id in sectors.count:
 		var at: Vector2 = place.call(id)
 		var known := client.knows_sector(id)
@@ -856,12 +856,39 @@ func _draw_chart() -> void:
 		if id == client.sector:
 			_chart.draw_arc(at, 12.0, 0.0, TAU, 32, Color.WHITE, 2.0)
 		_chart.draw_string(font, at + Vector2(-70, 24), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, Color(0.85, 0.95, 0.88))
-	# legend
+	# legend: what the colours are, then what the marks are
+	var ink := Color(0.7, 0.8, 0.74)
 	var x := 8.0
+	var y := _chart.size.y - 28
 	for k in Sectors.KIND_NAMES.size():
-		_chart.draw_circle(Vector2(x + 5, _chart.size.y - 10), 5.0, colours[k])
-		_chart.draw_string(font, Vector2(x + 14, _chart.size.y - 6), Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.8, 0.74))
+		_chart.draw_circle(Vector2(x + 5, y), 5.0, colours[k])
+		_chart.draw_string(font, Vector2(x + 14, y + 4), Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ink)
 		x += 26.0 + font.get_string_size(Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+	x = 8.0
+	y = _chart.size.y - 10
+	var grey := colours[0] as Color
+	for mark in 5:
+		var at := Vector2(x + 5, y)
+		var text := ""
+		match mark:
+			0:
+				_chart.draw_arc(at, 6.0, 0.0, TAU, 24, Color.WHITE, 1.5)
+				text = "корабль здесь"
+			1:
+				_chart.draw_circle(at, 5.0, grey)
+				_chart.draw_circle(at, 2.0, Color(0.04, 0.08, 0.07))
+				text = "точка внутри: уже были"
+			2:
+				_chart.draw_circle(at, 3.0, Color(0.3, 0.36, 0.34))
+				text = "неизвестно, что там"
+			3:
+				_chart.draw_line(at - Vector2(5, 0), at + Vector2(7, 0), Color(0.3, 0.8, 0.5, 0.75), 2.0)
+				text = "маршрут для прыжка"
+			4:
+				_chart.draw_line(at - Vector2(5, 0), at + Vector2(7, 0), Color.WHITE, 3.0)
+				text = "заданный прыжок"
+		_chart.draw_string(font, Vector2(x + 16, y + 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ink)
+		x += 30.0 + font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 
 
 func _build_pause(root: Control) -> void:

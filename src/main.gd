@@ -48,7 +48,8 @@ extends Node
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
 ## Dedicated server: board_after=SECONDS (pirates come aboard then),
-## derelict_after=SECONDS (a derelict comes alongside then and docks at once),
+## derelict_after=SECONDS (a derelict comes alongside then and docks at once;
+## also with --inproc, and --nodock leaves it alongside),
 ## pirateship_after=SECONDS (a pirate ship comes then, and docks by force 15 s later).
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
@@ -384,7 +385,7 @@ func _process(_delta: float) -> void:
 		else:
 			_show_menu("Сервер остановился.", true)
 	# test helpers; unused in normal play
-	if _opt.has("derelict_after") and not _derelicted and _flags.has("server") and _server != null and t >= float(_opt["derelict_after"]):
+	if _opt.has("derelict_after") and not _derelicted and _server != null and t >= float(_opt["derelict_after"]):
 		_derelicted = true
 		_server.sectors.kind[_server.sector] = Sectors.DERELICT
 		_server.sectors.reach[_server.sector] = Sectors.DOCK_RANGE
@@ -392,7 +393,7 @@ func _process(_delta: float) -> void:
 		_server.ship_dest = _server.ship_pos
 		_server.ship_moving = false
 		_server._to_all(_server._helm_packet())
-	if _opt.has("derelict_after") and _derelicted and not _dockship and _server != null and _server.derelict.here:
+	if _opt.has("derelict_after") and _derelicted and not _dockship and not _flags.has("nodock") and _server != null and _server.derelict.here:
 		_dockship = true
 		_server.derelict.dock(true)
 	if _opt.has("pirateship_after") and not _pirateshipped and _flags.has("server") and _server != null and t >= float(_opt["pirateship_after"]):
