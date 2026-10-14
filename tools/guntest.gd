@@ -358,6 +358,7 @@ func _v49(p) -> void:
 	g._mend_next = server.tick + 100000
 	eh = g.enemy_hull
 	var got := 0
+	g._rng.seed = 49                     # a fixed roll: 20 coin tosses fell 17 to 3 once on CI
 	for k in 20:
 		g.enemy_shield = 100.0
 		var was: int = g.enemy_hull
