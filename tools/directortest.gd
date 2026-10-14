@@ -23,7 +23,9 @@ func _initialize() -> void:
 
 
 func _run(crew: int, kind: int, mends: bool) -> void:
-	## Thirty minutes in one sector. `mends`: the crew closes every hole 30 s after it appears.
+	## Thirty minutes in one sector. `mends`: the crew closes every hole 30 s after it appears,
+	## and fights off boarders as they come (the test's crew cannot fight, and a lone one
+	## knocked down by pirates would rightly make the director fall quiet).
 	var server := GameServer.new()
 	get_root().add_child(server)
 	var problem := server.start(26000 + crew * 10 + kind * 2 + (1 if mends else 0), "ship01", 0)
@@ -55,6 +57,10 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 		elif mends and t - hole_since >= 30 * Net.TICK_HZ:
 			server.systems.seal_all()
 			server.air.refill()                   # and airs the ship, so the crew stays on its feet
+		if mends:
+			for p in server.players:
+				if p != null and p.pirate and not p.corpse and p.cond != Net.COND_DEAD:
+					server.combat.hurt(p, 1000, null)
 	var fired: int = server.director.fired
 	var limit := maxi(1, crew / 2 + 1)
 	print("crew %d, %s, crew %s holes: %d events in %d min, at most %d holes open at once" % [
