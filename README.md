@@ -191,7 +191,8 @@ Checking machines, power, doors and shutters without network or window:
   the flag travels in the character's look byte (`Net.LOOK_LIGHT`), and the pool is computed by every
   client. Without power the ship is dark: a near-black cover over the screen (unlit places stay
   faintly readable) with holes where light falls (flashlights, and a dim glow around yourself that
-  shows the room). The holes are drawn
+  shows the room). Whatever is out of sight is as dark as an unlit place, lit or not, except a soft
+  pool all round yourself (v47, "deep dark" as in SS13). The holes are drawn
   into a separate mask image that follows the camera (`WorldView._draw_mask`). Light is computed in `src/shared/sight.gd`, which will also
   be the basis of the field of view.
 - A person lying down (unconscious or dead) can be **searched** with E: a panel shows their

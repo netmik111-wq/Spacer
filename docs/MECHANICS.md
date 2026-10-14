@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v46 (version 0.39).
+Last updated: build v47 (version 0.40).
 
 Contents:
 
@@ -298,11 +298,16 @@ Contents:
   looking: outside the field of view flashlight light is not visible. (Until v45 it was a narrow
   35° beam 9 cells long.)
 - **Without power** the ship's lights go out. Space outside doesn't darken.
-- **The dark is near black but readable** (v46): unlit places keep **7%** of their light with a cold
-  tinge, so walls and rooms can be faintly made out, as in the author's SS13 screenshots.
+- **The dark is deep** (v47, the author's "deep dark" as in SS13): unlit places keep only **4.5%** of
+  their light (7% in v46), so walls and rooms are just outlines. **Whatever is out of sight is just as
+  dark, lit or not**: behind you and beyond the cone you see only the faint outline you remember
+  (until v47 a lit place out of sight was only dimmed to about a quarter, and stars were seen there).
+- **A soft pool around you** (v47, the author: "light on the main character like in SS13"): all the
+  way round you, in any light, the place is made out, fully right at your feet and fading out by
+  **3.2 cells**, stopped by walls. In the dark this pool also adds a little light (40% at your feet).
 - **In the dark your eyes still make out the room around you** (v45, dimmer in v46): up to **30%** of
   full light right around you, fading out by **5 cells**, stopped by walls; outside the field of view
-  it is fogged. The flashlight is much brighter. The same goes for derelicts and wrecks. People in the dark are still
+  and the pool around you it is black. The flashlight is much brighter. The same goes for derelicts and wrecks. People in the dark are still
   seen only within 2 cells or in a light (see "Field of view"). Until v45 there was pitch darkness
   outside the flashlight (build v27–v44).
 - **Starlight**: the outer hull of any ship (walls and doors facing open
@@ -613,7 +618,7 @@ The boarding ship:
   (spacesuit and jumpsuit), but **with no items**.
 - **Skills**: repair, medicine, shooting, from 0 to 100. Your job's skill starts
   at **50**. Each finished task of your own skill gives **+2**; a task of another skill gives **+1**
-  for every three. Skills are shown in the line under the top panel.
+  for every three. Skills are shown in the second top line (F1).
 - Bots and pirates go everywhere (they have no jobs).
 - **Crew reserve**: people who will replace the dead. The ship sets out with **3**.
   - A dead player can press **R** after 5 s and return as a new person of the same job
@@ -644,7 +649,7 @@ The boarding ship:
 
 ## 23. Campaign: hull, end, saving
 
-- The **goal** is to hold out as long as possible. The top line shows the reserve and hull integrity.
+- The **goal** is to hold out as long as possible. The top line (F1) shows the reserve and hull integrity.
 - **Hull**: integrity **100**. Each breach takes **5**, each pirate hit
   on a gun or console **3**. At **30** and below the ship warns you. It is patched at a trader
   and at a supply station (section 10).
@@ -688,6 +693,7 @@ The boarding ship:
 | T | chat straight into the radio |
 | F2 | admin panel (host and admins) |
 | Esc | menu: settings, admin panel, saving (host) |
+| F1 | ship status and key hints at the top of the screen (hidden by default since v47) |
 | F3 | debug |
 | F11 | full screen |
 
@@ -696,7 +702,7 @@ The boarding ship:
 - From the main menu and from the game's menu (Esc); kept in `user://options.cfg`, they take effect at once.
 - **Sound**: overall volume, sounds on the ship, engine hum (each 0–100%), mute.
 - **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
-  in the top line, the white flash after a jump.
+  in the top left corner (shown even while F1's status is hidden), the white flash after a jump.
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works

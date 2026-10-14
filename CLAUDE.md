@@ -113,6 +113,10 @@ Build v46 (0.39) was the author's own request, as one build: light and darkness 
 screenshots (soft per-cell light, near-black but readable dark, the flashlight a warm round pool instead
 of a beam) and vision of 9 cells (eyes and screen).
 
+Build v47 (0.40) was the author's own request, as one build: a clean screen (the status lines and the key
+hints at the top are hidden, F1 shows them) and "deep dark" as in SS13 (out of sight is near black, a soft
+pool all round the character).
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -325,7 +329,17 @@ The parameters for these checks are described in the header of `src/main.gd`.
   "only the flashlight gives light"). In the dark a red glow `DIM` (0.3 since v46) around our character,
   a `Sight.glow` pool of `DIM_RADIUS` cells, goes into the mask (`WorldView._draw_mask`), so the room is
   made out dimly and the flashlight is clearly brighter. Since v46 the dark sheet itself is not opaque
-  (`DARK` alpha 0.93): unlit places stay faintly readable, as in SS13.
+  (`DARK` alpha 0.93; 0.955 since v47): unlit places stay faintly readable, as in SS13.
+- **Deep dark** (v47, the author's word and SS13 screenshot). Out of sight is as dark as unlit (`UNSEEN`,
+  the shader mixes it by the green of the mask), whether the place is lit or not; it replaces the v46
+  `FOG` (a lit place out of sight was only dimmed to 0.74), so stars and lit rooms behind you are black
+  too. Instead a soft pool `NEAR` of `NEAR_RADIUS` cells (`Sight.glow`, stopped by walls) is drawn green
+  into `_look` all round our character, and in the dark adds a little red light: that is the SS13 look of
+  a player standing in a small pool. Purely client drawing; who is seen is unchanged (`can_see`,
+  `Replication.sees`).
+- **A clean screen** (v47, the author crossed them out): the status lines (`_info`) and the key hints
+  (`_keys`) in `GameScreen` are hidden until the `info` action (F1). The frame counter alone stays
+  in the top left when it is on in the settings. The first chat line names F1.
 - **Light as in SS13** (v46, the author's screenshots). A light is a set of cells with strengths
   (`Sight.glow`: a round pool around a spot ahead of the holder, cells with a clear line from the
   holder, walls lit on a face turned to the light; the old `Sight.cone` is only in tests now). The
