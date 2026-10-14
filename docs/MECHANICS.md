@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v42 (version 0.35).
+Last updated: build v43 (version 0.36).
 
 Contents:
 
@@ -298,9 +298,10 @@ Contents:
   in the middle (later, losing an eye will remove its part of the cone).
 - In the dark the cone narrows to **60°**; without light you see only where the flashlight shines
   (someone right next to you, within 2 cells, you still notice: their name is visible).
-- Walls and closed doors block the view. A wall (or closed door) your gaze reaches is seen **whole**,
-  as in SS13, not as a thin strip at its edge (v42). Walls next to you but outside the cone
-  (behind your back or to the side) are darkened like anything out of sight.
+- Walls and closed doors block the view. As in SS13, a cell (floor or wall) your gaze reaches whose
+  **middle** is inside the cone is seen **whole** (v43): floor right up to the walls, walls as whole
+  tiles. A cell at the edge of the cone whose middle is outside it (walls right beside you or behind
+  you) is seen only as far as the cone itself reaches into it, the rest is darkened like anything out of sight.
 - What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.
