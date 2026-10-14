@@ -100,6 +100,15 @@ var gun_charge := PackedByteArray()  # per gun: 0..100, 255 = out of order (see 
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var enemy_docks_in := 0              # seconds until it docks by force
+var gun_aim := Net.AIM_ANY           # where our guns aim: Net.ESYS_* or Net.AIM_ANY
+var enemy_sys := PackedByteArray()   # per Net.ESYS_*: the strength the enemy's system has left (empty = no enemy)
+var enemy_sys_full := PackedByteArray()
+# the holomap, while we watch one (see Net.S_HOLO)
+var holo_cells := PackedInt32Array() # the cells of our ship's floor, in the order the server sends their air
+var holo_air := PackedByteArray()    # per cell of holo_cells: 0..Net.AIR_FULL
+var holo_holes := {}                 # every hole in our hull: cell -> true
+var holo_doors := PackedByteArray()  # per door of our ship: bit 0 open, the rest Doors.flags shifted up by one
+var holo_changes := 0                # goes up with every holomap the server sends
 var pumps := {}                     # airlock pumps at work: wall cell -> Systems.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
@@ -391,6 +400,18 @@ func send_guns(which: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_GUNS, which]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_aim(which: int) -> void:
+	## Points the guns at one of the enemy's systems (Net.ESYS_*) or anywhere; only from the gun console.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_AIM, which]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_holo(on: bool) -> void:
+	## Starts or stops watching the holomap our character stands at.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_HOLO, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_wear(wear: int) -> void:
 	## Asks to take off what we wear there.
 	if _peer != null:
@@ -520,7 +541,7 @@ func use_target() -> int:
 	## 14 = something lying on the floor in front or underfoot, to pick up,
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
-	## 19 = an intercom.
+	## 19 = an intercom, 20 = a holomap monitor.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var cell := map.use_ahead(pred.x, pred.y, pred.facing, holes)
@@ -547,6 +568,8 @@ func use_target() -> int:
 			return 8
 		if map.intercom.has(cell):
 			return 19
+		if map.holo.has(cell):
+			return 20
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -946,6 +969,27 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			enemy_hull = pkt[4 + n]
 			enemy_full = pkt[5 + n]
 			enemy_docks_in = pkt.decode_u16(6 + n)
+			gun_aim = pkt[8 + n] if pkt.size() > 8 + n else Net.AIM_ANY
+			var k: int = pkt[9 + n] if pkt.size() > 9 + n else 0
+			enemy_sys = PackedByteArray()
+			enemy_sys_full = PackedByteArray()
+			for i in k:
+				enemy_sys.append(pkt[10 + n + i * 2])
+				enemy_sys_full.append(pkt[11 + n + i * 2])
+		Net.S_HOLO:
+			if not _ours(pkt):
+				return
+			var n := pkt.decode_u16(3)
+			if n != holo_cells.size():
+				return                       # (not the ship we know)
+			holo_air = pkt.slice(5, 5 + n)
+			var at := 5 + n
+			holo_holes.clear()
+			for i in pkt.decode_u16(at):
+				holo_holes[pkt.decode_u16(at + 2 + i * 2)] = true
+			at += 2 + pkt.decode_u16(at) * 2
+			holo_doors = pkt.slice(at + 1, at + 1 + pkt[at])
+			holo_changes += 1
 		Net.S_OUTFIT:
 			if pkt.size() >= 4:
 				looks[pkt.decode_u16(1)] = pkt[3]
@@ -1053,6 +1097,10 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	for other_map in Net.OTHER_MAPS:
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
+	holo_cells = PackedInt32Array()
+	for c in map.base_walk.size():
+		if map.on_ship(c):
+			holo_cells.append(c)
 	if problem == "" and map.crc != crc:
 		problem = "Карта «%s» на сервере отличается от вашей. Нужна одинаковая сборка игры." % map_name
 	if problem != "":

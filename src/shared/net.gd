@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 26
+const PROTOCOL := 27
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -151,8 +151,25 @@ const S_SEARCH := 23                # u16 id of the character we are searching (
                                     # then u8 how hurt they are (0 = unhurt .. 4 = dying)
 const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed
 const S_GUNS := 28                  # u8 count, per gun u8 charge (0..100, 255 = broken), then u8 enemy hull
-                                    # left, u8 enemy hull full (0 = no enemy), u16 seconds until it docks (0 = not coming)
+                                    # left, u8 enemy hull full (0 = no enemy), u16 seconds until it docks (0 = not coming),
+                                    # u8 where the guns aim (ESYS_* or AIM_ANY), u8 count of the enemy's systems
+                                    # (0 = no enemy), then per system u8 strength left, u8 strength when whole
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
+const C_AIM := 22                   # u8 ESYS_* or AIM_ANY: where on the enemy the guns aim, from the gun console
+const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at
+const S_HOLO := 31                  # the holomap (only to those watching it), after the ship's id: u16 count, then
+                                    # the air (0..AIR_FULL) of every cell of the ship's floor in order (see
+                                    # ShipMap.on_ship), u16 count, u16 per hole in the hull, u8 count, then per door
+                                    # of the ship u8: bit 0 open, the rest Doors.flags shifted up by one
+# The enemy ship's systems: each stands in a room of its drawing (ShipMap.zones). A hit
+# there wears it down; at nothing it stops working until the enemy's crew mends it.
+const ESYS_WEAPONS := 0             # its guns: down, it does not shoot
+const ESYS_HELM := 1                # its bridge: down, it shoots wide and cannot dodge
+const ESYS_ENGINE := 2              # its engine: down, it cannot close in to dock
+const ESYS_CREW := 3                # the quarters of its boarding party: every hit there kills one of them
+const ESYS_COUNT := 4
+const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик"]
+const AIM_ANY := 255                # the guns hit wherever they hit
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
@@ -178,6 +195,7 @@ const S_STORE := 22                 # the ship's supplies: u16 air for the air p
 # what a player may ask of the supply locker (C_STORE)
 const STORE_TAKE := 1               # one of the thing named
 const STORE_PUT_BACK := 3           # everything carried that the locker keeps goes back into it
+const STORE_PUT_ONE := 9            # the thing in one slot (the thing byte names the slot) goes back into it
 const STORE_BUY := 4                # one of the thing named; this and the one below only while docked with a trader
 const STORE_BUY_AIR := 6
 const STORE_HIRE := 7               # take on one more crew member for the reserve (from a trader)

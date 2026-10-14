@@ -15,6 +15,9 @@ const Options := preload("res://src/client/options.gd")
 const OptionsPanel := preload("res://src/ui/options_panel.gd")
 const AdminPanel := preload("res://src/ui/admin_panel.gd")
 const InventoryPanel := preload("res://src/ui/inventory_panel.gd")
+const StoreView := preload("res://src/ui/store_view.gd")
+const GunsView := preload("res://src/ui/guns_view.gd")
+const HoloView := preload("res://src/ui/holo_view.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -67,7 +70,10 @@ var _chart: Control
 var _jump_box: GridContainer
 var _jump_buttons_for := -1          # what the jump buttons were last built for
 var _console_shut: Button
-var _store_buttons := {}             # the supply locker's buttons: Net.STORE_* -> Button
+var _console_style: StyleBoxFlat
+var _store_view: StoreView           # the screens of the supply locker, the gun console and the holomap,
+var _guns_view: GunsView             # shown in the console's frame instead of its chart, text and buttons
+var _holo_view: HoloView
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _hand_shown := -1
@@ -414,6 +420,7 @@ func _build_console(root: Control) -> void:
 	style.set_corner_radius_all(4)
 	style.set_content_margin_all(18)
 	_console.add_theme_stylebox_override("panel", style)
+	_console_style = style
 	root.add_child(_console)
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
@@ -422,6 +429,15 @@ func _build_console(root: Control) -> void:
 	_console_title.add_theme_font_size_override("font_size", 20)
 	_console_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_console_title)
+	_store_view = StoreView.new()
+	box.add_child(_store_view)
+	_store_view.setup(client)
+	_guns_view = GunsView.new()
+	box.add_child(_guns_view)
+	_guns_view.setup(client)
+	_holo_view = HoloView.new()
+	box.add_child(_holo_view)
+	_holo_view.setup(client)
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
@@ -444,142 +460,38 @@ func _build_console(root: Control) -> void:
 
 func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
-	## The bridge consoles need power; the supply locker is opened by hand.
-	return target == 12 or ((target == 3 or target == 4 or target == 17) and client.powered())
+	## The bridge consoles and the holomap need power; the supply locker is opened by hand.
+	return target == 12 or ((target == 3 or target == 4 or target == 17 or target == 20) and client.powered())
 
 
 func _open_console(kind: int) -> void:
 	if _console_kind == 13 and kind != 13 and client.search_id >= 0:
 		client.send_search(Net.NOBODY)       # we step back from the one we were searching
 		client.search_id = -1
+	if _console_kind == 20 and kind != 20:
+		client.send_holo(false)
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
 		return
 	_close_chat()
 	_jump_buttons_for = -1
-	_store_buttons.clear()
-	_chart.visible = kind != 12
-	_jump_box.visible = true
-	_jump_box.columns = 3 if kind == 12 else 2           # the locker has many buttons
-	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else ("Пульт орудий" if kind == 17 else "Шкаф снабжения"))
-	if kind == 17:
-		_chart.visible = false
+	var own_view := kind == 12 or kind == 17 or kind == 20
+	_store_view.visible = kind == 12
+	_guns_view.visible = kind == 17
+	_holo_view.visible = kind == 20
+	_chart.visible = not own_view
+	_console_text.visible = not own_view
+	_jump_box.visible = not own_view
+	_jump_box.columns = 2
+	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
+		(Color(0.35, 0.7, 0.9) if kind == 20 else Color(0.3, 0.75, 0.45)))
+	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
+		13: "Обыск", 20: "Голокарта корабля"}.get(kind, "")
+	if kind == 20:
+		_holo_view.opened()
+		client.send_holo(true)
 	_console_shut.text = Options.keyed("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))
-
-
-func _update_guns() -> void:
-	## The gun console: how each gun is, the enemy if there is one, and buttons to fire.
-	var lines := PackedStringArray()
-	if client.enemy_full > 0:
-		lines.append("Цель: пиратский корабль над шлюзом. Корпус: %d из %d попаданий до разрушения." % [client.enemy_hull, client.enemy_full])
-		lines.append("Он пристыкуется силой через %d с." % client.enemy_docks_in)
-	else:
-		lines.append("Целей нет. Орудия бьют по кораблю, который нападает на нас.")
-	for i in client.gun_charge.size():
-		var c: int = client.gun_charge[i]
-		var where: String = ["левый борт у носа", "правый борт у носа", "днище"][i] if i < 3 else ""
-		var state := "сломано, нужен ремонт" if c == 255 else ("готово" if c >= 100 else "заряжается, %d%%" % c)
-		lines.append("Орудие %d (%s): %s." % [i + 1, where, state])
-	lines.append("Каждое попадание — %d%% вероятность. Зарядка %d с, нужно питание." % [75, 8])
-	_console_text.text = "\n".join(lines)
-	if _jump_buttons_for != 17000 + client.gun_charge.size():
-		_jump_buttons_for = 17000 + client.gun_charge.size()
-		for old in _jump_box.get_children():
-			old.queue_free()
-		for i in client.gun_charge.size():
-			var b := Button.new()
-			b.text = "Огонь: орудие %d" % (i + 1)
-			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			var which := i
-			b.pressed.connect(func() -> void: client.send_guns(which))
-			_jump_box.add_child(b)
-		var all := Button.new()
-		all.text = "Залп всеми готовыми"
-		all.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		all.pressed.connect(func() -> void: client.send_guns(255))
-		_jump_box.add_child(all)
-	var buttons := _jump_box.get_children()
-	for i in buttons.size():
-		var b := buttons[i] as Button
-		if b == null:
-			continue
-		var ready := client.enemy_full > 0
-		if i < client.gun_charge.size():
-			ready = ready and client.gun_charge[i] == 100
-		b.disabled = not ready
-
-
-func _update_store() -> void:
-	## The supply locker: what the ship has, what we carry, and a trader's prices when one is alongside.
-	var trading := client.can_trade()
-	var kept := Items.kept_in_locker()
-	var lines := PackedStringArray()
-	var held := PackedStringArray()
-	for item in kept:
-		held.append("%s: %d" % [Items.name_of(item).to_lower(), client.stock(item)])
-	lines.append("В шкафу: %s. Воздух для установки: %d из %d. Кредиты: %d." % [
-		", ".join(held), int(round(client.store_air)), int(Net.STORE_AIR_FULL), client.credits])
-	lines.append("Резерв экипажа: %d из %d. Прочность обшивки: %d из %d." % [client.reserve, Net.RESERVE_MAX, client.hull, Net.HULL_MAX])
-	var free := 0
-	var open := 0
-	for i in Net.SLOTS:
-		if client.usable(i):
-			open += 1
-			if client.slots[i] == Net.ITEM_NONE:
-				free += 1
-	lines.append("Свободных слотов у вас: %d из %d. Взятое ложится в руку, если она пуста." % [free, open])
-	lines.append("Что вещь умеет, видно, когда она в руке.")
-	if trading:
-		lines.append("Торговец на связи.")
-	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
-		lines.append("Торговец в этом секторе. Чтобы покупать, %s." % ("подойдите к нему" if client.powered() else "нужно питание"))
-	else:
-		lines.append("Докупить запас можно у торговца. Воздух для установки бесплатно пополняет станция снабжения.")
-	_console_text.text = "\n".join(lines)
-	var wanted := 9000 + (1 if trading else 0)
-	if _jump_buttons_for != wanted:
-		_jump_buttons_for = wanted
-		_store_buttons.clear()
-		for old in _jump_box.get_children():
-			old.queue_free()
-		var offers := []
-		for item in kept:
-			offers.append([Net.STORE_TAKE, item, "Взять: %s" % Items.name_of(item).to_lower()])
-		offers.append([Net.STORE_PUT_BACK, 0, "Положить всё обратно"])
-		if trading:
-			for item in kept:
-				if Items.price(item) > 0:
-					offers.append([Net.STORE_BUY, item, "Купить: %s, %d кр." % [Items.name_of(item).to_lower(), Items.price(item)]])
-			offers.append([Net.STORE_BUY_AIR, 0, "Купить воздух (%d): %d кр." % [int(Net.AIR_LOT), Net.PRICE_AIR]])
-			offers.append([Net.STORE_HIRE, 0, "Нанять человека в резерв: %d кр." % Net.PRICE_CREW])
-			offers.append([Net.STORE_BUY_HULL, 0, "Залатать обшивку (+%d): %d кр." % [Net.HULL_LOT, Net.PRICE_HULL]])
-		for offer: Array in offers:
-			var b := Button.new()
-			b.text = offer[2]
-			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b.pressed.connect(client.send_store.bind(int(offer[0]), int(offer[1])))
-			_jump_box.add_child(b)
-			_store_buttons[[int(offer[0]), int(offer[1])]] = b
-	var keeps_any := false
-	for item in kept:
-		keeps_any = keeps_any or client.carried(item) > 0
-	for key: Array in _store_buttons.keys():
-		var b: Button = _store_buttons[key]
-		var item: int = key[1]
-		match int(key[0]):
-			Net.STORE_TAKE:
-				b.disabled = client.stock(item) <= 0 or free == 0
-			Net.STORE_PUT_BACK:
-				b.disabled = not keeps_any
-			Net.STORE_BUY:
-				b.disabled = client.credits < Items.price(item)
-			Net.STORE_BUY_AIR:
-				b.disabled = client.credits < Net.PRICE_AIR or client.store_air >= Net.STORE_AIR_FULL
-			Net.STORE_HIRE:
-				b.disabled = client.credits < Net.PRICE_CREW or client.reserve >= Net.RESERVE_MAX
-			Net.STORE_BUY_HULL:
-				b.disabled = client.credits < Net.PRICE_HULL or client.hull >= Net.HULL_MAX
 
 
 func _update_console() -> void:
@@ -597,10 +509,13 @@ func _update_console() -> void:
 		_open_console(0)             # knocked out, pushed away from the console, or the power went
 		return
 	if _console_kind == 12:
-		_update_store()
+		_store_view.refresh()
 		return
 	if _console_kind == 17:
-		_update_guns()
+		_guns_view.refresh(get_process_delta_time())
+		return
+	if _console_kind == 20:
+		_holo_view.refresh(get_process_delta_time())
 		return
 	if _console_kind == 4:
 		_update_helm()
@@ -1317,7 +1232,9 @@ func _process(delta: float) -> void:
 				else "стоит, запас воздуха исчерпан"
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
-		_hint.text = "E: шкаф снабжения"
+		_hint.text = "E: шкаф снабжения (склад корабля)"
+	elif target == 20:
+		_hint.text = "Голокарта обесточена: %s" % why if no_power else "E: голокарта корабля (воздух, пробоины, поломки)"
 	elif target == 19:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
 	elif target == 18:

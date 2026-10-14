@@ -63,6 +63,10 @@ func _initialize() -> void:
 	p.hand = 0
 	_expect(server.inventory.act(p) and p.slots[0] == Net.ITEM_FLASHLIGHT, "and Z switches it off again")
 	server.inventory.act(p)
+	server.supplies.store_asked(p, Net.STORE_PUT_ONE, 2)
+	_expect(p.slots[2] == Net.ITEM_NONE and p.slots[0] == Net.ITEM_FLASHLIGHT_ON and int(server.ship.store[Net.ITEM_PATCH]) == Items.stock(Net.ITEM_PATCH),
+		"one thing goes back into the locker by its slot")
+	server.supplies.store_asked(p, Net.STORE_TAKE, Net.ITEM_PATCH)
 	server.supplies.store_asked(p, Net.STORE_PUT_BACK, 0)
 	_expect(p.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS and int(server.ship.store[Net.ITEM_FLASHLIGHT]) == Items.stock(Net.ITEM_FLASHLIGHT)
 		and int(server.ship.store[Net.ITEM_PATCH]) == Items.stock(Net.ITEM_PATCH), "everything goes back into the locker, a lit flashlight as a flashlight")

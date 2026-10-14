@@ -44,6 +44,9 @@ var locker := {}                     # wall cells with the supply locker
 var intercom := {}                   # wall cells with an intercom panel
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
+var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
+var zones: Array = []                # (a ship others fight) the rooms its systems stand in: per Net.ESYS_*,
+                                     # the cells of its own drawing (see Gunnery); empty = none named
 var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
                                      # chamber it serves, "inner": door, "outer": door (-1 = none)}
 var door_partner := PackedInt32Array() # per door: the other door of its airlock chamber, or -1.
@@ -80,7 +83,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
-	"engine", "air_plant", "locker", "intercom", "lock_pump"]
+	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -175,8 +178,15 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	air_plant = {}
 	locker = {}
 	intercom = {}
+	holo = {}
 	guns = PackedInt32Array()
 	gun_console = {}
+	zones = []
+	for z: Array in data.get("zones", []):
+		var at: int = int(z[0])
+		while zones.size() <= at:
+			zones.append(PackedInt32Array())
+		zones[at] = PackedInt32Array(z[1])
 	for i in cells.size():
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
@@ -188,6 +198,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			locker[i] = true
 		if cells[i] == tile_ids.get("intercom", -1):
 			intercom[i] = true
+		if cells[i] == tile_ids.get("holo", -1):
+			holo[i] = true
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
@@ -513,6 +525,8 @@ func device_name(cell: int) -> String:
 		return "орудие %d" % (guns.find(cell) + 1)
 	if gun_console.has(cell):
 		return "пульт орудий"
+	if holo.has(cell):
+		return "голокарта"
 	return ""
 
 
