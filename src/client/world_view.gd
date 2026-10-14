@@ -32,6 +32,7 @@ const BEAM_HEIGHT := 18.0                        # how far above the feet a beam
 const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
 const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
+const NEAR_WALLS := 0.6                          # how plainly the walls right around our character show in the dark
 const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
@@ -92,6 +93,8 @@ var _labels := {}                    # id -> Label
 var _seen := {}                      # id -> can it be seen from our deck (a name is hidden with its owner)
 var _label_layer: CanvasLayer
 var _ghost: Sprite2D
+var _me_layer: CanvasLayer          # above the dark: our own character is always made out
+var _me_over: Sprite2D
 var _stars := PackedVector2Array()
 var _star_sizes := PackedByteArray()
 var _star_origin := Vector2.ZERO     # corner and size of the patch of sky the stars are scattered over
@@ -236,6 +239,18 @@ func setup(p_client: GameClient) -> void:
 	shade_material.set_shader_parameter("mask", _mask_view.get_texture())
 	_shade.material = shade_material
 	_dark_layer.add_child(_dark_sheet)
+	# We always see ourselves, even in pitch dark (without the glow around us
+	# the author asked to be rid of): a copy of our figure over the dark.
+	_me_layer = CanvasLayer.new()
+	_me_layer.layer = 2
+	_me_layer.follow_viewport_enabled = true
+	add_child(_me_layer)
+	_me_over = Sprite2D.new()
+	_me_over.texture = _chars_tex
+	_me_over.region_enabled = true
+	_me_over.centered = false
+	_me_over.offset = Vector2(-CHAR_W / 2.0, -CHAR_H)
+	_me_layer.add_child(_me_over)
 
 	_ghost = Sprite2D.new()
 	_ghost.texture = _chars_tex
@@ -606,6 +621,8 @@ func _draw_mask() -> void:
 				continue
 			if _faces_space(map, x, y):
 				_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile)), star)
+	for cell: int in _walls_by_me():
+		_mask.draw_rect(_cell_rect(cell), Color(1, 0, 0, NEAR_WALLS))
 	if _dark <= 0.0 and not (client.other_here() and client.map.other_kind == Net.OTHER_DERELICT):
 		return
 	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
@@ -618,6 +635,32 @@ func _draw_mask() -> void:
 		for c: Color in b[1]:
 			reds.append(Color(0, 0, 1, c.a))
 		_mask.draw_polygon(b[0], reds)
+
+
+func _walls_by_me() -> Array:
+	## The walls (and things on them) right around our character: these are
+	## always made out, even in the dark or behind us (the author's word), so
+	## the character never stands in a black void. The floor stays dark.
+	var out := []
+	if client.my_cond == Net.COND_DEAD or client.my_deck() != _deck_shown:
+		return out
+	var map := client.map
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var x := client.pred.x + dx
+			var y := client.pred.y + dy
+			if x < 0 or y < 0 or x >= map.width or y >= map.height:
+				continue
+			var cell := y * map.width + x
+			if map.cells[cell] >= 0 and map.walk[cell] == 0:
+				out.append(cell)
+	return out
+
+
+func _cell_rect(cell: int) -> Rect2:
+	## A cell of the shown deck, in the deck's pixels.
+	var map := client.map
+	return Rect2(Vector2(cell % map.width, cell / map.width - _deck_shown * _stride) * _tile, Vector2(_tile, _tile))
 
 
 func _faces_space(map: ShipMap, x: int, y: int) -> bool:
@@ -662,6 +705,8 @@ func _draw_look() -> void:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
+	for cell: int in _walls_by_me():
+		_look.draw_rect(_cell_rect(cell), Color(0, 1, 0, 1))
 	var facing: int = s[1]
 	var green := Color(0, 1, 0, 1)
 	var origin := me.position + Vector2(0, -12)
@@ -1022,6 +1067,11 @@ func _process(delta: float) -> void:
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
+	_me_over.visible = me != null and me.get_parent() == _decks[my_deck].chars and client.my_cond != Net.COND_DEAD
+	if _me_over.visible:
+		_me_over.global_transform = me.global_transform
+		_me_over.region_rect = me.region_rect
+		_me_over.modulate = me.modulate * Color(0.8, 0.8, 0.85)
 	var focus := me.position - Vector2(0, 14) if me != null else Vector2.ZERO
 	var half := get_viewport_rect().size / zoom * 0.5
 	var map_size := Vector2(map.width, map.deck_height) * _tile

@@ -9,6 +9,8 @@ extends RefCounted
 ## and the row alone says which deck it is on. Between decks there is always
 ## at least one empty row, so nothing on one deck touches another in the grid.
 
+const Net := preload("res://src/shared/net.gd")
+
 const DOOR_BAND := 0                 # a door in a horizontal wall ('D' in the drawing)
 const DOOR_AIRLOCK := 1              # an airlock in a vertical wall ('A')
 
@@ -73,6 +75,12 @@ var tile_size := 32
 var atlas_columns := 8
 var tile_kinds := PackedStringArray()
 var tile_ids := {}                   # tile name -> id
+var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wall, used from the room it faces
+
+# Things set into a wall face one room (see fitting_front) and are used from
+# there: from the cell in front of them, or the cells either side of that one.
+const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
+	"engine", "air_plant", "locker", "intercom", "lock_pump"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -110,7 +118,11 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	walk.resize(width * height)
 	opaque.resize(width * height)
 	var windows := []
+	fitting = PackedByteArray()
+	fitting.resize(tile_kinds.size())
 	for t: Dictionary in tiles["tiles"]:
+		if FITTINGS.has(str(t["name"]).trim_prefix("pirate_")) and tile_ids.has(str(t["name"])):
+			fitting[int(tile_ids[str(t["name"])])] = 1
 		if str(t["name"]).trim_prefix("pirate_").begins_with("window"):
 			windows.append(tile_ids[str(t["name"])])
 	var src: Array = data["cells"]
@@ -446,6 +458,43 @@ func cell_ahead(x: int, y: int, facing: int) -> int:
 	if tx < 0 or ty < 0 or tx >= width or ty >= height:
 		return -1
 	return ty * width + tx
+
+
+func fitting_front(cell: int) -> int:
+	## The floor cell a thing fitted into this wall cell faces: the one below it,
+	## failing that above, then to the right or left. -1 = no fitting here.
+	if cell < 0 or cell >= cells.size() or cells[cell] < 0 or cells[cell] >= fitting.size() or fitting[cells[cell]] == 0:
+		return -1
+	var x := cell % width
+	var y := cell / width
+	for v: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+		if walkable(x + v.x, y + v.y):
+			return (y + v.y) * width + x + v.x
+	return -1
+
+
+func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
+	## The cell the "use" key works on for a character at x,y facing that way:
+	## the cell ahead, except that a thing fitted into a wall is only reached
+	## from the room it faces (never through the wall), from the cell in front
+	## of it or either cell beside that one (facing the wall). Cells in `keep`
+	## (holes in the hull) are always the cell ahead. -1 = nothing.
+	var ahead := cell_ahead(x, y, facing)
+	if ahead < 0 or keep.has(ahead):
+		return ahead
+	var here := y * width + x
+	var front := fitting_front(ahead)
+	if front >= 0:
+		return ahead if front == here else -1
+	if walk[ahead] == 1 or cells[ahead] < 0:
+		return ahead
+	# a bare wall: a fitting beside this spot of it, facing the cell beside us
+	var along := 1 if Net.DX[facing] == 0 else width
+	for side: int in [-along, along]:
+		var c := ahead + side
+		if c >= 0 and c < cells.size() and absi(c % width - ahead % width) <= 1 and fitting_front(c) == here + side:
+			return c
+	return ahead
 
 
 func device_name(cell: int) -> String:

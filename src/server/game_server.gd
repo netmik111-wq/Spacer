@@ -1014,7 +1014,7 @@ func _at_console(p: Player, cells: Dictionary) -> bool:
 	## Does this player stand facing a working console of that kind?
 	if p.cond != Net.COND_OK or not powered():
 		return false
-	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var ahead := map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	return ahead >= 0 and cells.has(ahead) and not broken.has(ahead)
 
 
@@ -1327,7 +1327,7 @@ func _store_asked(p: Player, action: int, item: int) -> void:
 	## A player at the supply locker takes something, puts it back, or buys from a trader.
 	if p.cond != Net.COND_OK:
 		return
-	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var ahead := map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	if ahead < 0 or not map.locker.has(ahead):
 		return
 	match action:
@@ -1718,7 +1718,7 @@ func _update_work(p: Player) -> void:
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
 		return
-	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var cell := map.use_ahead(p.st.x, p.st.y, p.st.facing, air.holes)
 	var door := map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
 	# and the skill of the one at work makes it quicker, down to half the time
@@ -1795,7 +1795,7 @@ func _work_done(p: Player, cell: int, ticks: int) -> bool:
 
 func _usable_ahead(p: Player) -> bool:
 	## Is there something in front of the character that the "use" key works on?
-	var cell := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var cell := map.use_ahead(p.st.x, p.st.y, p.st.facing, air.holes)
 	if cell < 0:
 		return false
 	var door := map.door_of[cell]
@@ -1809,7 +1809,7 @@ func _press(p: Player) -> void:
 	## The "use" key went down (on the tick the client pressed it). Most of what
 	## it does is holding it (see _update_work); a press itself picks up a thing
 	## lying in front or underfoot, or else takes a ladder.
-	var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var ahead := map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	if ahead >= 0 and map.lock_pump.has(ahead) and p.cond == Net.COND_OK and not p.corpse:
 		toggle_pump(p, ahead)
 	elif not _pick_up(p):
@@ -2300,7 +2300,7 @@ func _loot_asked(p: Player, theirs: bool, index: int) -> void:
 		return
 	var other: Player = players[p.searching]
 	if index >= Net.SLOTS:
-		# what they wear can be taken off them (not given: they cannot be dressed)
+		# what they wear can be taken off them (to dress them, give them the thing itself)
 		if not theirs:
 			return
 		var keep_tank := other.tank
@@ -2308,6 +2308,14 @@ func _loot_asked(p: Player, theirs: bool, index: int) -> void:
 		if worn_item != Net.ITEM_NONE and not p.add(worn_item):
 			other.put_on(worn_item)
 			other.tank = keep_tank
+		return
+	if not theirs and Items.worn_as(p.slots[index]) >= 0 and other.cond != Net.COND_DEAD and other.put_on(p.slots[index]):
+		# a suit (or clothes) given to somebody out cold goes onto them: put a
+		# spacesuit on a fallen friend before carrying them through vacuum
+		p.slots[index] = Net.ITEM_NONE
+		if other.has_suit():
+			other.supply = true              # and turn its oxygen on: they cannot do it themselves
+		other.self_dirty = true
 		return
 	var from := other if theirs else p
 	var to := p if theirs else other

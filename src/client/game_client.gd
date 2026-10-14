@@ -513,7 +513,7 @@ func use_target() -> int:
 	## 19 = an intercom.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
-	var cell := map.cell_ahead(pred.x, pred.y, pred.facing)
+	var cell := map.use_ahead(pred.x, pred.y, pred.facing, holes)
 	if cell >= 0:
 		if holes.has(cell):
 			return 1
@@ -656,7 +656,7 @@ func shutter_gap(door: int) -> Array:
 
 func use_cell() -> int:
 	## The cell our character faces, or -1.
-	return map.cell_ahead(pred.x, pred.y, pred.facing) if phase == PLAYING else -1
+	return map.use_ahead(pred.x, pred.y, pred.facing, holes) if phase == PLAYING else -1
 
 
 func engine_down() -> bool:

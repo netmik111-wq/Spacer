@@ -74,6 +74,25 @@ func _initialize() -> void:
 	server._respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_OK and server.reserve == 0, "and the dead one comes back")
 
+	print("things on walls")
+	var reach_ok := true
+	var from_behind := 0
+	for cell: int in map.intercom.keys() + map.chart.keys() + map.locker.keys():
+		var front := map.fitting_front(cell)
+		var fx := front % map.width
+		var fy := front / map.width
+		var up := Net.DIR_UP if front > cell else Net.DIR_DOWN
+		reach_ok = reach_ok and map.use_ahead(fx, fy, up) == cell
+		for side in [-1, 1]:
+			if map.walkable(fx + side, fy) and not map.walkable(cell % map.width + side, cell / map.width):
+				# (between two fittings either may answer)
+				reach_ok = reach_ok and map.fitting_front(map.use_ahead(fx + side, fy, up)) >= 0
+		var back := cell - (front - cell)
+		if map.walkable(back % map.width, back / map.width):
+			from_behind += 1
+			reach_ok = reach_ok and map.use_ahead(back % map.width, back / map.width, Net.DIR_DOWN if up == Net.DIR_UP else Net.DIR_UP) < 0
+	_expect(reach_ok and from_behind > 0, "a thing on a wall is used from its room, from in front or a cell aside, not through the wall")
+
 	print("the hull")
 	_expect(server.hull == Net.HULL_MAX, "the hull starts whole")
 	var cell: int = map.hull[0]

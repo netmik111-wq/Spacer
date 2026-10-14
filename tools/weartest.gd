@@ -97,7 +97,19 @@ func _initialize() -> void:
 	_expect(not body.has_suit() and Items.tank_of(p.slots[0]) == 8, "a suit can be taken off a body, with what is left in its tank")
 	server._loot_asked(p, false, 0)
 	_expect(p.slots[0] == Net.ITEM_NONE and body.count(Net.ITEM_SUIT) == 1 and not body.has_suit(),
-		"given back, it goes into their pockets: nobody can be dressed")
+		"given back to the dead, it goes into their pockets")
+	var out := server._new_player("Обморок")
+	out.st.place(p.st.x + 1, p.st.y)
+	out.take_off(Net.WEAR_SUIT)
+	out.supply = false
+	out.health = -10.0
+	out.cond = Net.COND_CRIT
+	out.st.down = true
+	p.searching = out.slot
+	p.slots[0] = Net.ITEM_SUIT + Net.SUIT_TANK_STEPS
+	server._loot_asked(p, false, 0)
+	_expect(p.slots[0] == Net.ITEM_NONE and out.has_suit() and out.supply,
+		"a suit given to somebody out cold goes onto them, with the oxygen on")
 
 	# the locker keeps them
 	_expect(int(server.store.get(Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, 0)) == 2 and int(server.store.get(Net.ITEM_BACKPACK, 0)) == 2,
