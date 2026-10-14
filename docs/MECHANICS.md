@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v41 (version 0.34).
+Last updated: build v42 (version 0.35).
 
 Contents:
 
@@ -288,8 +288,8 @@ Contents:
 - **Starlight**: the outer hull of any ship (walls and doors facing open
   space) is always slightly lit, even on a derelict ship and on ours without power.
   Anyone who goes out into space sees the hulls around them; inside a dark ship it is still dark.
-- **Next to you** walls are always visible (the 8 cells around you, even behind your back and in the dark), and so are
-  you yourself. The floor around you stays dark in the dark.
+- **You yourself** are always visible, even in the dark. The walls next to you are not lit in the dark
+  (until v42 they were; the author asked for real darkness).
 - A muzzle flash briefly lights up its spot in the dark.
 
 ## 12. Field of view
@@ -298,7 +298,10 @@ Contents:
   in the middle (later, losing an eye will remove its part of the cone).
 - In the dark the cone narrows to **60°**; without light you see only where the flashlight shines
   (someone right next to you, within 2 cells, you still notice: their name is visible).
-- Walls and closed doors block the view. What's outside your gaze is darkened: walls and floor
+- Walls and closed doors block the view. A wall (or closed door) your gaze reaches is seen **whole**,
+  as in SS13, not as a thin strip at its edge (v42). Walls next to you but outside the cone
+  (behind your back or to the side) are darkened like anything out of sight.
+- What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.
 - **The server decides who you see.** It sends your game only the people you see by these rules
