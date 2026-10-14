@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v44 (version 0.37).
+Last updated: build v45 (version 0.38).
 
 Contents:
 
@@ -44,7 +44,15 @@ Contents:
   pump) face one room (down if there is floor there, otherwise up or sideways). They can be used
   only from there: standing directly in front of them or one cell to the left or right, facing the wall.
   Not through the wall from the neighbouring room. Breaches and doors — from any side.
-- **Left-clicking** the world turns the character towards the click (in place, without a step),
+- **Left-clicking** something within reach that E works on (v45, the author's request) turns the
+  character to it and does what E would: picks up an item from the floor (ahead or underfoot), opens
+  a console (sector map, ship control, guns, holomap), the supply locker or the intercom, searches
+  a person lying down (with an empty hand), takes the ladder underfoot, switches an airlock pump.
+  **Holding** the button holds E: repairing a breach, a machine or a door, forcing a shutter,
+  refilling the tank, hacking a lock. The same reach rules as E: next to it, and a thing on a wall only
+  from the room it faces. A weapon or something to heal with in hand, clicked at a person (or
+  yourself), is used on them instead.
+- **Left-clicking** anywhere else turns the character towards the click (in place, without a step),
   then uses the item in hand if it can do anything.
 - The game shows your own movement immediately, without waiting for the server, and corrects it if the server
   decided otherwise. So even at 200 ms ping walking feels comfortable.
@@ -193,7 +201,7 @@ Contents:
   - the ship doesn't move or jump, a jump in progress is aborted;
   - consoles, air plant, oxygen racks, emergency shutters don't work;
   - doors open only by hand;
-  - the ship is in **pitch darkness** (see "Light and darkness").
+  - the lights go out (see "Light and darkness").
 - The spacesuit, the player's instruments, ladders and repair don't depend on power.
 - **Power failure** (event): power is lost for 8–15 s with the engine intact.
 
@@ -229,7 +237,8 @@ Contents:
 - **E** — pick up: first what's ahead, then what's underfoot. A wall with a console
   or locker ahead and a person lying down take priority (E goes to them).
 - **Z** — use the item by itself (turn on the flashlight, put on clothing).
-- **Clicking** the world — use the item at that spot (shot, blow, healing).
+- **Clicking** an item on the floor next to you or underfoot picks it up, like E (v45).
+- **Clicking** the world elsewhere — use the item at that spot (shot, blow, healing).
 - **Inventory window** (I or Tab): everything worn and carried, large and with names, grouped as
   kept: 6 at hand, 2 jumpsuit pockets, 4 backpack places (a group without its clothing is marked
   as needing it). Under it: what is in the hand, its state (rounds, uses, oxygen), what it does,
@@ -283,8 +292,13 @@ Contents:
   right away as wide as the body. Walls and closed doors stop it; windows and open doors
   let it through. Someone else's beam is visible from afar, but only where you are looking: outside the field of view
   flashlight light is not visible.
-- **Without power** the ship is in **pitch darkness**: only the flashlight (and a muzzle flash) gives light,
-  nothing around you is visible (the author's request, build v27). Space outside doesn't darken.
+- **Without power** the ship's lights go out. Space outside doesn't darken.
+- **In the dark your eyes still make out the room** (v45, the author's screenshot): within the field of
+  view everything up to **4 cells** away is dimly visible (about a third of full light), fading out by
+  **8.5 cells**; farther, and outside the field of view, it is black. The flashlight lights its cone
+  fully, so it is much brighter. The same goes for derelicts and wrecks. People in the dark are still
+  seen only within 2 cells or in a light (see "Field of view"). Until v45 there was pitch darkness
+  outside the flashlight (build v27–v44).
 - **Starlight**: the outer hull of any ship (walls and doors facing open
   space) is always slightly lit, even on a derelict ship and on ours without power.
   Anyone who goes out into space sees the hulls around them; inside a dark ship it is still dark.
@@ -296,8 +310,9 @@ Contents:
 
 - A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
   in the middle (later, losing an eye will remove its part of the cone).
-- In the dark the cone narrows to **60°**; without light you see only where the flashlight shines
-  (someone right next to you, within 2 cells, you still notice: their name is visible).
+- In the dark the room is still seen across the whole **160°** cone, dimly (see "Light and darkness"),
+  but **people** only within a **60°** cone: where the flashlight shines, or right next to you, within
+  2 cells (their name is visible).
 - Walls and closed doors block the view. As in SS13, a cell (floor or wall) your gaze reaches whose
   **middle** is inside the cone is seen **whole** (v43): floor right up to the walls, walls as whole
   tiles. A cell at the edge of the cone whose middle is outside it (walls right beside you or behind
@@ -492,7 +507,7 @@ The boarding ship:
 - To get there: go out through the airlock and cross space, or **dock** with a button on the ship-control
   console: it comes right alongside, outer door to outer door. Whoever stands on it
   moves along with it. Undocking is the same button.
-- It has **no power**: inside is pitch darkness, only the flashlight gives light,
+- It has **no power**: inside it is dark (the room around you is dimly visible, the flashlight lights properly),
   doors open by hand in 1.5 s, there are no emergency shutters.
 - Air: some compartments are in vacuum (40%), the rest have thin air (30–90% of normal); in half
   the cases there is a breach in the hull.
@@ -657,7 +672,7 @@ The boarding ship:
 | 1–6, mouse wheel | what's in hand |
 | Z | use the item in hand (flashlight) |
 | G | drop the item on the floor |
-| Mouse click | shot, blow, healing |
+| Mouse click | on something within reach: as E (pick up, console, machine, repair while held); elsewhere: shot, blow, healing |
 | R | return after death (takes one from the reserve) |
 | I, Tab | inventory window |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |

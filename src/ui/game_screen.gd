@@ -62,6 +62,9 @@ var _hint: Label
 var _work_bar: ColorRect
 var _work_fill: ColorRect
 var _use_held := false
+var _click_facing := 0               # a click on something to use: the way our character is turning to reach it
+var _click_until := 0.0              # (given up if the turn has not come by then)
+var _mouse_use := false              # the left button holds "use" down, like the key
 var _console: PanelContainer         # the screen of a bridge console, shown over the game
 var _console_kind := 0               # 3 = sector console, 4 = ship's controls (as GameClient.use_target)
 var _console_title: Label
@@ -380,7 +383,7 @@ static func _open(panel: Control) -> bool:
 func _show_keys() -> void:
 	## The keys, as the player has set them (see Options).
 	_hand_shown = -1                     # (the line over the slots names keys too)
-	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: применить на месте    %s: применить    %s: положить" % [
+	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: взять, пульт, машина или применить    %s: применить    %s: положить" % [
 		Options.key_text("move_up"), Options.key_text("move_left"), Options.key_text("move_down"), Options.key_text("move_right"), Options.key_text("use"), Options.key_text("drag"),
 		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
 
@@ -1052,9 +1055,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		# the wheel turns through the slots
 		var button := (event as InputEventMouseButton).button_index
 		if button == MOUSE_BUTTON_LEFT:
-			# a click in the world uses the thing in the hand there: shoot, strike, bandage
-			client.turn_to(_world.cell_under_mouse())        # the character turns to where it is clicked
-			client.send_fire(_world.cell_under_mouse())
+			_click_world()
 			get_viewport().set_input_as_handled()
 			return
 		if button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN:
@@ -1090,18 +1091,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_respawn()
 	elif _pause.visible:
 		done = false
-	elif Options.pressed(event, "use") and (_console.visible or _opens_panel(client.use_target()) or client.use_target() == 13):
-		# a bridge console, the locker, somebody lying: the key opens a screen, and closes it again
-		if _console.visible:
-			_open_console(0)
-		elif client.use_target() == 13:
-			client.send_search(client.lying_near())      # the screen opens when the server agrees
-		else:
-			_open_console(client.use_target())
+	elif Options.pressed(event, "use") and _console.visible:
+		_open_console(0)                                # the key closes a screen it opened
 	elif _console.visible:
 		done = false
-	elif Options.pressed(event, "use") and client.use_target() == 19:
-		_open_chat(Net.CHAT_INTERCOM_MARK + " ")          # an intercom: say something into it
+	elif Options.pressed(event, "use") and _use_screen(client.use_target()):
+		pass
 	elif Options.pressed(event, "drag"):
 		if client.dragging():
 			client.send_drag(Net.NOBODY)
@@ -1131,6 +1126,56 @@ func _unhandled_input(event: InputEvent) -> void:
 				break
 	if done:
 		get_viewport().set_input_as_handled()
+
+
+func _use_screen(target: int) -> bool:
+	## What the "use" key (or a click) opens: a bridge console, the locker, the
+	## pockets of somebody lying, an intercom to speak into. False = none of those.
+	if target == 13:
+		client.send_search(client.lying_near())          # the screen opens when the server agrees
+	elif target == 19:
+		_open_chat(Net.CHAT_INTERCOM_MARK + " ")
+	elif _opens_panel(target):
+		_open_console(target)
+	else:
+		return false
+	return true
+
+
+func _click_world() -> void:
+	## A left click in the world. On something within reach that the "use" key
+	## works on (a console, a machine, a door, a hole, a thing on the floor,
+	## somebody lying, the ladder underfoot) it turns our character to it and
+	## uses it, as E would; held down it holds E. Anywhere else it uses the thing
+	## in the hand there: shoot, strike, bandage.
+	click_at(_world.cell_under_mouse())
+
+
+func click_at(at: Vector2) -> void:
+	## A left click on that place (in cells of the whole grid; see _click_world).
+	var c := Vector2i(roundi(at.x), roundi(at.y))
+	var f := -1 if _fires_at(c) else client.click_facing(c)
+	if f < 0:
+		client.turn_to(at)                   # the character turns to where it is clicked
+		client.send_fire(at)
+		return
+	client.face(f)
+	_click_facing = f
+	_click_until = Time.get_ticks_msec() / 1000.0 + 0.6
+
+
+func _fires_at(c: Vector2i) -> bool:
+	## Is a click on this cell meant for the thing in the hand rather than for
+	## what lies there: a weapon or something to heal with, aimed at somebody (or at ourselves)?
+	var item := client.in_hand()
+	if not (Items.is_weapon(item) or Items.uses(item) >= 0 or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
+		return false
+	if c == Vector2i(client.pred.x, client.pred.y):
+		return true
+	for e: GameClient.Ent in client.ents.values():
+		if e.id != client.my_id and e.x == c.x and e.y == c.y:
+			return true
+	return false
 
 
 func _health_state() -> int:
@@ -1193,8 +1238,18 @@ func _process(delta: float) -> void:
 		want = forced_dir
 	client.want_dir = want
 
+	# a click on something to use: once our character has turned to it, it is used as with the key
+	if _click_facing > 0:
+		if client.pred.facing == _click_facing:
+			_click_facing = 0
+			if not busy and not _use_screen(client.use_target()):
+				_mouse_use = true
+		elif Time.get_ticks_msec() / 1000.0 > _click_until:
+			_click_facing = 0
 	# the "use" key: tell the server when it goes down or up
-	var use_now := (Options.held("use") and not busy) or forced_use
+	var use_now := (Options.held("use") and not busy) or forced_use or (_mouse_use and not busy)
+	if _mouse_use and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_mouse_use = false                   # (after this frame: a quick click still presses once)
 	if use_now != _use_held:
 		_use_held = use_now
 		client.send_use(use_now)
@@ -1253,7 +1308,7 @@ func _process(delta: float) -> void:
 		for i in Net.SLOTS:
 			room = room or (client.usable(i) and client.slots[i] == Net.ITEM_NONE)
 		_hint.text = "На полу: %s%s.  %s" % [Items.name_of(client.top_thing(cell)).to_lower(),
-			(" и ещё %d" % more) if more > 0 else "", "E: поднять" if room else "Некуда взять: все слоты заняты"]
+			(" и ещё %d" % more) if more > 0 else "", "E или щелчок: поднять" if room else "Некуда взять: все слоты заняты"]
 	elif target == 13:
 		var lying := client.lying_near()
 		var is_dead := client.ents.has(lying) and (client.ents[lying] as GameClient.Ent).cond == Net.COND_DEAD

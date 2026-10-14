@@ -188,8 +188,9 @@ Checking machines, power, doors and shutters without network or window:
   as a smooth cone, starts at chest level already as wide as the body and is cut off by walls. Walls and closed doors
   stop it; windows and open doors let it through. Everyone sees that a flashlight is on:
   the flag travels in the character's look byte (`Net.LOOK_LIGHT`), and the beam is computed by every
-  client. Without power the ship is pitch dark: a black cover over the screen with
-  holes where light falls (the flashlight beam and two cells around yourself). The holes are drawn
+  client. Without power the ship is dark: a black cover over the screen with
+  holes where light falls (the flashlight beam, and a dim glow around yourself that shows the room
+  in your field of view). The holes are drawn
   into a separate mask image that follows the camera (`WorldView._draw_mask`). Light is computed in `src/shared/sight.gd`, which will also
   be the basis of the field of view.
 - A person lying down (unconscious or dead) can be **searched** with E: a panel shows their
@@ -231,7 +232,7 @@ Checking machines, power, doors and shutters without network or window:
 
 - Items: pistol (rounds are part of the item number, `Net.ITEM_PISTOL + n`), magazine, baton,
   plaster. All are in the table `src/shared/items.gd`, in the locker and at the trader.
-- A mouse click on the world uses the item in hand (`C_FIRE`, `Combat.use_at`): the pistol
+- A mouse click on something within reach that E works on acts like E (v45: pick up, consoles, machines, repair while held); elsewhere it uses the item in hand (`C_FIRE`, `Combat.use_at`): the pistol
   fires there, an empty one reloads with a magazine, the baton hits the adjacent cell, the plaster
   heals yourself or a neighbour. Friendly fire is possible.
 - The server computes a shot instantly in a straight line up to a wall or closed door, hitting

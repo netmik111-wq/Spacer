@@ -49,6 +49,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## click=X,Y with click_after=SECONDS (a left click on that cell, as the mouse would).
 ## Dedicated server: board_after=SECONDS (pirates come aboard then),
 ## derelict_after=SECONDS (a derelict comes alongside then and docks at once;
 ## also with --inproc, and --nodock leaves it alongside),
@@ -126,6 +127,7 @@ var _picked := false
 var _given := false
 var _boarded := false
 var _goto_at := 0
+var _clicked := false
 var _trace: FileAccess = null
 
 
@@ -506,6 +508,10 @@ func _process(_delta: float) -> void:
 	if _opt.has("give_after") and not _given and _server != null and _screen != null and t >= float(_opt["give_after"]):
 		_given = true
 		_server.players[_client.my_id].add(int(_opt.get("give", Net.ITEM_FLASHLIGHT)), true)
+	if _opt.has("click_after") and not _clicked and _screen != null and t >= float(_opt["click_after"]):
+		_clicked = true
+		var at := str(_opt.get("click", "0,0")).split(",")
+		_screen.click_at(Vector2(float(at[0]), float(at[1])))
 	if _opt.has("pick_after") and not _picked and _screen != null and t >= float(_opt["pick_after"]):
 		_picked = true
 		_client.send_use(true)

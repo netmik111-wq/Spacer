@@ -33,6 +33,12 @@ const BEAM_START_WIDTH := 26.0                    # and how wide it is there
 const BEAM_RAYS := 32                             # how finely the edge of a beam follows the walls
 const FOG := 0.8                                  # how dark a lit place out of sight is (it is remembered, dimly)
 const STARLIGHT := 0.7                           # how much light a ship's outer skin gets from the stars
+# In the dark the eyes still make out the room around them, dimly (v45, the
+# author's screenshot): as much light as DIM within DIM_NEAR cells of our
+# character, fading out by DIM_FAR; only where we look, like any light.
+const DIM := 0.34
+const DIM_NEAR := 4.0
+const DIM_FAR := 8.5
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
 # eyes reach. Seen = lit and looked at; lit but out of sight = fog; unlit = black.
@@ -115,6 +121,7 @@ var _beams: Array = []               # the beams on the deck shown: [polygon, co
 # are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
 var _mask_view: SubViewport
 var _mask: Node2D                    # draws where light falls (red)
+var _dim_glow: GradientTexture2D     # the dim light around us in the dark: full in the middle, fading out
 var _look: Node2D                    # draws what our eyes reach (green)
 var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
 var _audio: Sounds                   # what is heard (see Sounds)
@@ -622,8 +629,24 @@ func _draw_mask() -> void:
 				_mask.draw_rect(Rect2(Vector2(x, y) * _tile, Vector2(_tile, _tile)), star)
 	if _dark <= 0.0 and not client.other_dark():
 		return
-	# (in the dark nothing is lit but flashlights and muzzle flashes: the author asked for
-	# no glow around our own character)
+	# In the dark the room around us is made out dimly where we look (the green
+	# of the mask); flashlights and muzzle flashes light it fully.
+	var me: Sprite2D = _views.get(client.my_id)
+	if me != null and me.get_parent() == _decks[_deck_shown].chars and client.my_cond == Net.COND_OK:
+		if _dim_glow == null:
+			var fade := Gradient.new()
+			fade.set_color(0, Color(1, 1, 1, 1))
+			fade.set_color(1, Color(1, 1, 1, 0))
+			fade.add_point(DIM_NEAR / DIM_FAR, Color(1, 1, 1, 1))
+			_dim_glow = GradientTexture2D.new()
+			_dim_glow.gradient = fade
+			_dim_glow.fill = GradientTexture2D.FILL_RADIAL
+			_dim_glow.fill_from = Vector2(0.5, 0.5)
+			_dim_glow.fill_to = Vector2(1.0, 0.5)
+			_dim_glow.width = 128
+			_dim_glow.height = 128
+		var r := DIM_FAR * _tile
+		_mask.draw_texture_rect(_dim_glow, Rect2(me.position + Vector2(-r, -12 - r), Vector2(2 * r, 2 * r)), false, Color(1, 0, 0, DIM))
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
@@ -683,7 +706,9 @@ func _draw_look() -> void:
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
 	var reach := float(Sight.SIGHT_REACH) * _tile
-	var arcs := Sight.eye_arcs(_my_dark())
+	# the whole field of view, in the dark too: there it only lets flashlights
+	# and the dim light around us show (people in the dark: see can_see)
+	var arcs := Sight.eye_arcs(false)
 	var cells := {}                          # cells a look passes through or stops at
 	for arc: Array in arcs:
 		var points := PackedVector2Array([origin])

@@ -324,8 +324,12 @@ func turn_to(at: Vector2) -> void:
 	var d := at - Vector2(pred.x, pred.y)
 	if d.length() < 0.3:
 		return
-	var facing := (Net.DIR_RIGHT if d.x > 0.0 else Net.DIR_LEFT) if absf(d.x) >= absf(d.y) else (Net.DIR_DOWN if d.y > 0.0 else Net.DIR_UP)
-	if facing == pred.facing:
+	face((Net.DIR_RIGHT if d.x > 0.0 else Net.DIR_LEFT) if absf(d.x) >= absf(d.y) else (Net.DIR_DOWN if d.y > 0.0 else Net.DIR_UP))
+
+
+func face(facing: int) -> void:
+	## Turns our character to face that way (Net.DIR_*), predicted at once.
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == pred.facing:
 		return
 	var at_tick := maxi(pred_tick + 1, _last_apply + 1)
 	_seq += 1
@@ -430,13 +434,13 @@ func carried(item: int) -> int:
 	return n
 
 
-func floor_cell() -> int:
+func floor_cell(facing: int = -1) -> int:
 	## The cell whose top thing the "use" key would pick up: the one in front, or
 	## failing that our own; -1 if there is nothing to pick up (the same order as
-	## Inventory.pick_up).
+	## Inventory.pick_up). `facing`: as if our character faced that way.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return -1
-	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing)
+	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing if facing < 0 else facing)
 	if ahead >= 0 and floor_things.has(ahead):
 		return ahead
 	var here := pred.y * map.width + pred.x
@@ -538,7 +542,7 @@ func send_suit(on: bool) -> void:
 		_peer.send(0, PackedByteArray([Net.C_SUIT, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
 
 
-func use_target() -> int:
+func use_target(facing: int = -1) -> int:
 	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
 	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
 	## 5 = something out of order that can be mended (a console, the engine, the air plant),
@@ -551,9 +555,11 @@ func use_target() -> int:
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
 	## 19 = an intercom, 20 = a holomap monitor.
+	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
-	var cell := map.use_ahead(pred.x, pred.y, pred.facing, holes)
+	var f := pred.facing if facing < 0 else facing
+	var cell := map.use_ahead(pred.x, pred.y, f, holes)
 	if cell >= 0:
 		if holes.has(cell):
 			return 1
@@ -591,14 +597,49 @@ func use_target() -> int:
 				return 9
 			if doors.barred(door, map.door_access[door], pred.access):
 				return 18
-	if lying_near() >= 0:
+	if lying_near(f) >= 0:
 		return 13
-	if floor_cell() >= 0:
+	if floor_cell(f) >= 0:
 		return 14
 	var here := pred.y * map.width + pred.x
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func click_facing(c: Vector2i) -> int:
+	## A left click on the cell `c` works like the "use" key on what is there (a
+	## thing on the wall, a door, a hole, things on the floor, somebody lying, the
+	## ladder underfoot): which way must our character face for the key to reach
+	## it? The way it faces now is tried first. -1 = nothing to use there, or out
+	## of reach (the same rules as the key: a thing on a wall only from its front).
+	if phase != PLAYING or my_cond != Net.COND_OK or not _have_self:
+		return -1
+	if c.x < 0 or c.y < 0 or c.x >= map.width or c.y >= map.height:
+		return -1
+	var cell := c.y * map.width + c.x
+	var here := pred.y * map.width + pred.x
+	var order: Array[int] = [pred.facing]
+	for f in range(1, 5):
+		if f != pred.facing:
+			order.append(f)
+	for f: int in order:
+		var t := use_target(f)
+		var on := -1
+		if t == 0:
+			continue
+		elif t == 13:
+			var e: Ent = ents.get(lying_near(f))
+			on = e.y * map.width + e.x if e != null else -1
+		elif t == 14:
+			on = floor_cell(f)
+		elif t == 6 or t == 7:
+			on = here
+		else:
+			on = map.use_ahead(pred.x, pred.y, f, holes)
+		if on == cell:
+			return f
+	return -1
 
 
 func lock_air(pump: int) -> float:
@@ -610,12 +651,12 @@ func lock_air(pump: int) -> float:
 	return float(sum) / (cells.size() * Net.AIR_FULL)
 
 
-func lying_near() -> int:
+func lying_near(facing: int = -1) -> int:
 	## The id of somebody lying (unconscious or dead) in the cell our character
 	## faces, or failing that in its own cell; -1 if there is nobody.
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return -1
-	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing)
+	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing if facing < 0 else facing)
 	var best := -1
 	var best_here := -1
 	for e: Ent in ents.values():
