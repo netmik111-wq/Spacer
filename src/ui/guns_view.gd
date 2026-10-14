@@ -169,6 +169,8 @@ func refresh(delta: float) -> void:
 		else:
 			what = "Пристыкуется силой через %d с%s." % [client.enemy_docks_in,
 				" (двигатель выбит: стоит на месте)" if client.enemy_sys[Net.ESYS_ENGINE] == 0 else ""]
+		if client.enemy_flags & Net.ENEMY_HELD:
+			what += " Захватный луч держит их: не уклоняются, не уходят и не подходят."
 		_status.text = "Корпус пиратского корабля: %d из %d. %s" % [client.enemy_hull, client.enemy_full, what]
 		var names := PackedStringArray()
 		for w in client.enemy_weapons:

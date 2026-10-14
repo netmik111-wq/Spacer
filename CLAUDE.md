@@ -126,6 +126,10 @@ kept in the cargo, a reactor power budget, shields (ours and the pirates') by th
 pirates 12, and a trader's window with categories, buying and selling. The beam was mine to invent (the
 author did not want FTL's); three ideas were put to him, the cutter is built as the default.
 
+Build v50 (0.43): the author answered the beam card with "B+C, 2 different beams": the tractor beam (holds
+the enemy 8 s: we hit more, it can't run or close in) and the siphon beam (moves its shield into ours) were
+added beside the cutter.
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -577,6 +581,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   is the `shield` tile ('Z'); theirs is the sixth room `Net.ESYS_SHIELDS` (70% of pirates have one). Our
   shield falls to 0 without power, broken or switched off; ionised it keeps its level but does not protect.
   Enemy guns are a loadout from `Gunnery.ENEMY_*`, each charging on its own (1.3× slower than ours).
+  Weapons from `Weapons.TRACTOR` on are the items `Net.ITEM_GUN_MORE + w` (the rockets hold 61 and 62);
+  always go through `Weapons.item_of`/`of_item`, never `ITEM_GUN + w`.
 - **The trader's offers are made by the server** (`Supplies.offers`, `S_TRADE`), seeded by the game and the
   place, so the same trader always has the same 4 ship weapons and, 30% of the time, the hardening. Selling
   is from the locker at half price (`Weapons.SELL_SHARE`). The trader's window is `TradeView`, opened from the

@@ -19,6 +19,15 @@ check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION
   in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
 - Atmosphere with gases, fire and electricity only after asking the author in detail.
 
+## v50 (tractor and siphon beams; the author's answer to the beam card)
+
+- The author picked both other beam ideas ("Option B+C. It's 2 different beams!"); the cutter stays too.
+- Tractor beam (`Weapons.TRACTOR`): holds the enemy 8 s (`Gunnery.held`): +25% to our hits, its escape
+  jump and docking countdown stand still; a holding shield stops it like the cutter.
+- Siphon beam (`Weapons.SIPHON`): 4 pulses, each moves 12 shield from theirs to ours.
+- Their cargo items are `Net.ITEM_GUN_MORE + w` (71, 72): 61 and 62 were already the rockets.
+- Pirates do not carry the new beams yet. Protocol 30.
+
 ## v49 (shields, ship weapons, trader's window; the author's request)
 - Ship weapons are swapped on the gun console with the cargo (the supply locker); the reactor gives 8 power to
   guns and shield. Ten weapons in `src/shared/weapons.gd` (all the numbers), shields by the author's rule

@@ -20,6 +20,7 @@ const GameServer := preload("res://src/server/game_server.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
 const Derelict := preload("res://src/server/derelict.gd")
 const Net := preload("res://src/shared/net.gd")
+const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 
@@ -357,6 +358,7 @@ func _v49(p) -> void:
 	g._mend_next = server.tick + 100000
 	eh = g.enemy_hull
 	var got := 0
+	g._rng.seed = 49                     # a fixed roll: 20 coin tosses fell 17 to 3 once on CI
 	for k in 20:
 		g.enemy_shield = 100.0
 		var was: int = g.enemy_hull
@@ -413,6 +415,48 @@ func _v49(p) -> void:
 	ship.store[Net.ITEM_ROCKET] = 2
 	g.fire(p, 0)
 	_expect(g.charge[0] == 0.0 and ship.store[Net.ITEM_ROCKET] == 1, "and spends one when it does")
+	# the tractor beam (v50)
+	ship.mounts[0] = Weapons.TRACTOR
+	g.enemy_hull = 12
+	g.systems[Net.ESYS_HELM] = 3
+	g.systems_out[Net.ESYS_HELM] = 0
+	g.systems[Net.ESYS_SHIELDS] = 3
+	g.enemy_shield = 100.0
+	g.charge[0] = 1.0
+	g.fire(p, 0)
+	_expect(not g.held() and g.enemy_shield == 100.0 - Weapons.BEAM_SHIELD and g.enemy_hull == 12, "a shield that holds keeps the tractor beam out")
+	g.enemy_shield = 0.0
+	g.systems[Net.ESYS_SHIELDS] = 0
+	g.charge[0] = 1.0
+	var dock_before: int = d._pirates_dock_at
+	g.fire(p, 0)
+	_expect(g.held() and g.enemy_hull == 12, "with the shield down it holds the ship, and does no damage")
+	_expect(is_equal_approx(g._hit_chance(Weapons.LASER), 0.95) and is_equal_approx(g._hit_chance(Weapons.RAPID), 0.6),
+		"while it holds, our shots hit %d%% more often, up to 95%%" % roundi(Weapons.TRACTOR_BONUS * 100))
+	g.flee = 0.0
+	_run(Net.TICK_HZ * 2)
+	_expect(g.flee == 0.0 and (dock_before < 0 or d._pirates_dock_at >= dock_before + Net.TICK_HZ * 2),
+		"a held ship charges no jump and comes no closer")
+	g.flee = -1.0
+	_run(roundi(Weapons.TRACTOR_HOLD * Net.TICK_HZ))
+	_expect(not g.held(), "it lets go after %d s" % int(Weapons.TRACTOR_HOLD))
+	var pk := g.packet()
+	_expect(Weapons.of_item(Weapons.item_of(Weapons.TRACTOR)) == Weapons.TRACTOR and Weapons.item_of(Weapons.TRACTOR) != Net.ITEM_ROCKET
+		and Weapons.of_item(Net.ITEM_ROCKET) == Weapons.NONE and Items.cargo(Weapons.item_of(Weapons.SIPHON)) and pk.size() > 0,
+		"the new beams are cargo things of their own, apart from the rockets")
+	# the siphon beam (v50)
+	ship.mounts[0] = Weapons.SIPHON
+	g.systems[Net.ESYS_SHIELDS] = 3
+	g.enemy_shield = 100.0
+	ship.shield_on = true
+	ship.shield = 20.0
+	g.charge[0] = 1.0
+	var our0: float = ship.shield
+	g.fire(p, 0)
+	_run(Weapons.SIPHON_PULSES * Net.TICK_HZ)
+	var took := Weapons.SIPHON_DRAIN * Weapons.SIPHON_PULSES
+	_expect(g.beam_left[0] == 0 and g.enemy_hull == 12 and g.enemy_shield <= 100.0 - took + 15.0 and ship.shield >= our0 + took - 1.0,
+		"the siphon drains %d of their shield into ours (theirs %d, ours %d)" % [roundi(took), roundi(g.enemy_shield), roundi(ship.shield)])
 	ship.mounts[0] = Weapons.LASER
 	g.enemy_hit_chance = -1.0
 	for q in server.players:

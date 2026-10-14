@@ -615,7 +615,8 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 
 
 const SHIP_SHOT_COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.55, 0.15), Net.SHOT_ION: Color(0.35, 0.65, 1.0),
-	Net.SHOT_ROCKET: Color(0.85, 0.85, 0.8), Net.SHOT_PLASMA: Color(0.4, 1.0, 0.45), Net.SHOT_BEAM: Color(0.9, 0.6, 1.0)}
+	Net.SHOT_ROCKET: Color(0.85, 0.85, 0.8), Net.SHOT_PLASMA: Color(0.4, 1.0, 0.45), Net.SHOT_BEAM: Color(0.9, 0.6, 1.0),
+	Net.SHOT_TRACTOR: Color(0.6, 1.0, 0.75), Net.SHOT_SIPHON: Color(0.35, 0.95, 1.0)}
 
 
 func _on_shot(kind: int, hit: bool, from: Vector2, to: Vector2) -> void:
@@ -707,7 +708,7 @@ func _draw_shade() -> void:
 			var k := int(sh[0])
 			var c: Color = SHIP_SHOT_COLOURS.get(k, SHIP_SHOT_COLOURS[Net.SHOT_CANNON])
 			var fade := minf(left, 1.0)
-			_shade.draw_line(a, b, Color(c, 0.9 * fade), 2.0 if k == Net.SHOT_BEAM else (5.0 if k == Net.SHOT_ROCKET else 4.0))
+			_shade.draw_line(a, b, Color(c, 0.9 * fade), 2.0 if k == Net.SHOT_BEAM or k == Net.SHOT_TRACTOR or k == Net.SHOT_SIPHON else (5.0 if k == Net.SHOT_ROCKET else 4.0))
 			if bool(sh[1]):
 				_shade.draw_circle(b, 14.0 * left + 4.0, Color(c.lightened(0.3), 0.8 * fade))
 			else:
