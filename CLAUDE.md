@@ -341,8 +341,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a player standing in a small pool. Purely client drawing; who is seen is unchanged (`can_see`,
   `Replication.sees`).
 - **The smooth cone** (v48, "smoother, like a triangle"). A second picture, `_cone_view`, holds the
-  field of view as one fan not cut by walls, its sides fading over `CONE_SOFT` (14°), plus the `NEAR` pool;
-  the shaders multiply the cells seen (green, worked out `CONE_SOFT` wider each side) by it, so walls
+  field of view as one soft fan not cut by walls (`CONE_SHADER`, worked out per pixel: a side fades across
+  `CONE_BAND` cells at our feet, widening by `CONE_SOFT` degrees outwards), plus the `NEAR` pool;
+  the shaders multiply the cells seen (green, worked out `LOOK_MARGIN` wider each side) by it, so walls
   still cut sight cell by cell but the sides are straight and soft. `_draw_light` takes one cell more
   round a light and lets open floor past its edge blend to zero (walls still keep the light up to them).
 - **A clean screen** (v47, the author crossed them out): the status lines (`_info`) and the key hints

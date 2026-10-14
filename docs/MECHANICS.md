@@ -306,7 +306,8 @@ Contents:
   way round you, in any light, the place is made out, fully right at your feet and fading out by
   **3.2 cells**, stopped by walls. In the dark this pool also adds a little light (40% at your feet).
 - **Smooth edges** (v48, the author: "smoother, like a triangle"): what you see ends along the straight
-  sides of the cone, fading out over **14°** on each side, not cell by cell; a light's pool fades out
+  sides of the cone, not cell by cell: each side fades across **1.6 cells** right by you, widening by
+  **14°** outwards, so it reads as one soft straight edge; a light's pool fades out
   to nothing over open floor instead of stopping at a cell's edge (it still stops right at walls).
 - **In the dark your eyes still make out the room around you** (v45, dimmer in v46): up to **30%** of
   full light right around you, fading out by **5 cells**, stopped by walls; outside the field of view
