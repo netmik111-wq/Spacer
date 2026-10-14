@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v39 (version 0.32).
+Last updated: build v40 (version 0.33).
 
 Contents:
 
@@ -222,6 +222,11 @@ Contents:
   or locker ahead and a person lying down take priority (E goes to them).
 - **Z** — use the item by itself (turn on the flashlight, put on clothing).
 - **Clicking** the world — use the item at that spot (shot, blow, healing).
+- **Inventory window** (I or Tab): everything worn and carried, large and with names, grouped as
+  kept: 6 at hand, 2 jumpsuit pockets, 4 backpack places (a group without its clothing is marked
+  as needing it). Under it: what is in the hand, its state (rounds, uses, oxygen), what it does,
+  free slots, and buttons to use, wear, drop and switch the oxygen supply. Click a thing: into the
+  hand; right click: onto the floor; click clothing: take it off. You can walk while it is open.
 - All items:
 
 | Item | Purpose | In locker | Price |
@@ -296,7 +301,8 @@ Contents:
 - A sound comes **from the side where it happened** and is quieter far away.
 - **Muffled** (quieter, without high frequencies) you hear what you can't see (behind a wall, behind
   a door), and everything when you yourself stand in thin air (under 60% of normal).
-- Your own footsteps are always audible; in a vacuum they are dull, through the suit.
+- Your own footsteps are audible only in air (20% of normal or more). In a vacuum and in open
+  space they are silent, like everything else (until v40 they were heard there, muffled).
 - The **engine hum** is heard on its deck while it runs and there is power; if it stops, there's trouble.
 - On-screen markers (circles with a label) remain only for the **breach hiss** and **screams**,
   and only if the source isn't visible. The farther the sound, the less precise the marker; beyond the edge
@@ -449,7 +455,7 @@ Contents:
 
 ## 20. Eventer (GM)
 
-- Runs events by itself or on the game host's command (menu on Esc).
+- Runs events by itself or on an admin's command (admin panel, «Космос и события» tab).
 - Events:
 
 | Event | Size | Where |
@@ -472,6 +478,24 @@ Contents:
 - The eventer watches the ship: it gives no new troubles while the whole crew is down or there are more breaches
   than people; with no patches on board breaches are three times rarer; unarmed crews are
   boarded half as often.
+
+### Admin panel
+
+- For the **host** (the player whose game created the server) and for players the host **made
+  admins**. Admins are remembered by player name in the campaign save. Opens with **F2** or from the
+  menu (Esc). The server checks every command; others' presses do nothing. You can walk while it is open.
+- **Things** tab: every item, as new (a pistol loaded, a medkit full, a spacesuit's tank full), 1, 2,
+  5 or 10 at a time. It goes into the hand, else a free slot, else the floor underfoot.
+- **People** tab: for everyone aboard (bots and pirates too): heal (health 100, wounds closed, tank
+  refilled; also raises the dead where they lie, but not bodies left after a return from the reserve),
+  kill, go to them, bring them to me, change job (and access). «Heal everyone». The host also
+  makes and unmakes admins here.
+- **Ship** tab: mend everything (breaches, machines, doors, shutters, power), seal breaches, breach
+  the hull near me, normal air in every cell and a full air plant store, fill the supply locker up to
+  its starting stock, +100 credits, hull to 100, +1 in the reserve, save the campaign.
+- **Space and events** tab: a station, a trader or a derelict in this sector with the ship put at
+  it (until the next jump), a pirate with a pistol or a baton in front of me, the eventer on or off,
+  and every event by hand.
 
 ## 21. Crew, jobs, reserve
 
@@ -565,7 +589,22 @@ Contents:
 | G | drop the item on the floor |
 | Mouse click | shot, blow, healing |
 | R | return after death (takes one from the reserve) |
+| I, Tab | inventory window |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
-| Esc | menu (for the host — eventer) |
+| T | chat straight into the radio |
+| F2 | admin panel (host and admins) |
+| Esc | menu: settings, admin panel, saving (host) |
 | F3 | debug |
 | F11 | full screen |
+
+### Settings
+
+- From the main menu and from the game's menu (Esc); kept in `user://options.cfg`, they take effect at once.
+- **Sound**: overall volume, sounds on the ship, engine hum (each 0–100%), mute.
+- **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
+  in the top line, the white flash after a jump.
+- **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
+  Alt. A key given to one action is taken from the one that had it (the window says so).
+  Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
+  with a modifier held, unless that exact combination belongs to another action. Hints on the
+  screen name the keys as set.

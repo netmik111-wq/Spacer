@@ -50,6 +50,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			end_campaign(Net.OVER_CREW_LOST)    # nobody alive and nobody left to send
 	var p := new_player(_unique_name(wanted))
 	p.peer = peer
+	server.admin.joined(p)
 	var demoted := false
 	if server.saved_crew.has(p.name):
 		restore_character(p, server.saved_crew[p.name])   # back from the last evening, as they were
@@ -176,6 +177,7 @@ func _kit_out(p: Player) -> void:
 func _me_packet(p: Player) -> PackedByteArray:
 	var out := PackedByteArray([Net.S_ME, p.job])
 	out.append_array(p.skills)
+	out.append((Net.ME_ADMIN if p.admin else 0) | (Net.ME_HOST if p.host else 0))
 	return out
 
 

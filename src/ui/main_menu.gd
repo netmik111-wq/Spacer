@@ -8,6 +8,7 @@ signal quit_requested
 const Net := preload("res://src/shared/net.gd")
 const SETTINGS := "user://settings.cfg"
 const Campaign := preload("res://src/server/campaign.gd")
+const OptionsPanel := preload("res://src/ui/options_panel.gd")
 
 var _name: LineEdit
 var _address: LineEdit
@@ -17,6 +18,7 @@ var _job_about: Label
 var _status: Label
 var _new_armed := false              # "new campaign" was pressed once while a saved one exists
 var _buttons: Array[Button] = []
+var _options: OptionsPanel
 
 
 func _ready() -> void:
@@ -125,9 +127,16 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 14)
 	box.add_child(_status)
 
+	var settings := Button.new()
+	settings.text = "Настройки: звук, изображение, клавиши"
+	settings.custom_minimum_size = Vector2(0, 36)
+	settings.pressed.connect(func() -> void: _options.open())
+	box.add_child(settings)
 	var quit := _button("Выход")
 	quit.pressed.connect(func() -> void: quit_requested.emit())
 	box.add_child(quit)
+	_options = OptionsPanel.new()
+	add_child(_options)
 
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS) == OK:

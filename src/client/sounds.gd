@@ -10,6 +10,7 @@ extends Node2D
 ## A vacuum carries nothing; the server only sends what can be heard at all.
 
 const Net := preload("res://src/shared/net.gd")
+const Options := preload("res://src/client/options.gd")
 
 const RATE := 22050
 const VOICES := 16                   # sounds that can play at once
@@ -43,11 +44,12 @@ static func prepare() -> void:
 
 func _ready() -> void:
 	prepare()
+	Options.ensure_buses()
 	if AudioServer.get_bus_index(MUFFLED_BUS) < 0:
 		var i := AudioServer.bus_count
 		AudioServer.add_bus(i)
 		AudioServer.set_bus_name(i, MUFFLED_BUS)
-		AudioServer.set_bus_send(i, "Master")
+		AudioServer.set_bus_send(i, Options.WORLD_BUS)
 		var low := AudioEffectLowPassFilter.new()
 		low.cutoff_hz = 700.0
 		AudioServer.add_bus_effect(i, low)
@@ -61,6 +63,7 @@ func _ready() -> void:
 	_hum.volume_db = -14.0
 	_hum.max_distance = 14.0 * 32.0
 	_hum.attenuation = 1.2
+	_hum.bus = Options.HUM_BUS
 	add_child(_hum)
 
 
@@ -76,7 +79,7 @@ func play(kind: int, at: Vector2, reach_cells: float, muffled: bool, volume_db: 
 	p.position = at
 	p.max_distance = maxf(reach_cells, 1.0) * 32.0 * 1.3
 	p.pitch_scale = _rng.randf_range(0.94, 1.06)
-	p.bus = MUFFLED_BUS if muffled else "Master"
+	p.bus = MUFFLED_BUS if muffled else Options.WORLD_BUS
 	p.volume_db = volume_db - (8.0 if muffled else 0.0)
 	p.play()
 
@@ -88,7 +91,9 @@ func hum(on: bool, at: Vector2, muffled: bool) -> void:
 			_hum.stop()
 		return
 	_hum.position = at
-	_hum.bus = MUFFLED_BUS if muffled else "Master"
+	_hum.bus = MUFFLED_BUS if muffled else Options.HUM_BUS
+	# (through the muffled bus the hum's own volume setting is applied here)
+	_hum.volume_db = -14.0 + (linear_to_db(maxf(Options.hum_volume, 0.0001)) if muffled else 0.0)
 	if not _hum.playing:
 		_hum.play()
 

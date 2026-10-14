@@ -31,7 +31,8 @@ extends Node
 ## that takes a ladder), jump_after=SECONDS (ask
 ## for a jump to the first sector in reach), event_after=SECONDS with event=ID
 ## (the host fires a director event), console_after=SECONDS (open the console
-## the character faces), --no-events (dedicated server: the director stays quiet),
+## the character faces), panel=inventory|admin|options|pause with panel_after=SECONDS (open that
+## window), --no-events (dedicated server: the director stays quiet),
 ## helm_after=SECONDS with helm=X,Y (set a course inside the sector; helm=out
 ## steers straight out of a meteor stream, helm=spot to the station or trader).
 ## With --inproc only: warp_after=SECONDS with warp_kind=KIND (jump to a sector
@@ -64,6 +65,7 @@ const GameScreen := preload("res://src/ui/game_screen.gd")
 const MainMenu := preload("res://src/ui/main_menu.gd")
 const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
+const Options := preload("res://src/client/options.gd")
 
 var _placed := false
 var _derelicted := false
@@ -85,7 +87,7 @@ var _host_campaign := "continue"    # a hosted game goes on with the saved campa
 var _empty_since := 0.0              # dedicated server with --autoquit: when it last had a player
 var _had_players := false
 
-const FPS_ACTIVE := 60
+const FPS_ACTIVE := 60                # until the player's own limit is read (see Options.max_fps)
 const FPS_BACKGROUND := 30
 const EMPTY_QUIT_SEC := 15.0         # a hosted game's server stops this long after the last player left
 const NOBODY_CAME_SEC := 40.0
@@ -105,6 +107,7 @@ var _suited := false
 var _jumped := false
 var _evented := false
 var _consoled := false
+var _paneled := false
 var _helmed := false
 var _warped := false
 var _helm_broken := false
@@ -160,7 +163,7 @@ func _ready() -> void:
 	# The picture changes 20 times a second at most, so drawing faster than
 	# 60 frames only heats the graphics card on a fast monitor.
 	Engine.max_fps = FPS_ACTIVE
-	_define_inputs()
+	_define_inputs()                     # (sets the frame limit the player chose)
 	Sounds.prepare()
 	_client = GameClient.new()
 	add_child(_client)
@@ -176,21 +179,9 @@ func _ready() -> void:
 
 
 func _define_inputs() -> void:
-	var keys := {
-		"move_up": [KEY_W, KEY_UP], "move_down": [KEY_S, KEY_DOWN],
-		"move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-		"chat": [KEY_ENTER, KEY_KP_ENTER], "pause": [KEY_ESCAPE],
-		"debug": [KEY_F3], "toggle_predict": [KEY_F4], "fullscreen": [KEY_F11], "respawn": [KEY_R],
-		"use": [KEY_E], "suit": [KEY_Q], "drag": [KEY_F], "drop": [KEY_G], "act": [KEY_Z],
-		"slot_1": [KEY_1], "slot_2": [KEY_2], "slot_3": [KEY_3], "slot_4": [KEY_4], "slot_5": [KEY_5], "slot_6": [KEY_6],
-	}
-	for action: String in keys:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		for key: int in keys[action]:
-			var ev := InputEventKey.new()
-			ev.physical_keycode = key as Key   # physical keys: WASD works on any keyboard layout
-			InputMap.action_add_event(action, ev)
+	## The keys, the sound and the picture, as the player set them (see Options).
+	Options.load_all()
+	Options.apply_video()
 
 
 func _show_menu(message: String, is_error: bool = false) -> void:
@@ -352,17 +343,18 @@ func _notification(what: int) -> void:
 			_client.stop_server_and_close(_server_token if _server_pid > 0 else "")
 		_stop_server(600)
 	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
-		if _client != null:
+		if _client != null and (Options.max_fps == 0 or Options.max_fps > FPS_BACKGROUND):
 			Engine.max_fps = FPS_BACKGROUND
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		if _client != null:
-			Engine.max_fps = FPS_ACTIVE
+			Engine.max_fps = Options.max_fps
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("fullscreen"):
-		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+	if Options.pressed(event, "fullscreen"):
+		Options.fullscreen = DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_FULLSCREEN
+		Options.apply_video()
+		Options.save_all()
 
 
 func _process(_delta: float) -> void:
@@ -443,6 +435,9 @@ func _process(_delta: float) -> void:
 	if _opt.has("event_after") and not _evented and _screen != null and t >= float(_opt["event_after"]):
 		_evented = true
 		_client.send_admin(Net.ADMIN_EVENT, int(_opt.get("event", 1)))
+	if _opt.has("panel_after") and not _paneled and _screen != null and t >= float(_opt["panel_after"]):
+		_paneled = true
+		_screen.open_panel(str(_opt.get("panel", "inventory")))
 	if _opt.has("console_after") and not _consoled and _screen != null and t >= float(_opt["console_after"]):
 		_consoled = true
 		_screen.open_console_here()

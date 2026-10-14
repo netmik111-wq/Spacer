@@ -60,6 +60,8 @@ var my_ship := Net.CREW_SHIP         # the network id of the ship we are on (see
 var ships := {}                      # id -> {"kind": Net.SHIP_*, "docked": bool, "at": Vector2i, "name": String}
 var predict := true                  # predict our own character (false = wait for the server)
 var admin_token := ""                # set when this game started the server: unlocks the host's test tools
+var is_admin := false                # the server lets us use the admin panel (see Net.ME_ADMIN)
+var is_host := false                 # we are the hosting player: we may make others admins
 
 # the ship itself, as the server last described it
 var doors := Doors.new()
@@ -231,6 +233,8 @@ func close() -> void:
 	hand = 0
 	store.clear()
 	admin_token = ""
+	is_admin = false
+	is_host = false
 	health = 100
 	my_cond = 0
 	tank = Net.TANK_FULL
@@ -712,11 +716,13 @@ func send_respawn() -> void:
 		_peer.send(0, PackedByteArray([Net.C_RESPAWN]), ENetPacketPeer.FLAG_RELIABLE)
 
 
-func send_admin(command: int, argument: int = 0) -> void:
-	## The hosting player's test tools (Net.ADMIN_*). The server ignores them without the right token.
-	if phase != PLAYING or admin_token.is_empty():
+func send_admin(command: int, argument: int = 0, target: int = 0) -> void:
+	## The admin panel and the host's test tools (Net.ADMIN_*). The server ignores
+	## them unless the token is right or it made our player an admin.
+	if phase != PLAYING or (admin_token.is_empty() and not is_admin):
 		return
-	var msg := PackedByteArray([Net.C_ADMIN, command, argument])
+	var msg := PackedByteArray([Net.C_ADMIN, command, argument, 0, 0])
+	msg.encode_u16(3, target)
 	msg.append_array(admin_token.to_utf8_buffer())
 	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
@@ -876,9 +882,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			roster_changed.emit()
 		Net.S_JOIN:
 			var id := pkt.decode_u16(1)
+			var was_here := roster.has(id)     # (already aboard: only its entry changed, a new job say)
 			_read_roster_entry(pkt, 1)
 			roster_changed.emit()
-			if id != my_id and not is_corpse(id) and not is_pirate(id):
+			if id != my_id and not was_here and not is_corpse(id) and not is_pirate(id):
 				notice.emit("%s на борту." % player_name(id))
 		Net.S_LEAVE:
 			var gone := pkt.decode_u16(1)
@@ -963,6 +970,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if pkt.size() >= 2 + Net.SKILLS:
 				job = pkt[1]
 				skills = pkt.slice(2, 2 + Net.SKILLS)
+				var flags: int = pkt[2 + Net.SKILLS] if pkt.size() > 2 + Net.SKILLS else 0
+				is_admin = flags & Net.ME_ADMIN != 0
+				is_host = flags & Net.ME_HOST != 0
 				if _auth.access != Net.JOB_ACCESS[job]:
 					_auth.access = Net.JOB_ACCESS[job]
 					pred.access = _auth.access
