@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v47 (version 0.40).
+Last updated: build v48 (version 0.41).
 
 Contents:
 
@@ -305,6 +305,9 @@ Contents:
 - **A soft pool around you** (v47, the author: "light on the main character like in SS13"): all the
   way round you, in any light, the place is made out, fully right at your feet and fading out by
   **3.2 cells**, stopped by walls. In the dark this pool also adds a little light (40% at your feet).
+- **Smooth edges** (v48, the author: "smoother, like a triangle"): what you see ends along the straight
+  sides of the cone, fading out over **14°** on each side, not cell by cell; a light's pool fades out
+  to nothing over open floor instead of stopping at a cell's edge (it still stops right at walls).
 - **In the dark your eyes still make out the room around you** (v45, dimmer in v46): up to **30%** of
   full light right around you, fading out by **5 cells**, stopped by walls; outside the field of view
   and the pool around you it is black. The flashlight is much brighter. The same goes for derelicts and wrecks. People in the dark are still

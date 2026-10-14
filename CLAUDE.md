@@ -117,6 +117,9 @@ Build v47 (0.40) was the author's own request, as one build: a clean screen (the
 hints at the top are hidden, F1 shows them) and "deep dark" as in SS13 (out of sight is near black, a soft
 pool all round the character).
 
+Build v48 (0.41) was the author's comment on the v47 picture: "smoother, like a triangle". The seen area
+now fades along the cone's straight sides, and light pools fade out over open floor.
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -337,6 +340,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   into `_look` all round our character, and in the dark adds a little red light: that is the SS13 look of
   a player standing in a small pool. Purely client drawing; who is seen is unchanged (`can_see`,
   `Replication.sees`).
+- **The smooth cone** (v48, "smoother, like a triangle"). A second picture, `_cone_view`, holds the
+  field of view as one fan not cut by walls, its sides fading over `CONE_SOFT` (14°), plus the `NEAR` pool;
+  the shaders multiply the cells seen (green, worked out `CONE_SOFT` wider each side) by it, so walls
+  still cut sight cell by cell but the sides are straight and soft. `_draw_light` takes one cell more
+  round a light and lets open floor past its edge blend to zero (walls still keep the light up to them).
 - **A clean screen** (v47, the author crossed them out): the status lines (`_info`) and the key hints
   (`_keys`) in `GameScreen` are hidden until the `info` action (F1). The frame counter alone stays
   in the top left when it is on in the settings. The first chat line names F1.
