@@ -55,6 +55,10 @@ func _initialize() -> void:
 	a.ship.credits = 77
 	a.reserve = 1
 	a.ship.hull = 64
+	a.ship.mounts[1] = 2                    # (Weapons.HEAVY) the guns and shield as set up (v49)
+	a.ship.armed[1] = 0
+	a.ship.hardened = true
+	a.ship.shield_on = false
 	a.jumps = 9
 	a.farthest = 4
 	var hole: int = map.hull[3]
@@ -87,6 +91,8 @@ func _initialize() -> void:
 	_expect(b.ship.store[Net.ITEM_PATCH] == 2 and b.ship.credits == 77, "with the same supplies and money")
 	_expect(b.reserve == 1 and b.ship.hull == hull_was and b.voyage_ticks == 123456 and b.jumps == 9 and b.farthest == 4,
 		"the same reserve, hull and record of the voyage")
+	_expect(b.ship.mounts[1] == 2 and b.ship.armed[1] == 0 and b.ship.hardened and not b.ship.shield_on,
+		"the same guns on their mounts, the shield as it was set, its hardening")
 	_expect(b.air.holes.has(hole) and b.ship.broken.has(engine) and not b.powered(), "the hole is still there and the engine still out")
 	_expect(b.doors.jammed[2] == 1, "a jammed door is still jammed")
 	_expect(absf(b.air.air[air_cell] - air_there) < 0.01, "the air is as it was")

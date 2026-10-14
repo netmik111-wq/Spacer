@@ -46,6 +46,14 @@ var credits := 0
 var store_told := PackedByteArray()   # the supplies as clients were last told
 var hull := Net.HULL_MAX              # strength of the hull, 0..Net.HULL_MAX
 
+# its guns and shield (see Gunnery, Weapons)
+var mounts := PackedByteArray()       # per gun mount (ShipMap.guns): the weapon on it (Weapons.*; NONE = empty)
+var armed := PackedByteArray()        # per gun mount: 1 = it draws power and charges
+var shield := 0.0                     # the shield, 0..Weapons.SHIELD_FULL
+var shield_on := true                 # the shield generator is switched on (it draws power)
+var hardened := false                 # the shield stops rockets too (the rare upgrade from a trader)
+var jammed := {}                      # a gun or the shield generator put out by ion or EMP: wall cell -> the tick it is back
+
 
 func engine_down() -> bool:
 	## It has an engine and it is out of order: no way under its own power, no jump.

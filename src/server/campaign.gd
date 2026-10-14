@@ -13,6 +13,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const Items := preload("res://src/shared/items.gd")
 
 const PATH := "user://campaign.json"
 const VERSION := 1
@@ -106,6 +107,8 @@ static func snapshot(server: Node) -> Dictionary:
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty),
 		"floor": floor, "crew": crew, "admins": server.admin.names.keys(),
+		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
+		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
 	}
 
 
@@ -137,12 +140,24 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.ship.moving = false
 	server.ship.in_reach = server.sectors.within_reach(server.ship.sector, server.ship.pos)
 	server.ship.store.clear()
+	for item in Items.kept_in_locker():
+		server.ship.store[item] = 0          # (things new since the save was made: none of them)
 	for item: String in data["store"]:
 		server.ship.store[int(item)] = int(data["store"][item])
 	server.ship.store_air = float(data["store_air"])
 	server.ship.credits = int(data["credits"])
 	server.reserve = int(data["reserve"])
 	server.ship.hull = int(data["hull"])
+	if data.has("mounts"):
+		var mounts := PackedByteArray(data["mounts"])
+		var armed := PackedByteArray(data.get("armed", []))
+		if mounts.size() == server.ship.mounts.size() and armed.size() == mounts.size():
+			server.ship.mounts = mounts
+			server.ship.armed = armed
+		server.ship.shield_on = bool(data.get("shield_on", true))
+		server.ship.hardened = bool(data.get("hardened", false))
+	else:
+		server.ship.hull = mini(server.ship.hull * 2, Net.HULL_MAX)   # saved before v49, when the hull was 100
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])

@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 28
+const PROTOCOL := 29
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -126,6 +126,10 @@ const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT 
 const SUIT_TANK_STEPS := 10
 const ITEM_JUMPSUIT := 41
 const ITEM_BACKPACK := 42
+const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + Weapons.* (51..60); kept in the
+                                    # supply locker only, never carried (Items "cargo")
+const ITEM_ROCKET := 61             # a rocket for the rocket launcher (cargo)
+const ITEM_EMP_ROCKET := 62         # an EMP rocket for the EMP launcher (cargo)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -150,12 +154,31 @@ const S_SEARCH := 23                # u16 id of the character we are searching (
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
                                     # then u8 how hurt they are (0 = unhurt .. 4 = dying)
 const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed
-const S_GUNS := 28                  # u8 count, per gun u8 charge (0..100, 255 = broken), then u8 enemy hull
+const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (Weapons.*), u8 charge (0..100,
+                                    # GUN_BROKEN, GUN_JAMMED), u8 GUNF_* flags; u8 power drawn, u8 power the reactor
+                                    # gives; u8 our shield (0..100), u8 SHF_* flags; then u8 enemy hull
                                     # left, u8 enemy hull full (0 = no enemy), u16 seconds until it docks (0 = not coming),
                                     # u8 where the guns aim (ESYS_* or AIM_ANY), u8 count of the enemy's systems
                                     # (0 = no enemy), then per system u8 strength left, u8 strength when whole,
+                                    # u8 seconds it is still put out by ion or EMP,
                                     # then u8 ENEMY_* flags, u16 seconds until it jumps away (while it flees;
-                                    # 65535 = its jump cannot charge now)
+                                    # 65535 = its jump cannot charge now), u8 the enemy's shield (0..100),
+                                    # u8 count, then u8 per weapon the enemy carries (Weapons.*)
+const GUN_BROKEN := 255
+const GUN_JAMMED := 254             # put out for a few seconds by an enemy ion or EMP hit
+const GUNF_ARMED := 1               # it draws power and charges
+const GUNF_BEAM := 2                # (a cutting beam) it is burning now
+const GUNF_NO_AMMO := 4             # (a launcher) no rockets for it in the cargo
+const SHF_HAS := 1                  # the ship has a shield generator
+const SHF_ON := 2                   # it is switched on
+const SHF_BROKEN := 4
+const SHF_JAMMED := 8
+const SHF_HARDENED := 16            # the rare upgrade: it stops rockets too
+const C_GUNSET := 24                # u8 action (GUNSET_*), u8 a, u8 b: set the guns up, from the gun console
+const GUNSET_ARM := 1               # a = mount, b = 1 power it, 0 cut its power
+const GUNSET_SHIELD := 2            # b = 1 switch the shield on, 0 off
+const GUNSET_MOUNT := 3             # a = mount, b = the weapon from the cargo to put on it (Weapons.*; NONE = take it
+                                    # down into the cargo)
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
 const C_AIM := 22                   # u8 ESYS_* or AIM_ANY: where on the enemy the guns aim, from the gun console
 const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at
@@ -170,8 +193,9 @@ const ESYS_HELM := 1                # its bridge: down, it shoots wide and canno
 const ESYS_ENGINE := 2              # its engine: down, it cannot close in to dock, nor jump away
 const ESYS_CREW := 3                # its quarters: every few hits there kill one of its crew
 const ESYS_JUMP := 4                # its jump drive: worn, it charges a jump slower; down, it cannot jump away
-const ESYS_COUNT := 5
-const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель"]
+const ESYS_SHIELDS := 5             # its shield generator: worn, the shield refills slower; down, it has none
+const ESYS_COUNT := 6
+const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты"]
 const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const AIM_ANY := 255                # the guns hit wherever they hit
@@ -181,6 +205,11 @@ const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
 const SHOT_CANNON := 3              # a ship's gun firing, or the enemy's shot landing on us
+const SHOT_ION := 4                 # (v49) an ion shot: blue
+const SHOT_ROCKET := 5              # a rocket: a smoky trail
+const SHOT_PLASMA := 6              # a blaster's pellet: green
+const SHOT_BEAM := 7                # a pulse of the cutting beam: a thin white-violet line
+# (for a ship's shot, hit 0 = it was stopped by a shield short of the hull)
 const S_SHIPS := 26                 # every ship in the world: u8 count, then per ship u16 id, u8 kind (SHIP_*),
                                     # u8 docked, s16 x, s16 y of its corner in the grid, u8 name length, name.
                                     # A ship other than the client's own is the one alongside (see ShipMap.place_other).
@@ -206,6 +235,11 @@ const STORE_BUY := 4                # one of the thing named; this and the one b
 const STORE_BUY_AIR := 6
 const STORE_HIRE := 7               # take on one more crew member for the reserve (from a trader)
 const STORE_BUY_HULL := 8           # have the hull patched up by HULL_LOT (from a trader)
+const STORE_SELL := 10              # sell one of the thing named from the locker to a trader (Weapons.SELL_SHARE of its price)
+const STORE_HARDEN := 11            # buy the shield hardening from a trader who offers it
+const S_TRADE := 32                 # what the trader alongside offers (sent when it changes): u8 count, then per thing
+                                    # u8 ITEM_*, u16 price; then u8 TRADE_* flags. Count 0 = no trader.
+const TRADE_HARDEN := 1             # it offers the shield hardening
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a
 # spare part, or three times as long without one.
@@ -229,11 +263,11 @@ const OVER_CREW_LOST := 2           # everyone dead, nobody left in the reserve
 const START_RESERVE := 3
 const RESERVE_MAX := 9
 const PRICE_CREW := 30
-const HULL_MAX := 100
+const HULL_MAX := 200                # (v49: was 100, the author asked for more)
 const HULL_PER_HOLE := 5            # strength a hole in the hull takes
 const HULL_PER_SYSTEM_HIT := 3      # and a pirate shot that puts a gun or a console out of order
-const HULL_LOT := 10                # a trader patches up this much
-const PRICE_HULL := 6
+const HULL_LOT := 20                # a trader patches up this much
+const PRICE_HULL := 10
 
 # Sounds. Each is heard this far, in cells, on its own deck; through air only:
 # where either the one who hears or the sound itself is in a vacuum, only what

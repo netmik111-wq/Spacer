@@ -5,7 +5,8 @@ extends VBoxContainer
 ## picture, how many there are and how many we carry, grouped by what it is for;
 ## under them what our character carries, and what a trader offers when one is
 ## alongside. A click on a card takes one, a right click buys one from a trader;
-## a click on one of our own things puts it back. Shown inside the console
+## a click on one of our own things puts it back. While a trader is alongside
+## a button opens the trader's screen (TradeView). Shown inside the console
 ## frame of GameScreen while our character stands at the locker.
 
 const Net := preload("res://src/shared/net.gd")
@@ -13,12 +14,14 @@ const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
-const CARD := Vector2(92, 104)
-const CARD_GAP := 8.0
-const GROUP_GAP := 26.0
+const CARD := Vector2(80, 92)
+const CARD_GAP := 6.0
+const GROUP_GAP := 22.0
 const MAX_WIDTH := 900.0
-const ICON := 46.0
+const CARDS_HIGH := 360.0            # the cards scroll beyond this
+const ICON := 40.0
 const SLOT := 46.0
 const SLOT_GAP := 6.0
 const INK := Color(0.86, 0.9, 0.95)
@@ -27,12 +30,7 @@ const GOOD := Color(0.45, 0.85, 0.55)
 const WARN := Color(0.95, 0.75, 0.3)
 const BAD := Color(0.95, 0.4, 0.35)
 # the groups of cards: caption, the things in it (anything the locker keeps that is in none goes last)
-const GROUPS: Array = [
-	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FUEL]],
-	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
-	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES]],
-	["Оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON]],
-]
+const GROUPS: Array = Items.CATEGORIES
 
 var client: GameClient
 var _gauges: Control
@@ -41,7 +39,8 @@ var _about: Label
 var _mine: Control
 var _trade_box: HBoxContainer
 var _put_all: Button
-var _trade_buttons := {}             # Net.STORE_* -> Button
+var _trade: Button
+var open_trade: Callable             # set by GameScreen: shows the trader's screen
 var _groups: Array = []              # [caption, PackedInt32Array of things, where it starts on the cards' canvas], as shown
 var _hover := -1                     # the thing under the mouse (a card), or -1
 var _hover_slot := -1                # our own slot under the mouse, or -1
@@ -78,7 +77,12 @@ func setup(p_client: GameClient) -> void:
 		g.append(Vector2(x, row * (CARD.y + 24.0)))
 		x += w + GROUP_GAP
 	_gauges = _canvas(Vector2(_width(), 50), _draw_gauges)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size = Vector2(_width() + 14.0, minf((row + 1) * (CARD.y + 24.0), CARDS_HIGH))
+	add_child(scroll)
 	_cards = _canvas(Vector2(_width(), (row + 1) * (CARD.y + 24.0)), _draw_cards)
+	_cards.reparent(scroll)
 	_cards.gui_input.connect(_on_cards_input)
 	_cards.mouse_exited.connect(func() -> void: _hover = -1)
 	_about = Label.new()
@@ -93,11 +97,7 @@ func setup(p_client: GameClient) -> void:
 	_trade_box.add_theme_constant_override("separation", 8)
 	add_child(_trade_box)
 	_put_all = _button("Положить всё обратно", func() -> void: client.send_store(Net.STORE_PUT_BACK))
-	for offer: Array in [[Net.STORE_BUY_AIR, "Воздух +%d: %d кр." % [int(Net.AIR_LOT), Net.PRICE_AIR]],
-			[Net.STORE_BUY_HULL, "Обшивка +%d: %d кр." % [Net.HULL_LOT, Net.PRICE_HULL]],
-			[Net.STORE_HIRE, "Нанять в резерв: %d кр." % Net.PRICE_CREW]]:
-		var action: int = offer[0]
-		_trade_buttons[action] = _button(offer[1], func() -> void: client.send_store(action))
+	_trade = _button("Торговля: купить и продать…", func() -> void: open_trade.call())
 
 
 func _group_width(g: Array) -> float:
@@ -149,16 +149,7 @@ func refresh() -> void:
 	for item in Items.kept_in_locker():
 		keeps_any = keeps_any or client.carried(item) > 0
 	_put_all.disabled = not keeps_any
-	for action: int in _trade_buttons.keys():
-		var b: Button = _trade_buttons[action]
-		b.visible = trading
-		match action:
-			Net.STORE_BUY_AIR:
-				b.disabled = client.credits < Net.PRICE_AIR or client.store_air >= Net.STORE_AIR_FULL
-			Net.STORE_BUY_HULL:
-				b.disabled = client.credits < Net.PRICE_HULL or client.hull >= Net.HULL_MAX
-			Net.STORE_HIRE:
-				b.disabled = client.credits < Net.PRICE_CREW or client.reserve >= Net.RESERVE_MAX
+	_trade.visible = trading
 	_about.text = _about_text(trading)
 
 
@@ -166,8 +157,10 @@ func _about_text(trading: bool) -> String:
 	var lines := PackedStringArray()
 	if _hover >= 0:
 		var line := "%s. %s В шкафу: %d, у вас: %d." % [Items.name_of(_hover), Items.about(_hover), client.stock(_hover), client.carried(_hover)]
-		if trading and Items.price(_hover) > 0:
-			line += " У торговца: %d кр. (правый щелчок)." % Items.price(_hover)
+		if trading and client.trade.has(_hover):
+			line += " У торговца: %d кр. (правый щелчок)." % client.trade[_hover]
+		if Items.cargo(_hover):
+			line += " Это груз корабля: в руки не берётся%s." % (", ставится на орудие с пульта орудий" if Weapons.of_item(_hover) != Weapons.NONE else "")
 		lines.append(line)
 	elif _hover_slot >= 0 and client.slots[_hover_slot] != Net.ITEM_NONE:
 		var thing := client.slots[_hover_slot]
@@ -180,7 +173,7 @@ func _about_text(trading: bool) -> String:
 	else:
 		lines.append("Щелчок по карточке: взять одну (в руку, если она пуста). Щелчок по своей вещи внизу: положить её в шкаф.")
 	if trading:
-		lines.append("Торговец на связи: правый щелчок по карточке покупает одну.")
+		lines.append("Торговец на связи: правый щелчок по карточке покупает одну; продать и купить остальное: кнопка «Торговля».")
 	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
 		lines.append("Торговец в этом секторе. Чтобы покупать, %s." % ("подойдите к нему" if client.powered() else "нужно питание"))
 	else:
@@ -249,14 +242,18 @@ func _draw_cards() -> void:
 			ItemArt.draw(_cards, icon, item)
 			if n == 0:
 				_cards.draw_rect(icon, Color(0.05, 0.05, 0.07, 0.6))
-			_cards.draw_string(font, r.position + Vector2(0, 8 + ICON + 15), Items.name_of(item), HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 12, INK)
+			var label := Weapons.short_of(Weapons.of_item(item)) if Weapons.of_item(item) != Weapons.NONE else Items.name_of(item)
+			var size := 12
+			while size > 9 and font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > CARD.x - 4:
+				size -= 1
+			_cards.draw_string(font, r.position + Vector2(0, 8 + ICON + 15), label, HORIZONTAL_ALIGNMENT_CENTER, CARD.x, size, INK)
 			_cards.draw_string(font, r.position + Vector2(6, 16), "×%d" % n, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, DIM if n == 0 else GOOD)
 			var mine := client.carried(item)
 			if mine > 0:
 				_cards.draw_string(font, r.position + Vector2(0, 16), "у вас %d " % mine, HORIZONTAL_ALIGNMENT_RIGHT, CARD.x - 4, 10, DIM)
-			if trading and Items.price(item) > 0:
-				var afford := client.credits >= Items.price(item)
-				_cards.draw_string(font, r.position + Vector2(0, CARD.y - 8), "%d кр." % Items.price(item), HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 11,
+			if trading and client.trade.has(item):
+				var afford := client.credits >= int(client.trade[item])
+				_cards.draw_string(font, r.position + Vector2(0, CARD.y - 6), "%d кр." % client.trade[item], HORIZONTAL_ALIGNMENT_CENTER, CARD.x, 11,
 					WARN if afford else BAD)
 
 
@@ -282,9 +279,9 @@ func _on_cards_input(event: InputEvent) -> void:
 	var item := _card_at(click.position)
 	if item < 0:
 		return
-	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0:
+	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0 and not Items.cargo(item):
 		client.send_store(Net.STORE_TAKE, item)
-	elif click.button_index == MOUSE_BUTTON_RIGHT and client.can_trade() and Items.price(item) > 0:
+	elif click.button_index == MOUSE_BUTTON_RIGHT and client.can_trade() and client.trade.has(item):
 		client.send_store(Net.STORE_BUY, item)
 	_cards.accept_event()
 

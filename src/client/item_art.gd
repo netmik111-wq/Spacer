@@ -3,6 +3,10 @@ extends RefCounted
 ## a slot on the screen or a spot on the floor. Each is laid out on a 17 by 17 grid.
 
 const Net := preload("res://src/shared/net.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
+
+# the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
+const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0)]
 
 
 static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
@@ -39,6 +43,17 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		var left := float(item - Net.ITEM_SUIT) / Net.SUIT_TANK_STEPS
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
+		return
+	if item > Net.ITEM_GUN and item < Net.ITEM_GUN + Weapons.COUNT:
+		_ship_gun(canvas, at, u, item - Net.ITEM_GUN)
+		return
+	if item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET:
+		# a rocket lying across: a grey body, a coloured nose, fins at the tail
+		var nose := Color(0.85, 0.25, 0.18) if item == Net.ITEM_ROCKET else Color(0.35, 0.6, 1.0)
+		canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(13, 4) * u, Color(0.1, 0.1, 0.12), 4.2 * u)
+		canvas.draw_line(at + Vector2(3.5, 12.5) * u, at + Vector2(12, 5) * u, Color(0.72, 0.74, 0.78), 2.6 * u)
+		canvas.draw_line(at + Vector2(11, 6) * u, at + Vector2(14, 3) * u, nose, 2.6 * u)
+		canvas.draw_line(at + Vector2(2, 11) * u, at + Vector2(5, 14) * u, Color(0.3, 0.3, 0.36), 1.4 * u)
 		return
 	match item:
 		Net.ITEM_JUMPSUIT:
@@ -114,3 +129,24 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(10, 5) * u, Vector2(3, 7) * u), Color(0.15, 0.15, 0.19))
 			canvas.draw_rect(Rect2(at + Vector2(10.5, 5.5) * u, Vector2(2, 6) * u), Color(0.55, 0.57, 0.66))
 			canvas.draw_rect(Rect2(at + Vector2(12, 6) * u, Vector2(1, 5) * u), Color(1.0, 0.97, 0.75) if lit else Color(0.62, 0.7, 0.78))
+
+
+static func _ship_gun(canvas: CanvasItem, at: Vector2, u: float, w: int) -> void:
+	## A ship's gun off its mount: a breech block with a barrel, marked with its class's colour;
+	## heavier guns have thicker barrels, the rapid laser and the blaster several.
+	var mark: Color = GUN_MARK[Weapons.klass(w)]
+	canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(8, 8) * u), Color(0.12, 0.12, 0.15))
+	canvas.draw_rect(Rect2(at + Vector2(3, 8) * u, Vector2(6, 6) * u), Color(0.5, 0.53, 0.6))
+	var barrels := 3 if w == Weapons.RAPID or w == Weapons.BLASTER else 1
+	var thick := 2.0 + (1.0 if w == Weapons.HEAVY or w == Weapons.ION_CANNON else (2.0 if w == Weapons.SIEGE else 0.0))
+	for k in barrels:
+		var y := 11.0 - thick / 2.0 + (k - (barrels - 1) / 2.0) * 2.4
+		canvas.draw_rect(Rect2(at + Vector2(9, y) * u, Vector2(7, thick) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(9.5, y + 0.4) * u, Vector2(6, thick - 0.8) * u), Color(0.38, 0.4, 0.46))
+	if Weapons.klass(w) == Weapons.CLASS_ROCKET:
+		canvas.draw_rect(Rect2(at + Vector2(9, 8) * u, Vector2(6, 6) * u), Color(0.12, 0.12, 0.15))
+		for k in 2:
+			canvas.draw_circle(at + Vector2(10.6 + k * 2.8, 11) * u, 1.0 * u, mark)
+	canvas.draw_rect(Rect2(at + Vector2(4, 9.5) * u, Vector2(4, 3) * u), mark)
+	for k in Weapons.power(w):                           # a pip per point of power it draws
+		canvas.draw_rect(Rect2(at + Vector2(2 + k * 2.2, 3) * u, Vector2(1.4, 1.6) * u), Color(0.95, 0.85, 0.3))

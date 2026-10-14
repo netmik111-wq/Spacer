@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v48 (version 0.41).
+Last updated: build v49 (version 0.42).
 
 Contents:
 
@@ -269,20 +269,26 @@ Contents:
   - across the top: credits, fuel canisters, air for the plant (bar), hull integrity (bar),
     crew reserve (bar);
   - every item the locker keeps as a card with its picture, how many are in the locker and how many you
-    carry, grouped: repair and fuel, equipment, medicine, weapons. Left click on a card takes one
+    carry, grouped: repair and fuel, equipment, medicine, personal weapons, ship weapons, ammunition
+    (the last two are cargo: they can't be taken into the hands). Left click on a card takes one
     (into the hand if it is empty); right click buys one when a trader is in reach (the price shows on
     the card); hovering shows what the item does;
   - your own slots underneath: click one to put that item back (only whole items; the frame is green
     on those that can go back), or "put everything back";
-  - at a trader, buttons for air (+10), hull (+10) and hiring a person into the reserve.
+  - at a trader, the button "Торговля" opens the trader's window.
 - Only whole items go back: a used medkit can't be swapped for a new one, a loaded
   pistol goes back empty, a spacesuit only with a full tank.
 - The ship sets out with **30 credits** and a full air reserve for the plant.
 - **Credits**: **15** for the first jump into each new sector (no other income yet).
-- **Trader**: fly the ship up to it; purchases are made at the locker, power is needed.
-  Sells all items in the table and air for the plant (10 cells for 5 credits).
-  Also there: **hire a person into the crew reserve** (**30** credits, no more than 9 in reserve) and
-  **patch the hull** (+**10** integrity for **6** credits).
+- **Trader**: fly the ship up to it; trading is done at the locker, power is needed.
+  The **trader's window** (v49) sorts its goods into categories on the left: all, repair and fuel, equipment,
+  medicine, personal weapons, ship weapons, ammunition, services and upgrades. Each row shows the item, how many
+  the locker holds, a **buy** button (its price) and a **sell** button: the trader buys any priced item from the
+  locker for **half** its price (things you carry must be put in the locker first).
+  It sells all ordinary items, rockets (4) and EMP rockets (6), **4 of the 10** kinds of ship weapon (the same
+  ones at the same trader every time) and, at about 1 trader in 3, the **shield hardening** (80).
+  Services: air for the plant (10 cells for 5 credits), **hire a person into the crew reserve** (**30** credits,
+  no more than 9 in reserve), **patch the hull** (+**20** integrity for **10** credits).
 - **Supply station**: when docked, free of charge it restores air in the compartments and the plant's reserve,
   tops fuel up to **3** canisters and patches the hull completely.
 
@@ -446,7 +452,7 @@ someone is outside):
 The boarding ship:
 
 - A ship in brown, red and black colours takes position above the airlock, 3 cells of space away, and
-  **opens fire** (see "Ship weapons"). After **40 s** it **docks by force** (waits if someone is between the ships), **breaks open both
+  **opens fire** (see "Ship weapons"). After **90 s** (40 until v49) it **docks by force** (waits if someone is between the ships), **breaks open both
   airlock doors** (they jam open; repair like a jammed door) and lands
   pirates: as many as in a boarding (1 + half the crew, no more than 4).
 - Their ship has light, air and power; on the floor 2–4 items: magazines, plasters, patches,
@@ -459,7 +465,7 @@ The boarding ship:
 ### Wrecked raider
 
 - A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a
-  dead hulk: no power, no light, doors open by hand. The ship is paid **25 credits** for it (no canister).
+  dead hulk: no power, no light, doors open by hand. The ship is paid **40 credits** for it (no canister).
 - It can be reached through open space or **docked with** from the ship-control console
   («Пристыковаться к разбитому кораблю»). Aboard: what it carried (2–4 things on the floor plus 1–3 more),
   and the bodies of its dead with their weapons.
@@ -473,37 +479,84 @@ The boarding ship:
 
 ### Ship weapons
 
-- The ship has **3 guns** in the hull: in compartments near the nose on the port and starboard sides and under the belly.
-  They are fired from the **gun console** on the bridge (E). The console and guns need power.
-- A gun recharges by itself: **8 s** after a shot. Buttons: fire one gun or a volley from all
-  ready ones. Hit chance **75%**.
-- The only target is the pirate ship, until it docks. It withstands **6 hits**. A boarding ship, once
-  wrecked, leaves with its crew, and the ship is credited **25 credits** and **1** fuel canister; a raider
+Since v49 (the author's request) guns can be changed, the ship has a shield, and there are ten kinds of ship weapon.
+
+- The ship has **3 gun mounts** in the hull: in compartments near the nose on the port and starboard sides and under
+  the belly. They are worked from the **gun console** on the bridge (E). The console and guns need power.
+  The ship sets out with a **laser** on each.
+- **Changing guns.** Each mount holds one weapon or none. On the console, "Сменить оружие…" under a gun puts on a
+  weapon from the **cargo** (the supply locker); the one taken down goes into the cargo. "Снять в трюм" leaves the
+  mount empty. A weapon just put on is unpowered and uncharged. Ship weapons and rockets are cargo: the locker
+  shows them, but they can't be taken into the hands.
+- **Reactor power: 8.** Every powered gun draws its power, the shield **2**. A gun is powered or cut with
+  "Питание" on the console; one that doesn't fit in what is left won't power up. A cut gun loses its charge.
+  The ship sets out with 3 lasers and the shield on: 5 of 8.
+- A powered gun charges by itself (each weapon its own time) while the ship has power and the mount is whole.
+  Buttons: fire one gun or a volley of all ready ones.
+
+| Weapon | Charge | Shots | Hit | Damage | Power | Price | What else |
+|---|---|---|---|---|---|---|---|
+| Лазер (laser) | 8 s | 1 | 75% | 1 | 1 | 30 | |
+| Тяжёлый лазер (heavy laser) | 14 s | 1 | 70% | 2 | 3 | 60 | takes 50 off a shield that stops it |
+| Осадный лазер (siege laser) | 20 s | 1 | 65% | 3 | 4 | 90 | takes 75 off a shield |
+| Скорострельный лазер (rapid laser) | 12 s | 6 | 35% each | 1 | 2 | 55 | |
+| Резак (cutting beam) | 16 s | 4 pulses, 1 a second | never misses | 1 a pulse | 2 | 70 | burns the room aimed at; the aim may move while it burns; a shield at 50+ stops it, losing only 10 a pulse |
+| Плазменный бластер (blaster) | 11 s | 4 pellets | 55% each | 1 | 2 | 55 | half the pellets ignore the shield |
+| Ракетная установка (rocket launcher) | 10 s | 1 | 85% | 2 | 1 | 50 | ignores the shield (not a hardened one); holes the hull 50% of the time; spends a rocket (4 cr.) |
+| ЭМИ-установка (EMP launcher) | 12 s | 1 | 85% | 0 | 1 | 60 | ignores the shield (not a hardened one); puts the system it hits out for **6 s**; spends an EMP rocket (6 cr.) |
+| Ионная пушка (ion gun) | 7 s | 1 | 80% | 0 | 1 | 40 | takes 35 off a shield; through it, puts the system it hits out for **3 s** |
+| Ионное орудие (ion cannon) | 13 s | 1 | 75% | 0 | 2 | 70 | takes 70 off a shield; through it, puts a system out for **3 s** |
+
+- **Shields** (the author's rule, not FTL's). A shield is a pool of **0–100** that refills **2.5 a second**.
+  A shot that meets it at **50 or more** is stopped and takes **25 per point of its damage** away (ion: its own
+  amount, the beam: 10). Below 50 a shot gets through with chance (50 − shield) / 50: at 25, half; at 0, all.
+  Lasers and the beam always meet the shield; half the blaster's pellets slip past it; rockets and EMP pass it
+  unless it is hardened; ion only wears it down, and what gets through puts a system out instead of doing damage.
+- **Our shield generator** stands in the wall of the life-support compartment on the lower deck (the engineer's
+  access). It needs power and can be switched off from the gun console (then it frees 2 power). Without power,
+  broken, or switched off, the shield is at 0; put out by ion or EMP it stops protecting and refilling for that
+  time. A broken generator is repaired like any machine.
+- **Shield hardening**: a rare upgrade, offered by about **1 trader in 3** for **80** credits. With it the shield
+  stops rockets and EMP rockets too, like lasers. Once bought, it stays.
+- The only target is the pirate ship, until it docks. Its hull takes **12** damage. A boarding ship, once
+  wrecked, leaves with its crew, and the ship is credited **40 credits** and **1** fuel canister; a raider
   stays as a wreck (see "Wrecked raider").
-- **Aiming at its systems.** The console shows the pirate ship's plan with five compartments, each with
+- **Its shield and guns.** 70% of pirate ships have a shield generator (a sixth room, «Щиты»), with the same rules
+  as ours. Every pirate ship has a laser and one more gun, drawn from laser, rapid laser, blaster, ion gun, rocket
+  launcher and heavy laser; **5** or more jumps from the start it has a third one (heavy, rapid, blaster, ion
+  cannon, rockets or EMP). Its guns charge **1.3 times** slower than ours, and slower still as its weapons room is
+  worn. Its rockets never run out.
+- **Aiming at its systems.** The console shows the pirate ship's plan with six compartments, each with
   a system; a click on a compartment (or its button) aims all guns there, "Куда попадёт" ("wherever it
-  lands") hits a random compartment. The aim is shared by everyone at the console. Every hit takes 1
-  from its hull, makes a breach in its hull next to that compartment and hits the system there:
+  lands") hits a random compartment. The aim is shared by everyone at the console. A hit that gets through
+  takes its damage from the hull and from the system there, and makes a breach next to that compartment
+  (a rocket: half the time):
   | Compartment | Strength | When knocked out |
   |---|---|---|
-  | Weapons (Орудия) | 2 hits | it stops shooting; worn to 1, it fires half as often |
-  | Bridge (Рубка) | 2 hits | its shots hit half as often (35%), ours hit **95%** |
-  | Engine (Двигатель) | 2 hits | it can't close in (the countdown to docking stands still) and can't jump away |
-  | Quarters (Кубрик) | 2 hits per crewman | every 2 hits kill one of its crew; a boarding ship with none left breaks off and leaves (no reward), a raider becomes a dead wreck |
-  | Jump drive (Гипердвигатель) | 2 hits | worn to 1, its jump charges twice as long; knocked out, it can't jump away |
-- **It runs when beaten** (v44): with its hull at **2** or less, or its guns knocked out and its hull at
-  half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**; with the
-  drive at 1 point, 40 s; with the drive or its engine knocked out, the charge stands still until it is
+  | Weapons (Орудия) | 3 | it stops shooting; worn, it fires slower (at 1 of 3, three times slower) |
+  | Bridge (Рубка) | 3 | its shots hit half as often, ours hit 20% more often (up to 95%) |
+  | Engine (Двигатель) | 3 | it can't close in (the countdown to docking stands still) and can't jump away |
+  | Quarters (Кубрик) | 2 per crewman | every 2 damage kills one of its crew; a boarding ship with none left breaks off and leaves (no reward), a raider becomes a dead wreck |
+  | Jump drive (Гипердвигатель) | 3 | worn, its jump charges slower in proportion; knocked out, it can't jump away |
+  | Shields (Щиты) | 3 (or none) | worn, its shield refills slower; knocked out, its shield falls to 0 |
+- Ion or EMP put a system out for their time: it works as if knocked out (on the shields: the shield stops
+  protecting and refilling), then comes back by itself.
+- **It runs when beaten** (v44): with its hull at **4** or less, or its guns knocked out and its hull at
+  half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**, worn
+  longer in proportion; with the drive or its engine knocked out, the charge stands still until it is
   mended. A ship that gets away pays nothing. While it runs it doesn't close in to dock either.
 - Its crew repairs one point of a worn system (not the quarters) every **15 s**: a system knocked out
-  comes before one only worn; while it runs, the jump drive and engine first, otherwise its guns first.
-- The pirate ship fires once every **9–13 s**, hitting with 70% chance. While one of our guns works it
-  aims **55%** of its shots at our guns (75% while it runs, to cover its escape); of the rest, 60%
-  breach the hull, half of those next to a crew member, and the others disable a bridge console. A broken gun
-  is repaired like machines (E, 6 s with a spare part).
-- The hint at a gun shows its charge; the console shows each gun's charge bar, the enemy's hull, the
-  time until it docks (or that it fights at a distance), how long until it jumps away while it runs,
-  its systems and what knocking each out does.
+  comes before one only worn; while it runs, the jump drive and engine first, otherwise its guns, then its shields.
+- **Its shots at us.** While one of our guns works it aims **55%** of its shots at our guns (75% while it runs);
+  of the rest, 60% hit the hull, half of those next to a crew member, and the others a bridge console or the shield
+  generator. A shot our shield stops shows as a blue ripple off the hull. What gets through: a gun, console or the
+  generator breaks (hull −3 per damage); a hull hit makes a breach (hull −5 per damage; a rocket breaches half the
+  time); ion or EMP put a gun or the shield generator out for 3 or 6 s. A broken gun is repaired like machines
+  (E, 6 s with a spare part).
+- Each gun's shots are told in one chat line (hits, what the shield stopped, misses, what it did).
+- The console shows the reactor's power, our shield, each gun with its weapon, charge, power and change list,
+  the enemy's hull, shield and guns, the time until it docks (or that it fights at a distance), how long until it
+  jumps away while it runs, its systems and what knocking each out does.
 
 ## 18. Bridge and flight within a sector
 
@@ -654,8 +707,8 @@ The boarding ship:
 ## 23. Campaign: hull, end, saving
 
 - The **goal** is to hold out as long as possible. The top line (F1) shows the reserve and hull integrity.
-- **Hull**: integrity **100**. Each breach takes **5**, each pirate hit
-  on a gun or console **3**. At **30** and below the ship warns you. It is patched at a trader
+- **Hull**: integrity **200** (100 until v49; an older save has its hull doubled). Each breach takes **5**, each
+  pirate hit on a gun, console or the shield generator **3** per point of its damage. At **50** and below the ship warns you. It is patched at a trader
   and at a supply station (section 10).
 - **End of campaign**: the hull reaches zero (the ship is destroyed) or the whole crew has died
   and nobody is in reserve. The game stops: no more jumps, the screen shows a summary — how many

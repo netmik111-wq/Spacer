@@ -120,6 +120,12 @@ pool all round the character).
 Build v48 (0.41) was the author's comment on the v47 picture: "smoother, like a triangle". The seen area
 now fades along the cone's straight sides, and light pools fade out over open floor.
 
+Build v49 (0.42) was the author's own request, as one build: ship weapons changed at the gun console and
+kept in the cargo, a reactor power budget, shields (ours and the pirates') by the author's rule, ten weapons
+(lasers heavy/siege/rapid, the cutting beam, blaster, rockets, EMP, ion gun and cannon), our hull 200 and
+pirates 12, and a trader's window with categories, buying and selling. The beam was mine to invent (the
+author did not want FTL's); three ideas were put to him, the cutter is built as the default.
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -153,7 +159,7 @@ new items for slots (tools, medkit, spare tank).
     godot --headless --path . --script res://tools/locktest.gd
     godot --headless --path . --script res://tools/derelicttest.gd
     godot --headless --path . --script res://tools/weartest.gd
-    godot --headless --path . --script res://tools/guntest.gd
+    godot --headless --path . --script res://tools/guntest.gd   (since v49 also weapons, shields, trade)
     godot --headless --path . --script res://tools/crewtest.gd
     godot --headless --path . --script res://tools/savetest.gd
     godot --headless --path . --script res://tools/admintest.gd
@@ -560,6 +566,21 @@ The parameters for these checks are described in the header of `src/main.gd`.
   the ship doesn't move or jump (`Derelict.holds_ship`), and a started jump fails.
   I decided this: we don't abandon anyone. Bots and pirates don't go into space.
 
+- **Ship weapons, power and shields** (v49, the author's request; `src/shared/weapons.gd` holds every number
+  the server and the client share). A gun mount (`ShipMap.guns`) holds a weapon (`Ship.mounts`), powered or not
+  (`Ship.armed`); a weapon off its mount is cargo: the item `Net.ITEM_GUN + Weapons.*` in the locker, with
+  `Items` "cargo" (never carried, `STORE_TAKE` refuses it). Rockets are cargo items too. The reactor gives
+  `Weapons.REACTOR` (8) to the guns and the shield (2); I chose the numbers. Set-up goes by `C_GUNSET` from
+  the gun console. Shields follow the author's rule exactly (holds at 50+, below lets through with chance
+  (50 − level)/50); rockets pass unless `Ship.hardened`, half the blaster's pellets pass, ion only wears
+  the shield and puts a system out (`Ship.jammed` for ours, `Gunnery.systems_out` for theirs). Our generator
+  is the `shield` tile ('Z'); theirs is the sixth room `Net.ESYS_SHIELDS` (70% of pirates have one). Our
+  shield falls to 0 without power, broken or switched off; ionised it keeps its level but does not protect.
+  Enemy guns are a loadout from `Gunnery.ENEMY_*`, each charging on its own (1.3× slower than ours).
+- **The trader's offers are made by the server** (`Supplies.offers`, `S_TRADE`), seeded by the game and the
+  place, so the same trader always has the same 4 ship weapons and, 30% of the time, the hardening. Selling
+  is from the locker at half price (`Weapons.SELL_SHARE`). The trader's window is `TradeView`, opened from the
+  locker's window (`GameScreen._show_trade`).
 - **Admin rights** (`src/server/admin.gd`, since v40). The host's game proves itself with the
   server's secret text (`ADMIN_HELLO` right after joining; `Player.host`), and only the host makes
   others admins (`ADMIN_GRANT`), by player name (`Admin.names`, kept in the save). Others send
@@ -616,6 +637,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   through a pipe is lost. Run with `timeout` and output to a file.
 - A door must stay open longer than the stretch the client replays
   on a correction (`Doors.HOLD_TICKS`, currently 2 seconds).
+- Console screens that build many controls (`GunsView`, `TradeView`) are set up when first opened, not
+  when `GameScreen` is built at joining: in v49 building them at joining cost ~60 ms and doubled the
+  corrections in nettest (the same clock pitfall as below).
 - Long client work at the moment of joining the game (as with creating sounds in `WorldView._ready`)
   knocks its clock off relative to the server, and the first steps get corrected. So sounds
   are made in advance while the menu is open (`Sounds.prepare` in `main.gd`).
