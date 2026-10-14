@@ -48,6 +48,40 @@ const DIM_RADIUS := 5.0
 # NEAR at our own cell, gone NEAR_RADIUS cells off, stopped by walls.
 const NEAR := 0.8
 const NEAR_RADIUS := 3.2
+const CONE_SOFT := 14.0                           # degrees over which the sides of the cone fade out
+const CONE_BAND := 1.6                            # and cells across which they fade, near us too
+const LOOK_MARGIN := 26.0                         # degrees the cells seen are worked out past the cone, for that fade
+# The smooth cone: a soft fan, worked out for each pixel. A side fades over a
+# band CONE_BAND cells wide at our feet, widening by CONE_SOFT degrees outwards,
+# so it reads as one soft straight edge (v48, the author: "smoother, like a triangle").
+const CONE_SHADER := """
+shader_type canvas_item;
+render_mode blend_add;
+uniform vec2 origin;
+uniform vec2 ahead;
+uniform float half_field;
+uniform float band;
+uniform float spread;
+uniform float reach;
+varying vec2 local;
+void vertex() {
+	local = VERTEX;
+}
+void fragment() {
+	vec2 rel = local - origin;
+	float r = length(rel);
+	float f = 1.0;
+	if (r > 1.0) {
+		float a = acos(clamp(dot(rel / r, ahead), -1.0, 1.0));
+		float out_by = a - half_field;          // how far past the side, as a turn
+		float dist = out_by <= 0.0 ? -r * sin(min(-out_by, 1.5707)) : r * sin(min(out_by, 1.5707));
+		float w = band + r * spread;
+		f = 1.0 - smoothstep(-0.5 * w, 0.5 * w, dist);
+		f *= 1.0 - smoothstep(reach - band, reach, r);
+	}
+	COLOR = vec4(0.0, 1.0, 0.0, f);
+}
+"""
 const LOOK_RAYS := 48                             # rays per eye when the field of view is worked out
 # The mask has two pictures in one: red is where light falls, green is what our
 # eyes reach. Seen and lit = clear; out of sight or unlit = near black.
@@ -55,10 +89,11 @@ const DARK_SHADER := """
 shader_type canvas_item;
 uniform sampler2D mask : filter_linear;
 uniform vec4 dark;
+uniform sampler2D cone : filter_linear;
 uniform float unseen;
 void fragment() {
 	vec4 m = texture(mask, SCREEN_UV);
-	float seen = clamp(m.g, 0.0, 1.0);
+	float seen = clamp(m.g, 0.0, 1.0) * clamp(texture(cone, SCREEN_UV).g, 0.0, 1.0);
 	// red: the ship's own light; blue: flashlights and flashes, which light only what we look at
 	float lit = clamp(m.r + m.b * seen, 0.0, 1.0);
 	COLOR = vec4(dark.rgb, mix(unseen, dark.a * (1.0 - lit), seen));
@@ -67,9 +102,10 @@ void fragment() {
 const SEEN_ONLY_SHADER := """
 shader_type canvas_item;
 uniform sampler2D mask : filter_linear;
+uniform sampler2D cone : filter_linear;
 void fragment() {
-	// shown only where our eyes reach (the green of the mask)
-	COLOR.a *= clamp(texture(mask, SCREEN_UV).g, 0.0, 1.0);
+	// shown only where our eyes reach (the green of the mask, inside the smooth cone)
+	COLOR.a *= clamp(texture(mask, SCREEN_UV).g, 0.0, 1.0) * clamp(texture(cone, SCREEN_UV).g, 0.0, 1.0);
 }
 """
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
@@ -133,6 +169,14 @@ var _light_textures := {}            # the pictures of light drawn last, one per
 var _mask_view: SubViewport
 var _mask: Node2D                    # draws where light falls (red)
 var _look: Node2D                    # draws what our eyes reach (green)
+# The smooth cone of the eyes, not cut by walls, with soft sides, and the pool
+# around us: a second picture that the cells seen (green) are multiplied by, so
+# what is seen ends along the cone's straight sides, not cell by cell (v47).
+var _cone_view: SubViewport
+var _cone: Node2D
+var _cone_fan: Node2D                # the fan itself, drawn by CONE_SHADER
+var _fan_rect := Rect2()             # where it is drawn (empty: nowhere)
+var _cone_camera: Camera2D
 var _sounds: Array = []              # marks of sounds heard: [kind, place in the deck's pixels, deck, seconds left]
 var _audio: Sounds                   # what is heard (see Sounds)
 var _last_cell := Vector2i(-1, -1)   # where our character was, for its own footsteps
@@ -237,6 +281,29 @@ func setup(p_client: GameClient) -> void:
 	_mask_camera = Camera2D.new()
 	_mask_view.add_child(_mask_camera)
 	_mask_camera.enabled = true
+	_cone_view = SubViewport.new()
+	_cone_view.disable_3d = true
+	_cone_view.transparent_bg = true
+	_cone_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(_cone_view)
+	_cone = Node2D.new()
+	_cone.material = adding
+	_cone.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_cone.draw.connect(_draw_cone)
+	_cone_view.add_child(_cone)
+	_cone_fan = Node2D.new()
+	var fan_shader := Shader.new()
+	fan_shader.code = CONE_SHADER
+	var fan_material := ShaderMaterial.new()
+	fan_material.shader = fan_shader
+	_cone_fan.material = fan_material
+	_cone_view.add_child(_cone_fan)
+	_cone_fan.draw.connect(func() -> void:
+		if _fan_rect.has_area():
+			_cone_fan.draw_rect(_fan_rect, Color.WHITE))
+	_cone_camera = Camera2D.new()
+	_cone_view.add_child(_cone_camera)
+	_cone_camera.enabled = true
 	_dark_layer = CanvasLayer.new()
 	_dark_layer.layer = 1
 	add_child(_dark_layer)
@@ -248,6 +315,7 @@ func setup(p_client: GameClient) -> void:
 	var sheet_material := ShaderMaterial.new()
 	sheet_material.shader = sheet_shader
 	sheet_material.set_shader_parameter("mask", _mask_view.get_texture())
+	sheet_material.set_shader_parameter("cone", _cone_view.get_texture())
 	sheet_material.set_shader_parameter("unseen", UNSEEN)
 	_dark_sheet.material = sheet_material
 	# the warm light of flashlights and the traces of shots show only where we look
@@ -256,6 +324,7 @@ func setup(p_client: GameClient) -> void:
 	var shade_material := ShaderMaterial.new()
 	shade_material.shader = seen_only
 	shade_material.set_shader_parameter("mask", _mask_view.get_texture())
+	shade_material.set_shader_parameter("cone", _cone_view.get_texture())
 	_shade.material = shade_material
 	_dark_layer.add_child(_dark_sheet)
 	# We always see ourselves, even in pitch dark (without the glow around us
@@ -416,6 +485,8 @@ func _update_ship(delta: float) -> void:
 	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
 	_mask.queue_redraw()
 	_look.queue_redraw()
+	_cone.queue_redraw()
+	_update_fan()
 	for i in range(_shots.size() - 1, -1, -1):
 		_shots[i][5] -= delta
 		if float(_shots[i][5]) <= 0.0:
@@ -494,6 +565,16 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 		hi = Vector2i(maxi(hi.x, x), maxi(hi.y, y))
 	if here.is_empty():
 		return
+	# one cell more all round, so the open floor just past the light's edge can
+	# take the last of it: the pool fades out to nothing instead of stopping at
+	# a cell's edge (v47, the author: "smoother")
+	lo = Vector2i(maxi(lo.x - 1, 0), maxi(lo.y - 1, 0))
+	hi = Vector2i(mini(hi.x + 1, map.width - 1), mini(hi.y + 1, map.deck_height - 1))
+	var walls := {}                          # cell -> does it stop light (worked out once)
+	for y in range(lo.y - 1, hi.y + 2):
+		for x in range(lo.x - 1, hi.x + 2):
+			walls[Vector2i(x, y)] = x < 0 or y < 0 or x >= map.width or y >= map.deck_height \
+				or Sight.blocks(map, client.doors, x, y + top)
 	var w := (hi.x - lo.x + 1) * LIGHT_SUB
 	var h := (hi.y - lo.y + 1) * LIGHT_SUB
 	var data := PackedByteArray()
@@ -508,16 +589,17 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 			var cx := lo.x + px / LIGHT_SUB
 			var own: float = here.get(Vector2i(cx, cy), 0.0)
 			var v := 0.0
-			if own > 0.0:
+			if own > 0.0 or not walls[Vector2i(cx, cy)]:
 				var gx := lo.x + (px + 0.5) / LIGHT_SUB - 0.5
 				var x0 := floori(gx)
 				var fx := gx - x0
-				# a neighbour the light does not reach counts as this cell, so the
-				# edge of a lit place next to a wall stays lit right up to it
-				var a: float = here.get(Vector2i(x0, y0), own)
-				var b: float = here.get(Vector2i(x0 + 1, y0), own)
-				var c: float = here.get(Vector2i(x0, y0 + 1), own)
-				var d: float = here.get(Vector2i(x0 + 1, y0 + 1), own)
+				# a wall the light does not reach counts as this cell, so the edge of
+				# a lit place next to a wall stays lit right up to it; open floor it
+				# does not reach counts as dark, so the light fades into it
+				var a: float = here.get(Vector2i(x0, y0), own if walls[Vector2i(x0, y0)] else 0.0)
+				var b: float = here.get(Vector2i(x0 + 1, y0), own if walls[Vector2i(x0 + 1, y0)] else 0.0)
+				var c: float = here.get(Vector2i(x0, y0 + 1), own if walls[Vector2i(x0, y0 + 1)] else 0.0)
+				var d: float = here.get(Vector2i(x0 + 1, y0 + 1), own if walls[Vector2i(x0 + 1, y0 + 1)] else 0.0)
 				v = lerpf(lerpf(a, b, fx), lerpf(c, d, fx), fy)
 			data[k] = 255
 			data[k + 1] = clampi(roundi(v * 255.0), 0, 255)
@@ -717,6 +799,45 @@ func _soft_circle(pen: Node2D, mid: Vector2, full: float, gone: float, colour: C
 			PackedColorArray([colour, none, none, colour]))
 
 
+func _update_fan() -> void:
+	## Where the soft fan of the cone (CONE_SHADER) is drawn this frame, if at all.
+	_fan_rect = Rect2()
+	_cone_fan.queue_redraw()
+	var me: Sprite2D = _views.get(client.my_id)
+	if me == null or me.get_parent() != _decks[_deck_shown].chars or client.my_cond != Net.COND_OK:
+		return
+	var s := client.sample(client.my_id)
+	if s.is_empty():
+		return
+	var facing: int = s[1]
+	var origin := me.position + Vector2(0, -12)
+	var half := 0.0
+	for arc: Array in Sight.eye_arcs(false):
+		half = maxf(half, maxf(absf(arc[0]), absf(arc[1])))
+	var reach := (float(Sight.SIGHT_REACH) + 1.5) * _tile
+	var m := _cone_fan.material as ShaderMaterial
+	m.set_shader_parameter("origin", origin)
+	m.set_shader_parameter("ahead", Vector2(Net.DX[facing], Net.DY[facing]))
+	m.set_shader_parameter("half_field", deg_to_rad(half))
+	m.set_shader_parameter("band", CONE_BAND * _tile)
+	m.set_shader_parameter("spread", tan(deg_to_rad(CONE_SOFT)))
+	m.set_shader_parameter("reach", reach)
+	_fan_rect = Rect2(origin - Vector2(reach, reach) * 1.1, Vector2(reach, reach) * 2.2)
+
+
+func _draw_cone() -> void:
+	## The smooth cone (see _cone_view): the whole field of view as one soft fan
+	## (CONE_SHADER), not cut by walls (the cells seen do that); and the pool all
+	## round us, at full strength.
+	var me: Sprite2D = _views.get(client.my_id)
+	var white := Color(0, 1, 0, 1)
+	if me == null or me.get_parent() != _decks[_deck_shown].chars or client.my_cond != Net.COND_OK:
+		if me != null and client.my_cond != Net.COND_DEAD:
+			_cone.draw_circle(me.position + Vector2(0, -12), _tile * 0.6, white)
+		return
+	_draw_light(_cone, _near, white, 0)
+
+
 func _draw_look() -> void:
 	## Green where our eyes reach: a cone from each eye, cut short by walls and
 	## shut doors, and our own cell (somebody right behind us is felt, not seen).
@@ -737,8 +858,14 @@ func _draw_look() -> void:
 	_draw_light(_look, _near, Color(0, 1, 0, NEAR), 0)       # and dimly all round us, as in SS13
 	var reach := float(Sight.SIGHT_REACH) * _tile
 	# the whole field of view, in the dark too: there it only lets flashlights
-	# and the dim light around us show (people in the dark: see can_see)
-	var arcs := Sight.eye_arcs(false)
+	# and the dim light around us show (people in the dark: see can_see). It is
+	# worked out LOOK_MARGIN wider each side: the smooth cone (_draw_cone) fades it
+	# out along straight sides there, instead of cell by cell.
+	var arcs: Array = []
+	for arc: Array in Sight.eye_arcs(false):
+		var lo := minf(arc[0], arc[1])
+		var hi := maxf(arc[0], arc[1])
+		arcs.append([lo - LOOK_MARGIN if lo < 0.0 else lo, hi + LOOK_MARGIN if hi > 0.0 else hi])
 	var cells := {}                          # cells a look passes through or stops at
 	for arc: Array in arcs:
 		var points := PackedVector2Array([origin])
@@ -1221,6 +1348,9 @@ func _process(delta: float) -> void:
 	_mask_view.size = Vector2i(get_viewport_rect().size)
 	_mask_camera.position = _camera.position
 	_mask_camera.zoom = _camera.zoom
+	_cone_view.size = _mask_view.size
+	_cone_camera.position = _camera.position
+	_cone_camera.zoom = _camera.zoom
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5
