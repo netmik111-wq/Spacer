@@ -1,4 +1,4 @@
-; Пиратский корабль: одна палуба. Наружная дверь внизу стыкуется со шлюзом корабля силой.
+; Pirate ship: one deck. The outer door at the bottom docks with the ship's airlock by force.
 = Пиратский корабль
  ##<>####<>##
  #....#.....#

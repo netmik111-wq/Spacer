@@ -1,553 +1,561 @@
-# Механики игры
+# Game mechanics
 
-Здесь описано всё, что уже есть в игре: как оно работает и с какими числами. Документ
-пополняется вместе с каждой сборкой. Чего в игре ещё нет, здесь не пишется: это в
-`docs/VISION.md` (видение и планы автора).
+This describes everything already in the game: how it works and with what numbers. The document
+grows with every build. What the game doesn't have yet is not written here: that is in
+`docs/VISION.md` (the author's vision and plans).
 
-Последнее обновление: сборка v37 (версия 0.30).
+Last updated: build v38 (version 0.31).
 
-Содержание:
+Contents:
 
-1. [Основа: сервер, шаги, сеть](#1-основа-сервер-шаги-сеть)
-2. [Корабль: палубы, полы, лестницы](#2-корабль-палубы-полы-лестницы)
-3. [Двери и аварийные шлюзы](#3-двери-и-аварийные-шлюзы)
-4. [Воздух и пробоины](#4-воздух-и-пробоины)
-5. [Здоровье, раны и смерть](#5-здоровье-раны-и-смерть)
-6. [Скафандр и кислород](#6-скафандр-и-кислород)
-7. [Двигатель и питание](#7-двигатель-и-питание)
-8. [Машины, поломки и ремонт](#8-машины-поломки-и-ремонт)
-9. [Вещи и инвентарь](#9-вещи-и-инвентарь)
-10. [Шкаф снабжения, торговец, кредиты](#10-шкаф-снабжения-торговец-кредиты)
-11. [Свет и темнота](#11-свет-и-темнота)
-12. [Поле зрения](#12-поле-зрения)
-13. [Звуки](#13-звуки)
-14. [Оружие и бой](#14-оружие-и-бой)
-15. [Лечение](#15-лечение)
-16. [Помощь упавшему: обыск и перетаскивание](#16-помощь-упавшему-обыск-и-перетаскивание)
-17. [Пираты](#17-пираты)
-18. [Мостик и полёт внутри сектора](#18-мостик-и-полёт-внутри-сектора)
-19. [Космос, секторы и прыжки](#19-космос-секторы-и-прыжки)
-20. [Ивентер (ГМ)](#20-ивентер-гм)
-21. [Экипаж, профессии, резерв](#21-экипаж-профессии-резерв)
-22. [Речь, рация, интерком](#22-речь-рация-интерком)
-23. [Кампания: обшивка, конец, сохранение](#23-кампания-обшивка-конец-сохранение)
-24. [Управление](#24-управление)
+1. [Basics: server, ticks, network](#1-basics-server-ticks-network)
+2. [Ship: decks, floors, ladders](#2-ship-decks-floors-ladders)
+3. [Doors and emergency shutters](#3-doors-and-emergency-shutters)
+4. [Air and breaches](#4-air-and-breaches)
+5. [Health, wounds and death](#5-health-wounds-and-death)
+6. [Spacesuit and oxygen](#6-spacesuit-and-oxygen)
+7. [Engine and power](#7-engine-and-power)
+8. [Machines, breakdowns and repair](#8-machines-breakdowns-and-repair)
+9. [Items and inventory](#9-items-and-inventory)
+10. [Supply locker, trader, credits](#10-supply-locker-trader-credits)
+11. [Light and darkness](#11-light-and-darkness)
+12. [Field of view](#12-field-of-view)
+13. [Sounds](#13-sounds)
+14. [Weapons and combat](#14-weapons-and-combat)
+15. [Healing](#15-healing)
+16. [Helping the fallen: searching and dragging](#16-helping-the-fallen-searching-and-dragging)
+17. [Pirates](#17-pirates)
+18. [Bridge and flight within a sector](#18-bridge-and-flight-within-a-sector)
+19. [Space, sectors and jumps](#19-space-sectors-and-jumps)
+20. [Eventer (GM)](#20-eventer-gm)
+21. [Crew, jobs, reserve](#21-crew-jobs-reserve)
+22. [Speech, radio, intercom](#22-speech-radio-intercom)
+23. [Campaign: hull, end, saving](#23-campaign-hull-end-saving)
+24. [Controls](#24-controls)
 
 ---
 
-## 1. Основа: сервер, шаги, сеть
+## 1. Basics: server, ticks, network
 
-- Всё решает сервер. Игра идёт шагами: **20 шагов в секунду**.
-- Персонаж проходит клетку за **0,2 с** (5 клеток в секунду). Тащащий тело идёт вдвое медленнее.
-- Нажатие направления **сразу поворачивает** персонажа, даже посреди шага или лицом к стене.
-- **Щелчок левой кнопкой** по миру поворачивает персонажа в сторону щелчка (на месте, без шага),
-  а потом применяет вещь в руке, если она что-то умеет.
-- Своё движение игра показывает сразу, не дожидаясь сервера, и поправляется, если сервер
-  решил иначе. Поэтому даже при пинге 200 мс ходить удобно.
-- Каждому игроку сервер присылает только то, что рядом: участок 3×3 по 16×16 клеток вокруг
-  него, на всех палубах сразу. Раз в 2 секунды игра сверяет своё знание мира с сервером.
-- «Новая кампания» и «Продолжить кампанию» запускают сервер отдельной программой в фоне. Хозяин игры — он же ГМ:
-  ему доступно меню ивентера.
+- The server decides everything. The game runs in ticks: **20 ticks per second**.
+- A character crosses a cell in **0.2 s** (5 cells per second). Someone dragging a body moves half as fast.
+- Pressing a direction **turns** the character **immediately**, even mid-step or facing a wall.
+- **Wall objects** (consoles, racks, locker, engine, air plant, intercom, airlock
+  pump) face one room (down if there is floor there, otherwise up or sideways). They can be used
+  only from there: standing directly in front of them or one cell to the left or right, facing the wall.
+  Not through the wall from the neighbouring room. Breaches and doors — from any side.
+- **Left-clicking** the world turns the character towards the click (in place, without a step),
+  then uses the item in hand if it can do anything.
+- The game shows your own movement immediately, without waiting for the server, and corrects it if the server
+  decided otherwise. So even at 200 ms ping walking feels comfortable.
+- The server sends each player only what is nearby: a 3×3 area of 16×16-cell chunks around
+  them, on all decks at once. Every 2 seconds the game checks its knowledge of the world against the server.
+- «Новая кампания» ("New campaign") and «Продолжить кампанию» ("Continue campaign") start the server as a separate program in the background. The game host is also the GM:
+  they have access to the eventer menu.
 
-## 2. Корабль: палубы, полы, лестницы
+## 2. Ship: decks, floors, ladders
 
-- Новый корабль (сборка v25), нос справа. У него **две палубы**:
-  - **верхняя**: мостик в носу (карта сектора, управление, место под пульт орудий),
-    длинный коридор, шлюз на две двери, арсенал, медблок, мастерская, каюты, два отсека
-    под бортовые орудия (пока пустые);
-  - **нижняя**: машинное отделение (двигатель), жизнеобеспечение (воздушная установка),
-    грузовой склад, трюм со шкафом снабжения, отсек под орудие днища (пока пустой), коридор.
-  - Лестницы: коридор у мостика ↔ нижний коридор, мастерская ↔ трюм.
-  - Стекло в коридоре над двигателем и над воздушной установкой: их свет видно сверху.
-  - Новые люди появляются в каютах верхней палубы и в коридорах, не в закрытых отсеках.
-  - **Интеркомы** — четыре панели на стенах: каюты и коридор наверху, мостик, склад и
-    коридор внизу, коридор и трюм внизу (см. раздел 22).
-- **Стекло** (прозрачный пол): сквозь него видно нижнюю палубу; воздух не проходит.
-- **Мостки** (решётка): видно вниз, воздух проходит между палубами.
-- **Люк с лестницей**: видно вниз, воздух проходит, можно спуститься.
-- По **лестнице** ходят клавишей E, стоя на её клетке. Тащимое тело переходит вместе с тащащим.
-- С палубы выше видны только те, кто стоит на прозрачной клетке; имена скрыты вместе с людьми.
-- Воздух между палубами течёт вдвое медленнее, чем по палубе.
+- New ship (build v25), nose to the right. It has **two decks**:
+  - **upper**: bridge in the nose (sector map, ship control, a spot for the gun console),
+    a long corridor, two-door airlock, armoury, medbay, workshop, cabins, two compartments
+    for the side guns (empty for now);
+  - **lower**: engine room (engine), life support (air plant),
+    cargo store, hold with the supply locker, a compartment for the belly gun (empty for now), corridor.
+  - Ladders: corridor by the bridge ↔ lower corridor, workshop ↔ hold.
+  - Glass in the corridor above the engine and above the air plant: their light is visible from above.
+  - New people appear in the upper-deck cabins and in corridors, not in restricted compartments.
+  - **Intercoms** — four panels on walls: cabins and corridor upstairs, bridge, store and
+    corridor below, corridor and hold below (see section 22).
+- **Glass** (transparent floor): you can see the lower deck through it; air does not pass.
+- **Catwalks** (grating): you can see down, air passes between decks.
+- **Hatch with ladder**: you can see down, air passes, you can climb down.
+- **Ladders** are used with the E key while standing on their cell. A dragged body goes along with the dragger.
+- From the deck above, only those standing on a transparent cell are visible; names are hidden along with the people.
+- Air flows between decks half as fast as along a deck.
 
-## 3. Двери и аварийные шлюзы
+## 3. Doors and emergency shutters
 
-- Двери **открываются сами**, когда в них идёшь (0,3 с), и закрываются через 2 с. На
-  стоящем в проёме дверь не закроется.
-- Закрытая дверь держит воздух, открытая выравнивает давление между отсеками.
-- **Без питания** двери открываются вручную: толчком за 1,5 с.
-- **Аварийный шлюз** есть у каждой двери:
-  - падает сам, когда разница давлений по сторонам двери 25% и больше;
-  - поднимается сам, когда разница меньше 10%;
-  - в упавший шлюз не войти; на нём горят две лампы давления по сторонам
-    (зелёная — норма, жёлтая — мало воздуха, красная — почти вакуум);
-  - подсказка у двери пишет разницу в кПа и где давление ниже;
-  - поднять вручную: держать E 3 с, шлюз останется поднятым 5 с;
-  - без питания шлюзы не падают и не поднимаются, лампы гаснут.
-- **Отсеки с допуском**: мостик, арсенал, медблок, оба бортовых орудийных отсека,
-  машинное отделение, жизнеобеспечение, орудийный отсек днища. Закрытая дверь такого
-  отсека открывается только тем, чья профессия даёт к нему доступ (см. раздел 21).
-  - На раме двери горит лампа замка: **зелёная** — вам можно, **красная** — нельзя.
-  - Замок можно **взломать**: держать E **5 с**. Дверь откроется, а корабль объявит всем,
-    кто и где взломал.
-  - **Без питания** замки не работают: дверь открывается вручную, как любая другая. Так
-    путь к мостику остаётся, даже когда всё сломано.
-- Беды дверей (события ивентера):
-  - **заклинило открытой**: воздух ходит свободно, пока не починят;
-  - **шлюз неисправен**: застрял как был, поднятым или упавшим, пока не починят.
-  - Чинится то и другое удержанием E (с запчастью 6 с, без неё 18 с).
+- Doors **open by themselves** when you walk into them (0.3 s) and close after 2 s. A door
+  won't close on someone standing in the doorway.
+- A closed door holds air; an open one equalises pressure between compartments.
+- **Without power** doors open by hand: a push taking 1.5 s.
+- Every door has an **emergency shutter**:
+  - it drops by itself when the pressure difference across the door is 25% or more;
+  - it rises by itself when the difference is under 10%;
+  - you can't walk into a dropped shutter; it shows two pressure lamps, one on each side
+    (green — normal, yellow — low air, red — near vacuum);
+  - the hint at the door gives the difference in kPa and which side is lower;
+  - raise it by hand: hold E for 3 s, the shutter stays raised for 5 s;
+  - without power shutters neither drop nor rise, and the lamps go dark.
+- **Restricted compartments**: bridge, armoury, medbay, both side gun compartments,
+  engine room, life support, belly gun compartment. The closed door of such a
+  compartment opens only for those whose job gives access to it (see section 21).
+  - A lock lamp glows on the door frame: **green** — you may enter, **red** — you may not.
+  - The lock can be **hacked**: hold E for **5 s**. The door opens, and the ship announces to everyone
+    who hacked it and where.
+  - **Without power** locks don't work: the door opens by hand like any other. That way
+    the path to the bridge remains even when everything is broken.
+- Door troubles (eventer events):
+  - **jammed open**: air moves freely until repaired;
+  - **shutter faulty**: stuck as it was, raised or dropped, until repaired.
+  - Both are repaired by holding E (6 s with a spare part, 18 s without).
 
-### Шлюз на две двери
+### Two-door airlock
 
-- **Камера** 3×2 клетки между **внутренней** дверью (в коридор) и **наружной** (в космос,
-  над ней будет стыковочный узел).
-- Открыта может быть **только одна** дверь: вторая не откроется, пока первая не закроется.
-  Если вторая заклинила или открыта, блокировку можно **снять вручную**: держать E 3 с,
-  дверь можно открыть в ближайшие 5 с (иначе заклинившая наружная дверь запирала бы
-  экипаж снаружи камеры навсегда).
-- Наружная дверь держится аварийным шлюзом, пока в камере есть воздух; внутренняя — пока
-  в камере вакуум (те же 25% и 10%, космос считается давлением 0). Поднять вручную можно,
-  как любой шлюз, но тогда воздух уйдёт.
-- **Насос** на стене камеры: E запускает и останавливает. Работает, только когда обе
-  двери закрыты и есть питание.
-  - Если в камере больше половины воздуха — откачивает его в **запас воздуха корабля**
-    (лишнее уходит за борт), иначе закачивает из запаса. Полная камера за ~5 с.
-  - Без запаса воздуха закачать нечем: остаётся поднять внутренний шлюз вручную.
-- Открытая наружная дверь выпускает воздух из своего проёма в космос.
+- A 3×2-cell **chamber** between the **inner** door (to the corridor) and the **outer** one (to space;
+  a docking port will be above it).
+- Only **one** door can be open: the second won't open until the first closes.
+  If the second is jammed or open, the interlock can be **released by hand**: hold E for 3 s,
+  and the door can be opened within the next 5 s (otherwise a jammed outer door would lock
+  the crew outside the chamber forever).
+- The outer door is held by its emergency shutter while there is air in the chamber; the inner one while
+  the chamber is in vacuum (the same 25% and 10%, space counts as pressure 0). It can be raised by hand
+  like any shutter, but then the air escapes.
+- **Pump** on the chamber wall: E starts and stops it. It works only when both
+  doors are closed and there is power.
+  - If the chamber has more than half its air, it pumps it out into the **ship's air reserve**
+    (the excess goes overboard), otherwise it pumps air in from the reserve. A full chamber takes ~5 s.
+  - With no air reserve there is nothing to pump in: the only option is to raise the inner shutter by hand.
+- An open outer door vents the air in its doorway into space.
 
-### Открытый космос
+### Open space
 
-- Из шлюза можно **выйти в открытый космос** и двигаться вокруг корабля. Шаг там вдвое
-  дольше (0,4 с), воздуха нет: нужна подача кислорода, лампы давления горят, как в вакууме.
-  В вакууме тихо.
-- Боты и пираты в космос не выходят.
+- From the airlock you can **go out into open space** and move around the ship. A step there takes twice
+  as long (0.4 s), there is no air: you need the oxygen supply, the pressure lamps light as in a vacuum.
+  In a vacuum it is silent.
+- Bots and pirates don't go out into space.
 
-## 4. Воздух и пробоины
+## 4. Air and breaches
 
-- В каждой клетке своё давление (одно число, без состава газов).
-- **Пробоина** в обшивке выпускает воздух наружу: отсек из 10 клеток теряет половину
-  воздуха примерно за 8 секунд.
-- **Нехватку воздуха не видно** на экране (решение автора). Узнать можно только по
-  приборам: лампы O2 LOW и kPa. Струйки воздуха видны лишь у самой пробоины.
-- **Заделать пробоину**: лицом к ней держать E 6 с; нужна **заплатка**.
-- Заделанный отсек остаётся без воздуха, пока не открыть дверь в целый. Ушедший в космос
-  воздух возвращают воздушная установка и станция снабжения.
+- Each cell has its own pressure (a single number, no gas composition).
+- A hull **breach** vents air outside: a 10-cell compartment loses half its
+  air in about 8 seconds.
+- **Lack of air is not shown** on screen (the author's decision). You can only tell from
+  the instruments: the O2 LOW and kPa lamps. Air streaks are visible only right at the breach.
+- **Sealing a breach**: face it and hold E for 6 s; a **patch** is needed.
+- A sealed compartment stays without air until you open a door to an intact one. Air lost to space
+  is returned by the air plant and the supply station.
 
-## 5. Здоровье, раны и смерть
+## 5. Health, wounds and death
 
-- Здоровье по шкале SS13: **100** — цел, **0 и ниже** — без сознания, **−100** — гибель.
-  Монитор пульса в углу показывает восемь состояний.
-- Ниже 76% нормального давления нечем дышать: до **3** здоровья в секунду. Ниже 20%
-  калечит само давление: ещё до **2** в секунду. В вакууме: без сознания через ~20 с,
-  гибель через ~40 с.
-- На хорошем воздухе здоровье возвращается: **1** в секунду в сознании, **0,5** без
-  сознания. В себя приходят на **10** здоровья.
-- **Раны** (от пуль и ударов) хранятся отдельно и **сами не заживают**: здоровье
-  поднимается только до «100 минус раны». Тяжело раненый без сознания не очнётся,
-  пока его не полечат.
-- Экран темнеет ниже 40 здоровья. Без сознания и погибшие лежат.
-- **Тела остаются** там, где упали (правило автора). Больше 30 тел — убирается самое старое.
+- Health on the SS13 scale: **100** — unharmed, **0 and below** — unconscious, **−100** — death.
+  The pulse monitor in the corner shows eight states.
+- Below 76% of normal pressure there is nothing to breathe: up to **3** health per second. Below 20%
+  the pressure itself harms you: up to **2** more per second. In a vacuum: unconscious after ~20 s,
+  death after ~40 s.
+- In good air health returns: **1** per second when conscious, **0.5** when
+  unconscious. You come to at **10** health.
+- **Wounds** (from bullets and blows) are kept separately and **don't heal by themselves**: health
+  rises only up to "100 minus wounds". A badly wounded unconscious person won't wake up
+  until treated.
+- The screen darkens below 40 health. The unconscious and the dead lie down.
+- **Bodies remain** where they fell (the author's rule). Above 30 bodies, the oldest is removed.
 
-## 6. Скафандр и кислород
+## 6. Spacesuit and oxygen
 
-- Скафандр (шлем и баллон) — одежда: его можно **снять и надеть** (см. «Одежда»). Каждый
-  новый член экипажа приходит в нём. Без скафандра **подача кислорода не работает**:
-  в вакууме или без воздуха защиты нет.
-- Снятый скафандр — вещь, и его баллон хранит, сколько в нём осталось кислорода (десятыми).
-- В скафандре управляется только **подача кислорода** (Q).
-- Пока подача включена и баллон не пуст, воздух вокруг не важен: ни удушья, ни урона
-  от давления. Полного баллона хватает на **2 минуты**.
-- Подача сама не включается: заметить лампу и нажать Q должен игрок.
-- **Заправка**: лицом к красной кислородной стойке держать E; полный баллон за 3 с.
-  Стойке нужно питание, а заправляется только надетый скафандр.
+- The spacesuit (helmet and tank) is clothing: it can be **taken off and put on** (see "Clothing"). Every
+  new crew member arrives wearing one. Without a spacesuit the **oxygen supply doesn't work**:
+  there is no protection in a vacuum or without air.
+- A removed spacesuit is an item, and its tank keeps how much oxygen is left in it (in tenths).
+- The only control on the spacesuit is the **oxygen supply** (Q).
+- While the supply is on and the tank isn't empty, the surrounding air doesn't matter: no suffocation, no damage
+  from pressure. A full tank lasts **2 minutes**.
+- The supply doesn't turn on by itself: the player has to notice the lamp and press Q.
+- **Refilling**: face the red oxygen rack and hold E; a full tank in 3 s.
+  The rack needs power, and only a worn spacesuit is refilled.
 
-### Одежда
+### Clothing
 
-- Три места для одежды, слева от слотов: **скафандр**, **комбинезон**, **рюкзак**.
-- **Надеть**: взять в руку и нажать Z. Если там уже что-то надето, оно снимается в руку
-  (поменяться).
-- **Снять**: щёлкнуть по надетому, оно ложится в руку (или в свободный слот). Комбинезон
-  и рюкзак не снимаются, пока в их местах лежат вещи.
-- **Комбинезон** даёт 2 кармана (слоты 7–8), **рюкзак** — ещё 4 места (слоты 9–12).
-  Без них эти слоты пустуют и видны бледно.
-- Новый член экипажа: скафандр с полным баллоном и комбинезон, без рюкзака (8 слотов).
-- На вид: в скафандре со шлемом; без скафандра в комбинезоне и без шлема; совсем
-  без одежды в сером нательном. Рюкзак видно на спине.
-- С лежащего (обыск) одежду можно снять щелчком по ней; одеть другого нельзя.
-- Погибший возвращается (R) в новом скафандре и комбинезоне, старые остаются на теле.
+- Three clothing places, to the left of the slots: **spacesuit**, **jumpsuit**, **backpack**.
+- **Put on**: take it in hand and press Z. If something is already worn there, it goes into your hand
+  (a swap).
+- **Take off**: click the worn item, it goes into your hand (or a free slot). The jumpsuit
+  and backpack can't be taken off while their places hold items.
+- The **jumpsuit** gives 2 pockets (slots 7–8), the **backpack** 4 more places (slots 9–12).
+  Without them these slots stay empty and look pale.
+- New crew member: spacesuit with a full tank and jumpsuit, no backpack (8 slots).
+- Appearance: in a spacesuit with a helmet; without a spacesuit in a jumpsuit and no helmet; with no
+  clothing at all in grey underwear. The backpack is visible on the back.
+- From a person lying down (search) clothing can be removed by clicking it. You can't dress a person
+  by clicking, but you **can give a spacesuit to an unconscious person** (not a dead one): it goes
+  onto them and their oxygen supply is turned on, so they don't suffocate in space.
+- A dead player returns (R) in a new spacesuit and jumpsuit; the old ones stay on the body.
 
-## 7. Двигатель и питание
+## 7. Engine and power
 
-- **Двигатель питает весь корабль** (слово автора). Когда он отключается, все системы
-  перестают работать, но **не ломаются**:
-  - корабль не ходит и не прыгает, начатый прыжок срывается;
-  - не работают пульты, воздушная установка, кислородные стойки, аварийные шлюзы;
-  - двери открываются только вручную;
-  - на корабле **кромешная тьма** (см. «Свет и темнота»).
-- От питания не зависят скафандр, приборы игрока, лестницы и ремонт.
-- **Сбой питания** (событие): питание пропадает на 8–15 с при целом двигателе.
+- **The engine powers the whole ship** (the author's word). When it shuts down, all systems
+  stop working, but **don't break**:
+  - the ship doesn't move or jump, a jump in progress is aborted;
+  - consoles, air plant, oxygen racks, emergency shutters don't work;
+  - doors open only by hand;
+  - the ship is in **pitch darkness** (see "Light and darkness").
+- The spacesuit, the player's instruments, ladders and repair don't depend on power.
+- **Power failure** (event): power is lost for 8–15 s with the engine intact.
 
-## 8. Машины, поломки и ремонт
+## 8. Machines, breakdowns and repair
 
-- **Двигатель** — нижняя палуба, машинное отделение, под стеклом коридора. Его состояние видно по свету на
-  полу: голубой — работает, красный мигающий — сломан. Видно и сверху, сквозь стекло.
-- **Воздушная установка** — нижняя палуба, под стеклом коридора. Понемногу добавляет
-  воздух в свой отсек, не выше нормы, и тратит **запас воздуха корабля** (60 клеток).
-  Кончился запас — встаёт.
-- **Пульты мостика** ломаются (замыкание): тёмный экран и искры.
-- Правило «не оба сразу»: пока сломан пульт, двигатель не ломается, и наоборот. Так у
-  экипажа всегда остаётся путь к бегству.
-- **Ремонт**: лицом к сломанному держать E. С **запчастью** 6 с (запчасть тратится),
-  без неё 18 с. Это для человека без навыка; навык ремонта сокращает время до половины
-  (с навыком 50 — 4,5 с, с навыком 100 — 3 с; см. раздел 21).
+- **Engine** — lower deck, engine room, under the corridor glass. Its state is visible from the light on the
+  floor: blue — working, flashing red — broken. Also visible from above, through the glass.
+- **Air plant** — lower deck, under the corridor glass. Slowly adds
+  air to its compartment, not above normal, and uses up the **ship's air reserve** (60 cells).
+  When the reserve runs out, it stops.
+- **Bridge consoles** break (short circuit): dark screen and sparks.
+- The "not both at once" rule: while a console is broken, the engine doesn't break, and vice versa. So the
+  crew always has a way to escape.
+- **Repair**: face the broken thing and hold E. With a **spare part** 6 s (the part is used up),
+  without one 18 s. That is for a person without skill; the repair skill cuts the time by up to half
+  (with skill 50 — 4.5 s, with skill 100 — 3 s; see section 21).
 
-## 9. Вещи и инвентарь
+## 9. Items and inventory
 
-- У каждого **6 слотов**, ещё **2 кармана** с комбинезоном и **4 места** с рюкзаком, в слоте
-  одна вещь. Вещи погибшего остаются на теле.
-- **Рука**: один слот подсвечен, это то, что в руке. Выбор: 1–6, колесо мыши, щелчок
-  по слоту. Взятое ложится в руку, если она пуста.
-- **G** — положить вещь из руки на пол под ноги. В клетке до **4** вещей.
-- **E** — поднять: сначала то, что впереди, потом то, что под ногами. Стена с пультом
-  или шкафом впереди и лежащий человек важнее (E достаётся им).
-- **Z** — применить вещь саму по себе (включить фонарик, надеть одежду).
-- **Щелчок мышью** по миру — применить вещь на месте (выстрел, удар, лечение).
-- Все вещи:
+- Everyone has **6 slots**, plus **2 pockets** with a jumpsuit and **4 places** with a backpack; one item
+  per slot. A dead person's items stay on the body.
+- **Hand**: one slot is highlighted, that is what's in hand. Choose with: 1–6, mouse wheel, clicking
+  a slot. A picked-up item goes into the hand if it is empty.
+- **G** — drop the item in hand on the floor at your feet. Up to **4** items per cell.
+- **E** — pick up: first what's ahead, then what's underfoot. A wall with a console
+  or locker ahead and a person lying down take priority (E goes to them).
+- **Z** — use the item by itself (turn on the flashlight, put on clothing).
+- **Clicking** the world — use the item at that spot (shot, blow, healing).
+- All items:
 
-| Вещь | Для чего | В шкафу | Цена |
+| Item | Purpose | In locker | Price |
 |---|---|---|---|
-| Заплатка | заделать пробоину | 8 | 5 |
-| Рация | говорить с «;» — слышат все с рацией | 4 | 6 |
-| Топливо | канистра на один прыжок | 8 | 6 |
-| Запчасть | ремонт втрое быстрее | 5 | 10 |
-| Фонарик | луч 35°, 9 клеток | 4 | 8 |
-| Пистолет | 8 патронов, урон 30 | 1 (пустой) | 25 |
-| Магазин | 8 патронов | 2 | 6 |
-| Дубинка | урон 15 по соседу | 1 | 8 |
-| Пластырь | закрывает 40 ран сразу | 2 | 6 |
-| Аптечка | 5 раз по 30 ран, 3 с | 2 | 15 |
-| Скафандр | шлем и баллон кислорода | 2 (полные) | 40 |
-| Комбинезон | 2 кармана | 2 | 8 |
-| Рюкзак | 4 места | 2 | 15 |
+| Patch | seal a breach | 8 | 5 |
+| Radio | talk with «;» — everyone with a radio hears | 4 | 6 |
+| Fuel | a canister for one jump | 8 | 6 |
+| Spare part | repair three times faster | 5 | 10 |
+| Flashlight | 35° beam, 9 cells | 4 | 8 |
+| Pistol | 8 rounds, damage 30 | 1 (empty) | 25 |
+| Magazine | 8 rounds | 2 | 6 |
+| Baton | damage 15 to a neighbour | 1 | 8 |
+| Plaster | closes 40 wounds at once | 2 | 6 |
+| Medkit | 5 uses of 30 wounds, 3 s | 2 | 15 |
+| Spacesuit | helmet and oxygen tank | 2 (full) | 40 |
+| Jumpsuit | 2 pockets | 2 | 8 |
+| Backpack | 4 places | 2 | 15 |
 
-## 10. Шкаф снабжения, торговец, кредиты
+## 10. Supply locker, trader, credits
 
-- **Шкаф снабжения** — жёлтый шкаф в стене нижней палубы. E открывает панель: запас
-  корабля, взять вещь, положить всё обратно. Питание шкафу не нужно.
-- Обратно кладутся только целые вещи: начатую аптечку на новую не обменять, заряженный
-  пистолет кладётся пустым, скафандр — только с полным баллоном.
-- Корабль отправляется с **30 кредитами** и полным запасом воздуха для установки.
-- **Кредиты**: **15** за первый прыжок в каждый новый сектор (других доходов пока нет).
-- **Торговец**: подойти к нему кораблём; покупки делаются у шкафа, нужно питание.
-  Продаёт все вещи из таблицы и воздух для установки (10 клеток за 5 кредитов).
-  Там же: **нанять человека в резерв экипажа** (**30** кредитов, в резерве не больше 9) и
-  **залатать обшивку** (+**10** прочности за **6** кредитов).
-- **Станция снабжения**: при стыковке бесплатно восполняет воздух в отсеках и запас установки,
-  доливает топливо до **3** канистр и латает обшивку целиком.
+- The **supply locker** is a yellow locker in a lower-deck wall. E opens a panel: the ship's
+  supplies, take an item, put everything back. The locker doesn't need power.
+- Only whole items go back: a used medkit can't be swapped for a new one, a loaded
+  pistol goes back empty, a spacesuit only with a full tank.
+- The ship sets out with **30 credits** and a full air reserve for the plant.
+- **Credits**: **15** for the first jump into each new sector (no other income yet).
+- **Trader**: fly the ship up to it; purchases are made at the locker, power is needed.
+  Sells all items in the table and air for the plant (10 cells for 5 credits).
+  Also there: **hire a person into the crew reserve** (**30** credits, no more than 9 in reserve) and
+  **patch the hull** (+**10** integrity for **6** credits).
+- **Supply station**: when docked, free of charge it restores air in the compartments and the plant's reserve,
+  tops fuel up to **3** canisters and patches the hull completely.
 
-## 11. Свет и темнота
+## 11. Light and darkness
 
-- **Фонарик** в руке светит гладким конусом **35°** на **9 клеток**. Луч начинается от груди,
-  сразу шириной с тело. Стены и закрытые двери его останавливают, окна и открытые двери
-  пропускают. Чужой луч видно издалека, но только там, куда смотришь: вне поля зрения
-  свет фонарей не виден.
-- **Без питания** на корабле **кромешная тьма**: светит только фонарик (и вспышка выстрела),
-  вокруг себя ничего не видно (просьба автора, сборка v27). Космос за бортом не темнеет.
-- **Звёздный свет**: наружная обшивка любого корабля (стены и двери, выходящие в открытый
-  космос) всегда немного освещена, даже у брошенного корабля и у нашего без питания.
-  Кто вышел в космос, видит корпуса вокруг себя; внутри тёмного корабля по-прежнему темно.
-- Вспышка выстрела на миг освещает место в темноте.
+- A **flashlight** in hand shines a smooth **35°** cone for **9 cells**. The beam starts at the chest,
+  right away as wide as the body. Walls and closed doors stop it; windows and open doors
+  let it through. Someone else's beam is visible from afar, but only where you are looking: outside the field of view
+  flashlight light is not visible.
+- **Without power** the ship is in **pitch darkness**: only the flashlight (and a muzzle flash) gives light,
+  nothing around you is visible (the author's request, build v27). Space outside doesn't darken.
+- **Starlight**: the outer hull of any ship (walls and doors facing open
+  space) is always slightly lit, even on a derelict ship and on ours without power.
+  Anyone who goes out into space sees the hulls around them; inside a dark ship it is still dark.
+- **Next to you** walls are always visible (the 8 cells around you, even behind your back and in the dark), and so are
+  you yourself. The floor around you stays dark in the dark.
+- A muzzle flash briefly lights up its spot in the dark.
 
-## 12. Поле зрения
+## 12. Field of view
 
-- Персонаж видит **только вперёд**: два глаза по **85°**, вместе **160°**, посередине
-  они перекрываются (позже потеря глаза отнимет его часть конуса).
-- В темноте конус сужается до **60°**; без света видно только то, куда светит фонарик
-  (стоящего вплотную, в 2 клетках, всё же замечаешь: его имя видно).
-- Стены и закрытые двери закрывают обзор. Что вне взгляда, затемнено: стены и пол
-  видны тускло, людей и их имён не видно.
-- Без сознания не видно ничего.
-- **Остаточный силуэт**: кто пропал из поля зрения, остаётся на месте, где его видели,
-  бледным силуэтом и тает за **10 с**. Силуэт исчезает сразу, если посмотреть на то место
-  (там видно, как есть) или снова увидеть самого человека.
+- A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
+  in the middle (later, losing an eye will remove its part of the cone).
+- In the dark the cone narrows to **60°**; without light you see only where the flashlight shines
+  (someone right next to you, within 2 cells, you still notice: their name is visible).
+- Walls and closed doors block the view. What's outside your gaze is darkened: walls and floor
+  are dimly visible, people and their names are not visible.
+- When unconscious you see nothing.
+- **Afterimage**: someone who drops out of the field of view stays where they were seen
+  as a pale silhouette that fades over **10 s**. The silhouette disappears at once if you look at that spot
+  (you see it as it is) or see the person themselves again.
 
-## 13. Звуки
+## 13. Sounds
 
-- Звуки **слышно**: шаги, двери, шипение пробоины, падение, стук вещи, лестница,
-  выстрел, удар. Все сделаны самой игрой из шума и тонов: сухо и коротко, как на
-  железном корабле. Чужого в них ничего нет.
-- Звук идёт **с той стороны, где он был**, и тише вдали.
-- **Приглушённо** (тише, без высоких частот) слышно то, чего не видно (за стеной, за
-  дверью), и всё, когда сам стоишь в разреженном воздухе (меньше 60% нормы).
-- Свои шаги слышно всегда, в вакууме — глухо, через скафандр.
-- **Гул двигателя** слышен на его палубе, пока он работает и есть питание; стих — значит беда.
-- Отметки на экране (круги с подписью) остались только у **шипения пробоины** и **крика**,
-  и только если источника не видно. Чем дальше звук, тем неточнее отметка; за краем
-  экрана — стрелка у края.
-- Дальность в клетках:
+- Sounds are **audible**: footsteps, doors, the hiss of a breach, a fall, an item's clatter, ladders,
+  shots, blows. All are made by the game itself from noise and tones: dry and short, as on
+  a metal ship. Nothing borrowed in them.
+- A sound comes **from the side where it happened** and is quieter far away.
+- **Muffled** (quieter, without high frequencies) you hear what you can't see (behind a wall, behind
+  a door), and everything when you yourself stand in thin air (under 60% of normal).
+- Your own footsteps are always audible; in a vacuum they are dull, through the suit.
+- The **engine hum** is heard on its deck while it runs and there is power; if it stops, there's trouble.
+- On-screen markers (circles with a label) remain only for the **breach hiss** and **screams**,
+  and only if the source isn't visible. The farther the sound, the less precise the marker; beyond the edge
+  of the screen — an arrow at the edge.
+- Range in cells:
 
-| Звук | Дальность |
+| Sound | Range |
 |---|---|
-| шаги | 6 |
-| дверь | 8 |
-| шипение (пробоина) | 12 |
-| падение | 10 |
-| стук (брошенная вещь) | 5 |
-| лестница | 7 |
-| выстрел | 18 |
-| удар | 8 |
-| крик (раненый) | 12 |
+| footsteps | 6 |
+| door | 8 |
+| hiss (breach) | 12 |
+| fall | 10 |
+| clatter (dropped item) | 5 |
+| ladder | 7 |
+| shot | 18 |
+| blow | 8 |
+| scream (wounded) | 12 |
 
-- Слышно только свою палубу. Звук не говорит, кто его издал.
-- **В вакууме тихо**: если слушающий или источник в отсеке без воздуха (меньше 20%
-  нормы), слышно только то, что совсем рядом (до 1,5 клетки).
-- Отметка крика или шипения в одном месте ставится не чаще раза в 1,8 с.
+- Only your own deck is heard. A sound doesn't tell who made it.
+- **In a vacuum it is silent**: if the listener or the source is in a compartment without air (under 20%
+  of normal), only what is very close (up to 1.5 cells) is heard.
+- A scream or hiss marker in one place is placed no more than once every 1.8 s.
 
-## 14. Оружие и бой
+## 14. Weapons and combat
 
-- **Пистолет**: щелчок — выстрел туда, куда щёлкнули. Урон **30**, дальность **14** клеток,
-  не чаще раза в 0,3 с. Пуля летит мгновенно и попадает в **первого на пути**, своих тоже.
-  Стены, окна и закрытые двери её останавливают.
-- Попадание считается там, **где стрелок видел цель** на своём экране: при пинге не нужно
-  целиться на опережение.
-- Пустой пистолет щелчком **перезаряжается** магазином из слотов за 1,5 с.
-- **Дубинка**: урон **15** по тому, кто стоит в одной из восьми клеток вокруг, ближе всех
-  к щелчку; не чаще раза в 0,8 с.
-- Попадание показывает след пули, вспышку у ствола и красную вспышку на раненом.
-- Четыре попадания из пистолета роняют без сознания.
-- **Навык стрельбы** расширяет зону попадания: от **0,45** клетки от линии выстрела без
-  навыка до **0,55** с навыком 100.
+- **Pistol**: a click fires where you clicked. Damage **30**, range **14** cells,
+  no more than once every 0.3 s. The bullet is instant and hits the **first one in its path**, allies too.
+  Walls, windows and closed doors stop it.
+- A hit is counted where **the shooter saw the target** on their screen: with ping you don't need
+  to lead your aim.
+- An empty pistol **reloads** on click with a magazine from your slots in 1.5 s.
+- **Baton**: damage **15** to whoever stands in one of the eight cells around you, closest
+  to the click; no more than once every 0.8 s.
+- A hit shows a bullet trail, a muzzle flash and a red flash on the wounded person.
+- Four pistol hits knock someone unconscious.
+- **Shooting skill** widens the hit zone: from **0.45** cells from the line of fire without
+  skill to **0.55** with skill 100.
 
-## 15. Лечение
+## 15. Healing
 
-- **Пластырь**: щелчок по себе или соседу, сразу закрывает **40** ран.
-- **Аптечка**: щелчок по себе или соседу, оба **3 с** стоят на месте; закрывает **30** ран.
-  Хватает на **5** раз. Сдвинулись — лечение прервалось. 3 с — это без навыка; навык
-  медицины сокращает время до половины (с навыком 50 — 2,25 с).
-- Лечение закрывает только раны; здоровье, отнятое воздухом, возвращается само.
+- **Plaster**: click yourself or a neighbour, it closes **40** wounds at once.
+- **Medkit**: click yourself or a neighbour, both stand still for **3 s**; it closes **30** wounds.
+  Enough for **5** uses. If you move, treatment is interrupted. 3 s is without skill; the medicine
+  skill cuts the time by up to half (with skill 50 — 2.25 s).
+- Healing closes only wounds; health taken by the air returns by itself.
 
-## 16. Помощь упавшему: обыск и перетаскивание
+## 16. Helping the fallen: searching and dragging
 
-- Лежащего (без сознания или погибшего) в своей или соседней клетке можно:
-  - **обыскать** (E): видно его слоты и свои, щелчок переносит вещь туда или обратно;
-    видно, насколько он ранен;
-  - **тащить** (F): идёте вдвое медленнее, он едет за вами на клетку позади, в том
-    числе по лестнице. F ещё раз — отпустить. Тащимого видно всегда, даже за спиной.
-- Стоящего на ногах обыскать или тащить нельзя.
+- A person lying down (unconscious or dead) in your cell or a neighbouring one can be:
+  - **searched** (E): you see their slots and yours, a click moves an item there or back;
+    you can see how badly they are wounded;
+  - **dragged** (F): you move half as fast, they follow one cell behind you, including
+    up and down ladders. F again — let go. The dragged person is always visible, even behind your back.
+- Someone standing on their feet can't be searched or dragged.
 
-## 17. Пираты
+## 17. Pirates
 
-- Враги в **бурых, красных и чёрных** скафандрах. Приходят событием **«Абордаж»**:
-  прорезают обшивку (настоящая пробоина) и заходят.
-- Число: 1 + половина экипажа, не больше **4**; безоружному экипажу на одного меньше.
-  Новый абордаж не приходит, пока на борту есть живой пират.
-- Видят по тем же правилам, что экипаж (конус, стены, темнота). В темноте замечают
-  того, у кого горит фонарик, издалека. Того, кто вплотную, чувствуют всегда.
-- Слышат шаги и шум экипажа и идут проверить. Ищут путь по всему кораблю, по лестницам,
-  в обход упавших шлюзов.
-- Стрелок стреляет с **8** клеток с разбросом до 0,7 клетки, раз в 0,7–1,3 с, сам
-  перезаряжается. Боец с дубинкой подходит вплотную.
-- Ранившего пирата он запоминает и идёт за ним.
-- При здоровье ниже **30** заклеивает раны пластырем, если он есть, иначе отступает.
-- **Лежащих не добивают.** Дышат сами (запечатанные скафандры).
-- Убитый пират оставляет тело с оружием, его можно обыскать.
+- Enemies in **brown, red and black** spacesuits. They come with the **«Абордаж»** ("Boarding") event:
+  they cut through the hull (a real breach) and come in.
+- Number: 1 + half the crew, no more than **4**; one fewer against an unarmed crew.
+  A new boarding doesn't come while there is a live pirate on board.
+- They see by the same rules as the crew (cone, walls, darkness). In the dark they spot
+  someone with a lit flashlight from afar. They always sense someone right next to them.
+- They hear the crew's footsteps and noise and go to check. They find paths across the whole ship, via ladders,
+  around dropped shutters.
+- A gunner shoots from **8** cells with a spread of up to 0.7 cells, once every 0.7–1.3 s, and
+  reloads by himself. A baton fighter closes in.
+- A pirate remembers whoever wounded him and goes after them.
+- Below **30** health he patches wounds with a plaster if he has one, otherwise he retreats.
+- **They don't finish off those lying down.** They breathe on their own (sealed spacesuits).
+- A killed pirate leaves a body with his weapon; it can be searched.
 
-### Пиратский корабль
+### Pirate ship
 
-- Событие **«Пиратский корабль»** (большое; не в метеорном потоке и не у станции; не бывает,
-  пока у шлюза другой корабль, на борту пираты или кто-то снаружи).
-- Корабль в бурых, красных и чёрных цветах встаёт над шлюзом в 3 клетках космоса и
-  **открывает огонь** (см. «Оружие корабля»). Через **40 с** он **стыкуется силой** (ждёт, если между кораблями кто-то есть), **вскрывает обе
-  двери шлюза** (они заклинивают открытыми, чинить как заклинившую дверь) и высаживает
-  пиратов: столько же, сколько при абордаже (1 + половина экипажа, не больше 4).
-- На их корабле свет, воздух и питание; на полу 2–4 вещи: магазины, пластыри, заплатки,
-  пистолет, дубинка.
-- Стыковаться с ним по своей воле нельзя. Расстыковаться можно с пульта управления: тогда
-  он уходит, а с ним пираты и тела, оставшиеся на нём. Вскрытый шлюз после этого выпускает
-  воздух в космос, пока двери не починят.
+- The **«Пиратский корабль»** ("Pirate ship") event (large; not in a meteor shower and not at a station; doesn't happen
+  while another ship is at the airlock, there are pirates on board or someone is outside).
+- A ship in brown, red and black colours takes position above the airlock, 3 cells of space away, and
+  **opens fire** (see "Ship weapons"). After **40 s** it **docks by force** (waits if someone is between the ships), **breaks open both
+  airlock doors** (they jam open; repair like a jammed door) and lands
+  pirates: as many as in a boarding (1 + half the crew, no more than 4).
+- Their ship has light, air and power; on the floor 2–4 items: magazines, plasters, patches,
+  a pistol, a baton.
+- You can't dock with it of your own will. You can undock from the ship-control console: then
+  it leaves, taking with it the pirates and bodies remaining on it. The broken-open airlock then vents
+  air into space until the doors are repaired.
 
-### Оружие корабля
+### Ship weapons
 
-- На корабле **3 орудия** в обшивке: в отсеках у носа по левому и правому борту и под днищем.
-  Стреляют с **пульта орудий** на мостике (E). Пульту и орудиям нужно питание.
-- Орудие заряжается само: **8 с** после выстрела. Кнопки: огонь одним орудием или залп всеми
-  готовыми. Попадание с вероятностью **75%**.
-- Цель — только пиратский корабль, пока он не пристыковался. Он выдерживает **6 попаданий**;
-  разбитый, уходит вместе с командой, а кораблю начисляется **25 кредитов** и **1** канистра топлива.
-- Пиратский корабль стреляет раз в **9–13 с**, попадает с вероятностью 70%: в 60% случаев
-  пробивает обшивку, иначе выводит из строя орудие или пульт мостика. Сломанное орудие
-  чинится, как машины (E, с запчастью 6 с).
-- Подсказка у орудия показывает его зарядку; пульт показывает цель, корпус врага и время
-  до его стыковки.
+- The ship has **3 guns** in the hull: in compartments near the nose on the port and starboard sides and under the belly.
+  They are fired from the **gun console** on the bridge (E). The console and guns need power.
+- A gun recharges by itself: **8 s** after a shot. Buttons: fire one gun or a volley from all
+  ready ones. Hit chance **75%**.
+- The only target is the pirate ship, until it docks. It withstands **6 hits**;
+  once wrecked, it leaves with its crew, and the ship is credited **25 credits** and **1** fuel canister.
+- The pirate ship fires once every **9–13 s**, hitting with 70% chance: in 60% of cases it
+  breaches the hull, otherwise it disables a gun or a bridge console. A broken gun
+  is repaired like machines (E, 6 s with a spare part).
+- The hint at a gun shows its charge; the console shows the target, the enemy's hull and the time
+  until it docks.
 
-## 18. Мостик и полёт внутри сектора
+## 18. Bridge and flight within a sector
 
-- На мостике два пульта (нужно питание):
-  - **карта сектора** (зелёный экран): соседние секторы и прыжок. Внизу карты пояснения:
-    цвет — что в секторе; белое кольцо — корабль здесь; тёмная точка внутри — уже были;
-    маленькая серая точка — неизвестно, что там; зелёная линия — маршрут; белая — заданный прыжок;
-  - **управление кораблём** (панель с огнями): щелчок по карте сектора задаёт курс.
-- Сектор — квадрат 200×200, корабль идёт по прямой со скоростью 1,5 в секунду.
-- В секторе одна главная особенность: метеорный поток (круг радиусом 45–60, внутри
-  пробоины), торговец или станция (подойти на 10).
-- Заданный прыжок отменяет курс: до прыжка корабль летит по инерции прямо, линия курса
-  пропадает, руль не слушается.
+- The bridge has two consoles (power needed):
+  - **sector map** (green screen): neighbouring sectors and jumping. At the bottom of the map there is a legend:
+    colour — what is in the sector; white ring — the ship is here; dark dot inside — already visited;
+    small grey dot — unknown what's there; green line — route; white — the set jump;
+  - **ship control** (panel with lights): clicking the sector map sets a course.
+- A sector is a 200×200 square; the ship moves in a straight line at 1.5 per second.
+- A sector has one main feature: a meteor shower (a circle of radius 45–60, with
+  breaches inside), a trader or a station (approach within 10).
+- A set jump cancels the course: until the jump the ship drifts straight on by inertia, the course line
+  disappears, the helm doesn't respond.
 
-### Брошенный корабль
+### Derelict ship
 
-- В секторе **«брошенный корабль»** он стоит в одной точке, как торговец. Подойти на 10 —
-  и он появляется над шлюзом, в **3 клетках** открытого космоса от наружной двери.
-- Добраться: выйти через шлюз и пройти по космосу, или **пристыковаться** кнопкой на пульте
-  управления: он подходит вплотную, наружная дверь к наружной двери. Кто на нём стоит,
-  переезжает вместе с ним. Расстыковка — той же кнопкой.
-- На нём **нет питания**: внутри кромешная тьма, светит только фонарик,
-  двери открываются вручную за 1,5 с, аварийных шлюзов нет.
-- Воздух: в части отсеков вакуум (40%), в остальных разреженный (30–90% нормы); в половине
-  случаев в обшивке есть пробоина.
-- **Добыча**: 5–8 вещей на полу: заплатки, запчасти, пластыри, магазины, канистры топлива,
-  фонарик, дубинка, начатые аптечки, изредка пистолет с патронами. Что осталось после ухода, лежит там же
-  при следующем посещении.
-- Пока кто-то живой снаружи нашего корабля (на брошенном или в космосе) или корабли
-  состыкованы, корабль **не трогается и не прыгает**; если кто-то вышел, пока заряжался
-  прыжок, прыжок срывается.
-- Пиратов на брошенных кораблях пока нет.
+- In a **«брошенный корабль»** ("derelict ship") sector it sits at one point, like a trader. Approach within 10 —
+  and it appears above the airlock, **3 cells** of open space from the outer door.
+- To get there: go out through the airlock and cross space, or **dock** with a button on the ship-control
+  console: it comes right alongside, outer door to outer door. Whoever stands on it
+  moves along with it. Undocking is the same button.
+- It has **no power**: inside is pitch darkness, only the flashlight gives light,
+  doors open by hand in 1.5 s, there are no emergency shutters.
+- Air: some compartments are in vacuum (40%), the rest have thin air (30–90% of normal); in half
+  the cases there is a breach in the hull.
+- **Loot**: 5–8 items on the floor: patches, spare parts, plasters, magazines, fuel canisters,
+  a flashlight, a baton, used medkits, occasionally a pistol with ammo. Whatever is left after you go stays there
+  for the next visit.
+- While anyone alive is outside our ship (on the derelict or in space) or the ships
+  are docked, the ship **doesn't move or jump**; if someone went out while a jump was charging,
+  the jump is aborted.
+- There are no pirates on derelict ships yet.
 
-## 19. Космос, секторы и прыжки
+## 19. Space, sectors and jumps
 
-- **Космос бесконечен.** Секторы создаются по мере подхода; одно и то же место всегда
-  одно и то же. Карта показывает окрестность 7×5 вокруг корабля.
-- У каждого сектора есть маршрут на север или на восток (тупиков нет) и с вероятностью
-  0,3 ещё по одному в каждую сторону; не больше 4.
-- Виды секторов: спокойный космос, метеорный поток, торговец, станция снабжения,
-  брошенный корабль.
-  Доля метеорных потоков растёт с удалением от начала: от 20% до 45%.
-- **Прыжок**: 8 с подготовки, потом 15 с двигатель перезаряжается.
-- **Топливо**: прыжок сжигает **1** канистру из шкафа снабжения в миг прыжка. Без топлива
-  в шкафу прыжок не задать; если последнюю канистру вынули, пока прыжок заряжался, он срывается.
-  Корабль отправляется с **8** канистрами. Откуда ещё: торговец (**6** кредитов), добыча
-  на брошенном и пиратском корабле, станция снабжения (до **3**), разбитый пиратский корабль (**1**).
-- Если на борту (в шкафу, в карманах, на телах и на полу) нет ни одной канистры, через
-  **2 минуты** приходит событие «Дрейфующее топливо»: **2** канистры в шкаф. Тупика без
-  топлива поэтому нет, но время уходит.
+- **Space is infinite.** Sectors are created as you approach; the same place is always
+  the same. The map shows a 7×5 neighbourhood around the ship.
+- Every sector has a route north or east (no dead ends) and, with probability
+  0.3, one more in each direction; no more than 4.
+- Sector kinds: calm space, meteor shower, trader, supply station,
+  derelict ship.
+  The share of meteor showers grows with distance from the start: from 20% to 45%.
+- **Jump**: 8 s of preparation, then 15 s for the engine to recharge.
+- **Fuel**: a jump burns **1** canister from the supply locker at the moment of the jump. Without fuel
+  in the locker a jump can't be set; if the last canister is taken out while the jump is charging, it is aborted.
+  The ship sets out with **8** canisters. Other sources: the trader (**6** credits), loot
+  on derelict and pirate ships, the supply station (up to **3**), a wrecked pirate ship (**1**).
+- If there isn't a single canister on board (in the locker, in pockets, on bodies or on the floor), after
+  **2 minutes** the «Дрейфующее топливо» ("Drifting fuel") event comes: **2** canisters into the locker. So there's no dead end without
+  fuel, but time passes.
 
-## 20. Ивентер (ГМ)
+## 20. Eventer (GM)
 
-- Ведёт события сам или по команде хозяина игры (меню по Esc).
-- События:
+- Runs events by itself or on the game host's command (menu on Esc).
+- Events:
 
-| Событие | Размер | Где |
+| Event | Size | Where |
 |---|---|---|
-| Микрометеорит (пробоина) | мелкое | везде, кроме станции |
-| Метеорный залп (3 пробоины) | среднее | в метеорном потоке |
-| Замыкание пульта | среднее | везде, кроме станции |
-| Отказ двигателя | большое | везде, кроме станции |
-| Отказ воздушной установки | среднее | везде, кроме станции |
-| Заклинившая дверь | мелкое | везде, кроме станции |
-| Отказ аварийного шлюза | мелкое | везде, кроме станции |
-| Сбой питания | среднее | везде, кроме станции |
-| Абордаж | большое | везде, кроме станции |
-| Пиратский корабль | большое | спокойный космос, торговец, брошенный корабль |
-| Дрейфующее топливо (2 канистры) | мелкое | само, только когда на борту нет топлива |
+| Micrometeorite (breach) | small | everywhere except a station |
+| Meteor volley (3 breaches) | medium | in a meteor shower |
+| Console short circuit | medium | everywhere except a station |
+| Engine failure | large | everywhere except a station |
+| Air plant failure | medium | everywhere except a station |
+| Jammed door | small | everywhere except a station |
+| Emergency shutter failure | small | everywhere except a station |
+| Power failure | medium | everywhere except a station |
+| Boarding | large | everywhere except a station |
+| Pirate ship | large | calm space, trader, derelict ship |
+| Drifting fuel (2 canisters) | small | by itself, only when there is no fuel on board |
 
-- Темп: раз в 3–6 минут в спокойном секторе и у торговца, раз в 25–45 с в метеорном
-  потоке; у станции событий нет. С большим экипажем чаще (до 2,5 раза).
-- Передышки: 15 с после прибытия в сектор, 8 с после входа в поток или выхода из него.
-- Ивентер смотрит на корабль: не даёт новых бед, пока весь экипаж лежит или пробоин
-  больше, чем людей; без заплаток на борту пробоины втрое реже; безоружных берут
-  на абордаж вдвое реже.
+- Pace: once every 3–6 minutes in a calm sector and at a trader, once every 25–45 s in a meteor
+  shower; no events at a station. More often with a large crew (up to 2.5 times).
+- Breathers: 15 s after arriving in a sector, 8 s after entering or leaving a shower.
+- The eventer watches the ship: it gives no new troubles while the whole crew is down or there are more breaches
+  than people; with no patches on board breaches are three times rarer; unarmed crews are
+  boarded half as often.
 
-## 21. Экипаж, профессии, резерв
+## 21. Crew, jobs, reserve
 
-- **Профессию** выбирают в меню перед входом. Она даёт доступ к отсекам и навык, который
-  растёт быстро.
+- The **job** is chosen in the menu before joining. It gives access to compartments and a skill that
+  grows fast.
 
-| Профессия | Доступ | Свой навык | С собой сверх обычного |
+| Job | Access | Own skill | Extra starting gear |
 |---|---|---|---|
-| Матрос | никуда | — | — |
-| Капитан | везде (один на корабль) | — | фонарик |
-| Пилот | мостик | — | фонарик |
-| Инженер | машинное, жизнеобеспечение, орудийные отсеки | ремонт | запчасть |
-| Врач | медблок | медицина | пластырь |
-| Охранник | арсенал, орудийные отсеки | стрельба | дубинка |
+| Sailor | nowhere | — | — |
+| Captain | everywhere (one per ship) | — | flashlight |
+| Pilot | bridge | — | flashlight |
+| Engineer | engine room, life support, gun compartments | repair | spare part |
+| Doctor | medbay | medicine | plaster |
+| Guard | armoury, gun compartments | shooting | baton |
 
-- Капитан на корабле **один**: если он уже есть, второй желающий поднимается на борт
-  матросом и получает об этом сообщение. Капитан прошлого вечера, пока не вернулся,
-  место держит.
-- Каждый из первого экипажа приходит с **рацией**, **заплаткой** и **запчастью** плюс вещь
-  своей профессии. Кто приходит из резерва (по R или перезайдя после гибели), одет
-  (скафандр и комбинезон), но **без вещей**.
-- **Навыки**: ремонт, медицина, стрельба, от 0 до 100. Свой навык профессии начинается
-  с **50**. Каждое законченное дело своего навыка даёт **+2**; дело чужого навыка — **+1**
-  за каждые три. Навыки видны в строке под верхней панелью.
-- Боты и пираты ходят везде (у них нет профессий).
-- **Резерв экипажа**: люди, которые заменят погибших. Корабль отправляется с **3**.
-  - Погибший через 5 с может нажать **R** и вернуться новым человеком той же профессии
-    (навыки с нуля, своя профессия — с 50). Это стоит **одного из резерва**; тело с вещами
-    остаётся.
-  - Резерв пуст — вернуться нельзя, пока товарищи не наймут людей у торговца.
-  - Погибший, который вышел из игры, при возвращении под тем же именем тоже берёт
-    одного из резерва. Если резерв пуст, а кто-то из экипажа жив, его не пустят.
-  - Вернуться ни с чем нельзя, если погибли все и в резерве никого: кампания окончена
-    (раздел 23).
-- Боты бродят по кораблю, иногда играют с фонариком и вещами; погибший бот возвращается
-  через 15 с и резерва не тратит.
+- There is **one** captain per ship: if there already is one, the second applicant boards
+  as a sailor and gets a message about it. Last evening's captain keeps the
+  place until they return.
+- Each member of the first crew arrives with a **radio**, a **patch** and a **spare part**, plus their
+  job's item. Those who come from the reserve (by R or by rejoining after death) are dressed
+  (spacesuit and jumpsuit), but **with no items**.
+- **Skills**: repair, medicine, shooting, from 0 to 100. Your job's skill starts
+  at **50**. Each finished task of your own skill gives **+2**; a task of another skill gives **+1**
+  for every three. Skills are shown in the line under the top panel.
+- Bots and pirates go everywhere (they have no jobs).
+- **Crew reserve**: people who will replace the dead. The ship sets out with **3**.
+  - A dead player can press **R** after 5 s and return as a new person of the same job
+    (skills from zero, own job's skill from 50). This costs **one from the reserve**; the body with its items
+    remains.
+  - Reserve empty — you can't return until your crewmates hire people at a trader.
+  - A dead player who left the game also takes one from the reserve when returning under the same name.
+    If the reserve is empty and someone of the crew is alive, they won't be let in.
+  - There's no coming back at all if everyone has died and nobody is in reserve: the campaign is over
+    (section 23).
+- Bots wander the ship, sometimes playing with the flashlight and items; a dead bot returns
+  after 15 s and doesn't use the reserve.
 
-## 22. Речь, рация, интерком
+## 22. Speech, radio, intercom
 
-- **Вслух** (Enter, текст): слышат те, кто на той же палубе не дальше **7** клеток, если
-  воздух есть и у говорящего, и у слушающего (не меньше 20% нормы). В вакууме слышно
-  только вплотную (до 1,5 клетки: шлем к шлему).
-- **Рация**: текст с «**;**» в начале. Слышат все, у кого есть рация, на любой палубе и
-  в вакууме. Без рации так сказать нельзя.
-- **Интерком**: текст с «**!**» в начале, стоя у панели (до 1,5 клетки), или E лицом к
-  панели. Слышат все, кто не дальше **6** клеток от любой панели корабля и стоит в воздухе.
-  Нужно питание.
-- В чате видно, откуда фраза: **[рация]**, **[интерком]**; сказанное вслух без пометки.
-- Без сознания говорить нельзя. **Погибшие** говорят только между собой (**[мёртвые]**),
-  живые их не слышат.
-- Сообщения корабля по-прежнему видят все.
+- **Aloud** (Enter, text): heard by those on the same deck no farther than **7** cells, if
+  both the speaker and the listener have air (at least 20% of normal). In a vacuum it is heard
+  only up close (up to 1.5 cells: helmet to helmet).
+- **Radio**: text starting with «**;**». Heard by everyone who has a radio, on any deck and
+  in a vacuum. Without a radio you can't speak this way.
+- **Intercom**: text starting with «**!**», standing at a panel (up to 1.5 cells), or E facing the
+  panel. Heard by everyone no farther than **6** cells from any panel on the ship and standing in air.
+  Power is needed.
+- The chat shows where a phrase came from: **[рация]** ("[radio]"), **[интерком]** ("[intercom]"); spoken aloud has no tag.
+- You can't speak while unconscious. **The dead** speak only among themselves (**[мёртвые]** ("[dead]")),
+  the living don't hear them.
+- Ship messages are still seen by everyone.
 
-## 23. Кампания: обшивка, конец, сохранение
+## 23. Campaign: hull, end, saving
 
-- **Цель** — продержаться как можно дольше. В верхней строке: резерв и прочность обшивки.
-- **Обшивка**: прочность **100**. Каждая пробоина снимает **5**, каждое попадание пирата
-  по орудию или пульту — **3**. При **30** и ниже корабль предупреждает. Латают у торговца
-  и на станции снабжения (раздел 10).
-- **Конец кампании**: обшивка дошла до нуля (корабль разрушен) или погиб весь экипаж,
-  а в резерве никого. Игра останавливается: прыжков больше нет, на экране итог — сколько
-  секторов пройдено, как далеко от начала, сколько прыжков и сколько времени продержались.
-  Начать заново — создать новую игру.
-- **Сохранение**: кампания сохраняется сама — раз в минуту, после каждого прыжка и когда
-  сервер останавливают. Хранится в файле `campaign.json` в папке данных игры
-  (на Windows: `%APPDATA%\Godot\app_userdata\Космический прототип`).
-  - Хозяин игры может сохранить и сам: Esc, **«Сохранить кампанию»**. В чате всем
-    приходит «Кампания сохранена» (или почему не вышло: игра без сохранения, кампания окончена).
-  - В меню: **«Продолжить кампанию»** (с кратким итогом сохранения) или **«Новая
-    кампания»** (если сохранение есть, кнопку надо нажать дважды: старое пропадёт).
-  - Выделенный сервер (`start-server.bat`) продолжает сохранённую кампанию, если она есть;
-    `CAMPAIGN=new` в файле начинает новую.
-  - Сохраняется: место в космосе и где корабль был, запасы, кредиты, резерв, обшивка,
-    поломки и пробоины, заклинившие двери, воздух в каждом отсеке, вещи на полу, тела,
-    и **каждый персонаж по имени игрока**: где стоял, здоровье и раны, вещи, одежда,
-    баллон, профессия и навыки. Вернувшись под тем же именем, игрок получает своего
-    персонажа. Это работает и в тот же вечер: вышел и зашёл — ты там же и с тем же.
-  - Не сохраняется: брошенный или пиратский корабль у борта, пираты на борту, боты,
-    настроение ивентера.
-  - Проигранная кампания сохранения не оставляет.
+- The **goal** is to hold out as long as possible. The top line shows the reserve and hull integrity.
+- **Hull**: integrity **100**. Each breach takes **5**, each pirate hit
+  on a gun or console **3**. At **30** and below the ship warns you. It is patched at a trader
+  and at a supply station (section 10).
+- **End of campaign**: the hull reaches zero (the ship is destroyed) or the whole crew has died
+  and nobody is in reserve. The game stops: no more jumps, the screen shows a summary — how many
+  sectors were passed, how far from the start, how many jumps and how long you held out.
+  To start over, create a new game.
+- **Saving**: the campaign saves itself — once a minute, after every jump and when
+  the server is stopped. It is stored in the file `campaign.json` in the game's data folder
+  (on Windows: `%APPDATA%\Godot\app_userdata\Космический прототип`).
+  - The game host can also save manually: Esc, **«Сохранить кампанию»** ("Save campaign"). Everyone gets
+    «Кампания сохранена» ("Campaign saved") in chat (or why it failed: a game without saving, the campaign is over).
+  - In the menu: **«Продолжить кампанию»** ("Continue campaign", with a short summary of the save) or **«Новая
+    кампания»** ("New campaign"; if a save exists, the button must be pressed twice: the old one will be lost).
+  - The dedicated server (`start-server.bat`) continues the saved campaign if there is one;
+    `CAMPAIGN=new` in the file starts a new one.
+  - What is saved: the place in space and where the ship has been, supplies, credits, reserve, hull,
+    breakdowns and breaches, jammed doors, air in each compartment, items on the floor, bodies,
+    and **each character by player name**: where they stood, health and wounds, items, clothing,
+    tank, job and skills. Returning under the same name, a player gets their
+    character back. This works the same evening too: leave and rejoin — you're in the same place with the same things.
+  - Not saved: a derelict or pirate ship alongside, pirates on board, bots,
+    the eventer's mood.
+  - A lost campaign leaves no save.
 
-## 24. Управление
+## 24. Controls
 
-| Клавиша | Действие |
+| Key | Action |
 |---|---|
-| WASD, стрелки | ходить |
-| E | действие: пульт, шкаф, лестница, ремонт, обыск, поднять вещь, взлом замка, интерком |
-| F | тащить лежащего / отпустить |
-| Q | подача кислорода |
-| 1–6, колесо мыши | что в руке |
-| Z | применить вещь в руке (фонарик) |
-| G | положить вещь на пол |
-| Щелчок мышью | выстрел, удар, лечение |
-| R | вернуться после гибели (берёт одного из резерва) |
-| Enter | чат: вслух; «;» — рация, «!» — интерком у панели |
-| Esc | меню (у хозяина — ивентер) |
-| F3 | отладка |
-| F11 | весь экран |
+| WASD, arrows | walk |
+| E | action: console, locker, ladder, repair, search, pick up item, hack lock, intercom |
+| F | drag a person lying down / let go |
+| Q | oxygen supply |
+| 1–6, mouse wheel | what's in hand |
+| Z | use the item in hand (flashlight) |
+| G | drop the item on the floor |
+| Mouse click | shot, blow, healing |
+| R | return after death (takes one from the reserve) |
+| Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
+| Esc | menu (for the host — eventer) |
+| F3 | debug |
+| F11 | full screen |

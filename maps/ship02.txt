@@ -1,5 +1,5 @@
-; Корабль игры: две палубы, нос справа. Легенда в tools/make_assets.py.
-; Отсеки с ограниченным доступом (палуба, x, y клетки пола, доступ):
+; The game's ship: two decks, bow on the right. Legend in tools/make_assets.py.
+; Restricted-access compartments (deck, x, y of a floor cell, access):
 @ 1 34 14 bridge
 @ 1 3 11 armory
 @ 1 14 17 medbay

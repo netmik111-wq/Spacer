@@ -1,191 +1,191 @@
-# Видение игры
+# Game vision
 
-Здесь записано, какой автор видит игру в будущем. Это не план работ и не обещание:
-по его словам, «пока это всё мечты и грёзы», но от них нужно отталкиваться, принимая
-решения сегодня. Документ пополняется по мере того, как автор дополняет видение.
+This is how the author sees the game in the future. It is not a work plan and not a promise:
+in his words, "for now it's all dreams and daydreams", but today's decisions should start
+from it. The document grows as the author adds to the vision.
 
-Записано со слов автора; формулировки по возможности его. Последнее пополнение: 12 октября 2026.
+Written down from the author's words, in his wording where possible. Last addition: 12 October 2026.
 
-## Основа
+## Foundation
 
-- Двумерная сетевая игра по мотивам Space Station 13 (сборка FTL13) и FTL.
-  Сеть на первом месте.
-- Своя игра и свои механики. Идеи берутся из книг и других игр, уникальные механики
-  придумываются по пути.
-- Скелет игры строится вокруг космоса и его жестокости.
-- Масштаб растёт вместе с числом игроков.
-- Нужны сюжет и кампания.
-- Делается маленькими шагами: сначала скелет, потом он обрастает мясом.
+- A 2D multiplayer game inspired by Space Station 13 (the FTL13 build) and FTL.
+  Networking comes first.
+- Our own game and our own mechanics. Ideas come from books and other games; unique mechanics
+  are invented along the way.
+- The game's skeleton is built around space and its cruelty.
+- The scale grows with the number of players.
+- A story and a campaign are needed.
+- Built in small steps: first the skeleton, then it grows flesh.
 
-## Сложность должна быть честной
+## Difficulty must be fair
 
-- Отсутствие воздуха в отсеке не показывается: игрок узнаёт о беде по приборам.
-  Так сложнее, и так задумано.
-- После смерти остаются тела.
-- В кампании сложность можно будет менять. Трудно должно становиться не потому, что
-  у противника «больше ХП и больше урона, просто потому что», а из-за уникальных механик,
-  большого корабля, улучшенного ИИ и оружия.
+- A compartment with no air is not shown: the player learns about trouble from the instruments.
+  This is harder, and it is meant to be.
+- Bodies remain after death.
+- In the campaign the difficulty can be changed. Things should get harder not because
+  the enemy has "more HP and more damage, just because", but through unique mechanics,
+  a big ship, better AI and weapons.
 
-## Корабль
+## The ship
 
-- В игре нужна этажность: у корабля две палубы, одна над другой.
-- Часть поверхностей прозрачная: решётчатые мостки (catwalks) в тоннелях, стеклянные полы
-  и тому подобное. Сквозь них видно всё, что происходит на другой палубе.
-- На корабле есть мостик с двумя пультами: управление кораблём и карта сектора.
-- Пульты смогут ломаться. Пока цел хотя бы один, остаётся путь к бегству:
-  - локально, внутри сектора (управление кораблём);
-  - глобально, сменив сектор и так избежав гибели (карта сектора).
-- Помимо обычных дверей нужны аварийные шлюзы: они сами изолируют проход
-  и показывают разницу давлений по обе стороны.
-- Когда двигатель отключается, абсолютно все системы корабля перестают работать,
-  но не ломаются.
+- The game needs multiple levels: the ship has two decks, one above the other.
+- Some surfaces are transparent: grated catwalks in tunnels, glass floors
+  and so on. Through them you can see everything happening on the other deck.
+- The ship has a bridge with two consoles: ship control and the sector map.
+- Consoles can break. While at least one is intact, there is still a way to escape:
+  - locally, within the sector (ship control);
+  - globally, by changing sector and so avoiding death (sector map).
+- Besides ordinary doors, emergency shutters are needed: they seal the passage on their own
+  and show the pressure difference on both sides.
+- When the engine shuts down, absolutely all ship systems stop working,
+  but do not break.
 
-## Экипаж и вещи
+## Crew and items
 
-- Нужна система инвентаря.
-- Упавшего можно перетащить, а труп или человека без сознания — обобрать.
+- An inventory system is needed.
+- A fallen person can be dragged, and a corpse or an unconscious person can be looted.
 
-## Космос
+## Space
 
-- Сектор — это зона, в которой находится главная угроза или событие: торговец
-  или что-то ещё.
-- Игра не строится вокруг бегства от угрозы, как FTL. Такой способ играть должен
-  оставаться, но как выбор игрока, а не как стержень.
-- Нужен глобальный космос с бесконечными угрозами: десятки тысяч мелких событий,
-  тысячи средних, сотни больших, десятки катастрофических.
+- A sector is a zone containing the main threat or event: a trader
+  or something else.
+- The game is not built around fleeing from a threat, like FTL. That way of playing should
+  remain, but as the player's choice, not as the core.
+- A global space with endless threats is needed: tens of thousands of small events,
+  thousands of medium, hundreds of large, dozens of catastrophic.
 
-## Ивентер
+## Eventer
 
-- Событиями управляет ивентер (он же ГМ): вручную или автоматически.
-- Он ведёт события на корабле и на нескольких кораблях сразу, чтобы игрокам не было скучно.
-- Он «сканирует» корабль игроков, их навыки и уровень игры, снаряжение и число игроков
-  и подбирает события под них.
+- Events are run by the eventer (also the GM): manually or automatically.
+- It runs events on one ship and on several ships at once, so players don't get bored.
+- It "scans" the players' ship, their skills and level of play, their gear and the number of players,
+  and picks events to suit them.
 
-## Название и главный враг (13 октября 2026)
+## Title and main enemy (13 October 2026)
 
-- Рабочее название, которое предложил автор: «Fear of dark space».
-- Автор думает ввести уникальную механику, связанную с темнотой космоса, и уникального
-  врага: корабль тьмы (энтропии).
-- Концепция: в будущем в космосе умирает всё. Ключевая борьба с этим врагом — финал
-  или итог игры.
+- Working title suggested by the author: "Fear of dark space".
+- The author is thinking of introducing a unique mechanic tied to the darkness of space, and a unique
+  enemy: the ship of darkness (of entropy).
+- Concept: in the future, everything in space dies. The key struggle against this enemy is the finale
+  or outcome of the game.
 
-## Третий план автора (12 октября 2026)
+## The author's third plan (12 October 2026)
 
-Автор сам расписал, что делать дальше. Пункты с точкой (1.1, 2.1 и так далее) он
-назвал заделом на будущее: сейчас делается основной пункт, а подпункт показывает,
-куда его потом растить. Решения по основному пункту принимать так, чтобы подпункту
-было куда встать.
+The author laid out himself what to do next. He called the dotted items (1.1, 2.1 and so on)
+groundwork for the future: the main item is done now, and the sub-item shows
+where to grow it later. Decisions on the main item should be made so that the sub-item
+has room to fit.
 
-1. Враги и стрельба, базовое оружие. У торговца появляются связанные с этим вещи.
-   - 1.1. Потом: лазеры, тазеры, нелетальное кинетическое, обычное кинетическое.
-2. Базовое лечение: себя и союзника. У торговца связанные с этим вещи, например
-   пластырь мгновенного лечения.
-   - 2.1. Потом: сверхсложная медицина. Части тела и зоны повреждений: голова, глаза,
-     торс, паховая зона, рука, кисть, нога, стопа. Органы и кости. Медблок на корабле,
-     автодоки, хирургические наборы (систему операций можно взять за образец
-     из SS13, сборка Newbay).
-3. Заброшенные корабли с добычей: кредитами и брошенными вещами. Вместе с ними
-   простой шлюз на две двери: пока воздух не выкачан или не закачан, двери
-   заблокированы, и открывается только одна, на вход или на выход. Вражеский корабль
-   с пиратами в недобрых цветах: бурый, красный, тёмно-чёрный. У торговца связанные
-   с этим вещи.
-   - 3.1. Далеко вперёд: специализированные корабли (медицинские, научные, военные,
-     пиратские, грузовые, археологические, экспедиционные, спасательные) и уникальные.
-4. Одежда: рюкзаки, комбинезоны, обычные скафандры.
-   - 4.1. Потом: риги наподобие Dead Space (со временем сверхсложные), перчатки
-     (изоляционные, тактические и другие), магнитные ботинки, броня, множество
-     вещей для красоты (со временем в огромном количестве), слои одежды. Скафандр
-     быстрого развёртывания: кубик или шар в руках, нажимаешь на себя, и на тебе
-     аварийный скафандр, очень медленный, с запасом воздуха минут на десять.
-5. Оружие как система корабля. Вместе с этим корабль должен стать упорядоченнее:
-   мостик в носу или в центре верхней палубы, орудия по бокам, на крыше, под днищем,
-   там, откуда можно стрелять.
-   - 5.1. Потом: сложнее, шире арсенал.
-7. Более сложный двигатель: холодный синтез, антиматерия, плазменные двигатели.
-   Смотреть, как это сделано в разных сборках SS13: Vg, tg, Bay, Newbay, Goonstation,
+1. Enemies and shooting, basic weapons. The trader gets related items.
+   - 1.1. Later: lasers, tasers, non-lethal kinetic, ordinary kinetic.
+2. Basic healing: yourself and an ally. The trader gets related items, for example
+   an instant-healing patch.
+   - 2.1. Later: ultra-complex medicine. Body parts and damage zones: head, eyes,
+     torso, groin, arm, hand, leg, foot. Organs and bones. A medbay on the ship,
+     autodocs, surgical kits (the surgery system can be modelled
+     on SS13, the Newbay build).
+3. Abandoned ships with loot: credits and abandoned items. Along with them,
+   a simple two-door airlock: until the air is pumped out or in, the doors
+   are blocked, and only one opens, for going in or out. An enemy ship
+   with pirates in sinister colours: brown, red, dark black. The trader gets related
+   items.
+   - 3.1. Far ahead: specialised ships (medical, science, military,
+     pirate, cargo, archaeological, expedition, rescue) and unique ones.
+4. Clothing: backpacks, jumpsuits, ordinary spacesuits.
+   - 4.1. Later: rigs like in Dead Space (eventually ultra-complex), gloves
+     (insulated, tactical and others), magnetic boots, armour, lots of
+     cosmetic items (eventually a huge number), clothing layers. A rapid-deployment
+     spacesuit: a cube or ball in your hands, you press it on yourself, and you are wearing
+     an emergency suit, very slow, with about ten minutes of air.
+5. Weapons as a ship system. Along with this the ship should become more orderly:
+   the bridge in the nose or in the centre of the upper deck, guns on the sides, on the roof, under the belly,
+   wherever they can fire from.
+   - 5.1. Later: more complex, a wider arsenal.
+7. A more complex engine: cold fusion, antimatter, plasma engines.
+   Look at how it's done in different SS13 builds: Vg, tg, Bay, Newbay, Goonstation,
    FTL13.
-8. Далёкое будущее: сложная атмосфера и электричество, проводка под полом, трубы,
-   термодинамика. Перед этим пунктом обязательно подробно расспросить автора.
+8. Distant future: complex atmosphere and electricity, wiring under the floor, pipes,
+   thermodynamics. Before this item, be sure to question the author in detail.
 
-Дополнение автора в тот же день: нужен пункт о поле зрения и о том, как показывать
-звуки за стенами и за спиной, вне поля зрения. Уточнение автора: поле зрения только
-вперёд, конусом; в темноте оно ещё меньше; фонарик светит конусом в 35 градусов (автор попросил рисовать свет гладким
-конусом, а не клетками, и чтобы луч начинался сразу шириной с тело, от груди). В вакууме тихо: звук идёт только по воздуху
-(предложил я, автор принял).
-Числа автора: обычный угол обзора 160 градусов, в темноте 60. Когда придёт сложная
-механика повреждений, обзор станет двумя глазами по 85 градусов с наложением посередине:
-потеря одного глаза отнимает свою часть конуса. В темноте то же наложение, только уже.
-Фонарик бьёт дальше, чем видит глаз в темноте, и конус его света другие видят раньше,
-чем того, кто светит: фонарик выдаёт владельца. Дальность: при свете весь экран,
-в кромешной тьме 2 клетки, фонарик 9 клеток.
+The author's addition the same day: an item is needed about the field of view and how to show
+sounds behind walls and behind your back, outside the field of view. The author's clarification: the field of view is only
+forward, as a cone; in the dark it is even smaller; the flashlight shines in a 35-degree cone (the author asked to draw the light as a smooth
+cone, not in cells, and for the beam to start right away as wide as the body, from the chest). In a vacuum it is silent: sound travels only through air
+(I suggested it, the author accepted).
+The author's numbers: normal view angle 160 degrees, in the dark 60. When the complex
+damage mechanics arrive, vision will become two eyes of 85 degrees each, overlapping in the middle:
+losing one eye removes its part of the cone. In the dark the same overlap, only narrower.
+The flashlight reaches farther than the eye sees in the dark, and others see its cone of light before
+they see the person holding it: the flashlight gives its owner away. Range: in light the whole screen,
+in pitch darkness 2 cells, flashlight 9 cells.
 
-Порядок шагов, принятый автором (предложил я, пункты автора разбиты на посильные сборки):
-1. Готово. Вещи: что в руке, положить и поднять, свойства вещей. Фонарик.
-2. Готово. Поле зрения и звуки вне его.
-3. Готово. Оружие и пираты-абордажники, простой пластырь.
-4. Готово. Лечение: аптечка, лечить себя и другого.
-5. Готово. Новый упорядоченный корабль: шлюз на две двери, места под стыковку и орудия.
-6. Готово. Брошенные корабли: стыковка, вылазка, добыча.
-7. Готово. Пиратский корабль: подходит, стыкуется силой, высаживает пиратов.
-8. Готово. Одежда: рюкзак, комбинезон, снимаемый скафандр.
-9. Готово. Оружие корабля: пульт, орудия, бой корабля с кораблём.
-Дальше пункты автора 7 и 8: двигатели и сложная атмосфера с электричеством.
+Step order accepted by the author (I proposed it; the author's items are split into manageable builds):
+1. Done. Items: what's in hand, drop and pick up, item properties. Flashlight.
+2. Done. Field of view and sounds outside it.
+3. Done. Weapons and boarding pirates, a simple patch.
+4. Done. Healing: medkit, heal yourself and another.
+5. Done. A new orderly ship: two-door airlock, places for docking and guns.
+6. Done. Derelict ships: docking, sortie, loot.
+7. Done. Pirate ship: approaches, docks by force, lands pirates.
+8. Done. Clothing: backpack, jumpsuit, removable spacesuit.
+9. Done. Ship weapons: console, guns, ship-to-ship combat.
+Next come the author's items 7 and 8: engines and complex atmosphere with electricity.
 
-Слово автора о брошенных кораблях (перед сборкой v26): к брошенному кораблю подлетаешь;
-можно пристыковаться, а можно и без стыковки выйти в открытый космос и добраться до
-него самому. Брошенные корабли он будет потом дорабатывать; пиратов на них пока нет.
+The author's word on derelict ships (before build v26): you fly up to a derelict ship;
+you can dock, or you can go out into open space without docking and reach
+it yourself. He will refine derelict ships later; there are no pirates on them for now.
 
-Пожелание автора к звукам (после сборки v21): частые звуки (шаги, двери, шлюзы, вещи)
-потом сделать настоящими звуками с направлением, чтобы в наушниках было понятно, откуда;
-значками на экране оставить только пробоины и крики, для простоты. Пока звука нет —
-сделать реже волны от ходьбы, они перегружают экран.
+The author's wish about sounds (after build v21): frequent sounds (footsteps, doors, shutters, items)
+should later become real sounds with direction, so that with headphones it's clear where they come from;
+keep only breaches and screams as on-screen icons, for simplicity. Until there is sound,
+make the walking ripples rarer, they clutter the screen.
 
-Номера автора сохранены, шестого пункта в его списке нет.
+The author's numbering is kept; there is no item six in his list.
 
-Что надо помнить:
-- Пункт 4 отменит нынешнее правило «скафандр есть у всех и всегда надет».
-- Пункт 5 потребует перерисовать корабль.
-- Из сборок SS13 берутся идеи и устройство механик, но не код: у SS13 своя лицензия.
+Things to remember:
+- Item 4 will cancel the current rule "everyone has a spacesuit and always wears it".
+- Item 5 will require redrawing the ship.
+- From SS13 builds we take ideas and how mechanics work, but not code: SS13 has its own license.
 
-## Что из этого уже есть в игре
+## What of this is already in the game
 
-- Воздух без подсказок, приборы автора, тела погибших.
-- Мостик с двумя пультами. Оба работают и оба ломаются; пока один сломан, второй цел.
-- Два пути бегства: своим ходом внутри сектора (из метеорного потока можно выйти)
-  и прыжком в другой сектор.
-- Бесконечный космос: секторов сколько угодно, они создаются по мере подхода корабля.
-  В каждом одна главная особенность; между соседними секторами прыжок.
-- Две палубы и лестницы между ними. Стеклянные полы и мостки, сквозь которые видно
-  соседнюю палубу и тех, кто на ней.
-- Первый ивентер: каталог событий четырёх размеров (пока восемь событий), автоматический
-  темп с оглядкой на состояние корабля и число игроков, ручной запуск хозяином игры.
-- На нижней палубе стоят двигатель и воздушная установка (понемногу возвращает воздух).
-  Обе ломаются и чинятся; их состояние видно с верхней палубы сквозь стеклянный пол.
-  Это предложено по ходу работы, автор согласился.
-- Двигатель питает весь корабль. Без него стоят пульты, воздушная установка, кислородные
-  стойки и аварийные шлюзы, двери открываются только вручную, свет гаснет. Ничего при
-  этом не ломается: починили двигатель, и всё заработало.
-- Аварийные шлюзы у каждой двери: падают сами при разнице давлений, показывают её,
-  поднимаются вручную.
+- Air without hints, the author's instruments, bodies of the dead.
+- A bridge with two consoles. Both work and both break; while one is broken, the other is intact.
+- Two ways to escape: under your own power within the sector (you can leave a meteor shower)
+  and by jumping to another sector.
+- Infinite space: any number of sectors, created as the ship approaches.
+  Each has one main feature; you jump between neighbouring sectors.
+- Two decks and ladders between them. Glass floors and catwalks through which you can see
+  the neighbouring deck and those on it.
+- The first eventer: a catalogue of events in four sizes (eight events so far), automatic
+  pacing that takes the ship's state and the number of players into account, manual triggering by the game host.
+- The lower deck holds the engine and the air plant (slowly restores air).
+  Both break and get repaired; their state is visible from the upper deck through the glass floor.
+  This was proposed during the work, and the author agreed.
+- The engine powers the whole ship. Without it the consoles, air plant, oxygen
+  racks and emergency shutters stop, doors open only by hand, the lights go out. Nothing
+  breaks in the process: fix the engine, and everything works again.
+- Emergency shutters at every door: they drop by themselves on a pressure difference, show it,
+  and are raised by hand.
 
-- Инвентарь на слотах (автор выбрал слоты, а не объём рюкзака): шесть слотов, в слоте
-  одна вещь. Лежащего без сознания или погибшего можно обыскать и тащить, в том числе
-  по лестнице. Вещи погибшего остаются на теле.
-- Запас корабля, который кончается: заплатки, запчасти, воздух для установки, кредиты.
-  Торговец продаёт запас, станция снабжения пополняет воздух. Предложено по ходу работы,
-  автор согласился.
+- Slot-based inventory (the author chose slots rather than backpack volume): six slots, one
+  item per slot. An unconscious or dead person lying down can be searched and dragged, including
+  up and down ladders. The dead person's items stay on the body.
+- Ship supplies that run out: patches, spare parts, air for the plant, credits.
+  The trader sells supplies, the supply station replenishes air. Proposed during the work,
+  the author agreed.
 
-- Вещи третьего плана, шаг 1: рука, положить и поднять вещь с пола, общая таблица свойств
-  вещей, фонарик с узким лучом. Без питания на корабле темно, свет фонарика видят все.
+- Third-plan items, step 1: the hand, dropping and picking up items from the floor, a shared table of item
+  properties, a flashlight with a narrow beam. Without power the ship is dark, everyone sees the flashlight's light.
 
-- Поле зрения: конус из двух глаз (160 градусов, в темноте 60 и 2 клетки), за спиной и за
-  стенами людей не видно. Звуки вне поля зрения отмечаются значками; в вакууме тихо.
+- Field of view: a two-eye cone (160 degrees, in the dark 60 and 2 cells); people behind your back and behind
+  walls are not visible. Sounds outside the field of view are marked with icons; in a vacuum it is silent.
 
-- Оружие: пистолет, дубинка, пластырь; стрельба мышью. Пираты-абордажники в бурых, красных
-  и чёрных скафандрах прорезают обшивку, охотятся на экипаж, отходят ранеными.
+- Weapons: pistol, baton, patch; shooting with the mouse. Boarding pirates in brown, red
+  and black spacesuits cut through the hull, hunt the crew, retreat when wounded.
 
-- Раны сами не заживают: их лечат пластырь и аптечка, себе и другому. Тяжело раненый
-  без сознания не очнётся, пока его не полечат.
+- Wounds don't heal by themselves: the patch and the medkit treat them, on yourself and on another. A badly wounded
+  unconscious person won't wake up until treated.
 
-Чего ещё нет вовсе: другие корабли и противники, навыки и снаряжение, сюжет и кампания.
-Событий пока восемь, а не тысячи.
+Not there at all yet: other ships and opponents, skills and gear, story and campaign.
+There are only eight events so far, not thousands.

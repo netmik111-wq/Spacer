@@ -1,356 +1,356 @@
 # Spacer
 
-Двумерная сетевая игра про экипаж космического корабля. Вдохновение: Space Station 13
-(прежде всего сборка FTL13) и FTL. В основе космос и его жестокость.
+A 2D multiplayer game about the crew of a spaceship. Inspired by Space Station 13
+(above all the FTL13 build) and FTL. At its core are space and its cruelty.
 
-Сделана на Godot 4.7, язык GDScript. Первый план из пяти шагов выполнен: сервер и игроки
-на одном корабле, двери, воздух по отсекам и пробоины, здоровье и гибель от нехватки воздуха,
-скафандр с баллоном и ремонт пробоин, мостик, секторы с прыжком и ивентер.
-После плана добавлены управление кораблём внутри сектора, поломка пультов мостика,
-вторая палуба с лестницами, стеклянными полами и мостками, на ней двигатель
-и воздушная установка, питание корабля от двигателя, аварийные шлюзы у дверей,
-запас корабля с расходом на ремонт и торговец, инвентарь на слотах, обыск
-и перетаскивание лежащих, бесконечный космос.
+Made with Godot 4.7, in GDScript. The first five-step plan is done: a server and players
+on one ship, doors, air per compartment and hull breaches, health and death from lack of air,
+a space suit with a tank and breach repair, a bridge, sectors with jumps and the event director.
+After the plan we added steering the ship within a sector, bridge console breakdowns,
+a second deck with ladders, glass floors and catwalks, with an engine
+and an air plant on it, ship power from the engine, emergency shutters at doors,
+ship supplies spent on repairs and a trader, a slot inventory, searching
+and dragging people who are down, and infinite space.
 
-Куда игра идёт дальше, записано в [docs/VISION.md](docs/VISION.md).
+Where the game is heading next is written in [docs/VISION.md](docs/VISION.md).
 
-## План
+## Plan
 
-1. **Готово.** Сервер и клиенты: персонажи ходят по кораблю и видят друг друга.
-2. **Готово.** Отсеки с воздухом: двери, пробоина, утечка, выравнивание давления.
-3. **Готово.** Урон от среды и состояния здоровья, вплоть до критического состояния и смерти.
-4. **Готово.** Скафандр с запасом кислорода и ремонт пробоины.
-5. **Готово.** Мостик с двумя пультами, секторы, прыжок и ивентер, который ломает корабль сам.
+1. **Done.** Server and clients: characters walk around the ship and see each other.
+2. **Done.** Compartments with air: doors, hull breach, leaks, pressure equalization.
+3. **Done.** Environmental damage and health states, up to critical condition and death.
+4. **Done.** A space suit with an oxygen supply and hull breach repair.
+5. **Done.** A bridge with two consoles, sectors, jumps and an event director that breaks the ship on its own.
 
-Второй план (двигатель и воздушная установка, аварийные шлюзы, новые события, запас
-и торговец, инвентарь с обыском и перетаскиванием, бесконечный космос) тоже выполнен.
+The second plan (engine and air plant, emergency shutters, new events, supplies
+and a trader, inventory with searching and dragging, infinite space) is also done.
 
-Сейчас идёт третий план автора, весь он записан в `docs/VISION.md`:
+The author's third plan is now under way; all of it is written in `docs/VISION.md`:
 
-1. **Готово.** Вещи: что в руке, положить и поднять, свойства вещей, фонарик.
-2. **Готово.** Поле зрения конусом и значки звуков вне его.
-3. **Готово.** Оружие и пираты-абордажники.
-4. **Готово.** Лечение.
-5. Новый упорядоченный корабль со шлюзом на две двери.
-6. Брошенные корабли. 7. Пиратский корабль. 8. Одежда. 9. Оружие корабля.
+1. **Done.** Items: what's in hand, drop and pick up, item properties, flashlight.
+2. **Done.** Cone-shaped field of view and sound icons outside it.
+3. **Done.** Weapons and pirate boarders.
+4. **Done.** Healing.
+5. A new, tidier ship with a two-door airlock.
+6. Derelict ships. 7. Pirate ship. 8. Clothing. 9. Ship weapons.
 
-## Как открыть
+## How to open
 
-1. Скачайте Godot 4.7 (обычную версию, не .NET) с godotengine.org.
-2. Скачайте этот репозиторий: зелёная кнопка «Code → Download ZIP», затем распакуйте архив.
-3. В менеджере проектов Godot нажмите «Импорт» и выберите файл `project.godot` из этой папки.
-4. F5 запускает игру. Чтобы открыть сразу два окна: «Отладка → Настроить экземпляры запуска».
+1. Download Godot 4.7 (the standard version, not .NET) from godotengine.org.
+2. Download this repository: the green button «Code → Download ZIP», then unpack the archive.
+3. In the Godot project manager press «Импорт» ("Import") and choose the `project.godot` file from this folder.
+4. F5 runs the game. To open two windows at once: «Отладка → Настроить экземпляры запуска» ("Debug → Customize Run Instances").
 
-## Что где лежит
+## What is where
 
-| Папка | Что в ней |
+| Folder | Contents |
 |---|---|
-| `src/shared/` | Общее для сервера и клиента: правило движения, двери, карта, сетевой протокол |
-| `src/server/` | Сервер: симуляция 20 шагов в секунду, воздух, здоровье, рассылка изменений, боты |
-| `src/client/` | Клиент: связь с сервером, предсказание своего персонажа, отрисовка корабля |
-| `src/ui/` | Меню, экран игры, чат, пауза |
-| `maps/` | Карты: `ship02.txt` (корабль игры), `ship01.txt` (корабль тестов) и `derelict01.txt` (брошенный корабль) рисуются символами, `.json` собираются из них |
-| `assets/` | Готовая графика, которую читает игра |
-| `art_src/` | Исходные референсы графики |
-| `tools/` | Сборка графики и карт, сетевые тесты |
-| `dist_files/` | Файлы, которые кладутся рядом с игрой в архив для Windows |
-| `docs/` | Видение игры со слов автора (`VISION.md`) и описание всех механик (`MECHANICS.md`) |
-| `research/` | Замеры сети, потоков и атмосферы, на которых держатся технические решения |
-| `CLAUDE.md` | Рабочие заметки: договорённости, причины решений, порядок проверки, грабли |
+| `src/shared/` | Shared by server and client: movement rule, doors, map, network protocol |
+| `src/server/` | Server: simulation at 20 ticks per second, air, health, sending changes, bots |
+| `src/client/` | Client: talking to the server, predicting your own character, drawing the ship |
+| `src/ui/` | Menu, game screen, chat, pause |
+| `maps/` | Maps: `ship02.txt` (the game's ship), `ship01.txt` (the test ship) and `derelict01.txt` (derelict ship) are drawn with characters, the `.json` files are built from them |
+| `assets/` | Finished graphics that the game reads |
+| `art_src/` | Source art references |
+| `tools/` | Building graphics and maps, network tests |
+| `dist_files/` | Files placed next to the game in the Windows archive |
+| `docs/` | The game's vision in the author's words (`VISION.md`) and a description of all mechanics (`MECHANICS.md`) |
+| `research/` | Measurements of networking, threads and atmosphere that the technical decisions rest on |
+| `CLAUDE.md` | Working notes: agreements, reasons for decisions, check procedure, pitfalls |
 
-## Как поменять карту
+## How to change the map
 
-Откройте `maps/ship02.txt`: корабль нарисован символами (`#` стена, `.` пол, `s` точка появления,
-`D` дверь в горизонтальной стене, `A` шлюз в вертикальной, `W` и `<>` окна, `1`–`5` стена с пультом,
-`6` двигатель, `7` воздушная установка, `8` шкаф снабжения, `9` насос шлюза (стена камеры шлюза; наружная дверь `D` камеры смотрит в космос), `g` стеклянный пол, `c` мостки, `H` лестница).
-Палубы рисуются одна за другой, верхняя первой; каждая начинается строкой `= название`.
-Лестница `H` ставится в одну и ту же клетку двух соседних палуб. Под мостками должен быть пол.
-Тайлы макета рассчитаны на отсеки высотой в две клетки, скрипт проверяет это и подбирает стыки стен сам.
+Open `maps/ship02.txt`: the ship is drawn with characters (`#` wall, `.` floor, `s` spawn point,
+`D` door in a horizontal wall, `A` door in a vertical wall, `W` and `<>` windows, `1`–`5` wall with a console,
+`6` engine, `7` air plant, `8` supply locker, `9` airlock pump (a wall of the airlock chamber; the chamber's outer door `D` faces space), `g` glass floor, `c` catwalk, `H` ladder).
+Decks are drawn one after another, the top one first; each starts with a line `= name`.
+A ladder `H` goes in the same cell of two adjacent decks. There must be floor under catwalks.
+The mockup tiles are designed for compartments two cells tall; the script checks this and picks wall joints itself.
 
     python3 tools/make_assets.py
 
-Нужен Python 3 с библиотекой Pillow. Картинка-превью появится в `tools/preview/`.
+You need Python 3 with the Pillow library. A preview image will appear in `tools/preview/`.
 
-## Запуск из командной строки
+## Running from the command line
 
-Параметры пишутся после `--`:
+Parameters go after `--`:
 
-    godot --path . -- --host bots=2 name=Капитан       создать игру сразу
-    godot --path . -- join=192.168.0.10 name=Инженер   подключиться сразу
-    godot --headless --path . -- --server port=24500   только сервер, без окна
+    godot --path . -- --host bots=2 name=Капитан       create a game right away
+    godot --path . -- join=192.168.0.10 name=Инженер   join right away
+    godot --headless --path . -- --server port=24500   server only, no window
 
-## Как собрать игру
+## How to build the game
 
-В репозитории лежат только исходники: готовая игра для Windows весит больше 100 МБ,
-такие файлы GitHub в репозиторий не принимает.
+The repository holds only the sources: the finished Windows game is over 100 MB,
+and GitHub does not accept files that large in a repository.
 
-В Godot: один раз установите шаблоны («Редактор → Управление шаблонами экспорта»),
-затем «Проект → Экспорт», выберите «Windows Desktop» или «Linux» и нажмите «Экспорт проекта».
+In Godot: install the templates once («Редактор → Управление шаблонами экспорта», "Editor → Manage Export Templates"),
+then «Проект → Экспорт» ("Project → Export"), choose «Windows Desktop» or «Linux» and press «Экспорт проекта» ("Export Project").
 
-То же из командной строки:
+The same from the command line:
 
     mkdir -p build/windows build/linux
     godot --headless --path . --export-release "Windows Desktop" build/windows/SpacePrototype.exe
     godot --headless --path . --export-release "Linux" build/linux/SpacePrototype.x86_64
 
-## Проверка сети
+## Network check
 
-`tools/nettest.sh` запускает сервер и несколько настоящих клиентов без окна и считает,
-сколько шагов сервер исправил и сошлось ли состояние. `tools/lagproxy.rs` — прослойка,
-которая добавляет задержку и потери пакетов, как в настоящем интернете
-(собирается командой `rustc -O tools/lagproxy.rs -o tools/lagproxy`).
+`tools/nettest.sh` starts a server and several real windowless clients and counts
+how many steps the server corrected and whether the state matched. `tools/lagproxy.rs` is a relay
+that adds delay and packet loss, like the real internet
+(built with `rustc -O tools/lagproxy.rs -o tools/lagproxy`).
 
-    GODOT=/путь/к/godot tools/nettest.sh 4 20                 4 клиента, 20 секунд
-    GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 4 20 40 10 2   задержка 40±10 мс, потери 2%
-    GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 4 20 80 15 0 200 1000   связь замирает на 200 мс раз в секунду
+    GODOT=/path/to/godot tools/nettest.sh 4 20                 4 clients, 20 seconds
+    GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 4 20 40 10 2   delay 40±10 ms, 2% loss
+    GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 4 20 80 15 0 200 1000   the link freezes for 200 ms once a second
 
-## Проверка воздуха
+## Air check
 
     godot --headless --path . --script res://tools/airtest.gd
 
-Считает на настоящей карте, за сколько пустеет пробитый отсек, и проверяет, что воздух
-не берётся из ниоткуда, не проходит сквозь закрытую дверь и что всё успокаивается.
-Сейчас отсек из 10 клеток теряет половину воздуха за 8 секунд и почти весь за полминуты.
-Тот же тест считает, сколько проживёт человек, оставшийся в пробитом отсеке.
+Measures on the real map how fast a breached compartment empties, and checks that air
+doesn't come from nowhere, doesn't pass through a closed door, and that everything settles.
+Right now a 10-cell compartment loses half its air in 8 seconds and almost all of it in half a minute.
+The same test measures how long a person left in a breached compartment survives.
 
-## Корабль: двери, воздух, обшивка
+## Ship: doors, air, hull
 
-- **Двери** закрыты. Кто идёт в дверь, тот её открывает: через 0,3 секунды она проходима.
-  Закрывается сама через 2 секунды после последнего прохода, но не на стоящем в ней.
-- **Воздух** хранится в каждой клетке, где можно стоять. 10 раз в секунду он перетекает
-  между соседними клетками туда, где давление ниже. Закрытая дверь не пропускает ничего.
-- **Пробоина** возможна в любой клетке внешней стены или окна. Клетки рядом с ней
-  теряют воздух в космос.
-- Боты не открывают двери, за которыми давление сильно отличается, чтобы не выпустить
-  воздух из всего корабля.
-- Отсек без воздуха на вид не отличается от обычного. Игрок видит только давление
-  в своей клетке, так задумано: должно быть трудно.
-- Корабль ломает ивентер; хозяин игры может пробить и заделать обшивку сам из меню (Esc).
+- **Doors** are closed. Whoever walks into a door opens it: after 0.3 seconds it is passable.
+  It closes by itself 2 seconds after the last person passes, but not on someone standing in it.
+- **Air** is stored in every cell you can stand on. 10 times a second it flows
+  between neighbouring cells towards lower pressure. A closed door lets nothing through.
+- A **hull breach** can happen in any cell of an outer wall or window. Cells next to it
+  lose air into space.
+- Bots don't open doors with a big pressure difference behind them, so as not to let
+  the air out of the whole ship.
+- A compartment without air looks no different from a normal one. The player sees only the pressure
+  in their own cell; this is intentional: it should be hard.
+- The event director breaks the ship; the host can breach and seal the hull themselves from the menu (Esc).
 
-## Палубы
+## Decks
 
-- У корабля две палубы, одна над другой. Игрок видит ту, на которой стоит.
-- **Лестница** — люк в полу верхней палубы и лестница под ним. Встать на клетку и нажать E.
-- **Стеклянный пол** и **мостки** (решётка) прозрачны: сверху сквозь них видно нижнюю палубу
-  и всех, кто под ними, снизу видно тех, кто стоит на них. Сквозь обычный пол не видно
-  ничего, в том числе имён.
-- **Воздух** между палубами идёт через мостки и люки, сквозь стекло не идёт. Пробоина
-  под мостками выпускает воздух и из отсека над ними.
-- В файле карты и в сети палубы лежат в одной сетке друг под другом (`ShipMap`), поэтому
-  клетка везде задаётся двумя числами.
+- The ship has two decks, one above the other. The player sees the one they are standing on.
+- A **ladder** is a hatch in the upper deck floor with a ladder under it. Stand on the cell and press E.
+- **Glass floors** and **catwalks** (grating) are transparent: from above you can see the lower deck through them
+  and everyone under them; from below you can see those standing on them. Through normal floor you see
+  nothing, including names.
+- **Air** flows between decks through catwalks and hatches, but not through glass. A breach
+  under catwalks also lets out the air from the compartment above them.
+- In the map file and over the network the decks lie in one grid one below another (`ShipMap`), so
+  a cell is always given by two numbers.
 
-## Машины
+## Machines
 
-- **Двигатель** (нижняя палуба, под мостиком) питает весь корабль. Сломан: встают все
-  системы, но ни одна не ломается. Корабль останавливается, начатый прыжок срывается,
-  пульты мостика не включаются, воздушная установка и кислородные стойки не работают,
-  аварийные шлюзы не срабатывают, двери открываются только вручную (1,5 секунды вместо
-  0,3), свет гаснет. Свет двигателя на полу виден с мостика сквозь стекло: голубой или красный.
-- **Воздушная установка** (нижний коридор) добавляет воздух в клетку перед собой,
-  0,12 клетки в секунду, не выше нормального давления, пока у корабля есть запас воздуха.
-- Обе чинятся удержанием E шесть секунд. Ломает их ивентер: события «Отказ двигателя»
-  и «Отказ воздушной установки».
-- Пока сломан пульт мостика, двигатель не ломается, и наоборот (`GameServer.can_break`).
+- The **engine** (lower deck, under the bridge) powers the whole ship. When it's broken, all
+  systems stop, but none of them break. The ship stops, a started jump fails,
+  the bridge consoles don't turn on, the air plant and oxygen racks don't work,
+  emergency shutters don't trigger, doors open only by hand (1.5 seconds instead of
+  0.3), the lights go out. The engine's light on the floor is visible from the bridge through the glass: blue or red.
+- The **air plant** (lower corridor) adds air to the cell in front of it,
+  0.12 cells per second, no higher than normal pressure, while the ship has an air supply.
+- Both are repaired by holding E for six seconds. The event director breaks them: the events «Отказ двигателя» ("Engine failure")
+  and «Отказ воздушной установки» ("Air plant failure").
+- While a bridge console is broken, the engine does not break, and vice versa (`GameServer.can_break`).
 
-- **Аварийный шлюз** есть у каждой двери. Он падает, когда давление по две стороны двери
-  расходится на четверть нормы, и поднимается, когда разница меньше десятой. Упавший
-  не даёт двери открыться и захлопывает открытую, если в проёме никого нет. Две лампы
-  показывают давление по сторонам, подсказка внизу экрана называет разницу в килопаскалях.
-  Поднять вручную: держать E три секунды, шлюз поднимется на пять секунд.
-  Числа в `src/shared/net.gd` (`SHUTTER_*`, `FORCE_TICKS`, `FORCED_OPEN_TICKS`).
+- Every door has an **emergency shutter**. It drops when the pressure on the two sides of the door
+  differs by a quarter of normal, and rises when the difference is under a tenth. A dropped one
+  keeps the door from opening and slams an open one shut if nobody is in the doorway. Two lamps
+  show the pressure on each side; the hint at the bottom of the screen gives the difference in kilopascals.
+  To raise it by hand: hold E for three seconds, the shutter rises for five seconds.
+  Numbers in `src/shared/net.gd` (`SHUTTER_*`, `FORCE_TICKS`, `FORCED_OPEN_TICKS`).
 
-- **Дверь может заклинить открытой** (`Doors.jammed`): не закрывается, шлюз её не закроет.
-  **Шлюз может отказать** (`Doors.faulty`): остаётся как есть, упавшим или поднятым, что бы
-  ни делало давление. То и другое чинится удержанием E шесть секунд.
-- **Сбой питания** обесточивает корабль на 8–15 секунд без поломки двигателя.
+- **A door can jam open** (`Doors.jammed`): it doesn't close, and the shutter won't close it.
+  **A shutter can fail** (`Doors.faulty`): it stays as it is, dropped or raised, whatever
+  the pressure does. Both are repaired by holding E for six seconds.
+- A **power failure** cuts power to the ship for 8–15 seconds without breaking the engine.
 
-Проверка машин, питания, дверей и шлюзов без сети и окна:
+Checking machines, power, doors and shutters without network or window:
 
     godot --headless --path . --script res://tools/machinetest.gd
 
-## Вещи, инвентарь, обыск, перетаскивание
+## Items, inventory, searching, dragging
 
-- У каждого персонажа шесть слотов, в слоте одна вещь (`Net.SLOTS`, `Net.ITEM_*`).
-  Вещи погибшего остаются на теле.
-- Что такое каждая вещь и что она умеет, записано в одной таблице `src/shared/items.gd`:
-  название, описание, цена у торговца, сколько её в шкафу в начале, во что она
-  переключается в руке, какой свет даёт. Её читают и сервер, и клиент. Картинки вещей
-  рисует код в `src/client/item_art.gd`.
-- Вещей три: заплатка, запчасть и фонарик.
-- **Рука.** Один из слотов в руке, он подсвечен. Выбирается клавишами 1–6, колесом мыши
-  или щелчком по слоту. Взятое из шкафа или с пола ложится в руку, если она пуста.
-- **Z** применяет вещь в руке сама по себе: включает и выключает фонарик.
-- **G** кладёт вещь из руки на пол в своей клетке. В клетке помещается четыре вещи.
-  **E** поднимает верхнюю вещь с клетки впереди, а если там пусто, то из-под ног. Вещь
-  на стене впереди (пульт, шкаф, стойка) и лежащий человек важнее: E достаётся им.
-- Вещи на полу рассылаются участками, как пробоины, и входят в контрольную сумму.
-- **Фонарик** в руке светит конусом в 35 градусов на 9 клеток. Луч рисуется
-  гладким конусом, начинается на уровне груди сразу шириной с тело и обрывается о стены. Стены и закрытые двери
-  его останавливают, окна и открытые двери пропускают. Что фонарик горит, видят все:
-  признак едет в байте вида персонажа (`Net.LOOK_LIGHT`), и луч считается у каждого
-  клиента. Без питания на корабле кромешная тьма: чёрное покрывало поверх экрана с
-  дырами там, где падает свет (луч фонарика и две клетки вокруг себя). Дыры рисуются
-  в отдельную картинку-маску, которая следует за камерой (`WorldView._draw_mask`). Расчёт света в `src/shared/sight.gd`, он же
-  будет основой поля зрения.
-- Лежащего (без сознания или погибшего) можно **обыскать** по E: панель показывает его
-  слоты и свои, щелчок переносит вещь в любую сторону.
-- Лежащего можно **тащить** по F: шаг длится вдвое дольше, лежащий едет в клетку, которую
-  тащащий только что покинул, и переходит с ним по лестнице.
-- И то и другое сервер проверяет на шаге, который назвал клиент, как нажатие у лестницы.
+- Each character has six slots, one item per slot (`Net.SLOTS`, `Net.ITEM_*`).
+  A dead character's items stay on the body.
+- What each item is and what it can do is written in one table, `src/shared/items.gd`:
+  name, description, trader price, how many are in the locker at the start, what it
+  toggles into in hand, what light it gives. Both the server and the client read it. Item pictures
+  are drawn by code in `src/client/item_art.gd`.
+- There are three items: patch, spare part and flashlight.
+- **Hand.** One of the slots is in hand; it is highlighted. Choose it with keys 1–6, the mouse wheel
+  or by clicking a slot. What you take from a locker or the floor goes into your hand if it's empty.
+- **Z** uses the item in hand by itself: turns the flashlight on and off.
+- **G** puts the item from your hand on the floor in your cell. A cell holds four items.
+  **E** picks up the top item from the cell ahead, and if that's empty, from under your feet. An item
+  on the wall ahead (console, locker, rack) and a person lying down take priority: E goes to them.
+- Items on the floor are sent by chunks, like breaches, and are part of the checksum.
+- A **flashlight** in hand shines a 35-degree cone for 9 cells. The beam is drawn
+  as a smooth cone, starts at chest level already as wide as the body and is cut off by walls. Walls and closed doors
+  stop it; windows and open doors let it through. Everyone sees that a flashlight is on:
+  the flag travels in the character's look byte (`Net.LOOK_LIGHT`), and the beam is computed by every
+  client. Without power the ship is pitch dark: a black cover over the screen with
+  holes where light falls (the flashlight beam and two cells around yourself). The holes are drawn
+  into a separate mask image that follows the camera (`WorldView._draw_mask`). Light is computed in `src/shared/sight.gd`, which will also
+  be the basis of the field of view.
+- A person lying down (unconscious or dead) can be **searched** with E: a panel shows their
+  slots and yours, a click moves an item either way.
+- A person lying down can be **dragged** with F: a step takes twice as long, the body moves into the cell
+  the dragger just left, and goes up and down ladders with them.
+- The server checks both on the tick the client named, like a ladder press.
 
-## Запас и торговля
+## Supplies and trade
 
-- У корабля есть запас в шкафу снабжения (нижняя палуба): заплатки, запчасти, фонарики,
-  воздух для установки и кредиты. Игрок берёт вещи с собой, в слоты инвентаря. Шкаф
-  держит любую вещь, у которой в таблице вещей задан начальный запас.
-- Пробоина требует заплатку. Ремонт машины, двери или шлюза тратит запчасть, а без неё
-  идёт втрое дольше. Воздушная установка расходует запас воздуха и встаёт, когда он кончился.
-- Торговец продаёт вещи из шкафа и воздух за кредиты, когда корабль подошёл к нему.
-  Покупки делаются у шкафа снабжения. Станция снабжения бесплатно пополняет воздух.
-- Кредиты даются за первый прыжок в каждый сектор.
-- Цены вещей и начальный запас в `src/shared/items.gd`, остальные числа в `src/shared/net.gd`
+- The ship has supplies in the supply locker (lower deck): patches, spare parts, flashlights,
+  air for the plant and credits. A player takes items along, in inventory slots. The locker
+  holds any item that has a starting stock in the item table.
+- A breach needs a patch. Repairing a machine, door or shutter uses a spare part, and without one
+  takes three times longer. The air plant uses up the air supply and stops when it runs out.
+- The trader sells locker items and air for credits when the ship has come up to it.
+  Purchases are made at the supply locker. A supply station refills air for free.
+- Credits are given for the first jump into each sector.
+- Item prices and starting stock are in `src/shared/items.gd`, other numbers in `src/shared/net.gd`
   (`SLOTS`, `START_CREDITS`, `PRICE_AIR`, `EXPLORE_REWARD`).
 
-## Поле зрения и звуки
+## Field of view and sounds
 
-- Персонаж видит только вперёд: конус из двух глаз по 85 градусов, вместе 160, в середине
-  они перекрываются. В темноте конус сужается до 60 градусов, и без света различимы лишь
-  2 клетки. Стены и закрытые двери взгляд останавливают. Каждый глаз считается отдельно
-  (`Sight.eye_arcs`), чтобы потом потерять глаз можно было вместе с его частью конуса.
-- Что вне взгляда, затемнено: стены и пол видны тускло, людей там не видно, их имён тоже.
-- Затемнение рисуется одним листом поверх экрана по маске из двух цветов: красный — где
-  светло, зелёный — куда смотрят глаза (`WorldView._draw_mask`, `_draw_look`).
-- Звуки (`Net.SOUND_*`): шаги, дверь, шипение пробоины, падение, стук брошенной вещи,
-  лестница. Сервер шлёт звук тем, кто в пределах его дальности на той же палубе
-  (`GameServer.sound`, `hears`). Звук идёт только по воздуху: если в вакууме слушающий
-  или источник, слышно лишь то, что вплотную. Клиент рисует значок там, где звук был,
-  если это место не видно; чем дальше звук, тем неточнее место; звук за краем экрана
-  отмечается у края со стрелкой.
+- A character sees only forward: a cone from two eyes of 85 degrees each, 160 together; in the middle
+  they overlap. In the dark the cone narrows to 60 degrees, and without light only
+  2 cells can be made out. Walls and closed doors stop sight. Each eye is computed separately
+  (`Sight.eye_arcs`), so that later an eye can be lost together with its part of the cone.
+- What's out of sight is dimmed: walls and floor are seen dimly, people there are not visible, nor their names.
+- The dimming is drawn as one sheet over the screen using a two-colour mask: red — where
+  it's lit, green — where the eyes are looking (`WorldView._draw_mask`, `_draw_look`).
+- Sounds (`Net.SOUND_*`): footsteps, door, breach hiss, falling, the clatter of a dropped item,
+  ladder. The server sends a sound to those within its range on the same deck
+  (`GameServer.sound`, `hears`). Sound travels only through air: if the listener or the source
+  is in vacuum, only what's right next to you is heard. The client draws an icon where the sound was
+  if that place isn't visible; the farther the sound, the less precise the place; a sound beyond the screen edge
+  is marked at the edge with an arrow.
 
-## Оружие и пираты
+## Weapons and pirates
 
-- Вещи: пистолет (патроны — часть номера вещи, `Net.ITEM_PISTOL + n`), магазин, дубинка,
-  пластырь. Все в таблице `src/shared/items.gd`, в шкафу и у торговца.
-- Щелчок мышью по миру применяет вещь в руке (`C_FIRE`, `GameServer.use_at`): пистолет
-  стреляет туда, пустой перезаряжается магазином, дубинка бьёт соседнюю клетку, пластырь
-  лечит себя или соседа. Огонь по своим возможен.
-- Выстрел сервер считает мгновенно по прямой до стены или закрытой двери и попадает
-  в первого на пути. Цель берётся там, где её видел стрелок: клиент шлёт свой «тик
-  отрисовки», сервер помнит, где кто был в последние 32 тика (`place_at`).
-- Пираты (`src/server/pirates.gd`) — обычные персонажи, которыми управляет сервер.
-  Видят по тем же правилам, что экипаж, идут на услышанное, стреляют с разбросом, бьют
-  дубинкой вплотную, при тяжёлых ранах заклеивают раны или отходят, лежащих не трогают.
-  Погибший пират оставляет тело с оружием. Ивентер присылает их событием «Абордаж»:
-  они прорезают обшивку (настоящая пробоина) и заходят; число зависит от экипажа.
+- Items: pistol (rounds are part of the item number, `Net.ITEM_PISTOL + n`), magazine, baton,
+  plaster. All are in the table `src/shared/items.gd`, in the locker and at the trader.
+- A mouse click on the world uses the item in hand (`C_FIRE`, `GameServer.use_at`): the pistol
+  fires there, an empty one reloads with a magazine, the baton hits the adjacent cell, the plaster
+  heals yourself or a neighbour. Friendly fire is possible.
+- The server computes a shot instantly in a straight line up to a wall or closed door, hitting
+  the first one in the way. The target is taken where the shooter saw it: the client sends its "render
+  tick", the server remembers where everyone was over the last 32 ticks (`place_at`).
+- Pirates (`src/server/pirates.gd`) are ordinary characters controlled by the server.
+  They see by the same rules as the crew, go towards what they hear, shoot with spread, hit
+  with a baton at close range, patch their wounds or retreat when badly hurt, and leave people lying down alone.
+  A dead pirate leaves a body with a weapon. The event director sends them with the event «Абордаж» ("Boarding"):
+  they cut through the hull (a real breach) and come in; their number depends on the crew.
 
-- Раны (`Player.wounds`) сами не заживают: хороший воздух возвращает только то, что отнял
-  плохой (`Vitals.advance`). Раны лечат пластырь (сразу) и аптечка: щелчок по себе или
-  соседу, 3 секунды оба не двигаются, закрывает 30, в аптечке 5 раз. Тяжело раненый
-  без сознания сам не очнётся, пока его не полечат. При обыске видно, насколько лежащий ранен.
+- Wounds (`Player.wounds`) don't heal by themselves: good air gives back only what bad air
+  took (`Vitals.advance`). Wounds are healed by the plaster (instantly) and the medkit: click on yourself or
+  a neighbour, both can't move for 3 seconds, heals 30, 5 uses per medkit. A badly wounded
+  unconscious person won't wake up by themselves until healed. Searching shows how badly the person lying down is wounded.
 
-Проверка оружия, ран, лечения и пиратов без сети и окна:
+Checking weapons, wounds, healing and pirates without network or window:
 
     godot --headless --path . --script res://tools/fighttest.gd
 
-Сетевой тест с абордажем: `BOARD=4 tools/nettest.sh 8 30`.
+Network test with boarding: `BOARD=4 tools/nettest.sh 8 30`.
 
-Проверка поля зрения и звуков без сети и окна:
+Checking field of view and sounds without network or window:
 
     godot --headless --path . --script res://tools/sighttest.gd
 
-Проверка вещей, руки, пола, шкафа и света без сети и окна:
+Checking items, hand, floor, locker and light without network or window:
 
     godot --headless --path . --script res://tools/itemtest.gd
 
-## Здоровье
+## Health
 
-- Здоровье идёт от 100 (цел) через 0 (без сознания) до −100 (погиб). Это шкала
-  Space Station 13, под неё нарисован монитор пульса из восьми состояний.
-- Ниже 76% нормального давления нечем дышать: до 3 единиц здоровья в секунду.
-  Ниже 20% калечит само давление: ещё до 2 в секунду.
-- В вакууме от полного здоровья: без сознания через 20 секунд, гибель через 40.
-  В пробитом отсеке из 10 клеток: 40 и 61 секунда с момента пробоины.
-- На хорошем воздухе здоровье возвращается: 1 в секунду в сознании, 0,5 без сознания;
-  в себя приходят на 10.
-- Без сознания и погибшие лежат и не ходят. Погибший через 5 секунд может нажать R
-  и вернуться новым членом экипажа. Боты возвращаются сами через 15 секунд.
-- Тела остаются лежать там, где упали, в том числе тело погибшего игрока, который вышел.
-  Когда тел больше 30, самое старое убирается.
-- Приборы: монитор пульса, лампа O2 LOW и лампа kPa (мигает, когда давление уже калечит).
-  Точных цифр игрок не видит, они есть только в отладке по F3.
-- Все числа лежат в `src/server/vitals.gd`.
+- Health goes from 100 (unhurt) through 0 (unconscious) to −100 (dead). This is the scale
+  of Space Station 13; the pulse monitor with eight states is drawn for it.
+- Below 76% of normal pressure there is nothing to breathe: up to 3 health per second.
+  Below 20% the pressure itself injures: another 2 per second.
+- In vacuum from full health: unconscious after 20 seconds, dead after 40.
+  In a breached 10-cell compartment: 40 and 61 seconds from the breach.
+- In good air health comes back: 1 per second when conscious, 0.5 when unconscious;
+  people come to at 10.
+- The unconscious and the dead lie down and can't walk. A dead player can press R after 5 seconds
+  and return as a new crew member. Bots return by themselves after 15 seconds.
+- Bodies stay where they fell, including the body of a dead player who left.
+  When there are more than 30 bodies, the oldest is removed.
+- Instruments: pulse monitor, the O2 LOW lamp and the kPa lamp (it blinks when pressure is already injuring).
+  The player doesn't see exact numbers; they are only in the F3 debug view.
+- All numbers are in `src/server/vitals.gd`.
 
-## Скафандр и ремонт
+## Space suit and repair
 
-- **Подача кислорода** (Q). Пока она включена и баллон не пуст, воздух вокруг не важен:
-  нет ни удушья, ни урона от давления. Полного баллона хватает на 2 минуты. Сама подача
-  не включается и не выключается, кроме случая, когда баллон опустел.
-- **Заправка**: лицом к красной коробке на стене, держать E. Три секунды на полный баллон.
-- **Ремонт**: вплотную лицом к пробоине, держать E шесть секунд без перерыва.
-- Заделанный отсек остаётся без воздуха, пока не откроется дверь в целый. Воздух, ушедший
-  в космос, возвращают воздушная установка и станция снабжения.
-- Клавиша E одна на всё: сервер сам смотрит, что перед персонажем, потом нет ли вещи
-  на полу впереди или под ногами, и только потом, не стоит ли он на лестнице.
+- **Oxygen supply** (Q). While it's on and the tank isn't empty, the surrounding air doesn't matter:
+  no suffocation and no pressure damage. A full tank lasts 2 minutes. The supply
+  never turns on or off by itself, except when the tank runs empty.
+- **Refilling**: face the red box on the wall and hold E. Three seconds for a full tank.
+- **Repair**: right up against the breach, facing it, hold E for six seconds without a break.
+- A sealed compartment stays without air until a door to an intact one opens. Air lost
+  to space is returned by the air plant and the supply station.
+- One E key for everything: the server first looks at what's in front of the character, then whether there's an item
+  on the floor ahead or underfoot, and only then whether they're standing on a ladder.
 
-## Мостик, секторы, ивентер
+## Bridge, sectors, event director
 
-- **Мостик** — правый верхний отсек с двумя пультами на стене. К пульту встают лицом
-  и нажимают E. Карта сектора (зелёный экран) задаёт прыжок, управление кораблём
-  (панель с оранжевыми огнями) ведёт корабль внутри сектора.
-- **Внутри сектора** корабль стоит на квадрате 200 на 200. Щелчок по карте на пульте
-  управления задаёт курс, корабль идёт туда по прямой со скоростью 1,5 в секунду.
-  За окнами при этом плывут звёзды.
-- **Главная особенность сектора имеет место.** Метеорный поток — круг, и прыжок
-  приводит внутрь него; вне круга сектор ведёт себя как спокойный космос. К станции
-  и торговцу нужно подойти: станция восполняет воздух при стыковке.
-- **Пульты ломаются** (событие «Замыкание пульта»). Сломанный не работает, темнеет
-  и искрит; чинится удержанием E шесть секунд. Оба сразу не ломаются, так что один
-  из двух путей бегства всегда остаётся.
-- **Космос бесконечен.** Секторы стоят на сетке без краёв. Что в секторе, следует из его
-  места и числа, с которого началась игра, поэтому о секторах, к которым корабль
-  не подходил, ничего не хранится. Сервер держит и рассылает только окно 7 на 5 секторов
-  вокруг корабля и строит его заново после каждого прыжка (`src/shared/sectors.gd`).
-  У каждого сектора есть маршрут на север или на восток, так что тупиков нет.
-  Чем дальше от начала, тем чаще метеорные потоки.
-- **Секторы.** В каждом одна главная особенность: спокойный космос, метеорный поток, торговец
-  (продаёт запас) или станция снабжения (восполняет воздух).
-  Экипаж знает, что в секторах, где был, и в соседних с текущим.
-- **Прыжок** заряжается 8 секунд, потом двигатель отдыхает 15 секунд. Задать его может
-  только тот, кто стоит у пульта.
-- **Ивентер** (`src/server/director.gd`) решает, что и когда ломается. У него каталог
-  событий четырёх размеров (сейчас восемь событий: микрометеорит, метеорный залп,
-  замыкание пульта, отказ двигателя, отказ воздушной установки, заклинившая дверь,
-  отказ аварийного шлюза и сбой питания), темп, зависящий от сектора и числа игроков, и «оглядка»:
-  пока открытых пробоин больше, чем экипаж может достать, или все лежат,
-  новых событий нет.
-- Хозяин игры может вести события сам: в меню галочка «Ивентер ведёт события сам»
-  и кнопка на каждое событие.
+- The **bridge** is the upper right compartment with two consoles on the wall. You face a console
+  and press E. The sector chart (green screen) sets a jump; the helm
+  (panel with orange lights) steers the ship within a sector.
+- **Within a sector** the ship is on a 200 by 200 square. Clicking the map on the helm
+  sets a course; the ship goes there in a straight line at 1.5 per second.
+  Meanwhile stars drift past the windows.
+- **The sector's main feature has a location.** A meteor shower is a circle, and a jump
+  lands inside it; outside the circle the sector behaves like calm space. You must come up to a station
+  or a trader: the station refills air when docked.
+- **Consoles break** (the event «Замыкание пульта», "Console short circuit"). A broken one doesn't work, goes dark
+  and sparks; it's repaired by holding E for six seconds. Both never break at once, so one
+  of the two ways to escape always remains.
+- **Space is infinite.** Sectors sit on a grid without edges. What's in a sector follows from its
+  location and the number the game started with, so nothing is stored about sectors the ship
+  hasn't come near. The server keeps and sends only a 7 by 5 window of sectors
+  around the ship and rebuilds it after every jump (`src/shared/sectors.gd`).
+  Every sector has a route north or east, so there are no dead ends.
+  The farther from the start, the more frequent the meteor showers.
+- **Sectors.** Each has one main feature: calm space, a meteor shower, a trader
+  (sells supplies) or a supply station (refills air).
+  The crew knows what's in sectors they've been to and in those next to the current one.
+- A **jump** charges for 8 seconds, then the engine rests for 15 seconds. Only someone standing
+  at the console can set it.
+- The **event director** (`src/server/director.gd`) decides what breaks and when. It has a catalogue
+  of events in four sizes (eight events now: micrometeorite, meteor volley,
+  console short circuit, engine failure, air plant failure, jammed door,
+  emergency shutter failure and power failure), a pace depending on the sector and the number of players, and "restraint":
+  while there are more open breaches than the crew can reach, or everyone is down,
+  there are no new events.
+- The host can run events themselves: in the menu, the checkbox «Ивентер ведёт события сам» ("The event director runs events itself")
+  and a button for each event.
 
-Проверка темпа без ожидания в реальном времени:
+Checking the pace without waiting in real time:
 
     godot --headless --path . --script res://tools/directortest.gd
 
-Проверка космоса (одно место всегда одно и то же, тупиков нет, карта помнит пройденное):
+Checking space (one place is always the same, no dead ends, the map remembers where you've been):
 
     godot --headless --path . --script res://tools/spacetest.gd
 
-## Как это устроено
+## How it works
 
-- Сервер решает всё: клиент шлёт только «какая клавиша зажата», сервер двигает персонажей
-  и сообщает каждому клиенту, что изменилось рядом с ним.
-- «Создать игру» запускает сервер вторым процессом без окна, поэтому он не замирает,
-  когда хозяин сворачивает или перетаскивает окно игры. При выходе хозяина сервер
-  прощается с игроками и закрывается. Если отдельный процесс запустить не удалось,
-  сервер работает внутри игры, как раньше.
-- Каждую смену направления клиент отправляет три раза подряд: потеря одного пакета
-  не задерживает команду.
-- Свой персонаж на клиенте двигается сразу, не дожидаясь ответа: клиент считает то же правило
-  движения, что и сервер, а при расхождении тихо поправляется.
-- Чужие персонажи рисуются с задержкой 0,1 секунды, поэтому двигаются плавно даже при неровной связи.
-- Раз в две секунды сервер присылает контрольную сумму, и клиент сверяет с ней свою картину мира
-  (видно по F3).
+- The server decides everything: the client sends only "which key is held", the server moves characters
+  and tells each client what changed near it.
+- «Создать игру» ("Create game") starts the server as a second windowless process, so it doesn't freeze
+  when the host minimizes or drags the game window. When the host leaves, the server
+  says goodbye to the players and shuts down. If the separate process couldn't be started,
+  the server runs inside the game, as before.
+- The client sends every change of direction three times in a row: losing one packet
+  doesn't delay the command.
+- Your own character moves on the client immediately, without waiting for a reply: the client runs the same movement
+  rule as the server, and quietly corrects itself on a mismatch.
+- Other characters are drawn with a 0.1-second delay, so they move smoothly even over an uneven connection.
+- Every two seconds the server sends a checksum, and the client checks its picture of the world against it
+  (visible with F3).
 
-## Что временное
+## What is temporary
 
-Карта собрана из тайлов макета. Персонажи, закрытый шлюз, полуоткрытые двери и пробоина
-нарисованы кодом (`tools/make_assets.py`). Звёзды и искры сломанного пульта рисует сама игра.
+The map is made of mockup tiles. Characters, the closed shutter, half-open doors and the breach
+are drawn by code (`tools/make_assets.py`). Stars and the sparks of a broken console are drawn by the game itself.

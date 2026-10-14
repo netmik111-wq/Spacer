@@ -1,61 +1,61 @@
-# Spacer — выжимка для продолжения работы
+# Spacer — summary for continuing the work
 
-Состояние на сборку **v35 (версия 0.28)**, 14 октября 2026. Подробности: `CLAUDE.md` (решения, грабли,
-порядок проверки), `docs/MECHANICS.md` (все механики с числами), `docs/VISION.md` (видение автора).
+State as of build **v35 (version 0.28)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
+check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION.md` (the author's vision).
 
-## Ссылки
-- Репозиторий: https://github.com/netmik111-wq/Spacer (ветка `main`).
-- Документ «Spacer: механики игры» (Claude Docs, обновлять с каждой сборкой):
-  https://claude.ai/artifact/CkpfXu7j25QbPqTijemas6 (проект `5f32e1ae-d2f4-4651-9d5a-aca9b95268ad`).
-- Опросник автора «Spacer: куда дальше» (ответы в db, коллекция `survey`, документ `answers`):
-  https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — прочитать `ArtifactData get survey/answers` и собрать четвёртый план.
+## Links
+- Repository: https://github.com/netmik111-wq/Spacer (branch `main`).
+- Document «Spacer: механики игры» ("Spacer: game mechanics"; Claude Docs, update with every build):
+  https://claude.ai/artifact/CkpfXu7j25QbPqTijemas6 (project `5f32e1ae-d2f4-4651-9d5a-aca9b95268ad`).
+- The author's survey «Spacer: куда дальше» ("Spacer: where next"; answers in the db, collection `survey`, document `answers`):
+  https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — read `ArtifactData get survey/answers` and build the fourth plan.
 
-## Ключевые решения
-- Godot 4.7.2 (GDScript, Compatibility), свой протокол на ENet (`Net.PROTOCOL` = 24), сервер решает всё,
-  20 тиков/с, один поток; клиент предсказывает движение и двери (`src/shared/`), сверка суммами.
-- Сборки только под Windows (игра у автора через Radmin VPN); exe режется на два архива, `play.bat` склеивает.
-- Общение и всё видимое игроку — по-русски, комментарии в коде — по-английски.
-- Правила автора: воздух не подсвечивается; тела остаются; двигатель питает всё; в вакууме тихо;
-  в темноте светит только фонарик; пока цел хоть один пульт мостика, есть путь к бегству.
-- Атмосферу с газами, огонь и электричество делать только после подробных расспросов автора.
+## Key decisions
+- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 24), the server decides everything,
+  20 ticks/s, one thread; the client predicts movement and doors (`src/shared/`), checked against checksums.
+- Builds for Windows only (the author plays over Radmin VPN); the exe is split into two archives, `play.bat` joins them.
+- Everything on GitHub (docs, notes, code comments, commit messages) is in English. What the player sees in the game stays in Russian; the author chose this on 2026-10-14 ("GitHub only").
+- The author's rules: air is not highlighted; bodies stay; the engine powers everything; it is silent in vacuum;
+  in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
+- Atmosphere with gases, fire and electricity only after asking the author in detail.
 
-## Что есть в игре
-- Корабль `ship02`: 2 палубы, нос справа, мостик (карта, управление, пульт орудий), шлюз на две двери
-  с насосом, 3 орудия, машинное, жизнеобеспечение, трюм со шкафом снабжения. `ship01` — только для тестов.
-- Воздух по клеткам, пробоины, двери с аварийными шлюзами, питание, поломки и ремонт (запчасти, заплатки).
-- Здоровье по шкале SS13, раны, лечение (пластырь, аптечка), скафандр как одежда (кислород в баллоне),
-  комбинезон (+2 кармана), рюкзак (+4), всего 12 слотов; вещи на полу, обыск, перетаскивание.
-- Поле зрения (160°, в темноте 60°), фонарик 35°/9 клеток, кромешная тьма без питания, силуэты ушедших
-  из виду на 10 с, звуки значками (по воздуху), поворот сразу и по щелчку мыши.
-- Бой: пистолет, дубинка, пираты с ИИ (абордаж через пробоину), пиратский корабль (40 с обстрела,
-  потом стыкуется силой и вскрывает шлюз; 6 попаданий из орудий — разбит, +25 кредитов).
-- Космос: бесконечные секторы, прыжки, торговец, станция, брошенные корабли (подлёт, выход в открытый
-  космос, стыковка, добыча, темнота), ивентер (ГМ) с 11 событиями; кредиты за разведку и за пиратов; топливо.
-- Кампания: резерв экипажа (R и возвращение погибшего стоят человека, найм у торговца), прочность обшивки,
-  конец кампании с итогом, сохранение между вечерами (`user://campaign.json`, персонажи по имени игрока).
-- Профессии (матрос, капитан, пилот, инженер, врач, охранник) с доступом к отсекам (замок взламывается
-  за 5 с, без питания не работает) и навыками ремонта, медицины, стрельбы.
-- Речь вслух (7 клеток, по воздуху), рация («;»), интеркомы («!», 4 панели), чат мёртвых.
-- Звуки слышно: сделаны кодом (`src/client/sounds.gd`), с направлением и приглушением, гул двигателя.
+## What the game has
+- Ship `ship02`: 2 decks, bow on the right, bridge (chart, helm, gun console), a two-door airlock
+  with a pump, 3 guns, engine room, life support, a hold with the supply locker. `ship01` is for tests only.
+- Per-cell air, hull breaches, doors with emergency shutters, power, breakdowns and repair (spare parts, patches).
+- SS13-scale health, wounds, healing (plaster, medkit), the space suit as clothing (oxygen in a tank),
+  jumpsuit (+2 pockets), backpack (+4), 12 slots in total; items on the floor, searching, dragging.
+- Field of view (160°, 60° in the dark), flashlight 35°/9 cells, pitch darkness without power, silhouettes of those
+  who left view for 10 s, sounds as icons (through air), turning instantly and by mouse click.
+- Combat: pistol, baton, pirates with AI (boarding through a breach), pirate ship (40 s of shelling,
+  then it docks by force and breaks open the airlock; 6 hits from the guns wreck it, +25 credits).
+- Space: infinite sectors, jumps, trader, station, derelict ships (approach, spacewalk,
+  docking, loot, darkness), the event director (GM) with 11 events; credits for exploration and for pirates; fuel.
+- Campaign: crew reserve (R and returning a dead character cost one person, hiring at the trader), hull integrity,
+  campaign end with a summary, saving between evenings (`user://campaign.json`, characters by player name).
+- Jobs (sailor, captain, pilot, engineer, doctor, security) with access to compartments (a lock is broken
+  in 5 s, does not work without power) and repair, medicine and shooting skills.
+- Speech out loud (7 cells, through air), radio («;»), intercoms («!», 4 panels), dead chat.
+- Sounds are audible: made in code (`src/client/sounds.gd`), with direction and muffling, engine hum.
 
-## Открытые проблемы
-- Звуки пока синтетические и без пространства стен (приглушение по видимости); голосового чата нет.
-- Профессии на корабль одни и те же; число людей от размера корабля (опросник) пока не учтено.
-- Один корабль игроков на сервер (архитектура; масштаб по видению требует нескольких).
-- Поле зрения только на клиенте (сервер шлёт и невидимых) — исправить до игры с незнакомыми.
-- Не проверено: сервер отдельным процессом на Windows, игра через интернет без VPN, полоска над
-  головами и прозрачные полы на видеокарте автора.
-- Сборки не выкладываются в GitHub Releases (автор не ответил).
+## Open problems
+- Sounds are still synthetic and walls don't shape them (muffling by visibility); no voice chat.
+- Jobs are the same for every ship; crew size by ship size (from the survey) is not accounted for yet.
+- One player ship per server (architecture; the scale in the vision needs several).
+- Field of view is client-only (the server also sends invisible players) — fix before playing with strangers.
+- Not verified: the server as a separate process on Windows, playing over the internet without VPN, the bar above
+  heads and transparent floors on the author's graphics card.
+- Builds are not published to GitHub Releases (the author did not answer).
 
-## Следующие шаги
-Четвёртый план (ответы опросника, порядок и статус в `CLAUDE.md`) выполнен, кроме фронта тьмы:
-топливо (v34), остальное одной сборкой v35 по просьбе автора. Фронт тьмы отложен: автор ещё
-продумывает концепт. Дальше — спросить автора, что важнее, и собрать пятый план. Идея автора (VISION): «Fear of dark space»,
-враг-энтропия («корабль тьмы»), борьба с ним как финал.
-Сборки лежат в общей папке проекта `/mnt/project-files/builds/vNN/` (два архива).
+## Next steps
+The fourth plan (survey answers, order and status in `CLAUDE.md`) is done, except the darkness front:
+fuel (v34), the rest in a single build v35 at the author's request. The darkness front is postponed: the author is still
+thinking the concept through. Next — ask the author what matters most and build the fifth plan. The author's idea (VISION): "Fear of dark space",
+an entropy enemy ("the ship of darkness"), fighting it as the finale.
+Builds are in the project's shared folder `/mnt/project-files/builds/vNN/` (two archives).
 
-## Порядок работы над сборкой
-Код → `godot --headless --path . --import` → все тесты из `CLAUDE.md` (13 скриптов + nettest с потерями,
-`DERELICT=3`, `PIRATESHIP=2`) → `MECHANICS.md`, документ в Claude Docs, `dist_files/README.txt`
-(CRLF, BOM), версия в `project.godot` → экспорт, размер в `play.bat`, два архива → коммит по-русски
-и push в `main`.
+## Build workflow
+Code → `godot --headless --path . --import` → all tests from `CLAUDE.md` (13 scripts + nettest with loss,
+`DERELICT=3`, `PIRATESHIP=2`) → `MECHANICS.md`, the Claude Docs document, `dist_files/README.txt`
+(CRLF, BOM), version in `project.godot` → export, size in `play.bat`, two archives → commit in English
+and push to `main`.

@@ -1,4 +1,4 @@
-; Брошенный корабль: одна палуба. Наружная дверь внизу стыкуется со шлюзом корабля.
+; Derelict ship: one deck. The outer door at the bottom docks with the ship's airlock.
 = Брошенный корабль
  ###W##4#W###
  #....#.....#

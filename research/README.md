@@ -1,104 +1,104 @@
-# Исследования: сеть, потоки, атмосфера
+# Research: networking, threads, atmosphere
 
-Замеры, на которых держатся технические решения проекта. В саму игру эта папка не входит
-(Godot её не видит из-за файла `.gdignore`). Всё измерено на Godot 4.7.2, на машине с двумя
-ядрами, в октябре 2026 года. Сырые результаты лежат в `results/`.
+Measurements that the project's technical decisions rest on. This folder is not part of the game
+itself (Godot ignores it because of the `.gdignore` file). Everything was measured on Godot 4.7.2,
+on a dual-core machine, in October 2026. Raw results are in `results/`.
 
-## Что решили по итогам
+## What we decided
 
-- **Игра работает в один поток.** Потоки ускоряют сервер, но не уменьшают общую нагрузку
-  и добавляют класс ошибок, которые трудно ловить (см. ниже).
-- **Сервер шлёт только изменения**, а не весь мир каждый шаг. Этот способ перенесён в игру.
-- **Вернуться к потокам стоит**, если на одном сервере станет больше 128 игроков или шаг
-  сервера начнёт занимать больше 25 мс (половина от 50 мс, отведённых на шаг).
-- **Атмосфера на больших картах** потребует либо считать только «активные» клетки,
-  либо вынести расчёт в модуль на компилируемом языке.
+- **The game runs on one thread.** Threads speed up the server but don't reduce the total load,
+  and they add a class of bugs that are hard to catch (see below).
+- **The server sends only changes**, not the whole world every tick. This approach was carried over into the game.
+- **Threads are worth revisiting** if one server gets more than 128 players or a server tick
+  starts taking more than 25 ms (half of the 50 ms budget per tick).
+- **Atmosphere on large maps** will need either computing only "active" cells,
+  or moving the calculation into a module in a compiled language.
 
-## Сеть: первая версия против второй
+## Networking: version 1 vs version 2
 
-Тестовый мир: карта 128×96 клеток, 20 шагов сервера в секунду, атмосфера 10 раз в секунду,
-каждый клиент получает то, что происходит в соседних участках карты.
+Test world: a 128×96 cell map, 20 server ticks per second, atmosphere 10 times per second,
+each client receives what happens in the neighbouring chunks of the map.
 
-- **Версия 1** (`server.gd`, `bots.gd`): каждый шаг каждому клиенту уходит полный снимок
-  окрестностей; клиент шлёт ввод 20 раз в секунду; всё в одном потоке.
-- **Версия 2** (`server2.gd`, `bots2.gd`): клиенту уходят только изменения; ввод шлётся,
-  когда меняется; сеть и атмосфера вынесены в отдельные потоки.
+- **Version 1** (`server.gd`, `bots.gd`): every tick each client gets a full snapshot
+  of its surroundings; the client sends input 20 times per second; everything on one thread.
+- **Version 2** (`server2.gd`, `bots2.gd`): the client gets only changes; input is sent
+  when it changes; networking and atmosphere run on separate threads.
 
-Игроки разбросаны по карте:
+Players spread across the map:
 
-| Игроков | Трафик на игрока, версия 1 | Версия 2 | Шаг сервера, версия 1 | Версия 2 | Загрузка ядра, версия 1 | Версия 2 |
+| Players | Traffic per player, version 1 | Version 2 | Server tick, version 1 | Version 2 | Core load, version 1 | Version 2 |
 |---|---|---|---|---|---|---|
-| 128 | 36,7 кбит/с | 10,1 кбит/с | 5,8 мс | 1,2 мс | 13,2% | 19,7% |
-| 256 | 59 кбит/с | 15,2 кбит/с | 7,9 мс | 2,2 мс | 19% | 23,8% |
-| 512 | 104 кбит/с | 25,0 кбит/с | 12,5 мс | 4,0 мс | 30% | 32,4% |
+| 128 | 36.7 kbit/s | 10.1 kbit/s | 5.8 ms | 1.2 ms | 13.2% | 19.7% |
+| 256 | 59 kbit/s | 15.2 kbit/s | 7.9 ms | 2.2 ms | 19% | 23.8% |
+| 512 | 104 kbit/s | 25.0 kbit/s | 12.5 ms | 4.0 ms | 30% | 32.4% |
 
-Версия 1 на 256 и 512 игроках измерена с донастройкой (сервер опрашивает сеть несколько раз
-за кадр): без неё подключались не все клиенты.
+Version 1 at 256 and 512 players was measured with extra tuning (the server polls the network several
+times per frame): without it not all clients connected.
 
-Все игроки в одной комнате (худший случай):
+All players in one room (worst case):
 
-| Игроков | Трафик на игрока, версия 1 | Версия 2 |
+| Players | Traffic per player, version 1 | Version 2 |
 |---|---|---|
-| 128 | 157 кбит/с | 28,8 кбит/с |
-| 256 | 307 кбит/с | 54,0 кбит/с |
+| 128 | 157 kbit/s | 28.8 kbit/s |
+| 256 | 307 kbit/s | 54.0 kbit/s |
 
-Что ещё показали замеры:
+What else the measurements showed:
 
-- **Проверка состояния.** Часть ботов собирала мир из изменений и сверяла его с контрольными
-  суммами сервера: расхождений не было ни в одном прогоне.
-- **Потоки не экономят процессор.** На 64 игроках шаг сервера упал с 5,1 до 0,7 мс,
-  но суммарная загрузка выросла с 11,7% до 17,1% ядра: работа не исчезла, а переехала.
-- **Больше 128 игроков упираются в настройки системы.** Без отдельного сетевого потока
-  из 512 клиентов подключились 307: операционная система теряла входящие пакеты.
-  Помогает либо сетевой поток, либо увеличенный буфер приёма (`net.core.rmem_default`).
-- **Сжатие ENet** уменьшает трафик на 14% (с 10,1 до 8,7 кбит/с на 128 игроках).
-- **Плохая связь.** Задержка 40±10 мс в каждую сторону: половина обновлений доходит
-  за 53 мс. При потере 2% пакетов 1,9% обновлений опаздывают больше чем на 150 мс,
-  при потере 5% таких 6,5%.
+- **State check.** Some bots rebuilt the world from changes and compared it with the server's
+  checksums: there were no mismatches in any run.
+- **Threads don't save CPU.** At 64 players the server tick dropped from 5.1 to 0.7 ms,
+  but total load rose from 11.7% to 17.1% of a core: the work didn't disappear, it moved.
+- **Beyond 128 players you hit system settings.** Without a separate network thread
+  only 307 of 512 clients connected: the operating system was dropping incoming packets.
+  Either a network thread or a larger receive buffer (`net.core.rmem_default`) helps.
+- **ENet compression** cuts traffic by 14% (from 10.1 to 8.7 kbit/s at 128 players).
+- **Bad connection.** With 40±10 ms delay each way, half of the updates arrive
+  within 53 ms. With 2% packet loss, 1.9% of updates are more than 150 ms late;
+  with 5% loss, 6.5% are.
 
-## Атмосфера: сколько стоит один шаг
+## Atmosphere: the cost of one step
 
-Модель: три газа в клетке, обмен с соседями, считается каждая клетка без оптимизаций.
+Model: three gases per cell, exchange with neighbours, every cell computed with no optimizations.
 
-| Карта | GDScript, один поток | GDScript, два ядра | Rust |
+| Map | GDScript, one thread | GDScript, two cores | Rust |
 |---|---|---|---|
-| 60×40 | 1,3 мс | без выигрыша | 0,02 мс |
-| 128×96 | 7–11 мс | 4–6 мс | 0,10 мс |
-| 255×255 (размер карты FTL13) | 38–43 мс | 20 мс | 0,57 мс |
+| 60×40 | 1.3 ms | no gain | 0.02 ms |
+| 128×96 | 7–11 ms | 4–6 ms | 0.10 ms |
+| 255×255 (FTL13 map size) | 38–43 ms | 20 ms | 0.57 ms |
 
-Код `atmos2.gd` годится как основа для шага 2 игры: он считает в запасной буфер
-и отмечает, в каких участках карты давление изменилось, чтобы слать только их.
+The `atmos2.gd` code is suitable as a basis for step 2 of the game: it computes into a spare buffer
+and marks which chunks of the map had pressure changes, so only those need to be sent.
 
-## Чем опасны потоки
+## Why threads are dangerous
 
-- **Потерянные изменения** (`race_demo.gd`). Два потока прибавляют по единице к одному числу
-  миллион раз каждый. Вместо 2 000 000 получается от 1,3 до 1,5 миллиона: от четверти
-  до трети прибавлений пропадает. С блокировкой результат верный, но тест идёт
-  в 13–15 раз дольше.
-- **Результат зависит от загрузки машины** (`det_test.gd`). Если атмосфера считается в фоне
-  и сервер забирает результат «когда готов», то на свободной машине за 200 шагов сервера
-  применяется 99 шагов атмосферы, а на занятой 77–81, и итог каждый раз другой.
-  Если шаг сервера ждёт результата, итог всегда одинаковый.
+- **Lost updates** (`race_demo.gd`). Two threads each add one to the same number
+  a million times. Instead of 2,000,000 you get 1.3 to 1.5 million: a quarter
+  to a third of the additions are lost. With a lock the result is correct, but the test runs
+  13–15 times longer.
+- **The result depends on machine load** (`det_test.gd`). If the atmosphere is computed in the background
+  and the server takes the result "when ready", then over 200 server ticks an idle machine applies
+  99 atmosphere steps, and a busy one 77–81, and the outcome differs every time.
+  If the server tick waits for the result, the outcome is always the same.
 
-## Как повторить
+## How to reproduce
 
-Нужен Godot 4.7.2. Команды запускаются из корня репозитория:
+You need Godot 4.7.2. Run the commands from the repository root:
 
-    export GODOT=/путь/к/godot
+    export GODOT=/path/to/godot
 
-    # атмосфера и потоки
+    # atmosphere and threads
     $GODOT --headless --path research/bench --script res://atmos_bench.gd
     $GODOT --headless --path research/bench --script res://atmos_bench2.gd
     $GODOT --headless --path research/bench --script res://race_demo.gd
     $GODOT --headless --path research/bench --script res://det_test.gd -- mode=async w=255 h=255
     rustc -O research/native/atmos.rs -o research/native/atmos_native && research/native/atmos_native
 
-    # сеть: версия 1 (128 игроков, 20 секунд) и версия 2 (128 игроков)
+    # networking: version 1 (128 players, 20 seconds) and version 2 (128 players)
     research/bench/run_one.sh 128 0 0 20 24600
     research/bench/run3.sh 128 0 24610 netthread=1 async=1
 
-    # сеть через плохую связь: 64 игрока, задержка 40±10 мс, потери 2%
+    # networking over a bad connection: 64 players, 40±10 ms delay, 2% loss
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     research/bench/run_lag.sh 64 24620 40 10 2 netthread=1 async=1
 
-Журналы прогонов пишутся в `research/bench/logs/` и в репозиторий не попадают.
+Run logs are written to `research/bench/logs/` and are not committed to the repository.
