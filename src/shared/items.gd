@@ -157,3 +157,14 @@ static func kept_in_locker() -> PackedInt32Array:
 		if kind_of(item) == item and stock(item) > 0:
 			out.append(item)
 	return out
+
+
+static func spawnable() -> PackedInt32Array:
+	## One of every thing, as it comes new (a pistol loaded, a kit full, a suit's
+	## tank full, a flashlight off): for the admin panel.
+	var out := PackedInt32Array()
+	for item: int in INFO.keys():
+		if kind_of(item) != item or not light(item).is_empty():
+			continue
+		out.append(item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item)
+	return out

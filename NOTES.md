@@ -1,6 +1,6 @@
 # Spacer — summary for continuing the work
 
-State as of build **v39 (version 0.32)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
+State as of build **v40 (version 0.33)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
 check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION.md` (the author's vision).
 
 ## Links
@@ -11,13 +11,19 @@ check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION
   https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — read `ArtifactData get survey/answers` and build the fourth plan.
 
 ## Key decisions
-- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 25), the server decides everything,
+- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 26), the server decides everything,
   20 ticks/s, one thread; the client predicts movement and doors (`src/shared/`), checked against checksums.
 - Builds for Windows only (the author plays over Radmin VPN); the exe is split into two archives, `play.bat` joins them.
 - Everything on GitHub (docs, notes, code comments, commit messages) is in English. What the player sees in the game stays in Russian; the author chose this on 2026-10-14 ("GitHub only").
 - The author's rules: air is not highlighted; bodies stay; the engine powers everything; it is silent in vacuum;
   in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
 - Atmosphere with gases, fire and electricity only after asking the author in detail.
+
+## v40 (friendly interfaces, the author's request)
+- Inventory window (I/Tab, `src/ui/inventory_panel.gd`), settings window with sound, picture and keys
+  (`src/ui/options_panel.gd`, `src/client/options.gd`, `user://options.cfg`), admin panel in four tabs
+  (`src/ui/admin_panel.gd`, server side `src/server/admin.gd`, test `tools/admintest.gd`).
+- Own footsteps are silent in a vacuum and in open space.
 
 ## v39 (engineering build)
 - `game_server.gd` is split into modules by topic (`chat`, `crew`, `movement`, `inventory`, `looting`, `combat`,

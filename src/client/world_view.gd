@@ -791,7 +791,12 @@ func _update_audio(delta: float) -> void:
 	var map := client.map
 	var here := Vector2i(client.pred.x, client.pred.y)
 	if here != _last_cell:
-		if _last_cell.x >= 0 and map.deck_of(_last_cell.y) == map.deck_of(here.y) and client.my_cond == Net.COND_OK:
+		# a vacuum carries no sound, our own steps included: out in space, or in a room
+		# with no air left, they are not heard at all (the author's rule)
+		var cell := here.y * map.width + here.x
+		var in_air := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR \
+			and not map.floats(here.x, here.y)
+		if _last_cell.x >= 0 and map.deck_of(_last_cell.y) == map.deck_of(here.y) and client.my_cond == Net.COND_OK and in_air:
 			_audio.play(Net.SOUND_STEP, _feet(Vector2(here.x, map.local_y(here.y))), Net.SOUND_RANGE[Net.SOUND_STEP], _thin_air_here(), -7.0)
 		_last_cell = here
 	_hum_timer -= delta

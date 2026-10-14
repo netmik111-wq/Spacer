@@ -11,6 +11,10 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const Director := preload("res://src/server/director.gd")   # only for the list of events in the host's menu
 const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
+const Options := preload("res://src/client/options.gd")
+const OptionsPanel := preload("res://src/ui/options_panel.gd")
+const AdminPanel := preload("res://src/ui/admin_panel.gd")
+const InventoryPanel := preload("res://src/ui/inventory_panel.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -76,6 +80,12 @@ var _chat_box: VBoxContainer
 var _chat_lines: Array = []          # [RichTextLabel, time it was added]
 var _chat_input: LineEdit
 var _pause: PanelContainer
+var _pause_admin: Button             # opens the admin panel; shown while the server counts us an admin
+var _options: OptionsPanel
+var _admin: AdminPanel
+var _inventory: InventoryPanel
+var _root: Control                   # (the windows above are made when first opened: making them
+                                     # while joining would hold up the client's clock)
 var _held: Array[int] = []
 var _info_timer := 0.0
 var _fps_smooth := 60.0
@@ -117,7 +127,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	top.add_child(spacer)
 	# the keys, in two lines under the top right corner, so they do not run into the line on the left
 	_keys = _text(root, 13)
-	_keys.text = "WASD: ходить    E: действие    F: тащить    Q: подача O2    Enter: чат    Esc: меню\n1–6 или колесо: что в руке    Щелчок: применить на месте    Z: применить    G: положить"
+	_show_keys()
 	_keys.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_keys.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	_keys.grow_horizontal = Control.GROW_DIRECTION_BEGIN
@@ -307,6 +317,9 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 
 	_build_console(root)
 	_build_pause(root)
+	_root = root
+	if client.admin_token != "":
+		client.send_admin(Net.ADMIN_HELLO)   # the server learns that our player is the host
 
 	# a jump: the countdown, and a white flash on landing
 	_jump_label = _text(root, 18)
@@ -321,9 +334,49 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(_flash)
-	client.arrived.connect(func() -> void: _flash.color.a = 0.9)
+	client.arrived.connect(func() -> void:
+		if Options.flash:
+			_flash.color.a = 0.9)
 	_rng.randomize()
 	_say("[color=#9aa3b5]Вы на борту. Нажмите Enter, чтобы написать в чат.[/color]")
+
+
+func _inventory_panel() -> InventoryPanel:
+	if _inventory == null:
+		_inventory = InventoryPanel.new()
+		_root.add_child(_inventory)
+		_inventory.setup(client)
+		_root.move_child(_inventory, _pause.get_index())
+	return _inventory
+
+
+func _admin_panel() -> AdminPanel:
+	if _admin == null:
+		_admin = AdminPanel.new()
+		_root.add_child(_admin)
+		_admin.setup(client)
+		_root.move_child(_admin, _pause.get_index())
+	return _admin
+
+
+func _options_panel() -> OptionsPanel:
+	if _options == null:
+		_options = OptionsPanel.new()
+		_root.add_child(_options)
+		_options.closed.connect(_show_keys)
+	return _options
+
+
+static func _open(panel: Control) -> bool:
+	return panel != null and panel.visible
+
+
+func _show_keys() -> void:
+	## The keys, as the player has set them (see Options).
+	_hand_shown = -1                     # (the line over the slots names keys too)
+	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: применить на месте    %s: применить    %s: положить" % [
+		Options.key_text("move_up"), Options.key_text("move_left"), Options.key_text("move_down"), Options.key_text("move_right"), Options.key_text("use"), Options.key_text("drag"),
+		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
 
 
 func _skills_text() -> String:
@@ -412,7 +465,7 @@ func _open_console(kind: int) -> void:
 	_console_title.text = "Карта сектора" if kind == 3 else ("Управление кораблём" if kind == 4 else ("Пульт орудий" if kind == 17 else "Шкаф снабжения"))
 	if kind == 17:
 		_chart.visible = false
-	_console_shut.text = "Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")
+	_console_shut.text = Options.keyed("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))
 
 
 func _update_guns() -> void:
@@ -933,19 +986,20 @@ func _build_pause(root: Control) -> void:
 			client.send_admin(Net.ADMIN_SAVE)
 			_set_pause(false))
 		box.add_child(save)
-		# the host is the game master: the director can be left to itself or driven by hand
-		var auto := CheckBox.new()
-		auto.text = "Ивентер ведёт события сам"
-		auto.button_pressed = true
-		auto.toggled.connect(func(on: bool) -> void: client.send_admin(Net.ADMIN_AUTO, 1 if on else 0))
-		box.add_child(auto)
-		for e: Dictionary in Director.EVENTS:
-			var fire := Button.new()
-			fire.text = "Событие: %s (%s)" % [e["name"], Director.SIZE_NAMES[int(e["size"])]]
-			fire.pressed.connect(func() -> void:
-				client.send_admin(Net.ADMIN_EVENT, int(e["id"]))
-				_set_pause(false))
-			box.add_child(fire)
+	# the admin panel: events, things, people, the ship (see AdminPanel)
+	_pause_admin = Button.new()
+	_pause_admin.text = "Панель администратора (%s)" % Options.key_text("admin")
+	_pause_admin.visible = false
+	_pause_admin.pressed.connect(func() -> void:
+		_set_pause(false)
+		_admin_panel().toggle())
+	box.add_child(_pause_admin)
+	var settings := Button.new()
+	settings.text = "Настройки: звук, изображение, клавиши"
+	settings.pressed.connect(func() -> void:
+		_set_pause(false)
+		_options_panel().open())
+	box.add_child(settings)
 	var resume := Button.new()
 	resume.text = "Продолжить"
 	resume.pressed.connect(func() -> void: _set_pause(false))
@@ -970,6 +1024,22 @@ func open_console_here() -> void:
 		_open_console(client.use_target())
 
 
+func open_panel(which: String) -> void:
+	## Test helper: open one of the windows ("options:2" opens its third tab).
+	var tab := int(which.get_slice(":", 1)) if which.contains(":") else 0
+	match which.get_slice(":", 0):
+		"inventory":
+			_inventory_panel().toggle()
+		"admin":
+			_admin_panel().toggle()
+			_admin_panel().show_tab(tab)
+		"options":
+			_options_panel().open()
+			_options_panel().show_tab(tab)
+		"pause":
+			_set_pause(true)
+
+
 func show_pause(on: bool) -> void:
 	_set_pause(on)
 
@@ -978,6 +1048,8 @@ func _set_pause(on: bool) -> void:
 	_pause.visible = on
 	if on:
 		_close_chat()
+		_pause_admin.visible = client.is_admin
+		_pause_admin.text = "Панель администратора (%s)" % Options.key_text("admin")
 
 
 func _open_chat(start: String = "") -> void:
@@ -1051,7 +1123,10 @@ func _on_slots_input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var free_hands := not _chat_input.visible and not _pause.visible and not _console.visible
+	if _open(_options):
+		return                               # the settings window takes the keys itself
+	var typing := _chat_input.visible
+	var free_hands := not typing and not _pause.visible and not _console.visible
 	if free_hands and event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 		# the wheel turns through the slots
 		var button := (event as InputEventMouseButton).button_index
@@ -1070,29 +1145,31 @@ func _unhandled_input(event: InputEvent) -> void:
 			client.send_hand(next)
 			get_viewport().set_input_as_handled()
 			return
-	if free_hands:
-		for i in Net.SLOTS:
-			if event.is_action_pressed("slot_%d" % (i + 1)):
-				client.send_hand(i)
-				get_viewport().set_input_as_handled()
-				return
-		if event.is_action_pressed("drop"):
-			client.send_drop()
-			get_viewport().set_input_as_handled()
-			return
-		if event.is_action_pressed("act"):
-			client.send_act()
-			get_viewport().set_input_as_handled()
-			return
-	if event.is_action_pressed("pause"):
-		if _chat_input.visible:
+	if not (event is InputEventKey):
+		return
+	var done := true
+	if Options.pressed(event, "pause"):
+		if typing:
 			_close_chat()
 		elif _console.visible:
 			_open_console(0)
+		elif _open(_inventory) or _open(_admin):
+			for panel: Control in [_inventory, _admin]:
+				if panel != null:
+					panel.visible = false
 		else:
 			_set_pause(not _pause.visible)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and (_console.visible or _opens_panel(client.use_target()) or client.use_target() == 13):
+	elif typing:
+		done = false
+	elif Options.pressed(event, "debug"):
+		show_debug(not _debug.visible)
+	elif Options.pressed(event, "toggle_predict"):
+		client.predict = not client.predict
+	elif Options.pressed(event, "respawn"):
+		client.send_respawn()
+	elif _pause.visible:
+		done = false
+	elif Options.pressed(event, "use") and (_console.visible or _opens_panel(client.use_target()) or client.use_target() == 13):
 		# a bridge console, the locker, somebody lying: the key opens a screen, and closes it again
 		if _console.visible:
 			_open_console(0)
@@ -1100,30 +1177,38 @@ func _unhandled_input(event: InputEvent) -> void:
 			client.send_search(client.lying_near())      # the screen opens when the server agrees
 		else:
 			_open_console(client.use_target())
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("use") and not _chat_input.visible and not _pause.visible and client.use_target() == 19:
+	elif _console.visible:
+		done = false
+	elif Options.pressed(event, "use") and client.use_target() == 19:
 		_open_chat(Net.CHAT_INTERCOM_MARK + " ")          # an intercom: say something into it
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("drag") and not _chat_input.visible and not _pause.visible and not _console.visible:
+	elif Options.pressed(event, "drag"):
 		if client.dragging():
 			client.send_drag(Net.NOBODY)
 		elif client.lying_near() >= 0:
 			client.send_drag(client.lying_near())
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("chat") and not _pause.visible and not _chat_input.visible:
-		_open_chat()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("debug"):
-		show_debug(not _debug.visible)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("suit") and not _chat_input.visible and not _pause.visible:
+	elif Options.pressed(event, "suit"):
 		client.send_suit(not client.supply)
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("respawn") and not _chat_input.visible:
-		client.send_respawn()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("toggle_predict"):
-		client.predict = not client.predict
+	elif Options.pressed(event, "drop"):
+		client.send_drop()
+	elif Options.pressed(event, "act"):
+		client.send_act()
+	elif Options.pressed(event, "inventory"):
+		_inventory_panel().toggle()
+	elif Options.pressed(event, "admin"):
+		if client.is_admin:
+			_admin_panel().toggle()
+	elif Options.pressed(event, "chat"):
+		_open_chat()
+	elif Options.pressed(event, "radio"):
+		_open_chat(Net.CHAT_RADIO_MARK + " ")
+	else:
+		done = false
+		for i in Net.SLOTS:
+			if Options.pressed(event, "slot_%d" % (i + 1)):
+				client.send_hand(i)
+				done = true
+				break
+	if done:
 		get_viewport().set_input_as_handled()
 
 
@@ -1152,7 +1237,7 @@ func _lamp(lamp: String, on: bool) -> void:
 
 func _input(event: InputEvent) -> void:
 	# Esc while typing: cancel the message (the text field would swallow the key otherwise)
-	if _chat_input.visible and event.is_action_pressed("pause"):
+	if _chat_input.visible and Options.pressed(event, "pause"):
 		_close_chat()
 		get_viewport().set_input_as_handled()
 
@@ -1161,11 +1246,11 @@ func _process(delta: float) -> void:
 	if client == null:
 		return
 	# which way to walk: the most recently pressed of the held direction keys
-	var busy := _chat_input.visible or _pause.visible or _console.visible
+	var busy := _chat_input.visible or _pause.visible or _console.visible or _open(_options)
 	_update_console()
 	for m: Array in MOVES:
 		var dir: int = m[1]
-		var down := Input.is_action_pressed(m[0]) and not busy
+		var down := Options.held(m[0]) and not busy
 		if down and not _held.has(dir):
 			_held.append(dir)
 		elif not down and _held.has(dir):
@@ -1188,7 +1273,7 @@ func _process(delta: float) -> void:
 	client.want_dir = want
 
 	# the "use" key: tell the server when it goes down or up
-	var use_now := (Input.is_action_pressed("use") and not busy) or forced_use
+	var use_now := (Options.held("use") and not busy) or forced_use
 	if use_now != _use_held:
 		_use_held = use_now
 		client.send_use(use_now)
@@ -1290,6 +1375,7 @@ func _process(delta: float) -> void:
 			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить%s" % no_part
 		else:
 			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить%s" % no_part
+	_hint.text = Options.keyed(_hint.text)
 	_work_bar.visible = (target == 1 or target == 5 or target >= 9 or Items.uses(client.in_hand()) > 0) and client.work > 0
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
@@ -1350,7 +1436,7 @@ func _process(delta: float) -> void:
 			elif Items.uses(item) > 0:
 				what += " (%d из %d)" % [Items.uses(item), Net.MEDKIT_USES]
 				extra = "    Щелчок по себе или соседу: лечить, 3 с не двигаясь"
-			_hand_label.text = "В руке: %s%s    G: положить" % [what, extra]
+			_hand_label.text = Options.keyed("В руке: %s%s    G: положить" % [what, extra])
 		# a weapon in the hand shows a sight instead of the arrow
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") or Items.uses(item) > 0 else Input.CURSOR_ARROW)
 	_hand_label.visible = alive
@@ -1370,6 +1456,7 @@ func _process(delta: float) -> void:
 			_fate.text = "Вы погибли. Нажмите R, чтобы вернуться новым членом экипажа из резерва (в резерве: %d)." % client.reserve
 		else:
 			_fate.text = "Вы погибли. Резерв экипажа пуст: вернуться можно, когда товарищи наймут людей у торговца."
+	_fate.text = Options.keyed(_fate.text)
 	_fate.visible = client.my_cond != Net.COND_OK and client.over == Net.OVER_NONE
 	_over.visible = client.over != Net.OVER_NONE
 	if _over.visible:
@@ -1394,6 +1481,8 @@ func _process(delta: float) -> void:
 			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]
 		if client.map.deck_count > 1:
 			_info.text += "     %s" % client.map.deck_names[client.my_deck()]
+		if Options.show_fps:
+			_info.text += "     Кадров: %d" % int(round(_fps_smooth))
 		_info.text += "\n%s     Навыки: %s" % [Net.JOB_NAMES[client.job], _skills_text()]
 		if _debug.visible:
 			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [

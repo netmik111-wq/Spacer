@@ -21,6 +21,7 @@ extends Node
 ##   navigation   steering, jumps, sectors
 ##   supplies     the supply locker and the trader
 ##   replication  what each client is told, and which characters it may see
+##   admin        the admin panel: giving things, healing, moving people, mending, events
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving). The crew's ship itself
 ## is one object with a network id (Ship); another one alongside gets its own.
@@ -53,6 +54,7 @@ const Systems := preload("res://src/server/systems.gd")
 const Navigation := preload("res://src/server/navigation.gd")
 const Supplies := preload("res://src/server/supplies.gd")
 const Replication := preload("res://src/server/replication.gd")
+const Admin := preload("res://src/server/admin.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -118,6 +120,7 @@ var systems := Systems.new()
 var navigation := Navigation.new()
 var supplies := Supplies.new()
 var replication := Replication.new()
+var admin := Admin.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -154,6 +157,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	systems.setup(self)
 	navigation.setup(self)
 	supplies.setup(self)
+	admin.setup(self)
 	doors.setup(map.doors.size())
 	doors.partner = map.door_partner
 	for d in range(map.other_first_door, map.doors.size()):
@@ -401,26 +405,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		if pkt.size() > 2:
 			looting.loot_asked(p, pkt[1] != 0, pkt[2])
 	elif kind == Net.C_ADMIN:
-		if pkt.size() > 3 and shutdown_token != "" and pkt.slice(3).get_string_from_utf8() == shutdown_token:
-			if pkt[1] == Net.ADMIN_BREACH:
-				# the wall the player faces, if it can be breached; otherwise the nearest that can
-				var ahead := map.cell_ahead(p.st.x, p.st.y, p.st.facing)
-				if not (ahead >= 0 and map.hull.has(ahead) and systems.breach(ahead)):
-					systems.breach_near(p.st.x, p.st.y)
-			elif pkt[1] == Net.ADMIN_SEAL:
-				systems.seal_all()
-			elif pkt[1] == Net.ADMIN_EVENT:
-				director.fire(pkt[2])
-			elif pkt[1] == Net.ADMIN_AUTO:
-				director.auto = pkt[2] != 0
-				chat.say("Ивентер: события идут сами." if director.auto else "Ивентер: события только вручную.")
-			elif pkt[1] == Net.ADMIN_SAVE:
-				if save_path == "":
-					chat.say("Эта игра запущена без сохранения.")
-				elif over != Net.OVER_NONE:
-					chat.say("Кампания окончена, сохранять нечего.")
-				else:
-					chat.say("Кампания сохранена." if save_campaign() else "Не удалось сохранить кампанию.")
+		admin.asked(p, pkt)
 
 
 func _reject(peer: ENetPacketPeer, reason: int) -> void:

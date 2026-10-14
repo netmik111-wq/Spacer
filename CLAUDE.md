@@ -91,6 +91,11 @@ asked for the rest to be done as one build (v35):
 
 The fourth plan is complete except for the darkness front. The next plan comes from new questions to the author.
 
+Build v40 (0.33) was the author's own request for friendly interfaces, done as one build: an
+inventory window, settings (sound, picture, every key rebindable with Ctrl/Shift/Alt), an admin
+panel in tabs for the host and the admins the host names, and the fix for own footsteps heard in
+space. The author also allowed merging pull requests without asking.
+
 After that: engines and complex atmosphere (only after asking). With each step add
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
@@ -113,7 +118,7 @@ new items for slots (tools, medkit, spare tank).
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 13 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 14 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -127,6 +132,7 @@ new items for slots (tools, medkit, spare tank).
     godot --headless --path . --script res://tools/guntest.gd
     godot --headless --path . --script res://tools/crewtest.gd
     godot --headless --path . --script res://tools/savetest.gd
+    godot --headless --path . --script res://tools/admintest.gd
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -145,7 +151,7 @@ logging in takes and how long a server tick takes (the budget is 50 ms). With `P
 the server gets CPU 0 to itself. Results are in `docs/BENCHMARK.md`.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 13 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 14 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -455,6 +461,24 @@ The parameters for these checks are described in the header of `src/main.gd`.
   the ship doesn't move or jump (`Derelict.holds_ship`), and a started jump fails.
   I decided this: we don't abandon anyone. Bots and pirates don't go into space.
 
+- **Admin rights** (`src/server/admin.gd`, since v40). The host's game proves itself with the
+  server's secret text (`ADMIN_HELLO` right after joining; `Player.host`), and only the host makes
+  others admins (`ADMIN_GRANT`), by player name (`Admin.names`, kept in the save). Others send
+  `C_ADMIN` with no text; the server checks `Player.admin`. The client learns its rights from the flags
+  byte at the end of `S_ME`. The author asked for an admin panel "for all tests"; I decided that
+  healing raises the dead where they lie, and that a body left after a return from the reserve stays a body.
+- **The player's settings** live in `user://options.cfg` (`src/client/options.gd`), not in the menu's
+  `settings.cfg`, which the menu rewrites whole. Every key is an action in `Options.ACTIONS` (two keys
+  each, physical keycodes, optional Ctrl/Shift/Alt). Check keys with `Options.pressed` and `Options.held`,
+  never `is_action_pressed`: a bare key also works with a modifier held unless that exact combination
+  is another action's. Text on screen is written with the default letters and passed through
+  `Options.keyed`, which puts the player's keys in their place. Sounds go to the `World` bus and the
+  engine hum to `Hum` (both made by `Options.ensure_buses`).
+- **Windows over the game** (inventory, admin panel) do not take the keyboard: their buttons have
+  `FOCUS_NONE`, so the character walks while they are open. The settings window and the menu do take it.
+- **Own footsteps** are played by the client only in air (`Net.SOUND_AIR`) and never in open space:
+  the author's rule that vacuum is silent (they were heard muffled until v40).
+
 ## Pitfalls
 
 - `ENetConnection.service()` with a non-zero timeout spins the CPU the whole time.
@@ -480,6 +504,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   the character on the old tile) cannot happen this way. Doors, holes, floor and air still go by chunk.
 - Whatever changes what blocks sight must call `Replication.sight_changed()` (doors opening and
   shutting, power, the other ship moving already do): who sees whom is cached until then.
+- A Control that draws on another one from a method named `_draw` also runs it for itself, and
+  Godot complains ("Drawing is only allowed inside this node's `_draw()`"). Name it otherwise.
 - A node with a negative `z_index` is drawn under what its parent draws itself (the stars
   in `WorldView._draw`). So decks are ordered with non-negative numbers.
 - Air falls asleep (`Air.settled`) while a door is still opening: it must also be woken

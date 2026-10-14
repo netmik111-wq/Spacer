@@ -105,7 +105,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"holes": holes, "broken": broken,
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty),
-		"floor": floor, "crew": crew,
+		"floor": floor, "crew": crew, "admins": server.admin.names.keys(),
 	}
 
 
@@ -146,6 +146,9 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])
+	server.admin.names.clear()
+	for n in data.get("admins", []):
+		server.admin.names[str(n)] = true
 	server.dead_names.clear()
 	for n in data["dead_names"]:
 		server.dead_names[str(n)] = true

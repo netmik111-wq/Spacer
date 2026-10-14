@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 25
+const PROTOCOL := 26
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -33,7 +33,8 @@ const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
-const C_ADMIN := 5                  # u8 command, u8 argument, secret text: the hosting player's tools (see ADMIN_*)
+const C_ADMIN := 5                  # u8 command, u8 argument, u16 target id, then the secret text (the hosting
+                                    # player's game) or nothing (a player the host made an admin): see ADMIN_*
 const C_RESPAWN := 6                # nothing else: a dead player asks to come back as a new crew member
 const C_USE := 7                    # u8 held, u32 tick: the "use" key went down (1) or up (0) on that tick of
                                     # the client's predicted clock. Pressing it on a ladder climbs; the tick lets
@@ -231,6 +232,23 @@ const ADMIN_SEAL := 2               # close every hole (tests)
 const ADMIN_EVENT := 3              # make the director fire the event whose id is the argument
 const ADMIN_AUTO := 4               # argument 1: the director runs events by itself; 0: only by hand
 const ADMIN_SAVE := 5               # save the campaign now and say so
+const ADMIN_HELLO := 6              # the hosting player's game makes itself known: its player is the host and an admin
+const ADMIN_GIVE := 7               # the thing (argument) into the admin's hand or a free slot, else at its feet
+const ADMIN_HEAL := 8               # the target is made whole: health, wounds, oxygen; the dead come back to life
+const ADMIN_KILL := 9               # the target dies
+const ADMIN_GOTO := 10              # the admin is put beside the target
+const ADMIN_BRING := 11             # the target is put beside the admin
+const ADMIN_GRANT := 12             # (host only) argument 1: the target becomes an admin, 0: no longer
+const ADMIN_JOB := 13               # the target takes the job given as the argument (JOB_*)
+const ADMIN_REPAIR := 14            # every hole closed, every machine and door mended, the power back
+const ADMIN_AIR := 15               # normal air in every cell of the ship, the air plant's store full
+const ADMIN_RESTOCK := 16           # the supply locker filled up to what a ship sets out with, at least
+const ADMIN_CREDITS := 17           # +100 credits
+const ADMIN_HULL := 18              # the hull as strong as new
+const ADMIN_RESERVE := 19           # +1 in the crew reserve
+const ADMIN_PIRATE := 20            # a pirate (argument 1: with a pistol, 0: with a baton) in front of the admin
+const ADMIN_PLACE := 21             # the sector becomes one of that kind (Sectors.*) and the ship is put at its spot
+const ADMIN_CREDITS_GIVEN := 100
 
 const NO_SECTOR := 255
 const JUMP_TICKS := 160             # a jump takes 8 s to charge
@@ -304,7 +322,10 @@ const SKILL_GAIN := 2                # what one piece of work adds to its job's 
 const SKILL_GAIN_OTHER := 1          # and, every SKILL_SLOW_EVERY such pieces, to any other skill
 const SKILL_SLOW_EVERY := 3
 const HACK_TICKS := 100             # holding "use" on a door one has no access to for 5 s breaks its lock
-const S_ME := 30                    # u8 job, then SKILLS bytes: our own character's job and skills
+const S_ME := 30                    # u8 job, then SKILLS bytes: our own character's job and skills, then u8 flags
+                                    # (ME_ADMIN, ME_HOST)
+const ME_ADMIN := 1                 # may use the admin panel
+const ME_HOST := 2                  # is the hosting player: may make others admins
 
 # who a roster entry is
 const KIND_PLAYER := 0
