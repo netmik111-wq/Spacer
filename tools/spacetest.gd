@@ -91,55 +91,55 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	# a ship under way when the jump is set coasts straight on, whatever point it was making for
-	var from: Vector2 = server.ship_pos
-	server.ship_dest = from + Vector2(20, 0)
-	server.ship_moving = true
-	server.start_jump(server.sectors.neighbours(server.sector)[0], "Проверка")
-	_expect(server.ship_moving and server.ship_dest == Vector2(Sectors.SPAN, from.y), "set for a jump, a moving ship coasts on to the edge of the sector instead of its old course")
+	var from: Vector2 = server.ship.pos
+	server.ship.dest = from + Vector2(20, 0)
+	server.ship.moving = true
+	server.navigation.start_jump(server.sectors.neighbours(server.ship.sector)[0], "Проверка")
+	_expect(server.ship.moving and server.ship.dest == Vector2(Sectors.SPAN, from.y), "set for a jump, a moving ship coasts on to the edge of the sector instead of its old course")
 	for t in Net.JUMP_TICKS - 2:
 		server._tick()
-	var went: float = server.ship_pos.x - from.x
-	_expect(absf(went - Sectors.SHIP_SPEED * (Net.JUMP_TICKS - 2) / Net.TICK_HZ) < 0.2 and server.ship_pos.y == from.y,
+	var went: float = server.ship.pos.x - from.x
+	_expect(absf(went - Sectors.SHIP_SPEED * (Net.JUMP_TICKS - 2) / Net.TICK_HZ) < 0.2 and server.ship.pos.y == from.y,
 		"and keeps its speed and heading until the jump (%.1f units in %.0f s)" % [went, (Net.JUMP_TICKS - 2) / float(Net.TICK_HZ)])
 	for t in 4:
 		server._tick()
-	_expect(not server.ship_moving and server.ship_pos == server.sectors.entry[server.sector], "it comes out of the jump standing still at its place of arrival")
-	server.been = {Sectors.key(server.sectors.cell[server.sector]): true}    # the walk below starts from here
-	server.sectors.build(server.space_seed, server.sectors.cell[server.sector], server.been)
-	server.credits = Net.START_CREDITS
-	server.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
+	_expect(not server.ship.moving and server.ship.pos == server.sectors.entry[server.ship.sector], "it comes out of the jump standing still at its place of arrival")
+	server.been = {Sectors.key(server.sectors.cell[server.ship.sector]): true}    # the walk below starts from here
+	server.sectors.build(server.space_seed, server.sectors.cell[server.ship.sector], server.been)
+	server.ship.credits = Net.START_CREDITS
+	server.ship.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
 	for t in Net.DRIVE_REST_TICKS:
 		server._tick()
-	var start_cell: Vector2i = server.sectors.cell[server.sector]
-	var credits := server.credits
+	var start_cell: Vector2i = server.sectors.cell[server.ship.sector]
+	var credits := server.ship.credits
 	var fresh := 0
 	var path: Array[Vector2i] = [start_cell]
-	var ok := server.sector == server.sectors.here and server.sectors.visited[server.sector] == 1
+	var ok := server.ship.sector == server.sectors.here and server.sectors.visited[server.ship.sector] == 1
 	for jump in 12:
 		# go on to a sector not yet visited if there is one, else anywhere
 		var next := -1
-		for n in server.sectors.neighbours(server.sector):
+		for n in server.sectors.neighbours(server.ship.sector):
 			if next < 0 or (server.sectors.visited[n] == 0 and server.sectors.visited[next] == 1):
 				next = n
 		var to: Vector2i = server.sectors.cell[next]
 		if server.sectors.visited[next] == 0:
 			fresh += 1
-		server.start_jump(next, "Проверка")
+		server.navigation.start_jump(next, "Проверка")
 		for t in Net.JUMP_TICKS + 2:
 			server._tick()
 		path.append(to)
-		ok = ok and server.sector == server.sectors.here and server.sectors.cell[server.sector] == to \
-			and server.sectors.visited[server.sector] == 1 and server.jump_to == Net.NO_SECTOR
+		ok = ok and server.ship.sector == server.sectors.here and server.sectors.cell[server.ship.sector] == to \
+			and server.sectors.visited[server.ship.sector] == 1 and server.ship.jump_to == Net.NO_SECTOR
 	_expect(ok, "after every jump the chart is centred on the sector the ship jumped to")
-	_expect(fresh >= 6 and server.credits == credits + fresh * Net.EXPLORE_REWARD,
+	_expect(fresh >= 6 and server.ship.credits == credits + fresh * Net.EXPLORE_REWARD,
 		"%d of 12 jumps found a new sector, and only those were paid for" % fresh)
 	var remembered := true
 	for i in server.sectors.count:
 		if path.has(server.sectors.cell[i]) != (server.sectors.visited[i] == 1):
 			remembered = false
 	_expect(remembered and server.been.size() == fresh + 1, "the chart marks exactly the sectors the ship has been to (%d of them)" % server.been.size())
-	var far_now: int = server.sectors.far_from_start(server.sector)
-	print("  the ship ended %d jumps from the start, at %s" % [far_now, server.sectors.cell[server.sector]])
+	var far_now: int = server.sectors.far_from_start(server.ship.sector)
+	print("  the ship ended %d jumps from the start, at %s" % [far_now, server.sectors.cell[server.ship.sector]])
 	server.stop()
 	server.free()
 

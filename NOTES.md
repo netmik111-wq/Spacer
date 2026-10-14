@@ -1,6 +1,6 @@
 # Spacer — summary for continuing the work
 
-State as of build **v35 (version 0.28)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
+State as of build **v39 (version 0.32)**, 14 October 2026. Details: `CLAUDE.md` (decisions, pitfalls,
 check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION.md` (the author's vision).
 
 ## Links
@@ -11,13 +11,21 @@ check procedure), `docs/MECHANICS.md` (all mechanics with numbers), `docs/VISION
   https://claude.ai/artifact/WkAgPwZZ2Xpwv25kzHLcs5 — read `ArtifactData get survey/answers` and build the fourth plan.
 
 ## Key decisions
-- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 24), the server decides everything,
+- Godot 4.7.2 (GDScript, Compatibility), own protocol on ENet (`Net.PROTOCOL` = 25), the server decides everything,
   20 ticks/s, one thread; the client predicts movement and doors (`src/shared/`), checked against checksums.
 - Builds for Windows only (the author plays over Radmin VPN); the exe is split into two archives, `play.bat` joins them.
 - Everything on GitHub (docs, notes, code comments, commit messages) is in English. What the player sees in the game stays in Russian; the author chose this on 2026-10-14 ("GitHub only").
 - The author's rules: air is not highlighted; bodies stay; the engine powers everything; it is silent in vacuum;
   in the dark only the flashlight shines; while at least one bridge console is intact, there is a way to escape.
 - Atmosphere with gases, fire and electricity only after asking the author in detail.
+
+## v39 (engineering build)
+- `game_server.gd` is split into modules by topic (`chat`, `crew`, `movement`, `inventory`, `looting`, `combat`,
+  `repairs`, `systems`, `navigation`, `supplies`, `replication`); ships are `Ship` objects with a network id (`S_SHIPS`).
+- The server decides who sees whom and sends each client only those characters (`Replication.sees`).
+- All 13 tests run on every push (`.github/workflows/tests.yml`, `tools/runtests.sh`).
+- Benchmark: `tools/bench.sh`, numbers in `docs/BENCHMARK.md`. Visibility made ticks ~3-6x dearer (32 players: mean 10.7 ms of 50).
+- Still one crewed ship per server, though the code now keeps ships as objects.
 
 ## What the game has
 - Ship `ship02`: 2 decks, bow on the right, bridge (chart, helm, gun console), a two-door airlock

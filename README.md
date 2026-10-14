@@ -150,7 +150,7 @@ The same test measures how long a person left in a breached compartment survives
   0.12 cells per second, no higher than normal pressure, while the ship has an air supply.
 - Both are repaired by holding E for six seconds. The event director breaks them: the events «Отказ двигателя» ("Engine failure")
   and «Отказ воздушной установки» ("Air plant failure").
-- While a bridge console is broken, the engine does not break, and vice versa (`GameServer.can_break`).
+- While a bridge console is broken, the engine does not break, and vice versa (`Systems.can_break`).
 
 - Every door has an **emergency shutter**. It drops when the pressure on the two sides of the door
   differs by a quarter of normal, and rises when the difference is under a tenth. A dropped one
@@ -222,7 +222,7 @@ Checking machines, power, doors and shutters without network or window:
   it's lit, green — where the eyes are looking (`WorldView._draw_mask`, `_draw_look`).
 - Sounds (`Net.SOUND_*`): footsteps, door, breach hiss, falling, the clatter of a dropped item,
   ladder. The server sends a sound to those within its range on the same deck
-  (`GameServer.sound`, `hears`). Sound travels only through air: if the listener or the source
+  (`Chat.sound`, `Chat.hears`). Sound travels only through air: if the listener or the source
   is in vacuum, only what's right next to you is heard. The client draws an icon where the sound was
   if that place isn't visible; the farther the sound, the less precise the place; a sound beyond the screen edge
   is marked at the edge with an arrow.
@@ -231,12 +231,12 @@ Checking machines, power, doors and shutters without network or window:
 
 - Items: pistol (rounds are part of the item number, `Net.ITEM_PISTOL + n`), magazine, baton,
   plaster. All are in the table `src/shared/items.gd`, in the locker and at the trader.
-- A mouse click on the world uses the item in hand (`C_FIRE`, `GameServer.use_at`): the pistol
+- A mouse click on the world uses the item in hand (`C_FIRE`, `Combat.use_at`): the pistol
   fires there, an empty one reloads with a magazine, the baton hits the adjacent cell, the plaster
   heals yourself or a neighbour. Friendly fire is possible.
 - The server computes a shot instantly in a straight line up to a wall or closed door, hitting
   the first one in the way. The target is taken where the shooter saw it: the client sends its "render
-  tick", the server remembers where everyone was over the last 32 ticks (`place_at`).
+  tick", the server remembers where everyone was over the last 32 ticks (`Combat.place_at`).
 - Pirates (`src/server/pirates.gd`) are ordinary characters controlled by the server.
   They see by the same rules as the crew, go towards what they hear, shoot with spread, hit
   with a baton at close range, patch their wounds or retreat when badly hurt, and leave people lying down alone.
@@ -318,9 +318,10 @@ Checking items, hand, floor, locker and light without network or window:
 - A **jump** charges for 8 seconds, then the engine rests for 15 seconds. Only someone standing
   at the console can set it.
 - The **event director** (`src/server/director.gd`) decides what breaks and when. It has a catalogue
-  of events in four sizes (eight events now: micrometeorite, meteor volley,
+  of events in four sizes (eleven events now: micrometeorite, meteor volley,
   console short circuit, engine failure, air plant failure, jammed door,
-  emergency shutter failure and power failure), a pace depending on the sector and the number of players, and "restraint":
+  emergency shutter failure, power failure, boarding and pirate ship, which it picks by chance,
+  and drifting fuel, which comes by itself to a ship left with no fuel at all), a pace depending on the sector and the number of players, and "restraint":
   while there are more open breaches than the crew can reach, or everyone is down,
   there are no new events.
 - The host can run events themselves: in the menu, the checkbox «Ивентер ведёт события сам» ("The event director runs events itself")

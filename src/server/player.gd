@@ -13,7 +13,7 @@ var bot := false
 var corpse := false                  # a body left behind: it only lies there
 var pirate := false                  # an enemy the server moves (see Pirates)
 var ready_tick := 0                  # its hands are free again from this tick (after a shot, a blow, a reload)
-var history := PackedVector2Array()  # where it was drawn on each of the last HISTORY ticks (see GameServer.place_at)
+var history := PackedVector2Array()  # where it was drawn on each of the last HISTORY ticks (see Combat.place_at)
 # what a pirate has in mind (see Pirates)
 var ai_target := -1                  # the slot of the one it is after
 var ai_goal := Vector2i(-1, -1)      # where it is going
@@ -27,11 +27,11 @@ var last_seq := 0                    # last input change applied, echoed back to
 
 var view_cx := -100                  # chunk this client's view is centred on (the row is counted inside its deck)
 var view_cy := -100
-var rep_x := -9999                   # position and facing as last sent to clients
-var rep_y := -9999
-var rep_look := -1
-var left_chunk := -1                 # the chunk it last moved out of, and the send that happened in
-var left_window := -1                # (see GameServer._record)
+var known := {}                      # its client's characters: slot -> place and look as last sent (see Replication)
+var vis_a := PackedInt64Array()      # per slot: whether it saw that one, and on what (see Replication._seen_now)
+var vis_b := PackedInt64Array()
+var vis_r := PackedByteArray()
+var vis_until := PackedInt32Array()  # per slot: it counts as seen until this tick
 
 var wounds := 0.0                    # of the health lost, what wounds took: it does not come back by itself
 var treating := -1                   # the slot of the one it is treating with a first-aid kit (-1 = nobody)

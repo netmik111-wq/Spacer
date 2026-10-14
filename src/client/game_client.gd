@@ -54,6 +54,10 @@ var my_id := -1
 var map := ShipMap.new()
 var roster := {}                     # id -> {"name": String, "colour": int, "kind": Net.KIND_*}
 var ents := {}                       # id -> Ent, exactly as the server reported
+var hidden := {}                     # id -> the cell it was last seen in: the server stopped telling us about it because we no longer
+                                     # see it (Net.FACING_HIDDEN); its silhouette may still fade where it was
+var my_ship := Net.CREW_SHIP         # the network id of the ship we are on (see Net.S_SHIPS)
+var ships := {}                      # id -> {"kind": Net.SHIP_*, "docked": bool, "at": Vector2i, "name": String}
 var predict := true                  # predict our own character (false = wait for the server)
 var admin_token := ""                # set when this game started the server: unlocks the host's test tools
 
@@ -81,7 +85,7 @@ var hand := 0                        # the slot whose thing is in the hand (we c
 var patches := 0                     # of that, hull patches
 var parts := 0                       # and spare parts
 var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
-var search_hurt := 0                 # how hurt they look (see GameServer.hurt_level)
+var search_hurt := 0                 # how hurt they look (see Combat.hurt_level)
 var search_slots := PackedByteArray()  # what they carry
 var search_worn := PackedByteArray()   # and what they wear
 var worn := PackedByteArray()        # what our character wears (Net.WEAR_*)
@@ -94,7 +98,7 @@ var gun_charge := PackedByteArray()  # per gun: 0..100, 255 = out of order (see 
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var enemy_docks_in := 0              # seconds until it docks by force
-var pumps := {}                     # airlock pumps at work: wall cell -> GameServer.PUMP_OUT or PUMP_IN
+var pumps := {}                     # airlock pumps at work: wall cell -> Systems.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
 # the campaign (see Net.S_CAMPAIGN)
@@ -140,6 +144,8 @@ var _host: ENetConnection = null
 var _peer: ENetPacketPeer = null
 var _name := ""
 var _t_connect := 0
+var login_ms := -1                    # from asking to connect to being let aboard (for tools/bench.sh)
+var in_world_ms := -1                 # and to the first word on our own character in the world
 var _view_cx := -100                 # the chunk our view is centred on; the row is counted inside its deck
 var _view_cy := -100
 
@@ -279,7 +285,7 @@ func stop_server_and_close(token: String) -> void:
 
 
 func send_use(held: bool) -> void:
-	## The "use" key went down or up. The server decides what it does (see GameServer._update_work).
+	## The "use" key went down or up. The server decides what it does (see Repairs.update).
 	if phase == PLAYING:
 		_simulate_to_now()
 		var msg := PackedByteArray([Net.C_USE, 1 if held else 0, 0, 0, 0, 0])
@@ -399,7 +405,7 @@ func carried(item: int) -> int:
 func floor_cell() -> int:
 	## The cell whose top thing the "use" key would pick up: the one in front, or
 	## failing that our own; -1 if there is nothing to pick up (the same order as
-	## GameServer._pick_up).
+	## Inventory.pick_up).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return -1
 	var ahead := map.cell_ahead(pred.x, pred.y, pred.facing)
@@ -628,7 +634,7 @@ func send_store(action: int, item: int = Net.ITEM_NONE) -> void:
 
 
 func can_trade() -> bool:
-	## Docked with a trader, with power for the link (the same rule as GameServer.can_trade).
+	## Docked with a trader, with power for the link (the same rule as Supplies.can_trade).
 	return powered() and sectors.count > 0 and sectors.kind[sector] == Sectors.TRADER \
 		and sectors.within_reach(sector, ship_pos())
 
@@ -880,49 +886,45 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				notice.emit("%s покинул корабль." % player_name(gone))
 			roster.erase(gone)
 			ents.erase(gone)
+			hidden.erase(gone)
 			roster_changed.emit()
 		Net.S_SECTORS:
 			sectors.unpack(pkt, 1)
 		Net.S_NAV:
 			# (the window of space is sent before this whenever the ship has arrived somewhere)
-			sector = pkt[1]
-			jump_to = pkt[2]
-			jump_tick = pkt.decode_u32(3)
-			drive_ready = pkt.decode_u32(7)
+			if not _ours(pkt):
+				return
+			sector = pkt[3]
+			jump_to = pkt[4]
+			jump_tick = pkt.decode_u32(5)
+			drive_ready = pkt.decode_u32(9)
 			var now_at: Vector2i = sectors.cell[sector] if sector < sectors.count else Vector2i.ZERO
 			if _nav_known and now_at != _ship_cell and phase == PLAYING:
 				arrived.emit()
 			_nav_known = true
 			_ship_cell = now_at
 		Net.S_HELM:
-			ship_from = Vector2(pkt.decode_s16(1), pkt.decode_s16(3)) / 10.0
-			ship_moving = pkt[5] != 0
-			ship_dest = Vector2(pkt[6], pkt[7])
-			ship_tick = pkt.decode_u32(8)
+			if not _ours(pkt):
+				return
+			ship_from = Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 10.0
+			ship_moving = pkt[7] != 0
+			ship_dest = Vector2(pkt[8], pkt[9])
+			ship_tick = pkt.decode_u32(10)
 		Net.S_DEVICES:
+			if not _ours(pkt):
+				return
 			broken.clear()
-			for i in pkt[1]:
-				broken[pkt[2 + i * 2] | (pkt[3 + i * 2] << 8)] = true
+			var n: int = pkt[3]
+			for i in n:
+				broken[pkt[4 + i * 2] | (pkt[5 + i * 2] << 8)] = true
 			pumps.clear()
-			var at: int = 2 + pkt[1] * 2
+			var at: int = 4 + n * 2
 			if pkt.size() > at:
 				for i in pkt[at]:
 					pumps[pkt.decode_u16(at + 1 + i * 3)] = pkt[at + 3 + i * 3]
 			ship_changes += 1
-		Net.S_OTHER:
-			if pkt.size() >= 6:
-				var at := Vector2i(pkt.decode_s16(1), pkt.decode_s16(3))
-				other_docked = pkt[5] != 0
-				var kind: int = pkt[6] if pkt.size() > 6 else Net.OTHER_DERELICT
-				if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind):
-					map.place_other(at, kind)
-					for d in range(map.other_first_door, map.doors.size()):
-						doors.ready[d] = Doors.CLOSED
-						doors.set_flags(d, 0)
-						doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0
-					other_changes += 1
-					ship_changes += 1
-					_rebuild_prediction()
+		Net.S_SHIPS:
+			_on_ships(pkt)
 		Net.S_SEARCH:
 			var who := pkt.decode_u16(1)
 			search_id = -1 if who == Net.NOBODY else who
@@ -930,20 +932,24 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			search_worn = pkt.slice(3 + Net.SLOTS, 3 + Net.SLOTS + Net.WORN)
 			search_hurt = pkt[3 + Net.SLOTS + Net.WORN] if pkt.size() > 3 + Net.SLOTS + Net.WORN else 0
 		Net.S_GUNS:
-			var n: int = pkt[1]
-			gun_charge = pkt.slice(2, 2 + n)
-			enemy_hull = pkt[2 + n]
-			enemy_full = pkt[3 + n]
-			enemy_docks_in = pkt.decode_u16(4 + n)
+			if not _ours(pkt):
+				return
+			var n: int = pkt[3]
+			gun_charge = pkt.slice(4, 4 + n)
+			enemy_hull = pkt[4 + n]
+			enemy_full = pkt[5 + n]
+			enemy_docks_in = pkt.decode_u16(6 + n)
 		Net.S_OUTFIT:
 			if pkt.size() >= 4:
 				looks[pkt.decode_u16(1)] = pkt[3]
 		Net.S_STORE:
-			store_air = pkt.decode_u16(1) / 10.0
-			credits = pkt.decode_u16(3)
+			if not _ours(pkt):
+				return
+			store_air = pkt.decode_u16(3) / 10.0
+			credits = pkt.decode_u16(5)
 			store.clear()
-			for i in pkt[5]:
-				store[pkt[6 + i * 3]] = pkt.decode_u16(7 + i * 3)
+			for i in pkt[7]:
+				store[pkt[8 + i * 3]] = pkt.decode_u16(9 + i * 3)
 		Net.S_CAMPAIGN:
 			if pkt.size() >= 14:
 				hull = pkt[1]
@@ -962,7 +968,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 					pred.access = _auth.access
 					_rebuild_prediction()
 		Net.S_POWER:
-			_power = pkt[1] != 0
+			if not _ours(pkt):
+				return
+			_power = pkt[3] != 0
 			ship_changes += 1
 			# without power doors open by hand: that is part of the walking rule we predict
 			doors.manual = not _power
@@ -977,6 +985,40 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_CHAT:
 			var n := pkt.decode_u16(4)
 			chat.emit(pkt.decode_u16(1), pkt[3], pkt.slice(6, 6 + n).get_string_from_utf8())
+
+
+func _ours(pkt: PackedByteArray) -> bool:
+	## Is this packet about one ship (see Net.S_NAV) about the ship we are on?
+	return pkt.size() >= 3 and pkt.decode_u16(1) == my_ship
+
+
+func _on_ships(pkt: PackedByteArray) -> void:
+	## The ships in the world. One other than ours lies alongside: it is laid into our grid.
+	ships.clear()
+	var pos := 2
+	for i in pkt[1]:
+		var n: int = pkt[pos + 8]
+		ships[pkt.decode_u16(pos)] = {"kind": pkt[pos + 2], "docked": pkt[pos + 3] != 0,
+			"at": Vector2i(pkt.decode_s16(pos + 4), pkt.decode_s16(pos + 6)),
+			"name": pkt.slice(pos + 9, pos + 9 + n).get_string_from_utf8()}
+		pos += 9 + n
+	var at := ShipMap.NO_OTHER
+	var kind := Net.OTHER_DERELICT
+	other_docked = false
+	for id: int in ships.keys():
+		if id != my_ship:
+			at = ships[id]["at"]
+			kind = Net.OTHER_PIRATE if int(ships[id]["kind"]) == Net.SHIP_PIRATE else Net.OTHER_DERELICT
+			other_docked = ships[id]["docked"]
+	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind):
+		map.place_other(at, kind)
+		for d in range(map.other_first_door, map.doors.size()):
+			doors.ready[d] = Doors.CLOSED
+			doors.set_flags(d, 0)
+			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT else 0
+		other_changes += 1
+		ship_changes += 1
+		_rebuild_prediction()
 
 
 func _read_roster_entry(pkt: PackedByteArray, pos: int) -> int:
@@ -994,8 +1036,9 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	my_id = pkt.decode_u16(1)
 	server_tick = pkt.decode_u32(3)
 	var crc := pkt.decode_u32(7)
-	var n := pkt[11]
-	var map_name := pkt.slice(12, 12 + n).get_string_from_utf8()
+	my_ship = pkt.decode_u16(11)
+	var n := pkt[13]
+	var map_name := pkt.slice(14, 14 + n).get_string_from_utf8()
 	var problem := map.load_from(map_name)
 	for other_map in Net.OTHER_MAPS:
 		if problem == "" and map.add_other(other_map) < 0:
@@ -1017,6 +1060,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	air.fill(0)
 	holes.clear()
 	phase = PLAYING
+	login_ms = Time.get_ticks_msec() - _t_connect
 	joined.emit()
 
 
@@ -1038,6 +1082,8 @@ func _on_world(pkt: PackedByteArray) -> void:
 				_apply_record(pkt.decode_u16(pos), pkt.decode_s16(pos + 2), pkt.decode_s16(pos + 4), pkt[pos + 6], s_tick)
 				pos += Net.ENT_BYTES
 		elif sec == Net.SEC_SELF:
+			if in_world_ms < 0:
+				in_world_ms = Time.get_ticks_msec() - _t_connect
 			_reconcile(s_tick, pkt, pos)
 			reconciled = true
 			pos += Net.SELF_BYTES
@@ -1173,6 +1219,14 @@ func _outside_view(x: int, y: int) -> bool:
 
 
 func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
+	if look == Net.FACING_HIDDEN:
+		# out of our sight now: the server tells us no more about it
+		var e_hidden: Ent = ents.get(id)
+		if e_hidden != null:
+			hidden[id] = Vector2i(e_hidden.x, e_hidden.y)
+		ents.erase(id)
+		return
+	hidden.erase(id)
 	if look == Net.FACING_GONE or _outside_view(x, y):
 		ents.erase(id)
 		return

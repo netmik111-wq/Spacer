@@ -32,14 +32,14 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 		failed += 1
 		return
 	for i in crew:
-		server._new_player("Проверка %d" % i)     # a crew member nobody controls: stands at the spawn point
+		server.crew.new_player("Проверка %d" % i)     # a crew member nobody controls: stands at the spawn point
 	var here := 0
 	for i in server.sectors.count:
 		if server.sectors.kind[i] == kind:
 			here = i
 	server.sectors.kind[here] = kind
-	server.sector = here
-	server.ship_pos = server.sectors.entry[here]      # in a meteor stream that is inside the stream
+	server.ship.sector = here
+	server.ship.pos = server.sectors.entry[here]      # in a meteor stream that is inside the stream
 	server.director.entered_sector()
 	var minutes := 30
 	var most_holes := 0
@@ -53,7 +53,7 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 		elif hole_since < 0:
 			hole_since = t
 		elif mends and t - hole_since >= 30 * Net.TICK_HZ:
-			server.seal_all()
+			server.systems.seal_all()
 			server.air.refill()                   # and airs the ship, so the crew stays on its feet
 	var fired: int = server.director.fired
 	var limit := maxi(1, crew / 2 + 1)

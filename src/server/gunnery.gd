@@ -55,7 +55,7 @@ func tick() -> void:
 	var map = server.map
 	var step := 1.0 / (CHARGE_SECONDS * Net.TICK_HZ)
 	for i in charge.size():
-		if server.powered() and not server.broken.has(map.guns[i]):
+		if server.powered() and not server.ship.broken.has(map.guns[i]):
 			charge[i] = minf(charge[i] + step, 1.0)
 	if fighting() and server.tick >= _enemy_next:
 		_enemy_next = server.tick + roundi(_rng.randf_range(ENEMY_GAP[0], ENEMY_GAP[1]) * Net.TICK_HZ)
@@ -63,14 +63,14 @@ func tick() -> void:
 	var now := packet()
 	if now != _told:
 		_told = now
-		server._to_all(now)
+		server.to_all(now)
 
 
 func packet() -> PackedByteArray:
 	var map = server.map
-	var out := PackedByteArray([Net.S_GUNS, charge.size()])
+	var out := PackedByteArray([Net.S_GUNS, server.ship.id & 0xFF, server.ship.id >> 8, charge.size()])
 	for i in charge.size():
-		out.append(255 if server.broken.has(map.guns[i]) else roundi(charge[i] * 20.0) * 5)
+		out.append(255 if server.ship.broken.has(map.guns[i]) else roundi(charge[i] * 20.0) * 5)
 	out.append(enemy_hull if fighting() else 0)
 	out.append(ENEMY_HULL if fighting() else 0)
 	var left := 0
@@ -84,14 +84,14 @@ func packet() -> PackedByteArray:
 func fire(p, which: int) -> void:
 	## Somebody at the gun console fires one gun, or every gun that is ready (which = 255).
 	var map = server.map
-	if not server._at_console(p, map.gun_console):
+	if not server.systems.at_console(p, map.gun_console):
 		return
 	if not fighting():
-		server._ship_says("Стрелять не по кому: целей нет.")
+		server.chat.say("Стрелять не по кому: целей нет.")
 		return
 	var fired := 0
 	for i in charge.size():
-		if (which == 255 or which == i) and charge[i] >= 1.0 and not server.broken.has(map.guns[i]):
+		if (which == 255 or which == i) and charge[i] >= 1.0 and not server.ship.broken.has(map.guns[i]):
 			charge[i] = 0.0
 			fired += 1
 			_our_shot(i)
@@ -107,9 +107,9 @@ func _our_shot(i: int) -> void:
 	var x: int = cell % map.width
 	var y: int = cell / map.width
 	var out := _outward(cell)
-	server.sound(Net.SOUND_SHOT, x, y)
+	server.chat.sound(Net.SOUND_SHOT, x, y)
 	var hit := _rng.randf() < HIT_CHANCE
-	server._tell_shot(Net.SHOT_CANNON, hit, Vector2(x, y), Vector2(x, y) + Vector2(out) * 12.0, y)
+	server.combat.tell_shot(Net.SHOT_CANNON, hit, Vector2(x, y), Vector2(x, y) + Vector2(out) * 12.0, y)
 	if hit:
 		enemy_hull -= 1
 		# a hole in its hull where it shows
@@ -117,26 +117,26 @@ func _our_shot(i: int) -> void:
 		if not hull.is_empty():
 			var c: int = hull[_rng.randi_range(0, hull.size() - 1)]
 			if server.air.set_hole(c, true):
-				server._hull_record(c, 1)
-		server._ship_says("Орудие %d: попадание! Корпус пиратского корабля: %d из %d." % [i + 1, maxi(enemy_hull, 0), ENEMY_HULL])
+				server.replication.hull_record(c, 1)
+		server.chat.say("Орудие %d: попадание! Корпус пиратского корабля: %d из %d." % [i + 1, maxi(enemy_hull, 0), ENEMY_HULL])
 	else:
-		server._ship_says("Орудие %d: промах." % (i + 1))
+		server.chat.say("Орудие %d: промах." % (i + 1))
 
 
 func _wrecked() -> void:
 	enemy_hull = 0
-	server.credits += WRECK_REWARD
-	server.store[Net.ITEM_FUEL] = int(server.store.get(Net.ITEM_FUEL, 0)) + Net.WRECK_FUEL
+	server.ship.credits += WRECK_REWARD
+	server.ship.store[Net.ITEM_FUEL] = int(server.ship.store.get(Net.ITEM_FUEL, 0)) + Net.WRECK_FUEL
 	server.derelict.pirates_wrecked()
-	server._ship_says("Пиратский корабль разбит и уходит, не успев пристыковаться! За него начислено %d кредитов, из обломков подобрана канистра топлива." % WRECK_REWARD)
-	server._tell_store()
+	server.chat.say("Пиратский корабль разбит и уходит, не успев пристыковаться! За него начислено %d кредитов, из обломков подобрана канистра топлива." % WRECK_REWARD)
+	server.supplies.tell_store()
 
 
 func _enemy_fires() -> void:
 	## The pirate ship's shot: it holes our hull, or puts a gun or a bridge console out of order.
 	var map = server.map
 	if _rng.randf() >= enemy_hit_chance:
-		server._ship_says("Пиратский корабль стреляет: мимо.")
+		server.chat.say("Пиратский корабль стреляет: мимо.")
 		return
 	if _rng.randf() < ENEMY_BREACH_SHARE or map.hull.is_empty():
 		var choice := PackedInt32Array()
@@ -147,30 +147,30 @@ func _enemy_fires() -> void:
 			return
 		var c: int = choice[_rng.randi_range(0, choice.size() - 1)]
 		_tracer_to(c)
-		server.breach(c)
+		server.systems.breach(c)
 		return
 	var targets := PackedInt32Array()
 	for g: int in map.guns:
-		if not server.broken.has(g):
+		if not server.ship.broken.has(g):
 			targets.append(g)
-	if server.can_break("console"):
+	if server.systems.can_break("console"):
 		for c: int in map.chart.keys() + map.helm.keys():
 			targets.append(c)
 	if targets.is_empty():
 		return
 	var hit: int = targets[_rng.randi_range(0, targets.size() - 1)]
-	server.broken[hit] = true
-	server._to_all(server._devices_packet())
-	server.hull_hit(Net.HULL_PER_SYSTEM_HIT)
+	server.ship.broken[hit] = true
+	server.to_all(server.ship.devices_packet())
+	server.crew.hull_hit(Net.HULL_PER_SYSTEM_HIT)
 	_tracer_to(hit)
-	server._ship_says("Попадание пиратов! Не работает: %s." % map.device_name(hit))
+	server.chat.say("Попадание пиратов! Не работает: %s." % map.device_name(hit))
 
 
 func _tracer_to(cell: int) -> void:
 	var map = server.map
 	var at := Vector2(cell % map.width, cell / map.width)
-	server._tell_shot(Net.SHOT_CANNON, true, at + Vector2(_outward(cell)) * 12.0, at, int(at.y))
-	server.sound(Net.SOUND_THUD, int(at.x), int(at.y))
+	server.combat.tell_shot(Net.SHOT_CANNON, true, at + Vector2(_outward(cell)) * 12.0, at, int(at.y))
+	server.chat.sound(Net.SOUND_THUD, int(at.x), int(at.y))
 
 
 func _outward(cell: int) -> Vector2i:

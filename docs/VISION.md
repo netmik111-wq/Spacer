@@ -157,7 +157,7 @@ Things to remember:
   Each has one main feature; you jump between neighbouring sectors.
 - Two decks and ladders between them. Glass floors and catwalks through which you can see
   the neighbouring deck and those on it.
-- The first eventer: a catalogue of events in four sizes (eight events so far), automatic
+- The first eventer: a catalogue of events in four sizes (eleven events so far), automatic
   pacing that takes the ship's state and the number of players into account, manual triggering by the game host.
 - The lower deck holds the engine and the air plant (slowly restores air).
   Both break and get repaired; their state is visible from the upper deck through the glass floor.
@@ -188,4 +188,4 @@ Things to remember:
   unconscious person won't wake up until treated.
 
 Not there at all yet: other ships and opponents, skills and gear, story and campaign.
-There are only eight events so far, not thousands.
+There are only eleven events so far, not thousands.

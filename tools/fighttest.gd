@@ -34,23 +34,23 @@ func _initialize() -> void:
 	a.slots[0] = Net.ITEM_PISTOL + Net.PISTOL_ROUNDS
 	a.hand = 0
 	_run(3)
-	server.use_at(a, server.tick, Vector2(12, 4))
+	server.combat.use_at(a, server.tick, Vector2(12, 4))
 	_expect(b.health == 100.0 - Items.PISTOL_DAMAGE and a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS - 1,
 		"a shot hits the one aimed at (%d left in the pistol)" % (a.slots[0] - Net.ITEM_PISTOL))
-	server.use_at(a, server.tick, Vector2(12, 4))
+	server.combat.use_at(a, server.tick, Vector2(12, 4))
 	_expect(a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS - 1, "a pistol does not fire again at once")
-	_run(GameServer.SHOT_TICKS)
+	_run(GameServer.Combat.SHOT_TICKS)
 	b.health = 100.0
 	var c = _crew("Заслон", 10, 4)
-	server.use_at(a, server.tick, Vector2(12, 4))
+	server.combat.use_at(a, server.tick, Vector2(12, 4))
 	_expect(c.health < 100.0 and b.health == 100.0, "it hits the first one in the way")
 	c.st.place(3, 7)
 	c.health = 100.0
-	_run(GameServer.SHOT_TICKS)
+	_run(GameServer.Combat.SHOT_TICKS)
 	b.st.place(8, 1)
-	server.use_at(a, server.tick, Vector2(8, 1))
+	server.combat.use_at(a, server.tick, Vector2(8, 1))
 	_expect(b.health == 100.0, "not through a wall")
-	_run(GameServer.SHOT_TICKS)
+	_run(GameServer.Combat.SHOT_TICKS)
 	# judged where the shooter saw the target: it has walked on since
 	b.st.place(12, 4)
 	_run(2)
@@ -59,44 +59,44 @@ func _initialize() -> void:
 	_run(10)
 	b.st.dir = Net.DIR_NONE
 	_expect(b.st.x > 12, "(the target walked on to %d,4)" % b.st.x)
-	server.use_at(a, seen, Vector2(12, 4))
+	server.combat.use_at(a, seen, Vector2(12, 4))
 	_expect(b.health < 100.0, "a shot counts where the shooter saw the target on its screen")
 	a.slots[0] = Net.ITEM_PISTOL
 	a.slots[1] = Net.ITEM_MAG
-	_run(GameServer.SHOT_TICKS)
-	server.use_at(a, server.tick, Vector2(12, 4))
+	_run(GameServer.Combat.SHOT_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(12, 4))
 	_expect(a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS and a.slots[1] == Net.ITEM_NONE, "an empty pistol takes the magazine")
 	var reloaded_at := server.tick
-	server.use_at(a, server.tick, Vector2(14, 4))
+	server.combat.use_at(a, server.tick, Vector2(14, 4))
 	_expect(a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS and server.tick == reloaded_at, "and reloading takes a moment")
 
 	print("a baton and a patch")
 	a.slots[0] = Net.ITEM_BATON
 	b.st.place(9, 4)
 	b.health = 100.0
-	_run(GameServer.RELOAD_TICKS)
-	server.use_at(a, server.tick, Vector2(9, 4))
+	_run(GameServer.Combat.RELOAD_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(9, 4))
 	_expect(b.health == 100.0 - 15, "a baton hurts the one next to us")
 	b.health = 100.0
-	_run(GameServer.BLOW_TICKS)
-	server.use_at(a, server.tick, Vector2(8.6, 3.7))
+	_run(GameServer.Combat.BLOW_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(8.6, 3.7))
 	_expect(b.health == 100.0 - 15, "even when the click is not right on them")
 	b.st.place(11, 4)
 	b.health = 100.0
-	_run(GameServer.BLOW_TICKS)
-	server.use_at(a, server.tick, Vector2(11, 4))
+	_run(GameServer.Combat.BLOW_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(11, 4))
 	_expect(b.health == 100.0, "and nobody further off")
 	a.slots[0] = Net.ITEM_MEDPATCH
 	a.health = 30.0
 	a.wounds = 70.0
-	_run(GameServer.BLOW_TICKS)
-	server.use_at(a, server.tick, Vector2(8, 4))
+	_run(GameServer.Combat.BLOW_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(8, 4))
 	_expect(a.health >= 70.0 and a.slots[0] == Net.ITEM_NONE, "a patch on oneself closes wounds and is used up")
 	a.slots[0] = Net.ITEM_MEDPATCH
 	b.st.place(9, 4)
 	b.health = 20.0
 	b.wounds = 80.0
-	server.use_at(a, server.tick, Vector2(9, 4))
+	server.combat.use_at(a, server.tick, Vector2(9, 4))
 	_expect(b.health >= 60.0, "or on the one next to us")
 
 	print("wounds and healing")
@@ -104,7 +104,7 @@ func _initialize() -> void:
 	b.st.place(9, 4)
 	b.health = 100.0
 	b.wounds = 0.0
-	server.hurt(b, 50, a)
+	server.combat.hurt(b, 50, a)
 	_run(10 * Net.TICK_HZ)
 	_expect(b.health <= 50.5 and b.wounds == 50.0, "wounds do not close by themselves (health %d)" % int(b.health))
 	b.health = 30.0
@@ -112,15 +112,15 @@ func _initialize() -> void:
 	_expect(b.health >= 34.0 and b.health <= 50.0, "but what thin air took comes back, up to what the wounds allow")
 	a.slots[0] = Net.ITEM_MEDKIT + Net.MEDKIT_USES
 	a.hand = 0
-	server.use_at(a, server.tick, Vector2(9, 4))
-	_run(GameServer.TREAT_TICKS / 2)
+	server.combat.use_at(a, server.tick, Vector2(9, 4))
+	_run(GameServer.Combat.TREAT_TICKS / 2)
 	_expect(b.wounds == 50.0, "a first-aid kit takes its time")
-	_run(GameServer.TREAT_TICKS / 2 + 2)
+	_run(GameServer.Combat.TREAT_TICKS / 2 + 2)
 	_expect(b.wounds == 50.0 - Items.MEDKIT_HEAL and a.slots[0] == Net.ITEM_MEDKIT + Net.MEDKIT_USES - 1,
 		"and closes %d of the wounds per use (%d uses left)" % [Items.MEDKIT_HEAL, a.slots[0] - Net.ITEM_MEDKIT])
-	_run(GameServer.TREAT_TICKS / 2)
+	_run(GameServer.Combat.TREAT_TICKS / 2)
 	b.st.place(12, 4)
-	_run(GameServer.TREAT_TICKS)
+	_run(GameServer.Combat.TREAT_TICKS)
 	_expect(b.wounds == 50.0 - Items.MEDKIT_HEAL, "the treatment stops when the patient walks off")
 	b.st.place(9, 4)
 	b.health = -30.0
@@ -130,8 +130,8 @@ func _initialize() -> void:
 	_run(5 * Net.TICK_HZ)
 	_expect(b.cond == Net.COND_CRIT and b.health <= -29.0, "badly wounded, one lying unconscious does not come round")
 	for i in 5:
-		server.use_at(a, server.tick, Vector2(9, 4))
-		_run(GameServer.TREAT_TICKS + 2)
+		server.combat.use_at(a, server.tick, Vector2(9, 4))
+		_run(GameServer.Combat.TREAT_TICKS + 2)
 	_run(2 * Net.TICK_HZ)
 	_expect(b.cond == Net.COND_OK, "treated, they come round (health %d)" % int(b.health))
 	_expect(a.slots[0] == Net.ITEM_NONE or Items.uses(a.slots[0]) > 0, "a used-up kit is gone")
@@ -146,8 +146,8 @@ func _initialize() -> void:
 	_expect(_roster_kind(_first_pirate()) == Net.KIND_PIRATE, "everyone is told they are pirates")
 	for q in server.players:
 		if q != null and q.pirate:
-			server._remove(q)
-	server.seal_all()
+			server.crew.remove(q)
+	server.systems.seal_all()
 	server.air.refill()
 	# a gunner and one of the crew in the same corridor
 	a.st.place(2, 23)
@@ -168,7 +168,7 @@ func _initialize() -> void:
 		server._tick()
 		victim.health = maxf(victim.health, 1.0)
 	_expect(victim.health < 100.0, "a pirate with a baton comes up and strikes")
-	server.hurt(pirate, 300, a)
+	server.combat.hurt(pirate, 300, a)
 	_run(2)
 	_expect(pirate.corpse and Items.is_weapon(pirate.slots[0]), "a dead pirate leaves a body with its weapon on it")
 	victim.st.place(15, 4)
@@ -190,8 +190,8 @@ func _initialize() -> void:
 	_expect(t.st.facing == Net.DIR_UP and t.st.dir == Net.DIR_NONE and t.st.x == 8 and t.st.y == 4, "a turn input turns it on the spot")
 
 	print("the locker and the trader")
-	_expect(int(server.store.get(Net.ITEM_PISTOL, 0)) == 1 and int(server.store.get(Net.ITEM_MAG, 0)) == 2, "the ship sets out with a pistol and two magazines")
-	_expect(server.weapons_aboard() >= 2, "the director knows the crew is armed (%d)" % server.weapons_aboard())
+	_expect(int(server.ship.store.get(Net.ITEM_PISTOL, 0)) == 1 and int(server.ship.store.get(Net.ITEM_MAG, 0)) == 2, "the ship sets out with a pistol and two magazines")
+	_expect(server.supplies.weapons_aboard() >= 2, "the director knows the crew is armed (%d)" % server.supplies.weapons_aboard())
 
 	server.stop()
 	server.free()
@@ -200,7 +200,7 @@ func _initialize() -> void:
 
 
 func _crew(who: String, x: int, y: int):
-	var p := server._new_player(who)
+	var p := server.crew.new_player(who)
 	p.slots.fill(Net.ITEM_NONE)
 	p.st.place(x, y)
 	p.st.facing = Net.DIR_RIGHT
@@ -217,7 +217,7 @@ func _first_pirate():
 
 
 func _roster_kind(p) -> int:
-	return -1 if p == null else server._roster_entry(p)[3]
+	return -1 if p == null else server.crew.roster_entry(p)[3]
 
 
 func _run(ticks: int) -> void:

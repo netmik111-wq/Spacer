@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v38 (version 0.31).
+Last updated: build v39 (version 0.32).
 
 Contents:
 
@@ -50,6 +50,11 @@ Contents:
   decided otherwise. So even at 200 ms ping walking feels comfortable.
 - The server sends each player only what is nearby: a 3×3 area of 16×16-cell chunks around
   them, on all decks at once. Every 2 seconds the game checks its knowledge of the world against the server.
+- Of the people in that area, the server sends only those your character can actually see (see
+  [Field of view](#12-field-of-view)), so nobody can find out from the game's data where someone
+  hidden from them is.
+- The ship is one object with its own network number; a derelict or pirate ship alongside gets one
+  of its own. (Nothing changes for the player yet: this is the ground for several crewed ships later.)
 - «Новая кампания» ("New campaign") and «Продолжить кампанию» ("Continue campaign") start the server as a separate program in the background. The game host is also the GM:
   they have access to the eventer menu.
 
@@ -274,6 +279,11 @@ Contents:
 - Walls and closed doors block the view. What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.
+- **The server decides who you see.** It sends your game only the people you see by these rules
+  (judged a little more generously: **12°** wider each side, and for **0.2 s** after they go out
+  of sight), the people right next to you (within **1.5** cells: felt, so you can search or drag
+  them), and anyone on your deck holding a lit flashlight (its beam is seen from anywhere). Everyone
+  else is not sent at all. Bodies count as people here. Shots and sounds are still heard as before.
 - **Afterimage**: someone who drops out of the field of view stays where they were seen
   as a pale silhouette that fades over **10 s**. The silhouette disappears at once if you look at that spot
   (you see it as it is) or see the person themselves again.

@@ -66,14 +66,14 @@ static func snapshot(server: Node) -> Dictionary:
 	for k: int in server.been:
 		been.append(k)
 	var store := {}
-	for item: int in server.store:
-		store[str(item)] = server.store[item]
+	for item: int in server.ship.store:
+		store[str(item)] = server.ship.store[item]
 	var holes: Array = []
 	for cell: int in server.air.holes:
 		if not map.is_other(cell):
 			holes.append(cell)
 	var broken: Array = []
-	for cell: int in server.broken:
+	for cell: int in server.ship.broken:
 		if not map.is_other(cell):
 			broken.append(cell)
 	var own_doors: int = map.other_first_door if map.other_kind >= 0 else map.doors.size()
@@ -97,11 +97,11 @@ static func snapshot(server: Node) -> Dictionary:
 	return {
 		"version": VERSION, "map": map.map_name,
 		"seed": server.space_seed, "been": been,
-		"at": [server.sectors.cell[server.sector].x, server.sectors.cell[server.sector].y],
-		"pos": [server.ship_pos.x, server.ship_pos.y],
-		"store": store, "store_air": server.store_air, "credits": server.credits,
-		"reserve": server.reserve, "hull": server.hull, "voyage": server.voyage_ticks,
-		"jumps": server.jumps, "farthest": server.farthest, "dead_names": server._dead_names.keys(),
+		"at": [server.sectors.cell[server.ship.sector].x, server.sectors.cell[server.ship.sector].y],
+		"pos": [server.ship.pos.x, server.ship.pos.y],
+		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits,
+		"reserve": server.reserve, "hull": server.ship.hull, "voyage": server.voyage_ticks,
+		"jumps": server.jumps, "farthest": server.farthest, "dead_names": server.dead_names.keys(),
 		"holes": holes, "broken": broken,
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty),
@@ -131,24 +131,24 @@ static func restore(server: Node, data: Dictionary) -> String:
 	var at := Vector2i(int(data["at"][0]), int(data["at"][1]))
 	server.been[Sectors.key(at)] = true
 	server.sectors.build(server.space_seed, at, server.been)
-	server.sector = server.sectors.here
-	server.ship_pos = Vector2(float(data["pos"][0]), float(data["pos"][1]))
-	server.ship_dest = server.ship_pos
-	server.ship_moving = false
-	server.in_reach = server.sectors.within_reach(server.sector, server.ship_pos)
-	server.store.clear()
+	server.ship.sector = server.sectors.here
+	server.ship.pos = Vector2(float(data["pos"][0]), float(data["pos"][1]))
+	server.ship.dest = server.ship.pos
+	server.ship.moving = false
+	server.ship.in_reach = server.sectors.within_reach(server.ship.sector, server.ship.pos)
+	server.ship.store.clear()
 	for item: String in data["store"]:
-		server.store[int(item)] = int(data["store"][item])
-	server.store_air = float(data["store_air"])
-	server.credits = int(data["credits"])
+		server.ship.store[int(item)] = int(data["store"][item])
+	server.ship.store_air = float(data["store_air"])
+	server.ship.credits = int(data["credits"])
 	server.reserve = int(data["reserve"])
-	server.hull = int(data["hull"])
+	server.ship.hull = int(data["hull"])
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])
-	server._dead_names.clear()
+	server.dead_names.clear()
 	for n in data["dead_names"]:
-		server._dead_names[str(n)] = true
+		server.dead_names[str(n)] = true
 	var air_saved := Marshalls.base64_to_raw(str(data["air"])).to_float32_array()
 	if air_saved.size() == server.air.air.size():
 		server.air.air = air_saved
@@ -156,7 +156,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.air.set_hole(int(cell), true)
 	server.air.wake()
 	for cell in data["broken"]:
-		server.broken[int(cell)] = true
+		server.ship.broken[int(cell)] = true
 	var jammed := Marshalls.base64_to_raw(str(data["jammed"]))
 	var faulty := Marshalls.base64_to_raw(str(data["faulty"]))
 	for d in mini(jammed.size(), server.doors.jammed.size()):
@@ -173,7 +173,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 			server.saved_crew[str(c["name"])] = c
 	for c: Dictionary in data["crew"]:
 		if bool(c["corpse"]):
-			server.restore_body(c)
+			server.crew.restore_body(c)
 			if not server.saved_crew.has(str(c["name"])):
-				server._dead_names[str(c["name"])] = true   # died and never came back: that takes the reserve
+				server.dead_names[str(c["name"])] = true   # died and never came back: that takes the reserve
 	return ""
