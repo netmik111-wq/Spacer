@@ -302,9 +302,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   of rays cut off at walls (`WorldView._find_beams`). Without power the ship is pitch
   dark (the author's request): a black cover with a shader and an image mask where white marks
   the beam (the author asked to remove light around yourself, build v27); space outside doesn't darken.
-- **Walls are seen whole** (v42, the author's request): `WorldView._draw_look` paints every wall or
-  shut door a look ray reaches as a full tile of green, plus our own cell as a square (a disc used to
-  poke into the wall beside us). The v38 rule "walls around you always visible" is gone: the author
+- **Cells are seen whole** (v42–v43, the author's request): `WorldView._draw_look` keeps the smooth cone
+  (rays now stop exactly at a wall's face) and paints as a full tile of green every cell a ray passes or
+  stops at whose middle lies inside an eye's arc; our own cell is a square (a disc used to poke into the
+  wall beside us). A cell whose middle is outside (the wall right beside us) stays dark beyond the cone. The v38 rule "walls around you always visible" is gone: the author
   found it lit walls behind him and in the pitch dark.
 - **The light and sight mask** (`WorldView._draw_mask`, `_draw_look`): red is ship light,
   blue is flashlights and flashes (they light only where green is, i.e. where we look), green is

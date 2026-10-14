@@ -683,8 +683,9 @@ func _draw_look() -> void:
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
 	var reach := float(Sight.SIGHT_REACH) * _tile
-	var faces := {}                          # walls and shut doors a look reaches: seen whole, as in SS13
-	for arc: Array in Sight.eye_arcs(_my_dark()):
+	var arcs := Sight.eye_arcs(_my_dark())
+	var cells := {}                          # cells a look passes through or stops at
+	for arc: Array in arcs:
 		var points := PackedVector2Array([origin])
 		for k in LOOK_RAYS + 1:
 			var way := ahead.rotated(deg_to_rad(lerpf(float(arc[0]), float(arc[1]), float(k) / LOOK_RAYS)))
@@ -692,14 +693,25 @@ func _draw_look() -> void:
 			while t < reach:
 				var at := origin + way * t
 				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
+				cells[c] = true
 				if c != start_cell and Sight.blocks(client.map, client.doors, c.x, c.y + _deck_shown * _stride):
-					faces[c] = true
+					while t > 0.0 and Vector2i(((origin + way * (t - 1.0)) / _tile).floor()) == c:
+						t -= 1.0             # back to the face of the wall, so no jagged strip pokes into it
+					t = maxf(t - 1.0, 0.0)
 					break
 				t += 4.0
 			points.append(origin + way * minf(t, reach))
 		_look.draw_colored_polygon(points, green)
-	for c: Vector2i in faces:
-		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+	# As in SS13, a cell whose middle is in the cone is seen whole: floor right up
+	# to the walls, and the walls themselves; one off the edge of the cone (beside
+	# or behind us) is seen only as far as the cone itself reaches into it.
+	for c: Vector2i in cells:
+		var to_mid := (Vector2(c) + Vector2(0.5, 0.5)) * _tile - origin
+		var angle := rad_to_deg(ahead.angle_to(to_mid))
+		for arc: Array in arcs:
+			if angle >= minf(arc[0], arc[1]) and angle <= maxf(arc[0], arc[1]):
+				_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+				break
 
 
 func _my_dark() -> bool:
