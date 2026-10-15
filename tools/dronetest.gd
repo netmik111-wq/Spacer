@@ -142,7 +142,11 @@ func _initialize() -> void:
 	drone.asked(q, Net.DRONE_STEER, Net.DIR_NONE)
 	_expect(g.revealed.count(0) == 0 or not drone.inside(), "steered through the ship, it shows every room (%d of %d known)" % [g.revealed.count(1), g.revealed.size()])
 	if drone.inside():
-		# it sees those in its room
+		# it sees those in its room (hits earlier on may have left nobody: then one more is aboard)
+		if crew.count() == 0:
+			g.systems[Net.ESYS_CREW] = Gunnery.HITS_PER_BOARDER
+			d._pirates_party = 1
+			crew.board(1, d.layout)
 		crew.at[0] = drone.at
 		crew.dest[0] = drone.at
 		_expect(_ecrew(crew.packet()) >= 1, "it sees a pirate in its room")
