@@ -134,6 +134,13 @@ Open problems:
 
 ## Build notes
 
+### v52 (blinking and smoothness; the author's video)
+- The author's video showed wall corners at the ends of rooms blinking on and off while walking, and
+  steps jerking every few frames. Corners and other cells grazed by a ray of the field of view are now
+  decided by fixed rules (see `docs/DECISIONS.md`, "No blinking at the edges of sight"); rays walk the
+  grid cell by cell. The client clock moves once per frame by the frame's length, and the cone's fan
+  no longer trails a frame behind the character. No gameplay changes.
+
 ### v51 (code tidy-up, speed, bug fixes; the author's request)
 - Server: who-sees-whom is worked out once per character per tick rather than once per pair
   (`Replication._prepare`), lines of sight remember which doors they cross (`Sight.clear_cached`,

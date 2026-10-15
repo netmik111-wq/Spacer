@@ -493,7 +493,6 @@ func _update_ship(delta: float) -> void:
 	if mask_key != _mask_key or not _shots.is_empty():
 		_mask_key = mask_key
 		_mask.queue_redraw()
-	_update_fan()
 	for i in range(_shots.size() - 1, -1, -1):
 		_shots[i][5] -= delta
 		if float(_shots[i][5]) <= 0.0:
@@ -898,27 +897,11 @@ func _draw_look() -> void:
 		var lo := minf(arc[0], arc[1])
 		var hi := maxf(arc[0], arc[1])
 		arcs.append([lo - LOOK_MARGIN if lo < 0.0 else lo, hi + LOOK_MARGIN if hi > 0.0 else hi])
-	var cells := {}                          # cells a look passes through or stops at
 	for arc: Array in arcs:
 		var points := PackedVector2Array([origin])
 		for k in LOOK_RAYS + 1:
 			var way := ahead.rotated(deg_to_rad(lerpf(float(arc[0]), float(arc[1]), float(k) / LOOK_RAYS)))
-			var t := 0.0
-			var was := Vector2i(-100000, 0)
-			while t < reach:
-				var at := origin + way * t
-				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
-				if c == was:
-					t += 4.0                 # still in the cell looked at last: nothing new
-					continue
-				was = c
-				cells[c] = true
-				if c != start_cell and Sight.blocks(client.map, client.doors, c.x, c.y + _deck_shown * _stride):
-					while t > 0.0 and Vector2i(((origin + way * (t - 1.0)) / _tile).floor()) == c:
-						t -= 1.0             # back to the face of the wall, so no jagged strip pokes into it
-					t = maxf(t - 1.0, 0.0)
-					break
-				t += 4.0
+			var t := _ray_reach(origin, way, start_cell, reach)
 			points.append(origin + way * minf(t, reach))
 		_look.draw_colored_polygon(points, green)
 	# As in SS13, a cell whose middle is in the cone is seen whole: floor right up
@@ -944,11 +927,29 @@ func _draw_look() -> void:
 				continue
 			if Sight.blocks(client.map, client.doors, x, y + dy):
 				walls.append(c)
-			elif cells.has(c) or (map.cells[(y + dy) * map.width + x] >= 0 and _clear_to(at_t, start_cell, c)):
+			elif map.cells[(y + dy) * map.width + x] >= 0 and _clear_to(at_t, start_cell, c):
 				seen[c] = true
+	# Whole cells are told by these checks alone, not by whether a ray happened to
+	# touch them: rays move with every pixel we walk, so a cell they only graze
+	# (a room's far corner) was shown one frame and hidden the next (v52, the
+	# author's video). The rays still draw the parts of cells seen in part.
 	var walls_seen: Array[Vector2i] = []
 	for c: Vector2i in walls:
-		if cells.has(c):
+		if _clear_to(at_t, start_cell, c):
+			walls_seen.append(c)             # its middle in plain sight
+			continue
+		var found := false
+		for d: Vector2i in [Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]:
+			# a corner: walls on both sides of it towards us, and the floor
+			# cell diagonally in front of it seen
+			var n := c + d
+			if seen.has(n) and (at_t.x >= n.x if d.x > 0 else at_t.x <= n.x + 1) \
+					and (at_t.y >= n.y if d.y > 0 else at_t.y <= n.y + 1) \
+					and Sight.blocks(map, client.doors, c.x + d.x, c.y + dy) \
+					and Sight.blocks(map, client.doors, c.x, c.y + d.y + dy):
+				found = true
+				break
+		if found:
 			walls_seen.append(c)
 			continue
 		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
@@ -963,13 +964,49 @@ func _draw_look() -> void:
 				faces = at_t.y >= n.y
 			else:
 				faces = at_t.y <= n.y + 1
-			if faces and (seen.has(n) or (cells.has(n) and not Sight.blocks(map, client.doors, n.x, n.y + dy))):
+			if faces and seen.has(n):
 				walls_seen.append(c)
 				break
 	for c: Vector2i in seen:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
 	for c: Vector2i in walls_seen:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+
+
+func _ray_reach(origin: Vector2, way: Vector2, start: Vector2i, reach: float) -> float:
+	## How far (in pixels) a look from `origin` along `way` goes before a wall or
+	## shut door, at most `reach`. Walked cell by cell through the grid, so it
+	## stops exactly at a wall's face and cannot slip past a corner between two
+	## steps (v52: a ray stepped a few pixels at a time did, here one frame and
+	## not the next, and a sliver behind the wall blinked).
+	var from := origin / _tile
+	var c := start
+	var step := Vector2i(int(signf(way.x)), int(signf(way.y)))
+	var t_max := Vector2(INF, INF)
+	var t_delta := Vector2(INF, INF)
+	if way.x != 0.0:
+		t_max.x = ((c.x + (1 if way.x > 0.0 else 0)) - from.x) / way.x
+		t_delta.x = 1.0 / absf(way.x)
+	if way.y != 0.0:
+		t_max.y = ((c.y + (1 if way.y > 0.0 else 0)) - from.y) / way.y
+		t_delta.y = 1.0 / absf(way.y)
+	var dy := _deck_shown * _stride
+	var limit := reach / _tile
+	while true:
+		var t := 0.0
+		if t_max.x < t_max.y:
+			t = t_max.x
+			c.x += step.x
+			t_max.x += t_delta.x
+		else:
+			t = t_max.y
+			c.y += step.y
+			t_max.y += t_delta.y
+		if t >= limit:
+			return reach
+		if Sight.blocks(client.map, client.doors, c.x, c.y + dy):
+			return maxf(t * _tile - 1.0, 0.0)   # just short of its face, so no jagged strip pokes into it
+	return reach
 
 
 static func _in_arcs(ahead: Vector2, v: Vector2, arcs: Array) -> bool:
@@ -1396,6 +1433,9 @@ func _process(delta: float) -> void:
 	_cone_view.size = _mask_view.size
 	_cone_camera.position = _camera.position
 	_cone_camera.zoom = _camera.zoom
+	# the soft fan of the cone goes where our character is drawn this frame
+	# (worked out before the characters moved, it trailed a frame behind: v52)
+	_update_fan()
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5
