@@ -84,6 +84,17 @@ func tell_nav() -> void:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+func cannot_jump() -> bool:
+	## (v54) Is the way out by jump closed: the engine out, no fuel, or every
+	## sector console broken? (Pirates who see us so, with our guns silent, board.)
+	if server.engine_down() or server.ship.fuel() <= 0:
+		return true
+	for cell: int in server.map.chart.keys():
+		if not server.ship.broken.has(cell):
+			return false
+	return true
+
+
 func jump_asked(p: Player, target: int) -> void:
 	## A player at the sector console asks for a jump.
 	if not server.systems.at_console(p, server.map.chart) or server.ship.jump_to != Net.NO_SECTOR or server.tick < server.ship.drive_ready or server.engine_down() or server.over != Net.OVER_NONE:

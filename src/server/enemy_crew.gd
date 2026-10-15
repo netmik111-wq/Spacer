@@ -25,8 +25,8 @@ const STEP_TICKS := 6                # one step of theirs: a little slower than 
 const PLAN_TICKS := 10               # how often they look again at who goes where
 const PROBE_SECONDS := 20.0          # a probe shows them this long (the author's word: "about 20 s")
 const HURT_SECONDS := 12.0           # a wounded one lies low this long
-const KILL_CHANCE := 0.3             # a hit that gets through into a room: each one in it dies this often...
-const WOUND_CHANCE := 0.4            # ... or else is wounded this often
+const KILL_CHANCE := 0.0             # a hit that gets through into a room kills nobody (the author: only wounds)...
+const WOUND_CHANCE := 0.6            # ... each one in it is wounded this often
 const MENDERS := 2                   # at most this many mend one system together
 
 var server: GameServer

@@ -3,7 +3,7 @@ extends SceneTree
 ## ransom (v54), on a real server stepped by hand:
 ##   godot --headless --path . --script res://tools/dronetest.gd
 ## Its crew stand at their posts, walk to what our hits knocked out and mend it
-## only there; hits into a room may kill those in it (the crew count follows);
+## only there; hits into a room wound those in it, never kill (the author);
 ## a probe shows them for a while. The drone flies over from the drone monitor,
 ## goes where it is steered, shows the rooms it enters and the crew near it,
 ## runs out of battery, is lost when the enemy goes, and its blast wears the
@@ -74,16 +74,16 @@ func _initialize() -> void:
 	var hit := g._hit_chance(Weapons.LASER)
 	_expect(is_equal_approx(hit, float(Weapons.info(Weapons.LASER)["hit"])), "with nobody in its cockpit it cannot dodge")
 
-	# hits into a room find those in it
+	# hits into a room find those in it: they are wounded, never killed (the author)
 	var before := crew.count()
-	var killed := false
+	var wounded := false
 	for k in 40:
 		var said := g.crew_hit(quarters)
-		if crew.count() < before:
-			killed = said.contains("Убит")
+		if said.contains("Ранен"):
+			wounded = true
 			break
-	_expect(crew.count() < before and killed, "a hit into their room kills one of them, and says so")
-	_expect(g.boarders_left() == crew.count() and d._pirates_party == crew.count(), "its crew count follows (%d)" % crew.count())
+	_expect(wounded and crew.count() == before, "a hit into their room wounds them and kills nobody (%d of %d)" % [crew.count(), before])
+	_expect(g.boarders_left() == crew.count() and d._pirates_party == crew.count(), "its crew count stands (%d)" % crew.count())
 
 	# a probe shows them for a while
 	server.ship.store[Net.ITEM_PROBE] = 1
@@ -227,6 +227,34 @@ func _initialize() -> void:
 	_expect(g.ransom > 0, "(a hunter offers)")
 	_run(roundi(Gunnery.RANSOM_SECONDS * Net.TICK_HZ) + 2)
 	_expect(g.ransom == 0 and (g.fleeing() or not g.fighting()), "nobody answers in %d s: it runs" % int(Gunnery.RANSOM_SECONDS))
+
+	# (v54, the author's word) a raider boards only when we can neither fight nor run
+	if d.here:
+		d._leave(true)
+	_expect(d.pirates_come(2, true), "a raider, to see when it boards")
+	g.ransom_chance = 0.0
+	g.temper = Net.TEMPER_RECKLESS
+	server.ship.store[Net.ITEM_FUEL] = 3
+	_run(2)
+	_expect(d._pirates_dock_at < 0, "while a gun of ours can fire it keeps its distance")
+	for i in server.ship.mounts.size():
+		server.ship.broken[map.guns[i]] = true
+	_run(2)
+	_expect(d._pirates_dock_at < 0, "with our guns silent but a jump to be had, it still keeps off")
+	for c: int in map.chart.keys():
+		server.ship.broken[c] = true
+	_run(2)
+	_expect(d._pirates_dock_at >= 0 and not d.docked, "guns silent and no jump: it closes in to board")
+	server.ship.broken.erase(map.guns[0])
+	_run(2)
+	_expect(d._pirates_dock_at < 0, "a gun mended in time: it pulls back")
+	server.ship.broken[map.guns[0]] = true
+	_run(Derelict.RAID_BOARD_TICKS + 10)
+	var boarders := 0
+	for who in server.players:
+		if who != null and who.pirate and not who.corpse:
+			boarders += 1
+	_expect(d.docked and boarders > 0, "otherwise it docks by force and its crew comes aboard (%d)" % boarders)
 
 	print("DRONETEST %s" % ("OK" if failed == 0 else "FAILED: %d" % failed))
 	quit(0 if failed == 0 else 1)

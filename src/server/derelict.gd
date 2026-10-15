@@ -28,6 +28,7 @@ const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
 
 const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
+const RAID_BOARD_TICKS := 30 * Net.TICK_HZ    # (v54) a raider that sees us helpless closes in and boards after this
 const GAP := 3                       # cells of open space between it and our airlock while not docked
 const VACUUM_ROOM := 0.4             # share of its rooms with no air left at all
 const HOLE_CHANCE := 0.5             # chance that a hole in its hull still leaks
@@ -199,6 +200,8 @@ func update() -> void:
 			if free and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
 				_leave()                     # we move on: the hulk stays where it drifts
 			return
+		if raid:
+			_raid_closes_in()
 		if _pirates_dock_at >= 0 and server.tick >= _pirates_dock_at:
 			_pirates_board()
 		elif _pirates_dock_at < 0 and not raid and not docked and free:
@@ -280,6 +283,22 @@ func becomes_wreck() -> void:
 	for i in _rng.randi_range(1, 3):
 		_drop(cells, PIRATE_LOOT)
 	server.replication.sight_changed()
+
+
+func _raid_closes_in() -> void:
+	## (v54, the author's word) A raider only boards when we can neither fight nor
+	## run: every gun of ours silent, and the engine out or no jump to be had.
+	## It warns, closes in and docks by force after RAID_BOARD_TICKS; if one of
+	## our guns speaks again before then, it pulls back to its distance.
+	var g = server.gunnery
+	var helpless: bool = g.fighting() and not g.fleeing() and g.ransom == 0 \
+		and g.our_guns_silent() and server.navigation.cannot_jump()
+	if helpless and _pirates_dock_at < 0:
+		_pirates_dock_at = server.tick + RAID_BOARD_TICKS
+		server.chat.say("Наши орудия молчат, а уйти прыжком мы не можем. Пиратский корабль идёт на сближение: через %d с он пристыкуется силой и пойдёт на абордаж!" % (RAID_BOARD_TICKS / Net.TICK_HZ))
+	elif not helpless and _pirates_dock_at >= 0 and g.fighting():
+		_pirates_dock_at = -1
+		server.chat.say("Пиратский корабль отходит на прежнюю дистанцию: у нас снова есть чем ответить или куда уйти.")
 
 
 func _watch_boarding() -> void:

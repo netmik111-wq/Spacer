@@ -153,6 +153,8 @@ Open problems:
   itself, not its wall tile: rebuilt with outlines that follow the shape of wall machines, floor things and bodies.
 - The author's bug note (videos, then his words): an empty airlock chamber against a docked ship with air kept
   the outer door shut. The pump now brings the chamber to the docked ship's pressure.
+- The author's answers: hits into a room only wound (no kills), the ransom stays, and a raider boards when
+  our guns are all silent and we cannot jump (engine out, no fuel or the sector console broken).
 
 ### v53 (many kinds of pirate ship; the author's request)
 - The author asked for more kinds of enemy ship, rolled ("procedural generation"), with a different setup each.

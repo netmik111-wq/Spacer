@@ -458,8 +458,12 @@ someone is outside):
 
 - **«Пиратский корабль: абордаж»** ("Pirate ship: boarding"): it comes to board us, as before (below).
 - **«Пиратский корабль: бой»** ("Pirate ship: fight"): a raid. It takes the same place above the airlock
-  but **never docks**: it fights at a distance until it is wrecked, runs, or we jump away. Its crew is
-  its class's (see "Kinds of pirate ship").
+  but **does not dock** while we can answer: it fights at a distance until it is wrecked, runs, or we jump away.
+  Its crew is its class's (see "Kinds of pirate ship").
+  - (v54, the author's word) When **every gun of ours is silent** (broken, put out by ion, or no power) **and we
+    cannot jump** (engine out, no fuel, or every sector console broken), it warns, closes in and after **30 s**
+    docks by force and boards like the boarding ship below. If a gun of ours can fire again before then, or a
+    jump is possible again, it pulls back to its distance.
 
 The boarding ship:
 
@@ -524,9 +528,9 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 - A system is mended only while somebody stands in its room: **1 point per 15 s** each, two at most.
 - With nobody at its guns they charge at **60%** speed; with nobody in the cockpit it **can't dodge** our shots
   and charges its jump at **half** speed.
-- A hit that gets through into a room (not ion) finds whoever is in it: each **dies 30%** of the time or is
-  **wounded 40%** (a wounded one lies low in the quarters for 12 s). Each killed one counts like 2 damage on the
-  quarters (the "Quarters" row below still holds: hits there kill as before).
+- A hit that gets through into a room (not ion) finds whoever is in it: each is **wounded 60%** of the time and
+  lies low in the quarters for 12 s (no mending, no post). Since the author's word in v54 such hits **kill nobody**;
+  the "Quarters" row below still holds: hits on the quarters kill as before.
 - We see them only through a probe (20 s) or the drone.
 
 ### Scouting drone
@@ -539,7 +543,7 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 - Every room it enters becomes known on the gun console. It sees the pirates in its room and right next to it.
 - Its battery lasts **60 s**. Each second, every fit pirate in its room shoots it down with a **15%** chance.
 - «Взорвать дрон здесь»: **2 damage** to the system in its room (no shield stops it), **1** to the hull, and it
-  may kill or wound the pirates in the room like a hit. The drone is spent.
+  may wound the pirates in the room like a hit. The drone is spent.
 - It is lost when its battery runs out, when it is shot down, or when the pirate ship goes.
 
 ### Ransom
