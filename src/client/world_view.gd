@@ -148,11 +148,37 @@ var hover := true                    # outline what the mouse is over (off while
 var hover_test := Vector2.INF       # (test helper) the mouse is taken to be this far from our character, in cells
 var _hover_pen: Node2D               # above the dark too: the outline of the thing under the mouse
 var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
+var _hover_ink: Node2D               # under _hover_pen: the silhouettes of things on the floor, drawn round them
+var _body_ink: Sprite2D              # on a body under the mouse: its outline (OUTLINE_SHADER)
+var _tile_lines := {}                # tile id -> the outline of the thing fitted into that wall tile (null: none)
+var _tiles_image: Image              # the tile atlas, to find those outlines in
 var _stars := PackedVector2Array()
 var _star_sizes := PackedByteArray()
 var _star_origin := Vector2.ZERO     # corner and size of the patch of sky the stars are scattered over
 var _star_field := Vector2.ONE
 var _star_shift := Vector2.ZERO      # how far the sky has slid: follows the ship's place in its sector
+# The outline under the mouse (v54): things on the floor are drawn again in its
+# colour a pixel out each of four ways (SILHOUETTE); a body's figure is copied, drawing
+# only the pixels just outside it (OUTLINE).
+const SILHOUETTE_SHADER := """shader_type canvas_item;
+uniform vec4 ink : source_color;
+void fragment() { COLOR = vec4(ink.rgb, ink.a * COLOR.a); }
+"""
+const OUTLINE_SHADER := """shader_type canvas_item;
+uniform vec4 ink : source_color;
+void fragment() {
+	float near = 0.0;
+	for (int i = -1; i <= 1; i++) {
+		for (int j = -1; j <= 1; j++) {
+			if (i * j == 0) {
+				near = max(near, texture(TEXTURE, UV + vec2(float(i), float(j)) * TEXTURE_PIXEL_SIZE).a);
+			}
+		}
+	}
+	float own = texture(TEXTURE, UV).a;
+	COLOR = vec4(ink.rgb, own > 0.5 ? 0.0 : ink.a * step(0.5, near));
+}
+"""
 const STAR_PIXELS_PER_UNIT := 9.0
 var _source_id := 0
 var _door_tiles: Array = []          # per door kind: tile ids for [shut, half open, open]
@@ -344,6 +370,17 @@ func setup(p_client: GameClient) -> void:
 	_hover_pen = Node2D.new()
 	_hover_pen.draw.connect(_draw_hover)
 	_me_layer.add_child(_hover_pen)
+	_hover_pen.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_hover_ink = Node2D.new()
+	_hover_ink.show_behind_parent = true
+	_hover_ink.material = _ink_material(SILHOUETTE_SHADER)
+	_hover_ink.draw.connect(_draw_hover_ink)
+	_hover_pen.add_child(_hover_ink)
+	_body_ink = Sprite2D.new()
+	_body_ink.texture = _chars_tex
+	_body_ink.region_enabled = true
+	_body_ink.centered = false
+	_body_ink.material = _ink_material(OUTLINE_SHADER)
 	_me_over = Sprite2D.new()
 	_me_over.texture = _chars_tex
 	_me_over.region_enabled = true
@@ -512,24 +549,27 @@ func _update_ship(delta: float) -> void:
 
 
 func _draw_things(d: int) -> void:
-	## Things lying on the floor of one deck: one in the middle of its cell, several side by side.
+	## Things lying on the floor of one deck.
 	var map := client.map
 	var pen := _decks[d].things
 	for cell: int in client.floor_things.keys():
 		if map.deck_of_cell(cell) != d:
 			continue
-		var things: PackedByteArray = client.floor_things[cell]
-		var here := PackedByteArray()
-		for v in things:
-			if v != Net.ITEM_NONE:
-				here.append(v)
-		var corner := _on_deck(cell) * _tile
-		if here.size() == 1:
-			ItemArt.draw(pen, Rect2(corner + Vector2(7, 9), Vector2(18, 18)), here[0])
-			continue
-		for k in here.size():
-			var spot := Vector2(3 + (k % 2) * 13, 6 + (k / 2) * 12)
-			ItemArt.draw(pen, Rect2(corner + spot, Vector2(14, 14)), here[k])
+		_floor_things_at(pen, cell, _on_deck(cell) * _tile)
+
+
+func _floor_things_at(pen: CanvasItem, cell: int, corner: Vector2) -> void:
+	## The things lying in one cell: one in the middle, several side by side.
+	var here := PackedByteArray()
+	for v in client.floor_things.get(cell, PackedByteArray()):
+		if v != Net.ITEM_NONE:
+			here.append(v)
+	if here.size() == 1:
+		ItemArt.draw(pen, Rect2(corner + Vector2(7, 9), Vector2(18, 18)), here[0])
+		return
+	for k in here.size():
+		var spot := Vector2(3 + (k % 2) * 13, 6 + (k / 2) * 12)
+		ItemArt.draw(pen, Rect2(corner + spot, Vector2(14, 14)), here[k])
 
 
 func _find_dim() -> Dictionary:
@@ -734,7 +774,9 @@ func _fade_afterimages(delta: float) -> void:
 func _update_hover() -> void:
 	## Something usable under the mouse gets an outline, as in SS13 (the author's
 	## note): bright when a click would reach it, faint when it is out of reach.
-	## Only what we can see: the outline gives nothing away in the dark.
+	## Only what we can see: the outline gives nothing away in the dark. The
+	## outline follows the thing itself (the author, v54): a machine on a wall,
+	## things on the floor, a body; a door, a hole or a ladder gets its cell's.
 	var on := Vector2i(-1, 0)
 	var map := client.map
 	var at := cell_under_mouse() if hover_test == Vector2.INF else Vector2(client.pred.x, client.pred.y) + hover_test
@@ -747,14 +789,182 @@ func _update_hover() -> void:
 	if on != _hover_on:
 		_hover_on = on
 		_hover_pen.queue_redraw()
+		_hover_ink.queue_redraw()
+	_hover_body()
+
+
+func _exit_tree() -> void:
+	# the body's outline is out of the tree while no body is under the mouse: free it ourselves
+	if _body_ink != null and _body_ink.get_parent() == null:
+		_body_ink.free()
+
+
+func _hover_colour() -> Color:
+	return Color(1.0, 0.92, 0.55, 0.9) if _hover_on.y == 1 else Color(0.75, 0.8, 0.9, 0.4)
+
+
+func _hover_body() -> void:
+	## A body lying under the mouse (with nothing on the wall there) is outlined
+	## by a copy of its figure that draws only the rim round it.
+	var sprite: Sprite2D = null
+	if _hover_on.x >= 0 and _tile_line(client.map.cells[_hover_on.x]) == null:
+		for e: GameClient.Ent in client.ents.values():
+			if e.id != client.my_id and e.cond != Net.COND_OK and e.y * client.map.width + e.x == _hover_on.x and _views.has(e.id):
+				sprite = _views[e.id]
+				break
+	if sprite == null or sprite.get_parent() == null:
+		if _body_ink.get_parent() != null:
+			_body_ink.get_parent().remove_child(_body_ink)
+		return
+	# beside the body, not in it: a body's sprite is freed when it leaves our view
+	if _body_ink.get_parent() != sprite.get_parent():
+		if _body_ink.get_parent() != null:
+			_body_ink.get_parent().remove_child(_body_ink)
+		sprite.get_parent().add_child(_body_ink)
+	_body_ink.transform = sprite.transform
+	_body_ink.z_index = sprite.z_index + 1
+	_body_ink.region_rect = sprite.region_rect.grow(1.0)
+	_body_ink.offset = sprite.offset - Vector2.ONE
+	_body_ink.flip_h = sprite.flip_h
+	(_body_ink.material as ShaderMaterial).set_shader_parameter("ink", _hover_colour())
+
+
+func _hover_kind() -> int:
+	## What the outline under the mouse goes round: 0 its cell, 1 a thing fitted
+	## into the wall, 2 things on the floor, 3 a body.
+	if _hover_on.x < 0:
+		return 0
+	if _tile_line(client.map.cells[_hover_on.x]) != null:
+		return 1
+	if _body_ink.get_parent() != null:
+		return 3
+	if client.floor_things.has(_hover_on.x) and client.map.door_of[_hover_on.x] < 0 and not client.holes.has(_hover_on.x):
+		return 2
+	return 0
 
 
 func _draw_hover() -> void:
 	if _hover_on.x < 0:
 		return
-	var box := Rect2(_on_deck(_hover_on.x) * _tile, Vector2(_tile, _tile)).grow(-0.5)
-	var colour := Color(1.0, 0.92, 0.55, 0.9) if _hover_on.y == 1 else Color(0.75, 0.8, 0.9, 0.4)
-	_hover_pen.draw_rect(box, colour, false, 1.0)
+	var corner := _on_deck(_hover_on.x) * _tile
+	match _hover_kind():
+		1:
+			_hover_pen.draw_texture(_tile_line(client.map.cells[_hover_on.x]), corner, _hover_colour())
+		2:
+			_floor_things_at(_hover_pen, _hover_on.x, corner)    # the things again, over their silhouettes
+		3:
+			pass
+		_:
+			_hover_pen.draw_rect(Rect2(corner, Vector2(_tile, _tile)).grow(-0.5), _hover_colour(), false, 1.0)
+
+
+func _draw_hover_ink() -> void:
+	## The silhouettes of the things on the floor under the mouse, a pixel out
+	## each of four ways: what is left of them round the things is their outline.
+	if _hover_kind() != 2:
+		return
+	(_hover_ink.material as ShaderMaterial).set_shader_parameter("ink", _hover_colour())
+	var corner := _on_deck(_hover_on.x) * _tile
+	for d: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+		_floor_things_at(_hover_ink, _hover_on.x, corner + d)
+
+
+func _tile_line(id: int) -> Texture2D:
+	## The outline of what is fitted into a wall tile (a console, a machine, a
+	## locker...): the pixels round those that differ from the bare wall. Null
+	## for every other tile. Worked out once per tile.
+	if id < 0:
+		return null
+	if _tile_lines.has(id):
+		return _tile_lines[id]
+	var map := client.map
+	var line: Texture2D = null
+	if id < map.fitting.size() and map.fitting[id] == 1:
+		if _tiles_image == null:
+			_tiles_image = (load("res://assets/tiles.png") as Texture2D).get_image()
+			if _tiles_image.is_compressed():
+				_tiles_image.decompress()
+		var name := ""
+		for n: String in map.tile_ids.keys():
+			if int(map.tile_ids[n]) == id:
+				name = n
+		var wall: int = map.tile_ids.get("pirate_wall_h" if name.begins_with("pirate_") else "wall_h", -1)
+		if wall >= 0:
+			line = _outline_of(id, wall)
+	_tile_lines[id] = line
+	return line
+
+
+func _outline_of(id: int, wall: int) -> Texture2D:
+	var cols := client.map.atlas_columns
+	var at := Vector2i(id % cols, id / cols) * _tile
+	var bare := Vector2i(wall % cols, wall / cols) * _tile
+	var t := _tile
+	var inside := PackedByteArray()
+	inside.resize(t * t)
+	for y in t:
+		for x in t:
+			var a := _tiles_image.get_pixel(at.x + x, at.y + y)
+			var b := _tiles_image.get_pixel(bare.x + x, bare.y + y)
+			if absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) + absf(a.a - b.a) > 0.1:
+				inside[y * t + x] = 1
+	# close one-pixel gaps (a pixel of the thing the colour of the wall), then
+	# fill what the outside cannot reach: the thing is one solid shape
+	var grown := _spread(inside, t, 1)
+	var solid := _spread(grown, t, 0)
+	var outside := PackedByteArray()
+	outside.resize(t * t)
+	var todo: Array[int] = []
+	for k in t:
+		for c: int in [k, (t - 1) * t + k, k * t, k * t + t - 1]:
+			if solid[c] == 0 and outside[c] == 0:
+				outside[c] = 1
+				todo.append(c)
+	while not todo.is_empty():
+		var c: int = todo.pop_back()
+		var x := c % t
+		var y := c / t
+		for n: Vector2i in [Vector2i(x - 1, y), Vector2i(x + 1, y), Vector2i(x, y - 1), Vector2i(x, y + 1)]:
+			if n.x >= 0 and n.y >= 0 and n.x < t and n.y < t:
+				var k := n.y * t + n.x
+				if solid[k] == 0 and outside[k] == 0:
+					outside[k] = 1
+					todo.append(k)
+	var picture := Image.create(t, t, false, Image.FORMAT_RGBA8)
+	var any := false
+	for y in t:
+		for x in t:
+			if outside[y * t + x] == 0:
+				continue
+			for n: Vector2i in [Vector2i(x - 1, y), Vector2i(x + 1, y), Vector2i(x, y - 1), Vector2i(x, y + 1)]:
+				if n.x >= 0 and n.y >= 0 and n.x < t and n.y < t and outside[n.y * t + n.x] == 0:
+					picture.set_pixel(x, y, Color.WHITE)
+					any = true
+					break
+	return ImageTexture.create_from_image(picture) if any else null
+
+
+static func _spread(cells: PackedByteArray, t: int, value: int) -> PackedByteArray:
+	## value 1: every cell next to a set one is set too; value 0: every cell next
+	## to an unset one is unset (a cell on the edge keeps its own).
+	var out := cells.duplicate()
+	for y in t:
+		for x in t:
+			if cells[y * t + x] == value:
+				continue
+			for n: Vector2i in [Vector2i(x - 1, y), Vector2i(x + 1, y), Vector2i(x, y - 1), Vector2i(x, y + 1)]:
+				if n.x >= 0 and n.y >= 0 and n.x < t and n.y < t and cells[n.y * t + n.x] == value:
+					out[y * t + x] = value
+					break
+	return out
+
+
+static func _ink_material(code: String) -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = code
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	return m
 
 
 func _draw_shade() -> void:

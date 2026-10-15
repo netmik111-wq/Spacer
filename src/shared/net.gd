@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 31
+const PROTOCOL := 32
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -131,6 +131,7 @@ const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + W
 const ITEM_ROCKET := 61             # a rocket for the rocket launcher (cargo)
 const ITEM_EMP_ROCKET := 62         # an EMP rocket for the EMP launcher (cargo)
 const ITEM_PROBE := 63              # (v53) a scanning probe, launched from the gun console: shows the enemy's rooms (cargo)
+const ITEM_DRONE := 64              # (v54) a scouting drone, launched and steered from the drone monitor (cargo)
 const ITEM_GUN_MORE := 60           # (v50) weapons from Weapons.TRACTOR on: ITEM_GUN_MORE + Weapons.* (71, 72)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
@@ -169,7 +170,8 @@ const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (W
                                     # u8 count of its rooms (ShipMap.rooms of its drawing), then per room u8: the
                                     # system in it (ESYS_*), ROOM_EMPTY, or ROOM_UNKNOWN (not scanned yet);
                                     # u8 probes in the cargo, then
-                                    # u8 count, then u8 per weapon the enemy carries (Weapons.*)
+                                    # u8 count, then u8 per weapon the enemy carries (Weapons.*);
+                                    # (v54) u8 credits of the ransom it offers (0 = none), u8 seconds the offer stands
 const ROOM_UNKNOWN := 255
 const ROOM_EMPTY := 254
 const GUN_BROKEN := 255
@@ -188,6 +190,7 @@ const GUNSET_SHIELD := 2            # b = 1 switch the shield on, 0 off
 const GUNSET_MOUNT := 3             # a = mount, b = the weapon from the cargo to put on it (Weapons.*; NONE = take it
                                     # down into the cargo)
 const GUNSET_PROBE := 4             # (v53) launch a scanning probe from the cargo at the enemy
+const GUNSET_RANSOM := 5            # (v54) take the ransom a beaten pirate ship offers
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
 const C_AIM := 22                   # u8 ESYS_*, AIM_ROOM + room or AIM_ANY: where on the enemy the guns aim, from the gun console
 const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at
@@ -195,6 +198,22 @@ const S_HOLO := 31                  # the holomap (only to those watching it), a
                                     # the air (0..AIR_FULL) of every cell of the ship's floor in order (see
                                     # ShipMap.on_ship), u16 count, u16 per hole in the hull, u8 count, then per door
                                     # of the ship u8: bit 0 open, the rest Doors.flags shifted up by one
+const C_DRONE := 25                 # (v54) u8 action (DRONE_*), u8 a: the scouting drone, from the drone monitor
+const DRONE_LAUNCH := 1             # send one from the cargo at the enemy
+const DRONE_STEER := 2              # a = the direction it is to go (DIR_*; DIR_NONE = stop)
+const DRONE_BLOW := 3               # it blows itself up where it is
+const S_DRONE := 33                 # (v54) the scouting drone, to all: u8 state (DRONE_*), u16 cell of the enemy's
+                                    # drawing it is in, u8 seconds of battery left, u8 seconds until it gets there
+                                    # (while flying), u8 drones in the cargo
+const DRONE_NONE := 0
+const DRONE_FLYING := 1             # on its way over
+const DRONE_INSIDE := 2             # inside the enemy ship
+const S_ECREW := 34                 # (v54) the enemy's crew we can see now (a probe shows them all for a while, the
+                                    # drone those near it), after the ship's id: u8 seconds the probe still shows them
+                                    # (0 = it does not), u8 count, then per one u16 the cell of the enemy's drawing it
+                                    # stands in, u8 flags (ECREW_*)
+const ECREW_MENDING := 1            # mending the system in its room
+const ECREW_HURT := 2               # wounded: it goes to lie low in its quarters
 # The enemy ship's systems: each stands in a room of its drawing (ShipMap.rooms; which room is
 # rolled for every ship, see Shipyard; a hand-made drawing may name them with ShipMap.zones). A hit
 # there wears it down; at nothing it stops working until the enemy's crew mends it.
@@ -209,6 +228,7 @@ const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигате
 const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const ENEMY_HELD := 4               # (v50) our tractor beam holds it
+const ENEMY_RANSOM := 8             # (v54) it offers a ransom to be let go (see the ransom byte at the end of S_GUNS)
 const AIM_ANY := 255                # the guns hit wherever they hit
 const AIM_ROOM := 64                # (v53) AIM_ROOM + n: the guns aim at room n of its drawing, whatever is in it
 # (v53) the classes of pirate ship (see Hulls), and how they behave in a fight

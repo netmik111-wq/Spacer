@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v53 (version 0.46).
+Last updated: build v54 (version 0.47).
 
 Contents:
 
@@ -129,6 +129,8 @@ Contents:
   - If the chamber has more than half its air, it pumps it out into the **ship's air reserve**
     (the excess goes overboard), otherwise it pumps air in from the reserve. A full chamber takes ~5 s.
   - With no air reserve there is nothing to pump in: the only option is to raise the inner shutter by hand.
+  - (v54) With a ship **docked** at the outer door that holds air, the pump brings the chamber to **that ship's
+    pressure** instead (in or out), so the outer door opens onto it; the inner door then follows the usual rule.
 - An open outer door vents the air in its doorway into space.
 
 ### Open space
@@ -215,6 +217,8 @@ Contents:
 - **Bridge consoles** break (short circuit): dark screen and sparks.
 - The "not both at once" rule: while a console is broken, the engine doesn't break, and vice versa. So the
   crew always has a way to escape.
+- **Drone monitor** (v54) — the fifth console, on the bridge's top wall between the helm and the holomap: the
+  scouting drone's screen (see "Scouting drone" under Pirates).
 - **Holomap** — a monitor with a blue screen on the bridge wall and in the engine room (top wall). E opens
   the whole ship deck by deck: every floor cell coloured by pressure (blue normal, from 76%; yellow
   lowered; red dangerous, below 20%; dark red vacuum), breaches blinking red, machines and consoles
@@ -508,6 +512,43 @@ they carry and how they fight, not only through more hull.
 - Its guns **firing** give away its gun room.
 - A **scanning probe** («Зонд-сканер», cargo, **12** credits at traders, the ship sets out with **1**) is
   launched from the gun console («Запустить зонд-сканер»): it shows every room at once, its crew and its temper.
+  Since v54 it also shows **where each of its crew is, for 20 s** (red dots on the plan, a white ring on one
+  who is mending, dim if wounded); another probe can be launched once those 20 s are over.
+- The **scouting drone** (v54) shows the rooms it enters and the crew near it: see "Scouting drone".
+
+### The pirates' crew at their posts
+
+Since v54 its crew are on its plan, walking room to room (a cell per 0.3 s). Twice a second they decide who
+goes where, in this order: to mend a system we **knocked out** (two to it), one to the **cockpit**, then to mend
+what is only **worn**, then one to its **guns**, one to its **shield generator**; the rest sit in the **quarters**.
+- A system is mended only while somebody stands in its room: **1 point per 15 s** each, two at most.
+- With nobody at its guns they charge at **60%** speed; with nobody in the cockpit it **can't dodge** our shots
+  and charges its jump at **half** speed.
+- A hit that gets through into a room (not ion) finds whoever is in it: each **dies 30%** of the time or is
+  **wounded 40%** (a wounded one lies low in the quarters for 12 s). Each killed one counts like 2 damage on the
+  quarters (the "Quarters" row below still holds: hits there kill as before).
+- We see them only through a probe (20 s) or the drone.
+
+### Scouting drone
+
+- **«Дрон-разведчик»** (cargo, **20** credits at traders, the ship sets out with **1**). Sent from the **drone
+  monitor** on the bridge (top wall, next to the holomap; E opens it; needs power) with «Запустить дрон», only while a
+  pirate ship fights us.
+- It flies over in **4 s** and gets in at the enemy's outer door. While you stand at the monitor, the **walking
+  keys steer it** (not your character), a cell per 0.25 s; anybody at the monitor may take over.
+- Every room it enters becomes known on the gun console. It sees the pirates in its room and right next to it.
+- Its battery lasts **60 s**. Each second, every fit pirate in its room shoots it down with a **15%** chance.
+- «Взорвать дрон здесь»: **2 damage** to the system in its room (no shield stops it), **1** to the hull, and it
+  may kill or wound the pirates in the room like a hit. The drone is spent.
+- It is lost when its battery runs out, when it is shot down, or when the pirate ship goes.
+
+### Ransom
+
+- Since v54 a beaten pirate ship that would run (any temper but reckless) **offers a ransom instead, half the
+  time**, once per fight: **60%** of its reward in credits and a **can of fuel**.
+- While the offer stands (**20 s**) it does not shoot. «Принять выкуп» on the gun console: we get the credits and
+  fuel, **30%** of the time one of its crew joins our reserve, and it leaves (no reward, no wreck).
+- Our shot is a refusal; so is silence for 20 s. Either way it then charges its jump to run, as below.
 - The guns can aim at any room, known or not: click it on the plan. Unknown rooms have no system button.
 
 ### Wrecked raider
@@ -593,7 +634,8 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   one; a reckless one never runs), or its guns knocked out and its hull at half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**, worn
   longer in proportion; with the drive or its engine knocked out, the charge stands still until it is
   mended. A ship that gets away pays nothing. While it runs it doesn't close in to dock either.
-- Its crew repairs one point of a worn system (not the quarters) every **15 s**: a system knocked out
+- Its crew repairs one point of a worn system (not the quarters) every **15 s** while one of them is in its room
+  (since v54; twice as fast with two): a system knocked out
   comes before one only worn; while it runs, the jump drive and engine first, otherwise its guns, then its shields.
 - **Its shots at us.** While one of our guns works it aims its temper's share of its shots at our guns (20% more
   while it runs); of the rest, its temper's share go at a bridge console or the shield generator, and the others
@@ -785,7 +827,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | Key | Action |
 |---|---|
 | WASD, arrows | walk |
-| E | action: console, locker, holomap, ladder, repair, search, pick up item, hack lock, intercom |
+| E | action: console, locker, holomap, drone monitor, ladder, repair, search, pick up item, hack lock, intercom |
 | F | drag a person lying down / let go |
 | Q | oxygen supply |
 | 1–6, mouse wheel | what's in hand |
@@ -793,7 +835,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | G | drop the item on the floor |
 | Mouse click | on something within reach: as E (pick up, console, machine, repair while held); elsewhere: shot, blow, healing |
 | R | return after death (takes one from the reserve) |
-| Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off |
+| Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off; since v54 it hugs the thing itself (a machine on a wall, things on the floor, a body), a door, hole or ladder keeps its cell's square |
 | I, Tab | inventory window |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
 | T | chat straight into the radio |

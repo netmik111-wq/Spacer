@@ -41,6 +41,7 @@ func _initialize() -> void:
 	var g: Gunnery = server.gunnery
 	server.shipyard.classic = true          # (the checks below were written for the old pirate ship: see shiptest for the rolled ones)
 	g.shield_chance = 0.0                    # (the old checks below are about a pirate ship with no shield)
+	g.ransom_chance = 0.0                    # (the old checks below are about a ship that runs when beaten)
 	g.loadout_for_test = PackedByteArray([Weapons.LASER])
 	var d: Derelict = server.derelict
 	_expect(map.guns.size() == 3 and map.gun_console.size() == 1, "the ship has three guns and a gun console")
@@ -71,7 +72,7 @@ func _initialize() -> void:
 	_expect(g.aim == Net.ESYS_HELM, "the gun console aims them at the enemy's bridge")
 	var pkt := g.packet()
 	var at := 4 + 3 * map.guns.size() + 4 + 4
-	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[pkt.size() - 2] == 1 and pkt[pkt.size() - 1] == Weapons.LASER,
+	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[pkt.size() - 4] == 1 and pkt[pkt.size() - 3] == Weapons.LASER and pkt[pkt.size() - 2] == 0,
 		"clients are told where the guns aim, how the enemy's systems are and what guns it has")
 	var credits := server.ship.credits
 	for i in 20:
@@ -102,8 +103,8 @@ func _initialize() -> void:
 		server._tick()
 	_expect(g.down(Net.ESYS_ENGINE) and d._pirates_dock_at == dock_at + 5 * Net.TICK_HZ, "with its engine out it cannot close in: the time to dock stands still")
 	g._mend_next = server.tick + 1
-	_run(2)
-	_expect(not g.down(Net.ESYS_WEAPONS) or not g.down(Net.ESYS_ENGINE), "its crew mends a system after a while")
+	_run(int(Gunnery.ENEMY_REPAIR_SECONDS + 10.0) * Net.TICK_HZ)
+	_expect(not g.down(Net.ESYS_WEAPONS) or not g.down(Net.ESYS_ENGINE), "its crew walks over and mends a system after a while")
 	credits = server.ship.credits
 	g.enemy_hull = Gunnery.ENEMY_HULL
 	g.aim_asked(p, Net.ESYS_CREW)

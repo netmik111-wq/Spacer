@@ -424,8 +424,50 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   rooms and numbers; `tools/shiptest.gd` checks the rolled ones.
 - **Outline under the mouse** (v53, the author's note and video, as in SS13): usable things you can see (or
   can reach) get a thin outline, bright within reach, faint beyond (`WorldView._update_hover`,
-  `GameClient.usable_at`). A tile outline, not the sprite's silhouette: wall objects are tiles, and a shader
-  per sprite costs more than it gives for now.
+  `GameClient.usable_at`). Since v54 (the author: "the outline must be around the object itself, not around
+  the wall") it follows the thing's own shape: for a thing fitted into a wall, the pixels of its tile that
+  differ from the bare wall tile, made solid, are outlined once per tile (`WorldView._tile_line`); things on
+  the floor are drawn again in the outline colour a pixel out four ways under themselves; a body gets a copy
+  of its figure whose shader draws only the rim. Doors, holes and ladders keep the cell's square: there the
+  tile is the thing.
 - **Windows and open doors are told as walls in the field of view** (v53, the author's video): a see-through
   cell in a wall whose middle is hidden used to be left to the rays, which cut a wedge out of it; now the
   wall rules (a seen face or corner) show it whole (`WorldView._draw_look`).
+- **The pirates' crew stand at their posts** (v54, the author: "the probe also shows the enemy crew moving
+  through their rooms"; the rest is mine). They are not characters in the world (`Player`), only places on
+  the enemy's drawing (`src/server/enemy_crew.gd`): real characters would need the pirates' AI, sight and
+  network for every one of them for a sight nobody stands next to. What they do counts, as in FTL, so
+  watching them is worth a probe: a knocked-out system is mended only while somebody is in its room (a
+  point per 15 s each, at most two), its guns charge at 60% with nobody at them, it cannot dodge with
+  nobody in its cockpit and charges its jump at half speed. Order of posts: what is knocked out, the
+  cockpit, what is worn, guns, shield, the rest rest. A shot that gets through into a room kills each one
+  in it 30% of the time and wounds 40% (12 s lying low in the quarters); the crew count
+  (`systems[ESYS_CREW]`, two points a head) follows, so the old quarters rule still holds.
+- **A probe shows the crew for 20 s** (the author's yes to "about 20 s"); it can be launched again once that
+  is over even if every room is known.
+- **The scouting drone** (v54, the author's notebook: an intruder drone steered by hand from a monitor). It
+  is a place on the enemy's drawing too, not a thing in the world: the author asked for scouting through a
+  monitor, and a real flying object would bring physics, collisions and sight for little. The drone monitor
+  is the fifth console of the mockup ('5', unused until now) on the bridge. 4 s to fly over, in at the
+  enemy's outer door, a cell per 0.25 s, 60 s of battery, seen pirates in its room shoot it down 15% a
+  second each. It shows the rooms it enters and the crew in its room and next to it. Its blast (my idea,
+  asked of the author) does 2 to the system in its room through any shield and 1 to the hull: a choice
+  between scouting longer and one sure hit. 20 credits at traders, one aboard at the start.
+- **Ransom** (v54, mine, asked of the author): a beaten pirate that would run (not a reckless one) offers a
+  ransom instead half the time: 60% of its reward and a can of fuel, 30% a prisoner for the reserve. It holds
+  its fire for the 20 s the offer stands; our shot is a refusal; either way it then runs. It gives a
+  peaceful end to a fight and a choice (money now, or the wreck's loot and full reward if we can stop it).
+- **Fight length** (v54, the author: "balance fights so they don't go too long"). Measured with
+  `tools/fightbench.gd` (a sensible gunner who stays at the console, our crew mending a device every 10 s):
+  every class and temper ends in 0.5–2 minutes with the starting three lasers, before v54 as well. Fights
+  drag only when nobody can fire: the gunner knocked out (the enemy holes the hull near the crew) or our guns
+  broken and not mended; then a gunship or cruiser wrecks us in 3–6 minutes. So no numbers were changed for
+  length beyond the crew rules and the ransom; what to do when our guns fall silent went to the author as a
+  question.
+- **"Щиты: нет"** on the gun console when the enemy has no shield generator (v54 fix): it showed "?" even
+  though the shield line said there was none.
+- **The airlock pump matches a docked ship** (v54, the author's bug note: the chamber was empty, the docked
+  ship had air, and the outer door's shutter would not let him through; the pump only knew the corridor and
+  space). When the floor past the outer door belongs to a docked ship with air (`ShipMap.lock_beyond`,
+  `Systems.docked_air`), the pump works towards its pressure and stops within 0.05. Raising the shutter by
+  hand still works, as before.

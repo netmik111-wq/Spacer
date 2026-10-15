@@ -16,6 +16,7 @@ const GameClient := preload("res://src/client/game_client.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")    # only for its numbers, to explain them
 const Weapons := preload("res://src/shared/weapons.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
+const EnemyPlan := preload("res://src/ui/enemy_plan.gd")
 const UNKNOWN := Color(0.22, 0.26, 0.34)
 
 const PLAN := Vector2(420, 190)
@@ -51,6 +52,7 @@ var _volley: Button
 var _enemy_line: Label
 var _target: Label
 var _probe: Button
+var _ransom: Button
 var _enemy_shield: ColorRect
 var _plan: Control
 var _aims: GridContainer
@@ -115,6 +117,11 @@ func setup(p_client: GameClient) -> void:
 	_probe.focus_mode = Control.FOCUS_NONE
 	_probe.pressed.connect(func() -> void: client.send_gunset(Net.GUNSET_PROBE, 0, 0))
 	right.add_child(_probe)
+	_ransom = Button.new()
+	_ransom.focus_mode = Control.FOCUS_NONE
+	_ransom.visible = false
+	_ransom.pressed.connect(func() -> void: client.send_gunset(Net.GUNSET_RANSOM, 0, 0))
+	right.add_child(_ransom)
 	_aims = GridContainer.new()
 	_aims.columns = 3
 	_aims.add_theme_constant_override("h_separation", 6)
@@ -174,7 +181,9 @@ func refresh(delta: float) -> void:
 	var fighting := _fighting()
 	if fighting:
 		var what := ""
-		if client.enemy_flags & Net.ENEMY_FLEEING:
+		if client.ransom > 0:
+			what = "Пираты сдаются и ждут ответа на выкуп (%d с). Выстрел будет отказом." % client.ransom_left
+		elif client.enemy_flags & Net.ENEMY_FLEEING:
 			what = "Пираты заряжают прыжок, чтобы уйти: %s." % ("прыжок сорван, пока не починят" if client.enemy_jumps_in == 65535
 				else "уйдут через %d с" % client.enemy_jumps_in)
 		elif client.enemy_flags & Net.ENEMY_RAID:
@@ -204,9 +213,12 @@ func refresh(delta: float) -> void:
 		_fill(_enemy_shield, 0.0)
 	_target.text = ("Цель: %s (щёлкните по отсеку, чтобы навести орудия)" % _enemy_name()) if fighting else "Цель: нет"
 	var unknown := client.enemy_rooms.count(Net.ROOM_UNKNOWN)
-	_probe.disabled = not fighting or client.probes <= 0 or (unknown == 0 and client.enemy_temper != Net.TEMPER_UNKNOWN)
+	_probe.disabled = not fighting or client.probes <= 0 or client.ecrew_probe > 0
 	_probe.text = "Запустить зонд-сканер (в трюме: %d)%s" % [client.probes,
 		(", не просканировано отсеков: %d" % unknown) if fighting and unknown > 0 else ""]
+	_ransom.visible = fighting and client.ransom > 0
+	if _ransom.visible:
+		_ransom.text = "Принять выкуп: %d кр. и топливо (осталось %d с)" % [client.ransom, client.ransom_left]
 	_update_power()
 	_update_guns(fighting)
 	var aimed := _aimed_room()
@@ -219,6 +231,8 @@ func refresh(delta: float) -> void:
 			b.text = "Куда попадёт"
 		elif fighting and known:
 			b.text = "%s: %s" % [Net.ESYS_NAMES[which], _state(which)]
+		elif fighting and which == Net.ESYS_SHIELDS and client.enemy_sys_full[which] == 0:
+			b.text = "%s: нет" % Net.ESYS_NAMES[which]       # (no shield generator: known from the start)
 		elif fighting:
 			b.text = "%s: ?" % Net.ESYS_NAMES[which]
 		else:
@@ -236,7 +250,7 @@ func refresh(delta: float) -> void:
 		lines.append("Пустой отсек: попадание сюда бьёт только по корпусу.")
 	else:
 		lines.append("Без наводки снаряд ложится в случайный отсек. Попадание отнимает урон у корпуса и у системы в отсеке и показывает, что в отсеке.")
-	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину. Выбитую систему пираты чинят: единица за %d с." % [
+	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину. Выбитую систему пираты чинят, только когда кто-то из них стоит в её отсеке: единица за %d с. Попадание в отсек может убить или ранить пиратов в нём (их показывают зонд и дрон)." % [
 		str(Weapons.SHIELD_REGEN), int(Gunnery.ENEMY_REPAIR_SECONDS)])
 	_about.text = "\n".join(lines)
 	_plan.queue_redraw()
@@ -271,14 +285,7 @@ func _update_power() -> void:
 
 
 func _state(which: int) -> String:
-	var left: int = client.enemy_sys[which]
-	if client.enemy_sys_full[which] == 0:
-		return "нет"
-	if which == Net.ESYS_CREW:
-		return "%d чел." % ((left + Gunnery.HITS_PER_BOARDER - 1) / Gunnery.HITS_PER_BOARDER)
-	if left > 0 and which < client.enemy_sys_out.size() and client.enemy_sys_out[which] > 0:
-		return "выкл. %d с" % client.enemy_sys_out[which]
-	return "выбит" if left == 0 else "%d/%d" % [left, client.enemy_sys_full[which]]
+	return EnemyPlan.state(client, which)
 
 
 func _cargo_guns() -> Array:
@@ -404,110 +411,21 @@ func _aimed_room() -> int:
 
 
 func _layout() -> Array:
-	## [the enemy's drawing (ShipMap), cell size, where its corner goes on the plan].
-	var o = client.map.other if client.pirates_alongside() else null
-	if o == null:
-		return [null, 0.0, Vector2.ZERO]
-	var px := floorf(minf(PLAN.x / o.width, PLAN.y / o.height))
-	return [o, px, (PLAN - Vector2(o.width, o.height) * px) / 2.0]
+	return EnemyPlan.layout(client, PLAN)
 
 
 func _room_at_local(o, local: int) -> int:
-	return o.room_of[local] if local >= 0 and local < o.room_of.size() else -1
+	return EnemyPlan.room_at_local(o, local)
 
 
 func _draw_plan() -> void:
-	var font := ThemeDB.fallback_font
-	_plan.draw_rect(Rect2(Vector2.ZERO, PLAN), Color(0.03, 0.06, 0.05))
-	var lay := _layout()
-	var o = lay[0]
-	if o == null or not _fighting() or client.enemy_rooms.size() != o.rooms.size():
-		_plan.draw_string(font, Vector2(0, PLAN.y / 2.0 + 6), "Нет цели", HORIZONTAL_ALIGNMENT_CENTER, PLAN.x, 18, DIM)
-		return
-	var px: float = lay[1]
-	var at: Vector2 = lay[2]
-	var pulse := 0.5 + 0.5 * sin(_time * 5.0)
-	for y in o.height:
-		for x in o.width:
-			var local: int = y * o.width + x
-			if o.cells[local] < 0:
-				continue
-			var r := Rect2(at + Vector2(x, y) * px, Vector2(px, px))
-			if o.walk[local] == 0:
-				_plan.draw_rect(r, Color(0.25, 0.3, 0.3))
-				continue
-			var room := _room_at_local(o, local)
-			var c := Color(0.12, 0.16, 0.16)
-			if room >= 0:
-				var z: int = client.enemy_rooms[room]
-				if z == Net.ROOM_UNKNOWN:
-					c = UNKNOWN
-				elif z < Net.ESYS_COUNT:
-					var share := float(client.enemy_sys[z]) / maxf(client.enemy_sys_full[z], 1.0)
-					c = (GOOD if share >= 1.0 else (WARN if share > 0.0 else BAD)).darkened(0.55)
-					if client.enemy_sys_full[z] == 0:
-						c = Color(0.16, 0.18, 0.2)              # (no shield generator in it)
-					elif z < client.enemy_sys_out.size() and client.enemy_sys_out[z] > 0:
-						c = ION.darkened(0.5)                     # put out by ion or EMP for now
-				if room == _hover_room:
-					c = c.lightened(0.25)
-			_plan.draw_rect(r.grow(-1.0), c)
-	# the rooms' names (or what we do not know yet) and the sights on the room aimed at
-	var aimed := _aimed_room()
-	for k in o.rooms.size():
-		var cells: PackedInt32Array = o.rooms[k]
-		if cells.is_empty():
-			continue
-		var lo := Vector2(INF, INF)
-		var hi := Vector2(-INF, -INF)
-		for local in cells:
-			var v := Vector2(local % o.width, local / o.width)
-			lo = lo.min(v)
-			hi = hi.max(v + Vector2.ONE)
-		var box := Rect2(at + lo * px, (hi - lo) * px)
-		var z: int = client.enemy_rooms[k]
-		var name := "?" if z == Net.ROOM_UNKNOWN else ("пусто" if z >= Net.ESYS_COUNT else Net.ESYS_NAMES[z])
-		var size := 13
-		while size > 9 and font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
-			size -= 1
-		if font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
-			name = "Прыжок" if z == Net.ESYS_JUMP else name.left(3)   # (a small room: a short name)
-			if font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
-				name = name.left(1)
-		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 - 2), name, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, size,
-			DIM if z == Net.ROOM_EMPTY else INK)
-		if z < Net.ESYS_COUNT:
-			_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 + 14), _state(z), HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 11, INK)
-		if k == aimed:
-			var aim := Color(AIM, 0.5 + 0.5 * pulse)
-			_plan.draw_rect(box.grow(2.0), aim, false, 2.0)
-			var mid := box.get_center()
-			var rad := minf(box.size.x, box.size.y) * 0.35
-			_plan.draw_arc(mid, rad, 0.0, TAU, 32, aim, 1.5)
-			for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
-				_plan.draw_line(mid + d * rad * 0.6, mid + d * rad * 1.3, aim, 1.5)
-	# holes in its hull, where we have seen them
-	for y in o.height:
-		for x in o.width:
-			var cell: int = (client.map.other_at.y + y) * client.map.width + client.map.other_at.x + x
-			if client.holes.has(cell):
-				var mid := at + (Vector2(x, y) + Vector2(0.5, 0.5)) * px
-				_plan.draw_line(mid - Vector2(4, 4), mid + Vector2(4, 4), BAD, 2.0)
-				_plan.draw_line(mid - Vector2(4, -4), mid + Vector2(4, -4), BAD, 2.0)
-	if client.gun_aim == Net.AIM_ANY:
-		_plan.draw_string(font, Vector2(6, PLAN.y - 6), "Наводки нет: куда попадёт", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DIM)
+	EnemyPlan.draw(_plan, client, PLAN, _time, _hover_room, _aimed_room())
+	if _fighting() and client.gun_aim == Net.AIM_ANY:
+		_plan.draw_string(ThemeDB.fallback_font, Vector2(6, PLAN.y - 6), "Наводки нет: куда попадёт", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DIM)
 
 
 func _room_at(at: Vector2) -> int:
-	## The room of the plan at that point, or -1.
-	var lay := _layout()
-	var o = lay[0]
-	if o == null or float(lay[1]) <= 0.0:
-		return -1
-	var v: Vector2 = (at - (lay[2] as Vector2)) / float(lay[1])
-	if v.x < 0 or v.y < 0 or v.x >= o.width or v.y >= o.height:
-		return -1
-	return _room_at_local(o, int(v.y) * o.width + int(v.x))
+	return EnemyPlan.room_at(client, PLAN, at)
 
 
 func _system_in(room: int) -> int:

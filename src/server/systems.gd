@@ -11,6 +11,7 @@ const Air := preload("res://src/server/air.gd")
 
 const PUMP_OUT := 1
 const PUMP_IN := 2
+const PUMP_CLOSE := 0.05               # a chamber this close to the docked ship's pressure needs no pumping
 const PUMP_PER_STEP := 0.02            # air moved per chamber cell per air step (two ticks): about 5 s for a full chamber
 
 var server: GameServer
@@ -182,18 +183,40 @@ func lock_shut(pump: int) -> bool:
 	return server.doors.is_shut(int(lock["inner"])) and server.doors.is_shut(int(lock["outer"]))
 
 
+func docked_air(pump: int) -> float:
+	## The air of the ship docked at that airlock's outer door (0..1), or -1 when
+	## there is none or it holds next to no air (v54, the author's note: a chamber
+	## in vacuum kept the door to a docked ship with air shut, and the pump only
+	## knew the corridor and space).
+	var beyond := server.map.lock_beyond(pump)
+	if beyond < 0 or server.air.air[beyond] < Net.SHUTTER_LIFT:
+		return -1.0
+	return server.air.air[beyond]
+
+
+func _pump_way(pump: int) -> int:
+	## Which way the pump must work: towards the docked ship's pressure when one
+	## with air is docked, else out to open on space or in to open on the ship.
+	var docked := docked_air(pump)
+	var have := lock_air(pump)
+	if docked >= 0.0:
+		if absf(have - docked) < PUMP_CLOSE:
+			return 0
+		return PUMP_OUT if have > docked else PUMP_IN
+	return PUMP_OUT if have > 0.5 else PUMP_IN
+
+
 func toggle_pump(p: Player, cell: int) -> void:
 	## The "use" key on a pump: start it the way the chamber needs, or stop it.
 	if server.ship.pumps.has(cell):
 		server.ship.pumps.erase(cell)
 	elif not server.powered() or not lock_shut(cell):
 		return
-	elif lock_air(cell) > 0.5:
-		server.ship.pumps[cell] = PUMP_OUT
-	elif server.ship.store_air > 0.0:
-		server.ship.pumps[cell] = PUMP_IN
 	else:
-		return
+		var way := _pump_way(cell)
+		if way == 0 or (way == PUMP_IN and server.ship.store_air <= 0.0):
+			return
+		server.ship.pumps[cell] = way
 	server.chat.sound(Net.SOUND_HISS, cell % server.map.width, cell / server.map.width, p.slot)
 	server.to_all(server.ship.devices_packet())
 
@@ -207,20 +230,23 @@ func run_pumps() -> void:
 			done.append(cell)
 			continue
 		var cells: PackedInt32Array = server.map.lock_pump[cell]["chamber"]
+		var docked := docked_air(cell)
+		var out: bool = server.ship.pumps[cell] == PUMP_OUT
+		var goal := (docked if docked >= 0.0 else 0.0) if out else (docked if docked >= 0.0 else 1.0)
 		var left := 0.0
 		for c in cells:
-			if server.ship.pumps[cell] == PUMP_OUT:
-				var take := minf(server.air.air[c], PUMP_PER_STEP)
+			if out:
+				var take := clampf(server.air.air[c] - goal, 0.0, PUMP_PER_STEP)
 				server.air.air[c] -= take
 				server.ship.store_air = minf(server.ship.store_air + take, Net.STORE_AIR_FULL)   # what does not fit is let out
-				left = maxf(left, server.air.air[c])
+				left = maxf(left, server.air.air[c] - goal)
 			else:
-				var give := minf(minf(1.0 - server.air.air[c], PUMP_PER_STEP), server.ship.store_air)
+				var give := minf(clampf(goal - server.air.air[c], 0.0, PUMP_PER_STEP), server.ship.store_air)
 				server.air.air[c] += give
 				server.ship.store_air -= give
-				left = maxf(left, 1.0 - server.air.air[c])
+				left = maxf(left, goal - server.air.air[c])
 		server.air.wake()
-		if left < 0.001 or (server.ship.pumps[cell] == PUMP_IN and server.ship.store_air <= 0.0):
+		if left < 0.001 or (not out and server.ship.store_air <= 0.0):
 			done.append(cell)
 	for cell: int in done:
 		server.ship.pumps.erase(cell)

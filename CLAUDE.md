@@ -34,8 +34,8 @@ needs:
 
 ## Where things stand
 
-Build v53 (version 0.46) is the latest. Plans one to four are done except the darkness front (the
-author is still thinking it through); builds v40 to v50 were the author's own requests, one build each.
+Build v54 (version 0.47) is the latest. Plans one to four are done except the darkness front (the
+author is still thinking it through); builds v40 to v54 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -64,7 +64,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 16 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 17 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -81,6 +81,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/admintest.gd
     godot --headless --path . --script res://tools/holotest.gd
     godot --headless --path . --script res://tools/shiptest.gd  (rolled pirate ships, scanning, the probe)
+    godot --headless --path . --script res://tools/dronetest.gd (since v54: the pirates' crew, the drone, ransom)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -99,9 +100,11 @@ logging in takes and how long a server tick takes (the budget is 50 ms). With `P
 the server gets CPU 0 to itself; it also prints where the tick time went (players, ship, air, sight,
 sending). Results are in `docs/BENCHMARK.md`. Sight alone, without a network:
 `godot --headless --path . --script res://tools/sightbench.gd -- 32 400` (bots, ticks).
+How long ship fights last, per class and temper (since v54; rerun after changing fight numbers):
+`godot --headless --path . --script res://tools/fightbench.gd -- 4 0 10` (fights per cell, jumps out, our mend seconds).
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 16 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 17 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -123,7 +126,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   world, the network loop and the order of a tick; everything else is in parts it keeps one of each:
   `chat`, `crew`, `movement`, `inventory`, `looting`, `combat`, `repairs`, `systems`, `navigation`,
   `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`,
-  and `shipyard`, which rolls every pirate ship since v53).
+  and `shipyard`, which rolls every pirate ship since v53; since v54 `enemy_crew`, the pirate ship's crew at
+  their posts, and `drone`, the scouting drone).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -161,9 +165,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `sounds.gd`, `options.gd`, `item_art.gd`.
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
-  helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`; `inventory_panel.gd`,
+  helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
+  draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`,
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`.
-- `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `lagproxy.rs`,
+- `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`. `maps/`: ship blueprints (`*.txt`, built to `*.json`).
 
 ## Pitfalls
@@ -196,6 +201,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - Pirates are Players too: whatever counts the crew must skip `p.pirate` (and `p.bot`, `p.corpse`).
   The director counted boarders as crew until v40's fix, so it let holes pile up past its limit
   after a boarding (`directortest` failed now and then).
+- The pirate ship's own crew during a fight are not Players (v54): they are cells of its drawing in
+  `EnemyCrew`. Their count must stay equal to `Gunnery.boarders_left()` and `Derelict._pirates_party`:
+  kill them through `Gunnery.crew_hit` or quarters hits, which keep all three in step.
 - A node with a negative `z_index` is drawn under what its parent draws itself (the stars
   in `WorldView._draw`). So decks are ordered with non-negative numbers.
 - Air falls asleep (`Air.settled`) while a door is still opening: it must also be woken
@@ -251,5 +259,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
 - The map is drawn by decks, the top one first; each starts with a line `= name`.
   New signs: `g` glass, `c` catwalks, `H` ladder (in one tile of two adjacent decks),
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
-  `I` intercom, `M` holomap. A line `% deck x y system` names the room of an enemy ship's system (used only by
+  `I` intercom, `M` holomap, `5` drone monitor (v54). A line `% deck x y system` names the room of an enemy ship's system (used only by
   the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked.

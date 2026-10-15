@@ -134,6 +134,26 @@ Open problems:
 
 ## Build notes
 
+### v54 (pirate crew, scouting drone, ransom; the list the author agreed after v53)
+- The author agreed three things after v53: the probe also shows the enemy's crew moving (about 20 s),
+  fights that don't drag on (measure first), and the drone from his notebook steered from a monitor.
+- The pirate ship's crew stand at their posts and walk to mend what we knock out (`src/server/enemy_crew.gd`):
+  a system is mended only while somebody is in its room, empty posts slow its guns and stop its dodging, and
+  our hits may kill or wound those in the room hit. A probe shows them for 20 s, the drone those near it.
+- The scouting drone (`src/server/drone.gd`, `src/ui/drone_view.gd`): a new drone monitor ('5') on the bridge
+  sends one from the cargo; the walking keys steer it room by room inside the enemy ship; it shows rooms and
+  crew, can be shot down, lasts 60 s, can blow itself up for 2 damage through the shield.
+- A beaten pirate that would run may offer a ransom instead (credits, fuel, sometimes a prisoner).
+- Fight length measured with the new `tools/fightbench.gd`: 0.5–2 min for every class and temper while a
+  gunner stays at the console (before and after); fights drag only when nobody can fire. New test
+  `tools/dronetest.gd` (17 in all). The enemy plan is drawn by `src/ui/enemy_plan.gd` for both consoles.
+  Protocol 32.
+
+- After the first v54 archives the author asked (screenshot) for the mouse-over outline to go round the thing
+  itself, not its wall tile: rebuilt with outlines that follow the shape of wall machines, floor things and bodies.
+- The author's bug note (videos, then his words): an empty airlock chamber against a docked ship with air kept
+  the outer door shut. The pump now brings the chamber to the docked ship's pressure.
+
 ### v53 (many kinds of pirate ship; the author's request)
 - The author asked for more kinds of enemy ship, rolled ("procedural generation"), with a different setup each.
   He agreed to: hand-drawn hulls with everything inside rolled; bigger ships harder through behaviour, not

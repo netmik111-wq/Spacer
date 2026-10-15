@@ -91,6 +91,34 @@ func _initialize() -> void:
 			stale += 1
 	_expect(stale == 0, "where it lay before is open space again, with no air left behind (%d cells)" % stale)
 
+	# a chamber in vacuum against a docked ship with air: the pump matches its pressure (v54, the author's note)
+	var beyond := map.lock_beyond(pump)
+	_expect(beyond >= 0 and map.is_other(beyond), "past the outer door lies the docked ship (%d)" % beyond)
+	for c in map.other_cells:
+		if map.walk[c] == 1:
+			server.air.air[c] = 0.8
+	for c in (map.lock_pump[pump]["chamber"] as PackedInt32Array):
+		server.air.air[c] = 0.0
+	p.st.place(ours.x, ours.y + 2)
+	server.ship.store_air = Net.STORE_AIR_FULL
+	_run(4)
+	_expect(server.doors.locked[outer] == 1, "the outer door is held: vacuum here, air there")
+	server.systems.toggle_pump(p, pump)
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_IN, "the pump fills the chamber towards the docked ship's air")
+	_run(200)
+	var docked_air := server.systems.docked_air(pump)
+	_expect(server.ship.pumps.is_empty() and absf(server.systems.lock_air(pump) - docked_air) < 0.06,
+		"and stops at its pressure (%.2f against %.2f)" % [server.systems.lock_air(pump), docked_air])
+	_expect(server.doors.locked[outer] == 0, "so the outer door opens onto it")
+	for c in (map.lock_pump[pump]["chamber"] as PackedInt32Array):
+		server.air.air[c] = 1.0
+	_run(4)
+	server.systems.toggle_pump(p, pump)
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_OUT, "a full chamber is let down to it")
+	_run(200)
+	_expect(server.ship.pumps.is_empty() and absf(server.systems.lock_air(pump) - server.systems.docked_air(pump)) < 0.06,
+		"to the same pressure (%.2f)" % server.systems.lock_air(pump))
+
 	# back aboard, undocked, and away
 	p.st.place(ours.x, ours.y + 2)
 	_expect(d.dock(false) == "" and not d.docked, "it is drawn off again")
