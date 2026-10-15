@@ -110,6 +110,10 @@ var shield_flags := 0                # Net.SHF_*
 var enemy_sys_out := PackedByteArray() # per Net.ESYS_*: seconds it is still put out by ion or EMP
 var enemy_shield := 0                # the enemy's shield, 0..100
 var enemy_weapons := PackedByteArray() # the enemy's guns (Weapons.*)
+var enemy_class := Net.ECLASS_RAIDER # (v53) its class (Hulls)
+var enemy_temper := Net.TEMPER_UNKNOWN # how it fights, once a probe has shown it
+var enemy_rooms := PackedByteArray() # per room of its drawing (ShipMap.rooms): Net.ESYS_*, ROOM_EMPTY or ROOM_UNKNOWN
+var probes := 0                      # scanning probes in the cargo
 var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
 var trade_flags := 0                 # Net.TRADE_*
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
@@ -117,7 +121,7 @@ var enemy_full := 0
 var enemy_docks_in := 0              # seconds until it docks by force
 var enemy_flags := 0                 # Net.ENEMY_*: it came for a raid, it is running
 var enemy_jumps_in := 0              # (while it runs) seconds until it jumps away; 65535 = it cannot now
-var gun_aim := Net.AIM_ANY           # where our guns aim: Net.ESYS_* or Net.AIM_ANY
+var gun_aim := Net.AIM_ANY           # where our guns aim: Net.ESYS_*, Net.AIM_ROOM + room or Net.AIM_ANY
 var enemy_sys := PackedByteArray()   # per Net.ESYS_*: the strength the enemy's system has left (empty = no enemy)
 var enemy_sys_full := PackedByteArray()
 # the holomap, while we watch one (see Net.S_HOLO)
@@ -522,7 +526,7 @@ func other_here() -> bool:
 
 func pirates_alongside() -> bool:
 	## Is a pirate ship (still able to fight) alongside?
-	return other_here() and map.other_kind == Net.OTHER_PIRATE and not other_wreck
+	return other_here() and map.other_kind >= Net.OTHER_PIRATE and not other_wreck
 
 
 func other_dark() -> bool:
@@ -645,6 +649,24 @@ func use_target(facing: int = -1) -> int:
 	if map.climb[here] >= 0:
 		return 6 if map.climb[here] > here else 7
 	return 0
+
+
+func usable_at(cell: int) -> bool:
+	## Is there something in that cell the "use" key (or a click) works on, near
+	## or not: a thing on a wall, a door, a hole, things on the floor, somebody
+	## lying, a ladder? For the outline under the mouse (WorldView._draw_hover).
+	if cell < 0 or cell >= map.cells.size():
+		return false
+	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell):
+		return true
+	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
+			map.gun_console, map.intercom, map.holo]:
+		if things.has(cell):
+			return true
+	for e: Ent in ents.values():
+		if e.id != my_id and e.cond != Net.COND_OK and e.y * map.width + e.x == cell:
+			return true
+	return false
 
 
 func click_facing(c: Vector2i) -> int:
@@ -1110,7 +1132,13 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			enemy_flags = pkt[at]
 			enemy_jumps_in = pkt.decode_u16(at + 1)
 			enemy_shield = pkt[at + 3]
-			enemy_weapons = pkt.slice(at + 5, at + 5 + pkt[at + 4])
+			enemy_class = pkt[at + 4]
+			enemy_temper = pkt[at + 5]
+			var rooms: int = pkt[at + 6]
+			enemy_rooms = pkt.slice(at + 7, at + 7 + rooms)
+			at += 7 + rooms
+			probes = pkt[at]
+			enemy_weapons = pkt.slice(at + 2, at + 2 + pkt[at + 1])
 		Net.S_TRADE:
 			trade.clear()
 			for i in pkt[1]:
@@ -1191,11 +1219,11 @@ func _on_ships(pkt: PackedByteArray) -> void:
 	ships.clear()
 	var pos := 2
 	for i in pkt[1]:
-		var n: int = pkt[pos + 8]
+		var n: int = pkt[pos + 9]
 		ships[pkt.decode_u16(pos)] = {"kind": pkt[pos + 2], "docked": pkt[pos + 3] != 0,
-			"at": Vector2i(pkt.decode_s16(pos + 4), pkt.decode_s16(pos + 6)),
-			"name": pkt.slice(pos + 9, pos + 9 + n).get_string_from_utf8()}
-		pos += 9 + n
+			"at": Vector2i(pkt.decode_s16(pos + 4), pkt.decode_s16(pos + 6)), "layout": pkt[pos + 8],
+			"name": pkt.slice(pos + 10, pos + 10 + n).get_string_from_utf8()}
+		pos += 10 + n
 	var at := ShipMap.NO_OTHER
 	var kind := Net.OTHER_DERELICT
 	var wreck := false
@@ -1204,7 +1232,7 @@ func _on_ships(pkt: PackedByteArray) -> void:
 		if id != my_ship:
 			at = ships[id]["at"]
 			wreck = int(ships[id]["kind"]) == Net.SHIP_WRECK
-			kind = Net.OTHER_PIRATE if int(ships[id]["kind"]) == Net.SHIP_PIRATE or wreck else Net.OTHER_DERELICT
+			kind = int(ships[id]["layout"]) if int(ships[id]["layout"]) < map.others.size() else Net.OTHER_DERELICT
 			other_docked = ships[id]["docked"]
 	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck:
 		if at != map.other_at or kind != map.other_kind:

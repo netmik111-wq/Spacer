@@ -1,0 +1,11 @@
+; Pirate cutter (class "катер"): small and quick, one deck. Its outer door at the bottom docks
+; with the ship's airlock by force. Which room holds which system is rolled anew for every
+; ship (see Shipyard); its rooms are all the floor between walls and doors.
+= Пиратский катер
+ ##T#W##3#
+ #..A..#.#
+ #..#..#.#
+###D##D#D##
+#...A..A..#
+#...#..#..#
+#D####6####

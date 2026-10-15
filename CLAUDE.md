@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v52 (version 0.45) is the latest. Plans one to four are done except the darkness front (the
+Build v53 (version 0.46) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v50 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -64,7 +64,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 15 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 16 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -80,6 +80,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/savetest.gd
     godot --headless --path . --script res://tools/admintest.gd
     godot --headless --path . --script res://tools/holotest.gd
+    godot --headless --path . --script res://tools/shiptest.gd  (rolled pirate ships, scanning, the probe)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -100,7 +101,7 @@ sending). Results are in `docs/BENCHMARK.md`. Sight alone, without a network:
 `godot --headless --path . --script res://tools/sightbench.gd -- 32 400` (bots, ticks).
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 15 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 16 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -121,7 +122,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - **The server is split by topic** (since v39). `src/server/game_server.gd` keeps the state of the
   world, the network loop and the order of a tick; everything else is in parts it keeps one of each:
   `chat`, `crew`, `movement`, `inventory`, `looting`, `combat`, `repairs`, `systems`, `navigation`,
-  `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`).
+  `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`,
+  and `shipyard`, which rolls every pirate ship since v53).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -153,7 +155,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `src/main.gd`: start-up, command-line options for tests and screenshots (listed in its header).
 - `src/shared/`: what both sides use. `net.gd` (protocol, ids, constants), `mover.gd` and `doors.gd`
   (predicted rules), `ship_map.gd` (the grid, decks, tiles), `sight.gd` (sight and light), `items.gd`,
-  `weapons.gd`, `sectors.gd`.
+  `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
@@ -249,4 +251,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
 - The map is drawn by decks, the top one first; each starts with a line `= name`.
   New signs: `g` glass, `c` catwalks, `H` ladder (in one tile of two adjacent decks),
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
-  `I` intercom, `M` holomap. A line `% deck x y system` names the room of an enemy ship's system. A line `@ deck x y access` makes a compartment locked.
+  `I` intercom, `M` holomap. A line `% deck x y system` names the room of an enemy ship's system (used only by
+  the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked.

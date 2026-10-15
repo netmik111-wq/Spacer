@@ -1,0 +1,10 @@
+; Pirate gunship, second hull (class "канонерка"). One deck; the outer door at the bottom
+; docks with the ship's airlock by force. Systems go into its rooms by lot (see Shipyard).
+= Пиратская канонерка
+ ##T##W###3#####T#W##
+ #......#..A..#.....#
+ #......#..#..#.....#
+###D######D######D####
+#...A...A......A...A.#
+#...#...#......#...#.#
+##D########T#6########

@@ -49,6 +49,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
 ## click=X,Y with click_after=SECONDS (a left click on that cell, as the mouse would).
 ## Dedicated server: board_after=SECONDS (pirates come aboard then),
 ## derelict_after=SECONDS (a derelict comes alongside then and docks at once;
@@ -314,6 +315,9 @@ func _on_joined() -> void:
 		_client.admin_token = _server_token
 	_screen.setup(_client, _hosting, _pending_port)
 	_screen.exit_requested.connect(_leave)
+	if _opt.has("hover"):
+		var xy := str(_opt["hover"]).split(",")
+		_screen._world.hover_test = Vector2(float(xy[0]), float(xy[1]))
 
 
 func _on_failed(reason: String) -> void:

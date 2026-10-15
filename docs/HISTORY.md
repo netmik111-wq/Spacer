@@ -134,6 +134,18 @@ Open problems:
 
 ## Build notes
 
+### v53 (many kinds of pirate ship; the author's request)
+- The author asked for more kinds of enemy ship, rolled ("procedural generation"), with a different setup each.
+  He agreed to: hand-drawn hulls with everything inside rolled; bigger ships harder through behaviour, not
+  only hull; the attack drone left for a build of its own.
+- Four classes (cutter, raider, gunship, cruiser; `src/shared/hulls.gd`), six new hulls (`maps/pirate02..07`),
+  `src/server/shipyard.gd` rolls the class (by distance from the start), the hull, which room holds which
+  system, the guns, the shield, the crew, the temper (four ways of fighting) and the name.
+- Rooms are unknown at first; sensors, hits, the enemy's own fire and the new scanning probe show them. The
+  guns aim at rooms; empty rooms soak up shots. New test `tools/shiptest.gd` (16 in all).
+- From the author's notes: usable things get an outline under the mouse (as in SS13); a window or open door
+  is no longer drawn with a wedge cut out of it in the field of view.
+
 ### v52 (blinking and smoothness; the author's video)
 - The author's video showed wall corners at the ends of rooms blinking on and off while walking, and
   steps jerking every few frames. Corners and other cells grazed by a ray of the field of view are now

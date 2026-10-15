@@ -1,0 +1,10 @@
+; Pirate cutter, second hull (class "катер"). One deck; the outer door at the bottom docks
+; with the ship's airlock by force. Systems go into its rooms by lot (see Shipyard).
+= Пиратский катер
+   #W##T###
+   #.A..#.#
+   #.#..#.#
+####D#D##D##
+#....A.A...#
+#....#.#...#
+##D#####6###

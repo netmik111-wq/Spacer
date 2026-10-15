@@ -85,6 +85,8 @@ const INFO := {
 	Net.ITEM_GUN_MORE + Weapons.SIPHON: {"gun": Weapons.SIPHON, "cargo": true},
 	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме.", "price": Weapons.ROCKET_PRICE, "cargo": true},
 	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме.", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
+	Net.ITEM_PROBE: {"name": "Зонд-сканер", "about": "Запускается с пульта орудий: показывает все отсеки пиратского корабля, его экипаж и повадки. Хранится в трюме.",
+		"price": 12, "stock": 1, "cargo": true},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -202,6 +204,7 @@ const CATEGORIES: Array = [
 		Net.ITEM_GUN + Weapons.EMP, Net.ITEM_GUN + Weapons.ION, Net.ITEM_GUN + Weapons.ION_CANNON,
 		Net.ITEM_GUN_MORE + Weapons.TRACTOR, Net.ITEM_GUN_MORE + Weapons.SIPHON]],
 	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET]],
+	["Разведка", [Net.ITEM_PROBE]],
 ]
 
 

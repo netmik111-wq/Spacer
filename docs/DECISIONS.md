@@ -404,4 +404,28 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   `GameClient.use_target`.
 - **A plaster is not used up on somebody with no wounds** (v51 bug fix, `Combat`): it would have been
   wasted and the player sees nothing happen.
-
+- **Pirate ships are rolled from hand-drawn hulls** (v53, the author: "make them procedural... different
+  setups for each ship"; he agreed to hand-drawn hulls with the insides rolled). Fully generated hulls would
+  need their own checks that they fit off our airlock, draw well and have a room per system; seven drawn hulls
+  in four classes give variety while rooms, systems, guns, shield, crew, temper and name are rolled
+  (`src/server/shipyard.gd`, classes in `src/shared/hulls.gd`). Any hull may be added as `maps/pirateNN.txt`:
+  7 rows (band, 2 room rows, band, 2 room rows, band), the outer `D` in the bottom band at x ≤ 10, the upper
+  half narrower than the lower, at least 6 rooms; add it to `Net.OTHER_MAPS` and a class's `layouts`.
+- **Bigger is harder through behaviour, not only hull** (v53, the author agreed): a class differs in guns,
+  their pool, shield and its refill, how slowly its guns charge, how easily it is hit, crew and reward; the
+  temper (calculating, cautious, reckless, hunter) decides when it runs and what it shoots at. Classes come
+  only from some distance out (`from`), so the first fights stay small.
+- **Its insides are unknown until found** (v53, mine): with systems in random rooms, knowing them is the
+  interesting part of a fight. Sensors (one room per 7 s while powered), hits, its own fire and a probe
+  (12 cr., one aboard at the start) show rooms; aim goes at a room (`Net.AIM_ROOM + room`), so firing blind is
+  allowed. Rooms are found by flood fill of floor bounded by walls and doors (`ShipMap.rooms`), the same on
+  server and client, so only per-room bytes go over the network.
+- **The old pirate ship stays for tests** (`Shipyard.classic`): guntest was written against its fixed
+  rooms and numbers; `tools/shiptest.gd` checks the rolled ones.
+- **Outline under the mouse** (v53, the author's note and video, as in SS13): usable things you can see (or
+  can reach) get a thin outline, bright within reach, faint beyond (`WorldView._update_hover`,
+  `GameClient.usable_at`). A tile outline, not the sprite's silhouette: wall objects are tiles, and a shader
+  per sprite costs more than it gives for now.
+- **Windows and open doors are told as walls in the field of view** (v53, the author's video): a see-through
+  cell in a wall whose middle is hidden used to be left to the rays, which cut a wedge out of it; now the
+  wall rules (a seen face or corner) show it whole (`WorldView._draw_look`).

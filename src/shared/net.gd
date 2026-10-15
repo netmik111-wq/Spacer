@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 30
+const PROTOCOL := 31
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -130,6 +130,7 @@ const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + W
                                     # supply locker only, never carried (Items "cargo")
 const ITEM_ROCKET := 61             # a rocket for the rocket launcher (cargo)
 const ITEM_EMP_ROCKET := 62         # an EMP rocket for the EMP launcher (cargo)
+const ITEM_PROBE := 63              # (v53) a scanning probe, launched from the gun console: shows the enemy's rooms (cargo)
 const ITEM_GUN_MORE := 60           # (v50) weapons from Weapons.TRACTOR on: ITEM_GUN_MORE + Weapons.* (71, 72)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
@@ -164,7 +165,13 @@ const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (W
                                     # u8 seconds it is still put out by ion or EMP,
                                     # then u8 ENEMY_* flags, u16 seconds until it jumps away (while it flees;
                                     # 65535 = its jump cannot charge now), u8 the enemy's shield (0..100),
+                                    # (v53) u8 its class (ECLASS_*), u8 its temper (TEMPER_*, 255 = not known yet),
+                                    # u8 count of its rooms (ShipMap.rooms of its drawing), then per room u8: the
+                                    # system in it (ESYS_*), ROOM_EMPTY, or ROOM_UNKNOWN (not scanned yet);
+                                    # u8 probes in the cargo, then
                                     # u8 count, then u8 per weapon the enemy carries (Weapons.*)
+const ROOM_UNKNOWN := 255
+const ROOM_EMPTY := 254
 const GUN_BROKEN := 255
 const GUN_JAMMED := 254             # put out for a few seconds by an enemy ion or EMP hit
 const GUNF_ARMED := 1               # it draws power and charges
@@ -180,14 +187,16 @@ const GUNSET_ARM := 1               # a = mount, b = 1 power it, 0 cut its power
 const GUNSET_SHIELD := 2            # b = 1 switch the shield on, 0 off
 const GUNSET_MOUNT := 3             # a = mount, b = the weapon from the cargo to put on it (Weapons.*; NONE = take it
                                     # down into the cargo)
+const GUNSET_PROBE := 4             # (v53) launch a scanning probe from the cargo at the enemy
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
-const C_AIM := 22                   # u8 ESYS_* or AIM_ANY: where on the enemy the guns aim, from the gun console
+const C_AIM := 22                   # u8 ESYS_*, AIM_ROOM + room or AIM_ANY: where on the enemy the guns aim, from the gun console
 const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at
 const S_HOLO := 31                  # the holomap (only to those watching it), after the ship's id: u16 count, then
                                     # the air (0..AIR_FULL) of every cell of the ship's floor in order (see
                                     # ShipMap.on_ship), u16 count, u16 per hole in the hull, u8 count, then per door
                                     # of the ship u8: bit 0 open, the rest Doors.flags shifted up by one
-# The enemy ship's systems: each stands in a room of its drawing (ShipMap.zones). A hit
+# The enemy ship's systems: each stands in a room of its drawing (ShipMap.rooms; which room is
+# rolled for every ship, see Shipyard; a hand-made drawing may name them with ShipMap.zones). A hit
 # there wears it down; at nothing it stops working until the enemy's crew mends it.
 const ESYS_WEAPONS := 0             # its guns: down, it does not shoot
 const ESYS_HELM := 1                # its bridge: down, it shoots wide and cannot dodge
@@ -201,6 +210,17 @@ const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const ENEMY_HELD := 4               # (v50) our tractor beam holds it
 const AIM_ANY := 255                # the guns hit wherever they hit
+const AIM_ROOM := 64                # (v53) AIM_ROOM + n: the guns aim at room n of its drawing, whatever is in it
+# (v53) the classes of pirate ship (see Hulls), and how they behave in a fight
+const ECLASS_CUTTER := 0
+const ECLASS_RAIDER := 1
+const ECLASS_GUNSHIP := 2
+const ECLASS_CRUISER := 3
+const TEMPER_CALCULATING := 0
+const TEMPER_CAUTIOUS := 1
+const TEMPER_RECKLESS := 2
+const TEMPER_HUNTER := 3
+const TEMPER_UNKNOWN := 255
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
@@ -215,7 +235,8 @@ const SHOT_TRACTOR := 8             # (v50) the tractor beam: a pale green line
 const SHOT_SIPHON := 9              # (v50) a pulse of the siphon beam: a cyan line
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull)
 const S_SHIPS := 26                 # every ship in the world: u8 count, then per ship u16 id, u8 kind (SHIP_*),
-                                    # u8 docked, s16 x, s16 y of its corner in the grid, u8 name length, name.
+                                    # u8 docked, s16 x, s16 y of its corner in the grid, u8 its drawing (its
+                                    # number in OTHER_MAPS; 0 for our own), u8 name length, name.
                                     # A ship other than the client's own is the one alongside (see ShipMap.place_other).
 const CREW_SHIP := 1                # the network id of the crew's own ship (another ship gets a new one each time)
 const SHIP_CREW := 0                # kinds of ship
@@ -225,7 +246,8 @@ const SHIP_WRECK := 3               # a pirate ship our guns have wrecked: dark 
 # the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)
 const OTHER_DERELICT := 0
 const OTHER_PIRATE := 1
-const OTHER_MAPS: Array[String] = ["derelict01", "pirate01"]
+# (v53) every drawing from OTHER_PIRATE on is a pirate ship's: see Hulls for which class each is
+const OTHER_MAPS: Array[String] = ["derelict01", "pirate01", "pirate02", "pirate03", "pirate04", "pirate05", "pirate06", "pirate07"]
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how

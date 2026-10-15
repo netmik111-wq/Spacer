@@ -3,16 +3,20 @@ extends VBoxContainer
 ## our guns: each with the weapon on it, its charge, a button to fire it, a
 ## switch for its power and a list to change the weapon for one in the cargo;
 ## and a volley of every gun that is ready. On the right the enemy ship as the
-## guns' sights see it: its shield, its guns, its plan room by room, each room
-## coloured by how worn the system in it is. A click on a room aims the guns
-## there (a click off the rooms: anywhere); the buttons under the plan do the
-## same. Shown inside the console frame of GameScreen while our character
+## guns' sights see it: its name and class, its shield, its guns, its plan room
+## by room, each room coloured by how worn the system in it is. Rooms not
+## scanned yet show a question mark (v53): which room holds what is rolled for
+## every ship. A click on a room aims the guns there (a click off the rooms:
+## anywhere); the buttons under the plan aim at a system once we know its room.
+## A probe from the cargo shows the whole ship. Shown inside the console frame of GameScreen while our character
 ## stands at the gun console.
 
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")    # only for its numbers, to explain them
 const Weapons := preload("res://src/shared/weapons.gd")
+const Hulls := preload("res://src/shared/hulls.gd")
+const UNKNOWN := Color(0.22, 0.26, 0.34)
 
 const PLAN := Vector2(420, 190)
 const BAR := 330.0
@@ -45,12 +49,15 @@ var _guns_box: VBoxContainer
 var _gun_rows: Array = []            # per gun: [Label, ColorRect fill, fire Button, power Button, OptionButton, its signature]
 var _volley: Button
 var _enemy_line: Label
+var _target: Label
+var _probe: Button
 var _enemy_shield: ColorRect
 var _plan: Control
 var _aims: GridContainer
 var _aim_buttons := {}               # Net.ESYS_* or Net.AIM_ANY -> Button
 var _about: Label
-var _hover := -2                     # the room under the mouse: Net.ESYS_*, -1 = none, -2 = not over the plan
+var _hover := -2                     # the system under the mouse: Net.ESYS_*, -1 = none, -2 = not over the plan
+var _hover_room := -1                # the room of the plan under the mouse (-1 = none)
 var _hover_gun := -1                 # the gun whose row the mouse is over
 var _time := 0.0
 
@@ -90,7 +97,7 @@ func setup(p_client: GameClient) -> void:
 	var right := VBoxContainer.new()
 	right.add_theme_constant_override("separation", 6)
 	row.add_child(right)
-	_label(right, 13).text = "Цель: пиратский корабль (щёлкните по отсеку, чтобы навести орудия)"
+	_target = _label(right, 13)
 	_enemy_line = _label(right, 12)
 	_enemy_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_enemy_line.custom_minimum_size = Vector2(PLAN.x, 0)
@@ -100,8 +107,14 @@ func setup(p_client: GameClient) -> void:
 	_plan.mouse_filter = Control.MOUSE_FILTER_STOP
 	_plan.draw.connect(_draw_plan)
 	_plan.gui_input.connect(_on_plan_input)
-	_plan.mouse_exited.connect(func() -> void: _hover = -2)
+	_plan.mouse_exited.connect(func() -> void:
+		_hover = -2
+		_hover_room = -1)
 	right.add_child(_plan)
+	_probe = Button.new()
+	_probe.focus_mode = Control.FOCUS_NONE
+	_probe.pressed.connect(func() -> void: client.send_gunset(Net.GUNSET_PROBE, 0, 0))
+	right.add_child(_probe)
 	_aims = GridContainer.new()
 	_aims.columns = 3
 	_aims.add_theme_constant_override("h_separation", 6)
@@ -176,36 +189,53 @@ func refresh(delta: float) -> void:
 		for w in client.enemy_weapons:
 			names.append(Weapons.name_of(w).to_lower())
 		var has_shield: bool = client.enemy_sys_full[Net.ESYS_SHIELDS] > 0
-		_enemy_line.text = "Щит пиратов: %s. Их орудия: %s." % [("%d из 100%s" % [client.enemy_shield,
+		var temper := "не известны (покажет зонд)"
+		if client.enemy_temper != Net.TEMPER_UNKNOWN:
+			var t: Dictionary = Hulls.temper(client.enemy_temper)
+			temper = "%s: %s" % [t["name"], t["about"]]
+		_enemy_line.text = "Щит пиратов: %s. Их орудия: %s. Повадки: %s." % [("%d из 100%s" % [client.enemy_shield,
 			", пропускает" if client.enemy_shield < Weapons.SHIELD_HOLDS else ""]) if has_shield else "нет генератора щита",
-			", ".join(names) if not names.is_empty() else "нет"]
+			", ".join(names) if not names.is_empty() else "нет", temper]
 		_fill(_enemy_shield, client.enemy_shield / 100.0 if has_shield else 0.0)
 		_enemy_shield.color = SHIELD if client.enemy_shield >= Weapons.SHIELD_HOLDS else WARN
 	else:
 		_status.text = "Целей нет. Орудия бьют по пиратскому кораблю, пока он не пристыковался."
 		_enemy_line.text = ""
 		_fill(_enemy_shield, 0.0)
+	_target.text = ("Цель: %s (щёлкните по отсеку, чтобы навести орудия)" % _enemy_name()) if fighting else "Цель: нет"
+	var unknown := client.enemy_rooms.count(Net.ROOM_UNKNOWN)
+	_probe.disabled = not fighting or client.probes <= 0 or (unknown == 0 and client.enemy_temper != Net.TEMPER_UNKNOWN)
+	_probe.text = "Запустить зонд-сканер (в трюме: %d)%s" % [client.probes,
+		(", не просканировано отсеков: %d" % unknown) if fighting and unknown > 0 else ""]
 	_update_power()
 	_update_guns(fighting)
+	var aimed := _aimed_room()
 	for which: int in _aim_buttons.keys():
 		var b: Button = _aim_buttons[which]
-		b.disabled = not fighting
-		b.set_pressed_no_signal(fighting and client.gun_aim == which)
+		var known := which == Net.AIM_ANY or client.enemy_rooms.find(which) >= 0
+		b.disabled = not fighting or not known
+		b.set_pressed_no_signal(fighting and (client.gun_aim == which or (which != Net.AIM_ANY and aimed >= 0 and aimed == client.enemy_rooms.find(which))))
 		if which == Net.AIM_ANY:
 			b.text = "Куда попадёт"
-		elif fighting:
+		elif fighting and known:
 			b.text = "%s: %s" % [Net.ESYS_NAMES[which], _state(which)]
+		elif fighting:
+			b.text = "%s: ?" % Net.ESYS_NAMES[which]
 		else:
 			b.text = Net.ESYS_NAMES[which]
 	var lines := PackedStringArray()
-	var about := _hover if _hover >= 0 else (client.gun_aim if fighting and client.gun_aim != Net.AIM_ANY else -1)
+	var about := _hover if _hover >= 0 else (client.gun_aim if fighting and client.gun_aim < Net.ESYS_COUNT else -1)
 	if _hover_gun >= 0 and _hover_gun < client.gun_weapon.size() and client.gun_weapon[_hover_gun] != Weapons.NONE:
 		var w: int = client.gun_weapon[_hover_gun]
 		lines.append("%s. %s Энергия: %d." % [Weapons.name_of(w), Weapons.info(w)["about"], Weapons.power(w)])
 	elif about >= 0:
 		lines.append(SYSTEM_ABOUT[about])
+	elif _hover_room >= 0 and _hover_room < client.enemy_rooms.size() and client.enemy_rooms[_hover_room] == Net.ROOM_UNKNOWN:
+		lines.append("Неизвестный отсек: что в нём, покажут сканеры (по отсеку раз в несколько секунд), наше попадание или зонд. Стрелять сюда можно и вслепую.")
+	elif _hover_room >= 0:
+		lines.append("Пустой отсек: попадание сюда бьёт только по корпусу.")
 	else:
-		lines.append("Без наводки снаряд ложится в случайный отсек. Попадание отнимает урон у корпуса и у системы в отсеке.")
+		lines.append("Без наводки снаряд ложится в случайный отсек. Попадание отнимает урон у корпуса и у системы в отсеке и показывает, что в отсеке.")
 	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину. Выбитую систему пираты чинят: единица за %d с." % [
 		str(Weapons.SHIELD_REGEN), int(Gunnery.ENEMY_REPAIR_SECONDS)])
 	_about.text = "\n".join(lines)
@@ -357,20 +387,33 @@ func _update_guns(fighting: bool) -> void:
 
 # ---------------------------------------------------------------- the enemy's plan
 
+func _enemy_name() -> String:
+	for id: int in client.ships.keys():
+		if id != client.my_ship:
+			return str(client.ships[id]["name"])
+	return "пиратский корабль"
+
+
+func _aimed_room() -> int:
+	## The room of the plan our guns aim at, or -1.
+	if client.gun_aim == Net.AIM_ANY:
+		return -1
+	if client.gun_aim >= Net.AIM_ROOM:
+		return client.gun_aim - Net.AIM_ROOM
+	return client.enemy_rooms.find(client.gun_aim)
+
+
 func _layout() -> Array:
 	## [the enemy's drawing (ShipMap), cell size, where its corner goes on the plan].
-	var o = client.map.others[Net.OTHER_PIRATE] if client.map.others.size() > Net.OTHER_PIRATE else null
+	var o = client.map.other if client.pirates_alongside() else null
 	if o == null:
 		return [null, 0.0, Vector2.ZERO]
 	var px := floorf(minf(PLAN.x / o.width, PLAN.y / o.height))
 	return [o, px, (PLAN - Vector2(o.width, o.height) * px) / 2.0]
 
 
-func _zone_of(o, local: int) -> int:
-	for k in o.zones.size():
-		if (o.zones[k] as PackedInt32Array).has(local):
-			return k
-	return -1
+func _room_at_local(o, local: int) -> int:
+	return o.room_of[local] if local >= 0 and local < o.room_of.size() else -1
 
 
 func _draw_plan() -> void:
@@ -378,11 +421,11 @@ func _draw_plan() -> void:
 	_plan.draw_rect(Rect2(Vector2.ZERO, PLAN), Color(0.03, 0.06, 0.05))
 	var lay := _layout()
 	var o = lay[0]
-	if o == null:
+	if o == null or not _fighting() or client.enemy_rooms.size() != o.rooms.size():
+		_plan.draw_string(font, Vector2(0, PLAN.y / 2.0 + 6), "Нет цели", HORIZONTAL_ALIGNMENT_CENTER, PLAN.x, 18, DIM)
 		return
 	var px: float = lay[1]
 	var at: Vector2 = lay[2]
-	var fighting := client.enemy_full > 0 and client.enemy_sys.size() == Net.ESYS_COUNT
 	var pulse := 0.5 + 0.5 * sin(_time * 5.0)
 	for y in o.height:
 		for x in o.width:
@@ -391,26 +434,28 @@ func _draw_plan() -> void:
 				continue
 			var r := Rect2(at + Vector2(x, y) * px, Vector2(px, px))
 			if o.walk[local] == 0:
-				_plan.draw_rect(r, Color(0.25, 0.3, 0.3) if fighting else Color(0.15, 0.18, 0.18))
+				_plan.draw_rect(r, Color(0.25, 0.3, 0.3))
 				continue
-			var z := _zone_of(o, local)
+			var room := _room_at_local(o, local)
 			var c := Color(0.12, 0.16, 0.16)
-			if z >= 0 and fighting:
-				var share := float(client.enemy_sys[z]) / maxf(client.enemy_sys_full[z], 1.0)
-				c = (GOOD if share >= 1.0 else (WARN if share > 0.0 else BAD)).darkened(0.55)
-				if client.enemy_sys_full[z] == 0:
-					c = Color(0.16, 0.18, 0.2)              # (no shield generator in it)
-				elif z < client.enemy_sys_out.size() and client.enemy_sys_out[z] > 0:
-					c = ION.darkened(0.5)                     # put out by ion or EMP for now
-				if z == _hover:
+			if room >= 0:
+				var z: int = client.enemy_rooms[room]
+				if z == Net.ROOM_UNKNOWN:
+					c = UNKNOWN
+				elif z < Net.ESYS_COUNT:
+					var share := float(client.enemy_sys[z]) / maxf(client.enemy_sys_full[z], 1.0)
+					c = (GOOD if share >= 1.0 else (WARN if share > 0.0 else BAD)).darkened(0.55)
+					if client.enemy_sys_full[z] == 0:
+						c = Color(0.16, 0.18, 0.2)              # (no shield generator in it)
+					elif z < client.enemy_sys_out.size() and client.enemy_sys_out[z] > 0:
+						c = ION.darkened(0.5)                     # put out by ion or EMP for now
+				if room == _hover_room:
 					c = c.lightened(0.25)
 			_plan.draw_rect(r.grow(-1.0), c)
-	if not fighting:
-		_plan.draw_string(font, Vector2(0, PLAN.y / 2.0 + 6), "Нет цели", HORIZONTAL_ALIGNMENT_CENTER, PLAN.x, 18, DIM)
-		return
-	# the rooms' names and the sights on the room aimed at
-	for k in o.zones.size():
-		var cells: PackedInt32Array = o.zones[k]
+	# the rooms' names (or what we do not know yet) and the sights on the room aimed at
+	var aimed := _aimed_room()
+	for k in o.rooms.size():
+		var cells: PackedInt32Array = o.rooms[k]
 		if cells.is_empty():
 			continue
 		var lo := Vector2(INF, INF)
@@ -420,15 +465,20 @@ func _draw_plan() -> void:
 			lo = lo.min(v)
 			hi = hi.max(v + Vector2.ONE)
 		var box := Rect2(at + lo * px, (hi - lo) * px)
-		var name := Net.ESYS_NAMES[k]
+		var z: int = client.enemy_rooms[k]
+		var name := "?" if z == Net.ROOM_UNKNOWN else ("пусто" if z >= Net.ESYS_COUNT else Net.ESYS_NAMES[z])
 		var size := 13
-		while size > 10 and font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
+		while size > 9 and font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
 			size -= 1
 		if font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
-			name = "Прыжок" if k == Net.ESYS_JUMP else name.left(3)   # (a small room: a short name)
-		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 - 2), name, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, size, INK)
-		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 + 14), _state(k), HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 11, INK)
-		if k == client.gun_aim:
+			name = "Прыжок" if z == Net.ESYS_JUMP else name.left(3)   # (a small room: a short name)
+			if font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > box.size.x - 2.0:
+				name = name.left(1)
+		_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 - 2), name, HORIZONTAL_ALIGNMENT_CENTER, box.size.x, size,
+			DIM if z == Net.ROOM_EMPTY else INK)
+		if z < Net.ESYS_COUNT:
+			_plan.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 + 14), _state(z), HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 11, INK)
+		if k == aimed:
 			var aim := Color(AIM, 0.5 + 0.5 * pulse)
 			_plan.draw_rect(box.grow(2.0), aim, false, 2.0)
 			var mid := box.get_center()
@@ -437,35 +487,43 @@ func _draw_plan() -> void:
 			for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 				_plan.draw_line(mid + d * rad * 0.6, mid + d * rad * 1.3, aim, 1.5)
 	# holes in its hull, where we have seen them
-	if client.other_here() and client.pirates_alongside():
-		for y in o.height:
-			for x in o.width:
-				var cell: int = (client.map.other_at.y + y) * client.map.width + client.map.other_at.x + x
-				if client.holes.has(cell):
-					var mid := at + (Vector2(x, y) + Vector2(0.5, 0.5)) * px
-					_plan.draw_line(mid - Vector2(4, 4), mid + Vector2(4, 4), BAD, 2.0)
-					_plan.draw_line(mid - Vector2(4, -4), mid + Vector2(4, -4), BAD, 2.0)
+	for y in o.height:
+		for x in o.width:
+			var cell: int = (client.map.other_at.y + y) * client.map.width + client.map.other_at.x + x
+			if client.holes.has(cell):
+				var mid := at + (Vector2(x, y) + Vector2(0.5, 0.5)) * px
+				_plan.draw_line(mid - Vector2(4, 4), mid + Vector2(4, 4), BAD, 2.0)
+				_plan.draw_line(mid - Vector2(4, -4), mid + Vector2(4, -4), BAD, 2.0)
 	if client.gun_aim == Net.AIM_ANY:
 		_plan.draw_string(font, Vector2(6, PLAN.y - 6), "Наводки нет: куда попадёт", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DIM)
 
 
 func _room_at(at: Vector2) -> int:
+	## The room of the plan at that point, or -1.
 	var lay := _layout()
 	var o = lay[0]
-	if o == null:
+	if o == null or float(lay[1]) <= 0.0:
 		return -1
 	var v: Vector2 = (at - (lay[2] as Vector2)) / float(lay[1])
 	if v.x < 0 or v.y < 0 or v.x >= o.width or v.y >= o.height:
 		return -1
-	return _zone_of(o, int(v.y) * o.width + int(v.x))
+	return _room_at_local(o, int(v.y) * o.width + int(v.x))
+
+
+func _system_in(room: int) -> int:
+	if room < 0 or room >= client.enemy_rooms.size() or client.enemy_rooms[room] >= Net.ESYS_COUNT:
+		return -1
+	return client.enemy_rooms[room]
 
 
 func _on_plan_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		_hover = _room_at((event as InputEventMouseMotion).position)
+		_hover_room = _room_at((event as InputEventMouseMotion).position)
+		_hover = _system_in(_hover_room)
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and client.enemy_full > 0:
 		var room := _room_at((event as InputEventMouseButton).position)
-		client.send_aim(room if room >= 0 else Net.AIM_ANY)
+		var system := _system_in(room)
+		client.send_aim(system if system >= 0 else (Net.AIM_ROOM + room if room >= 0 else Net.AIM_ANY))
 		_plan.accept_event()

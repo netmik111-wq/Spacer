@@ -144,6 +144,10 @@ var _label_layer: CanvasLayer
 var _ghost: Sprite2D
 var _me_layer: CanvasLayer          # above the dark: our own character is always made out
 var _me_over: Sprite2D
+var hover := true                    # outline what the mouse is over (off while a screen is open)
+var hover_test := Vector2.INF       # (test helper) the mouse is taken to be this far from our character, in cells
+var _hover_pen: Node2D               # above the dark too: the outline of the thing under the mouse
+var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
 var _stars := PackedVector2Array()
 var _star_sizes := PackedByteArray()
 var _star_origin := Vector2.ZERO     # corner and size of the patch of sky the stars are scattered over
@@ -337,6 +341,9 @@ func setup(p_client: GameClient) -> void:
 	_me_layer.layer = 2
 	_me_layer.follow_viewport_enabled = true
 	add_child(_me_layer)
+	_hover_pen = Node2D.new()
+	_hover_pen.draw.connect(_draw_hover)
+	_me_layer.add_child(_hover_pen)
 	_me_over = Sprite2D.new()
 	_me_over.texture = _chars_tex
 	_me_over.region_enabled = true
@@ -724,6 +731,32 @@ func _fade_afterimages(delta: float) -> void:
 			ghost.modulate.a = 0.55 * float(a[1]) / AFTERIMAGE_SECONDS
 
 
+func _update_hover() -> void:
+	## Something usable under the mouse gets an outline, as in SS13 (the author's
+	## note): bright when a click would reach it, faint when it is out of reach.
+	## Only what we can see: the outline gives nothing away in the dark.
+	var on := Vector2i(-1, 0)
+	var map := client.map
+	var at := cell_under_mouse() if hover_test == Vector2.INF else Vector2(client.pred.x, client.pred.y) + hover_test
+	var c := Vector2i(roundi(at.x), roundi(at.y))
+	if hover and client.my_cond == Net.COND_OK and c.x >= 0 and c.y >= 0 and c.x < map.width and c.y < map.height:
+		var cell := c.y * map.width + c.x
+		var reach := client.click_facing(c) >= 0
+		if client.usable_at(cell) and (reach or can_see(c.x, c.y)):
+			on = Vector2i(cell, 1 if reach else 0)
+	if on != _hover_on:
+		_hover_on = on
+		_hover_pen.queue_redraw()
+
+
+func _draw_hover() -> void:
+	if _hover_on.x < 0:
+		return
+	var box := Rect2(_on_deck(_hover_on.x) * _tile, Vector2(_tile, _tile)).grow(-0.5)
+	var colour := Color(1.0, 0.92, 0.55, 0.9) if _hover_on.y == 1 else Color(0.75, 0.8, 0.9, 0.4)
+	_hover_pen.draw_rect(box, colour, false, 1.0)
+
+
 func _draw_shade() -> void:
 	## The warm light of flashlights on the floor, and shots: a trace, a flash
 	## at the muzzle and a spark where it hit (the dark itself is the sheet over the screen).
@@ -925,10 +958,16 @@ func _draw_look() -> void:
 				continue
 			if x < 0 or y < 0 or x >= map.width or y + dy >= map.height:
 				continue
+			var local := (y + dy) * map.width + x
 			if Sight.blocks(client.map, client.doors, x, y + dy):
 				walls.append(c)
-			elif map.cells[(y + dy) * map.width + x] >= 0 and _clear_to(at_t, start_cell, c):
+			elif map.cells[local] >= 0 and _clear_to(at_t, start_cell, c):
 				seen[c] = true
+			elif map.cells[local] >= 0 and (map.walk[local] == 0 or map.door_of[local] >= 0):
+				# a window or an open door in a wall whose middle is hidden: told as a
+				# wall is (its seen face or corner shows it whole), not left to the
+				# rays, which cut a wedge out of it (v53, the author's video)
+				walls.append(c)
 	# Whole cells are told by these checks alone, not by whether a ray happened to
 	# touch them: rays move with every pixel we walk, so a cell they only graze
 	# (a room's far corner) was shown one frame and hidden the next (v52, the
@@ -1436,6 +1475,7 @@ func _process(delta: float) -> void:
 	# the soft fan of the cone goes where our character is drawn this frame
 	# (worked out before the characters moved, it trailed a frame behind: v52)
 	_update_fan()
+	_update_hover()
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5

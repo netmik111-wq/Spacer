@@ -24,7 +24,8 @@ extends Node
 ##   admin        the admin panel: giving things, healing, moving people, mending, events
 ##   holomap      the holomap monitors: the whole ship's air, holes and doors, to those watching
 ## and, from before: director (events), pirates, derelict (another ship
-## alongside), gunnery (ship's guns), campaign (saving). The crew's ship itself
+## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
+## every pirate ship that comes). The crew's ship itself
 ## is one object with a network id (Ship); another one alongside gets its own.
 
 signal log_line(text: String)
@@ -42,6 +43,7 @@ const Director := preload("res://src/server/director.gd")
 const Pirates := preload("res://src/server/pirates.gd")
 const Derelict := preload("res://src/server/derelict.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
+const Shipyard := preload("res://src/server/shipyard.gd")
 const Campaign := preload("res://src/server/campaign.gd")
 const Ship := preload("res://src/server/ship.gd")
 const Chat := preload("res://src/server/chat.gd")
@@ -111,6 +113,7 @@ var director := Director.new()
 var pirates := Pirates.new()
 var derelict := Derelict.new()
 var gunnery := Gunnery.new()
+var shipyard := Shipyard.new()
 var chat := Chat.new()
 var crew := Crew.new()
 var movement := Movement.new()
@@ -206,6 +209,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
 	derelict.setup(self)
 	gunnery.setup(self)
+	shipyard.setup(self)
 	pirates.setup(self)
 	director.setup(self)
 	rng.randomize()
