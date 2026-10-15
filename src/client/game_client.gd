@@ -731,6 +731,16 @@ func lock_air(pump: int) -> float:
 	return float(sum) / (cells.size() * Net.AIR_FULL)
 
 
+func docked_air(pump: int) -> float:
+	## The air of the ship docked at that airlock's outer door as we know it (0..1),
+	## or -1 (the same rule as Systems.docked_air).
+	var beyond := map.lock_beyond(pump)
+	if beyond < 0:
+		return -1.0
+	var there := float(air[beyond]) / Net.AIR_FULL
+	return there if there >= Net.SHUTTER_LIFT else -1.0
+
+
 func lying_near(facing: int = -1) -> int:
 	## The id of somebody lying (unconscious or dead) in the cell our character
 	## faces, or failing that in its own cell; -1 if there is nobody.

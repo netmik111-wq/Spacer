@@ -479,6 +479,21 @@ func _sides() -> void:
 		door_vent[d] = 1 if here and ((door_sides[d * 2] < 0 and is_space(a.x, a.y)) or (door_sides[d * 2 + 1] < 0 and is_space(b.x, b.y))) else 0
 
 
+func lock_beyond(pump: int) -> int:
+	## The floor just past the outer door of that pump's airlock: the ship docked
+	## there (v54), or -1 when the door opens into space.
+	var lock: Dictionary = lock_pump[pump]
+	var d: int = lock["outer"]
+	if d < 0:
+		return -1
+	var chamber: PackedInt32Array = lock["chamber"]
+	for k in 2:
+		var c := door_sides[d * 2 + k]
+		if c >= 0 and not chamber.has(c):
+			return c
+	return -1
+
+
 func floats(x: int, y: int) -> bool:
 	## Open space a suited character can drift through: inside the grid, on a
 	## deck's own rows, where there is no ship.

@@ -466,3 +466,8 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   question.
 - **"Щиты: нет"** on the gun console when the enemy has no shield generator (v54 fix): it showed "?" even
   though the shield line said there was none.
+- **The airlock pump matches a docked ship** (v54, the author's bug note: the chamber was empty, the docked
+  ship had air, and the outer door's shutter would not let him through; the pump only knew the corridor and
+  space). When the floor past the outer door belongs to a docked ship with air (`ShipMap.lock_beyond`,
+  `Systems.docked_air`), the pump works towards its pressure and stops within 0.05. Raising the shutter by
+  hand still works, as before.

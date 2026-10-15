@@ -1182,6 +1182,15 @@ func _process(delta: float) -> void:
 			_hint.text = "Насос шлюза обесточен: %s" % why
 		elif not (client.doors.is_shut(int(lock["inner"])) and client.doors.is_shut(int(lock["outer"]))):
 			_hint.text = "Насос шлюза: сначала должны закрыться обе двери"
+		elif client.docked_air(pump) >= 0.0:
+			var docked := client.docked_air(pump)
+			if absf(client.lock_air(pump) - docked) < 0.05:
+				_hint.text = "Давление в шлюзе как на пристыкованном корабле: наружная дверь откроется"
+			elif client.lock_air(pump) < docked and client.store_air <= 0.0:
+				_hint.text = "Насос шлюза: запас воздуха пуст, закачать нечего"
+			else:
+				_hint.text = "E: %s воздух, чтобы выровнять давление с пристыкованным кораблём (откроется наружная дверь)" % \
+					("закачать" if client.lock_air(pump) < docked else "откачать")
 		elif client.lock_air(pump) > 0.5:
 			_hint.text = "E: откачать воздух из шлюза (наружная дверь откроется, когда воздуха не останется)"
 		elif client.store_air <= 0.0:

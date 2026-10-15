@@ -121,6 +121,7 @@ var _mend_part := PackedFloat32Array() # per Net.ESYS_*: how far the point being
 var ransom := 0                      # (v54) credits it offers to be let go (0 = no offer)
 var ransom_until := 0                # the tick the offer runs out
 var _offered := false                # it has made its offer this fight
+var _over := false                   # this enemy is settled (wrecked or broken off): _settle does nothing more
 var _told := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
 
@@ -150,6 +151,7 @@ func setup(p_server: Node) -> void:
 
 func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	## A pirate ship rolled by Shipyard comes: its numbers, its guns, its rooms (none known yet).
+	_over = false
 	var boarders: int = design["crew"]
 	klass = design["klass"]
 	temper = design["temper"]
@@ -639,6 +641,8 @@ func settle() -> bool:
 
 func _settle() -> bool:
 	## After our hits: is it wrecked, or is its boarding party dead? True if the fight is over.
+	if _over:
+		return true                          # (settled already: it is paid for once)
 	if enemy_hull <= 0 and systems.size() > 0:
 		_wrecked()
 		return true
@@ -653,6 +657,7 @@ func _settle() -> bool:
 
 func _broken_off() -> void:
 	## Its boarding party is dead: with nobody to send over it gives up and goes.
+	_over = true
 	enemy_hull = 0
 	beam_left.fill(0)
 	server.derelict.pirates_wrecked()
@@ -998,6 +1003,7 @@ func ransom_taken(p) -> void:
 
 
 func _wrecked() -> void:
+	_over = true
 	enemy_hull = 0
 	beam_left.fill(0)
 	server.ship.credits += reward

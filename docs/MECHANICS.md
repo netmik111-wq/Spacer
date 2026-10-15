@@ -129,6 +129,8 @@ Contents:
   - If the chamber has more than half its air, it pumps it out into the **ship's air reserve**
     (the excess goes overboard), otherwise it pumps air in from the reserve. A full chamber takes ~5 s.
   - With no air reserve there is nothing to pump in: the only option is to raise the inner shutter by hand.
+  - (v54) With a ship **docked** at the outer door that holds air, the pump brings the chamber to **that ship's
+    pressure** instead (in or out), so the outer door opens onto it; the inner door then follows the usual rule.
 - An open outer door vents the air in its doorway into space.
 
 ### Open space
