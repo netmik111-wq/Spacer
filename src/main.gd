@@ -51,6 +51,9 @@ extends Node
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
 ## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
 ## click=X,Y with click_after=SECONDS (a left click on that cell, as the mouse would).
+## drone_after=SECONDS (send the scouting drone from the drone monitor the character faces),
+## with steer=DIR,SECONDS;DIR,SECONDS... (then steer it: DIR 1 up, 2 down, 3 left, 4 right, 0 stop),
+## probe_after=SECONDS (launch a probe from the gun console the character faces).
 ## Dedicated server: board_after=SECONDS (pirates come aboard then),
 ## derelict_after=SECONDS (a derelict comes alongside then and docks at once;
 ## also with --inproc, and --nodock leaves it alongside),
@@ -123,6 +126,10 @@ var _fainted := false
 var _handed := false
 var _taken := false
 var _acted := false
+var _droned := false
+var _probed := false
+var _steers: Array = []              # [direction, seconds] still to send to the drone
+var _steer_at := 0.0
 var _dropped := false
 var _picked := false
 var _given := false
@@ -506,6 +513,20 @@ func _process(_delta: float) -> void:
 	if _opt.has("act_after") and not _acted and _screen != null and t >= float(_opt["act_after"]):
 		_acted = true
 		_client.send_act()
+	if _opt.has("drone_after") and not _droned and _screen != null and t >= float(_opt["drone_after"]):
+		_droned = true
+		_client.send_drone(Net.DRONE_LAUNCH)
+		for part in str(_opt.get("steer", "")).split(";", false):
+			var bits := part.split(",")
+			_steers.append([int(bits[0]), float(bits[1]) if bits.size() > 1 else 1.0])
+		_steer_at = t + 5.0
+	if not _steers.is_empty() and t >= _steer_at:
+		var step: Array = _steers.pop_front()
+		_client.send_drone(Net.DRONE_STEER, step[0])
+		_steer_at = t + float(step[1])
+	if _opt.has("probe_after") and not _probed and _screen != null and t >= float(_opt["probe_after"]):
+		_probed = true
+		_client.send_gunset(Net.GUNSET_PROBE, 0, 0)
 	if _opt.has("drop_after") and not _dropped and _screen != null and t >= float(_opt["drop_after"]):
 		_dropped = true
 		_client.send_drop()

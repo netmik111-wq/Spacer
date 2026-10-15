@@ -33,6 +33,7 @@ func _initialize() -> void:
 	server.director.auto = false
 	var map := server.map
 	var g: Gunnery = server.gunnery
+	g.ransom_chance = 0.0                # (its checks of tempers are about ships that run)
 	var d: Derelict = server.derelict
 	var yard: Shipyard = server.shipyard
 

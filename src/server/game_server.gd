@@ -23,6 +23,8 @@ extends Node
 ##   replication  what each client is told, and which characters it may see
 ##   admin        the admin panel: giving things, healing, moving people, mending, events
 ##   holomap      the holomap monitors: the whole ship's air, holes and doors, to those watching
+##   enemy_crew   (v54) the pirate ship's crew at their posts while it fights us
+##   drone        (v54) the scouting drone, steered from the drone monitor
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -59,6 +61,8 @@ const Supplies := preload("res://src/server/supplies.gd")
 const Replication := preload("res://src/server/replication.gd")
 const Admin := preload("res://src/server/admin.gd")
 const Holomap := preload("res://src/server/holomap.gd")
+const EnemyCrew := preload("res://src/server/enemy_crew.gd")
+const Drone := preload("res://src/server/drone.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -127,6 +131,8 @@ var supplies := Supplies.new()
 var replication := Replication.new()
 var admin := Admin.new()
 var holomap := Holomap.new()
+var enemy_crew := EnemyCrew.new()
+var drone := Drone.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -168,6 +174,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	supplies.setup(self)
 	admin.setup(self)
 	holomap.setup(self)
+	enemy_crew.setup(self)
+	drone.setup(self)
 	doors.setup(map.doors.size())
 	doors.partner = map.door_partner
 	for d in range(map.other_first_door, map.doors.size()):
@@ -403,6 +411,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HOLO:
 		if pkt.size() > 1:
 			holomap.asked(p, pkt[1] != 0)
+	elif kind == Net.C_DRONE:
+		if pkt.size() > 2:
+			drone.asked(p, pkt[1], pkt[2])
 	elif kind == Net.C_WEAR:
 		if pkt.size() > 1 and pkt[1] < Net.WORN:
 			inventory.take_off(p, pkt[1])
@@ -557,6 +568,8 @@ func _tick() -> void:
 	navigation.update()
 	derelict.update()
 	gunnery.tick()
+	enemy_crew.tick()
+	drone.tick()
 	holomap.tick()
 	director.tick()
 	_lap("ship")

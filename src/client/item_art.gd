@@ -68,6 +68,15 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(2, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
 		canvas.draw_rect(Rect2(at + Vector2(12, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
 		return
+	if item == Net.ITEM_DRONE:
+		# a scouting drone seen from above: a flat body, four rotor rings and an orange eye
+		for c: Vector2 in [Vector2(4, 4), Vector2(13, 4), Vector2(4, 13), Vector2(13, 13)]:
+			canvas.draw_line(at + Vector2(8.5, 8.5) * u, at + c * u, Color(0.12, 0.12, 0.15), 1.6 * u)
+			canvas.draw_arc(at + c * u, 2.6 * u, 0.0, TAU, 12, Color(0.55, 0.58, 0.64), 1.2 * u)
+		canvas.draw_rect(Rect2(at + Vector2(5.5, 6) * u, Vector2(6, 5) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(6, 6.5) * u, Vector2(5, 4) * u), Color(0.42, 0.45, 0.5))
+		canvas.draw_circle(at + Vector2(8.5, 8.5) * u, 1.3 * u, Color(1.0, 0.6, 0.2))
+		return
 	match item:
 		Net.ITEM_JUMPSUIT:
 			# a folded jumpsuit with a collar and a pocket

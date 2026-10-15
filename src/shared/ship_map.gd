@@ -44,6 +44,7 @@ var locker := {}                     # wall cells with the supply locker
 var intercom := {}                   # wall cells with an intercom panel
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
+var drone_console := {}              # (v54) wall cells with the drone monitor (the fifth console of the mockup)
 var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
 var shield := {}                     # wall cells with the shield generator (see Gunnery)
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
@@ -186,6 +187,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	shield = {}
 	guns = PackedInt32Array()
 	gun_console = {}
+	drone_console = {}
 	zones = []
 	for z: Array in data.get("zones", []):
 		var at: int = int(z[0])
@@ -198,6 +200,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			guns.append(i)
 		if cells[i] >= 0 and cells[i] == tile_ids.get("console_4", -2):
 			gun_console[i] = true
+		if cells[i] >= 0 and cells[i] == tile_ids.get("console_5", -2):
+			drone_console[i] = true
 		if cells[i] < 0:
 			continue
 		if cells[i] == tile_ids.get("locker", -1):
@@ -563,6 +567,8 @@ func device_name(cell: int) -> String:
 		return "орудие %d" % (guns.find(cell) + 1)
 	if gun_console.has(cell):
 		return "пульт орудий"
+	if drone_console.has(cell):
+		return "монитор дрона"
 	if holo.has(cell):
 		return "голокарта"
 	if shield.has(cell):

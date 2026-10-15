@@ -114,6 +114,16 @@ var enemy_class := Net.ECLASS_RAIDER # (v53) its class (Hulls)
 var enemy_temper := Net.TEMPER_UNKNOWN # how it fights, once a probe has shown it
 var enemy_rooms := PackedByteArray() # per room of its drawing (ShipMap.rooms): Net.ESYS_*, ROOM_EMPTY or ROOM_UNKNOWN
 var probes := 0                      # scanning probes in the cargo
+var ransom := 0                      # (v54) credits a beaten pirate ship offers to be let go (0 = none)
+var ransom_left := 0                 # seconds the offer stands
+var drone_state := Net.DRONE_NONE    # (v54) the scouting drone (Net.S_DRONE)
+var drone_at := 0                    # the cell of the enemy's drawing it is in
+var drone_battery := 0               # seconds of battery left
+var drone_coming := 0                # seconds until it gets there (while flying)
+var drones := 0                      # drones in the cargo
+var ecrew := PackedInt32Array()      # (v54) the enemy's crew we can see: per one, its cell of the enemy's drawing
+var ecrew_flags := PackedByteArray() # per one, Net.ECREW_*
+var ecrew_probe := 0                 # seconds a probe still shows them all
 var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
 var trade_flags := 0                 # Net.TRADE_*
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
@@ -443,6 +453,12 @@ func send_gunset(action: int, a: int, b: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_GUNSET, action, a, b]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_drone(action: int, a: int = 0) -> void:
+	## Launches, steers or blows up the scouting drone (Net.DRONE_*); only from the drone monitor.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_DRONE, action, a]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_holo(on: bool) -> void:
 	## Starts or stops watching the holomap our character stands at.
 	if _peer != null:
@@ -598,7 +614,7 @@ func use_target(facing: int = -1) -> int:
 	## 14 = something lying on the floor in front or underfoot, to pick up,
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
-	## 19 = an intercom, 20 = a holomap monitor.
+	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -629,6 +645,8 @@ func use_target(facing: int = -1) -> int:
 			return 19
 		if map.holo.has(cell):
 			return 20
+		if map.drone_console.has(cell):
+			return 21
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -660,7 +678,7 @@ func usable_at(cell: int) -> bool:
 	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell):
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo]:
+			map.gun_console, map.intercom, map.holo, map.drone_console]:
 		if things.has(cell):
 			return true
 	for e: Ent in ents.values():
@@ -1139,6 +1157,22 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			at += 7 + rooms
 			probes = pkt[at]
 			enemy_weapons = pkt.slice(at + 2, at + 2 + pkt[at + 1])
+			at += 2 + pkt[at + 1]
+			ransom = pkt[at] if pkt.size() > at + 1 else 0
+			ransom_left = pkt[at + 1] if pkt.size() > at + 1 else 0
+		Net.S_DRONE:
+			drone_state = pkt[1]
+			drone_at = pkt.decode_u16(2)
+			drone_battery = pkt[4]
+			drone_coming = pkt[5]
+			drones = pkt[6]
+		Net.S_ECREW:
+			ecrew_probe = pkt[3]
+			ecrew = PackedInt32Array()
+			ecrew_flags = PackedByteArray()
+			for i in pkt[4]:
+				ecrew.append(pkt.decode_u16(5 + i * 3))
+				ecrew_flags.append(pkt[7 + i * 3])
 		Net.S_TRADE:
 			trade.clear()
 			for i in pkt[1]:
