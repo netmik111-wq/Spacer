@@ -39,3 +39,25 @@ v39 ticks cost more because the server now works out, for every pair of players,
 (server-side visibility). It is still well inside the 50 ms budget at 32 players. If it grows
 past ~25 ms, the first thing to do is to check sight less often for far-away pairs or to cache
 lines of sight per cell.
+
+### v50 and v51, 32 clients (same machine, 2026-10-15)
+
+| | v50, 32 | v51, 32 |
+|---|---|---|
+| login to welcome, median | 131 ms | 122 ms |
+| login to first state in world, median | 937 ms | 894 ms |
+| server work per login | 0.56 ms | 0.51 ms |
+| tick mean, all aboard | 10.76 ms | 5.76 ms |
+| tick median, all aboard | 8.41 ms | 4.67 ms |
+| tick p99, all aboard | 50.7 ms | 31.4 ms |
+| tick max | 247 ms | 84.6 ms |
+| ticks over 50 ms, all aboard | 11 of 1046 | 6 of 1303 |
+
+v51 lines of sight are remembered per cell pair and each character's place, look and light are
+worked out once a tick instead of once per pair, so the tick costs about half. Where a v51 tick goes
+(`bench.sh` now prints it): sending 4.70 ms, of which working out who sees whom 4.04 ms; players
+0.63 ms, the ship 0.21 ms, air 0.05 ms. Sight is still most of the tick: the next step, if needed, is
+to check far-away pairs less often. The rare ticks over budget in both runs come with the clients
+starving this 4-CPU machine (the maximum moves a lot between runs); the server's own work is the mean.
+`tools/sightbench.gd` (32 bots, no network) shows the same: 7.4 ms of sight per tick before, about
+3.5 ms after.
