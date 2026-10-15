@@ -153,6 +153,17 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   middle has a clear line (`_clear_to`, cell by cell) and a wall with a face turned to the eye on a seen
   floor cell count too. A wall is never "seen" through another wall (that chained down whole columns
   in a first try). It costs a few milliseconds a frame in software rendering.
+- **No blinking at the edges of sight** (v52, the author's video): whole cells are decided only by
+  `_clear_to` (floor and walls whose middle is in plain sight), a wall's face on a seen floor cell, and a
+  corner (walls on both sides towards us, the diagonal floor seen); never by whether a ray touched them,
+  since rays move with every pixel walked and a room's far corner was shown one frame, hidden the next
+  (in the video ~60 blinks in 20 s; in a scripted walk here 23–26 before, 0 after). The rays are walked
+  cell by cell (`_ray_reach`), so they stop exactly at a wall and never slip past a corner.
+- **One clock per frame** (v52, the author's video: steps jerked every few frames): `GameClient.now_ticks`
+  moves once a frame by the frame's length (`_tick_frame_clock`), pulled 5% a frame towards the wall clock
+  and snapped to it past 2 ticks. Reading the wall clock mid-frame put each frame's picture as far on as
+  that frame happened to start late. `GameClient` processes first (`process_priority` -100), and the
+  cone's soft fan (`_update_fan`) is placed after the characters move: it trailed a frame behind.
 - **The light and sight mask** (`WorldView._draw_mask`, `_draw_look`): red is ship light,
   blue is flashlights and flashes (they light only where green is, i.e. where we look), green is
   the field of view. Warm beam light (`_shade`) is also drawn only within the field of view. Whoever disappears

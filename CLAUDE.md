@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v51 (version 0.44) is the latest. Plans one to four are done except the darkness front (the
+Build v52 (version 0.45) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v50 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.

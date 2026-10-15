@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v51 (version 0.44).
+Last updated: build v52 (version 0.45).
 
 Contents:
 
@@ -346,6 +346,9 @@ Contents:
 - Since v44 every cell in the cone is checked on its own, not only those a ray happens to touch: floor
   whose middle can be seen in a straight line, and a wall whose face is turned to you on a floor cell you
   see. So a wall far along a corridor, seen almost edge on, is no longer left dark.
+- Since v52 a room's corner wall is seen when the floor diagonally in front of it is seen, and whole cells
+  are decided only by these checks, never by whether a drawn ray happened to graze them, so walls and
+  corners no longer blink on and off as you walk. The picture moves on by an even amount every frame.
 - What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.

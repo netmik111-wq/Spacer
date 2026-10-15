@@ -31,6 +31,8 @@ const Sight := preload("res://src/shared/sight.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
+const FRAME_CLOCK_SNAP := 2.0         # ticks the frame clock may stray from the wall clock before it jumps to it
+const FRAME_CLOCK_PULL := 0.05        # and the share of the gap it closes each frame
 const CLOCK_SNAP := 6.0              # a clock this far off is set at once instead of eased
 const CONNECT_TIMEOUT_MS := 6000
 const INPUT_COPIES := 2              # extra copies of every input change, one per frame
@@ -176,6 +178,7 @@ var _view_cx := -100                 # the chunk our view is centred on; the row
 var _view_cy := -100
 
 var _have_clock := false
+var _frame_clock := -1.0             # now_ticks(): moved on once a frame (see _tick_frame_clock)
 var _recv_offset := 0.0
 var _recv_target := 0.0
 var _pred_offset := 0.0
@@ -198,6 +201,10 @@ var _haul_from := Vector2.ZERO       # the one we haul is drawn sliding between 
 var _haul_to := Vector2.ZERO         # our own predicted character rather than a moment behind it
 var _haul_seen := -1                 # our step (its start tick) that slide belongs to
 var _haul_id := -1                   # who it was worked out for
+
+
+func _init() -> void:
+	process_priority = -100              # the clock and the network first, then the views draw the same frame from them
 
 
 func connect_to(address: String, port: int, player_name: String, wanted_job: int = Net.JOB_CREWMAN) -> String:
@@ -867,7 +874,31 @@ func player_colour(id: int) -> int:
 # ------------------------------------------------------------------ clocks
 
 func now_ticks() -> float:
-	return Time.get_ticks_usec() * 0.000001 * Net.TICK_HZ
+	## The client's clock, in ticks. It moves once a frame, by the frame's own
+	## length (see _tick_frame_clock), so everything drawn in one frame is drawn
+	## for one moment, and each frame moves the picture on by an even amount.
+	if _frame_clock < 0.0:
+		return Time.get_ticks_usec() * 0.000001 * Net.TICK_HZ
+	return _frame_clock
+
+
+func _tick_frame_clock(delta: float) -> void:
+	## Reading the wall clock in the middle of a frame makes steps uneven: a frame
+	## that starts a few milliseconds late shows the world further on, though it
+	## reaches the screen at the same even beat as the rest (v52: the author's
+	## video, movement jerking every few frames). So the clock follows the
+	## frames' lengths, which Godot evens out, and is pulled gently towards the
+	## wall clock so it never drifts away from it.
+	var real := Time.get_ticks_usec() * 0.000001 * Net.TICK_HZ
+	if _frame_clock < 0.0:
+		_frame_clock = real
+		return
+	_frame_clock += delta * Net.TICK_HZ
+	var off := real - _frame_clock
+	if absf(off) > FRAME_CLOCK_SNAP:
+		_frame_clock = real                  # a long freeze, or a frame far off: catch up at once
+	else:
+		_frame_clock += off * FRAME_CLOCK_PULL
 
 
 func render_tick() -> float:
@@ -922,6 +953,7 @@ func _ease_clock(current: float, target: float, dt_ticks: float) -> float:
 # ----------------------------------------------------------------- network
 
 func _process(delta: float) -> void:
+	_tick_frame_clock(delta)
 	if phase == IDLE:
 		return
 	_poll()
