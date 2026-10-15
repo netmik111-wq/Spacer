@@ -424,8 +424,12 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   rooms and numbers; `tools/shiptest.gd` checks the rolled ones.
 - **Outline under the mouse** (v53, the author's note and video, as in SS13): usable things you can see (or
   can reach) get a thin outline, bright within reach, faint beyond (`WorldView._update_hover`,
-  `GameClient.usable_at`). A tile outline, not the sprite's silhouette: wall objects are tiles, and a shader
-  per sprite costs more than it gives for now.
+  `GameClient.usable_at`). Since v54 (the author: "the outline must be around the object itself, not around
+  the wall") it follows the thing's own shape: for a thing fitted into a wall, the pixels of its tile that
+  differ from the bare wall tile, made solid, are outlined once per tile (`WorldView._tile_line`); things on
+  the floor are drawn again in the outline colour a pixel out four ways under themselves; a body gets a copy
+  of its figure whose shader draws only the rim. Doors, holes and ladders keep the cell's square: there the
+  tile is the thing.
 - **Windows and open doors are told as walls in the field of view** (v53, the author's video): a see-through
   cell in a wall whose middle is hidden used to be left to the rays, which cut a wedge out of it; now the
   wall rules (a seen face or corner) show it whole (`WorldView._draw_look`).

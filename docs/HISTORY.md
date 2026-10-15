@@ -149,6 +149,9 @@ Open problems:
   `tools/dronetest.gd` (17 in all). The enemy plan is drawn by `src/ui/enemy_plan.gd` for both consoles.
   Protocol 32.
 
+- After the first v54 archives the author asked (screenshot) for the mouse-over outline to go round the thing
+  itself, not its wall tile: rebuilt with outlines that follow the shape of wall machines, floor things and bodies.
+
 ### v53 (many kinds of pirate ship; the author's request)
 - The author asked for more kinds of enemy ship, rolled ("procedural generation"), with a different setup each.
   He agreed to: hand-drawn hulls with everything inside rolled; bigger ships harder through behaviour, not

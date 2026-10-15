@@ -833,7 +833,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | G | drop the item on the floor |
 | Mouse click | on something within reach: as E (pick up, console, machine, repair while held); elsewhere: shot, blow, healing |
 | R | return after death (takes one from the reserve) |
-| Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off |
+| Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off; since v54 it hugs the thing itself (a machine on a wall, things on the floor, a body), a door, hole or ladder keeps its cell's square |
 | I, Tab | inventory window |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
 | T | chat straight into the radio |
