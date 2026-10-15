@@ -150,7 +150,7 @@ func think(p) -> void:
 	# badly hurt: patch itself up if it can, else fall back from whoever it fights
 	if p.health < FLEE_BELOW:
 		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
-		if patch >= 0 and now >= p.ready_tick:
+		if patch >= 0 and p.wounds > 0.0 and now >= p.ready_tick:
 			p.hand = patch
 			server.combat.use_at(p, now, here)
 			return
