@@ -67,6 +67,7 @@ func reshape() -> void:
 			var i := y * map.width + x
 			if map.walk[i] == 0:
 				air[i] = 0.0
+				_next[i] = 0.0           # (the two buffers swap: a stale value would come back as air in open space)
 				level[i] = 0
 				continue
 			_cells.append(i)

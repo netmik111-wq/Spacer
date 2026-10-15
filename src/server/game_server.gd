@@ -134,6 +134,9 @@ var measure := false
 var tick_usec := PackedInt32Array()     # how long each tick took
 var tick_players := PackedByteArray()   # and how many players were connected on it
 var hello_usec := PackedInt32Array()    # how long the server took over each player's coming aboard
+var part_usec := {}                     # the parts of a tick: name -> microseconds over the whole run
+var part_ticks := 0                    # ticks those were counted over (with somebody connected)
+var lap_at := -1
 
 
 func start(p_port: int, map_name: String, bots: int) -> String:
@@ -249,7 +252,15 @@ func stop() -> void:
 func bench_report() -> Dictionary:
 	## What tools/bench.sh reads: every tick's length and how many were aboard then.
 	return {"tick_usec": Array(tick_usec), "tick_players": Array(tick_players), "hello_usec": Array(hello_usec),
-		"cpus": OS.get_processor_count(), "cpu": OS.get_processor_name()}
+		"cpus": OS.get_processor_count(), "cpu": OS.get_processor_name(), "parts": part_usec, "part_ticks": part_ticks}
+
+
+func _lap(part: String) -> void:
+	## (measure only) Adds the time since the last lap to that part of the tick.
+	if lap_at >= 0:
+		var now := Time.get_ticks_usec()
+		part_usec[part] = int(part_usec.get(part, 0)) + now - lap_at
+		lap_at = now
 
 
 func player_count() -> int:
@@ -501,6 +512,10 @@ func chunk_of(x: int, y: int) -> int:
 
 func _tick() -> void:
 	tick += 1
+	lap_at = -1
+	if measure and not slot_of.is_empty():
+		lap_at = Time.get_ticks_usec()
+		part_ticks += 1
 	for p: Player in players:
 		if p == null or p.corpse:
 			continue
@@ -509,6 +524,7 @@ func _tick() -> void:
 		looting.update(p)
 		repairs.update(p)
 		crew.tell_me(p)
+	_lap("players")
 	systems.power_changed()
 	supplies.tell_store()
 	if over == Net.OVER_NONE:
@@ -525,6 +541,7 @@ func _tick() -> void:
 	gunnery.tick()
 	holomap.tick()
 	director.tick()
+	_lap("ship")
 	if tick % Net.AIR_EVERY == 0:
 		systems.feed_air()
 		systems.run_pumps()
@@ -535,6 +552,8 @@ func _tick() -> void:
 	if tick % Net.TICK_HZ == 0:
 		for cell: int in air.holes.keys():
 			chat.sound(Net.SOUND_HISS, cell % map.width, cell / map.width)
+	_lap("air")
 	crew.tell_looks()
 	_tell_ships()
 	replication.send()
+	_lap("send")

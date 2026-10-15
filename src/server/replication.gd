@@ -52,6 +52,13 @@ var _ship_sums_tick := -1
 var _sight_epoch := 0               # goes up whenever what blocks sight may have changed (doors, power, the other ship)
 var _lit := {}                      # cells a flashlight lights this tick (worked out only when needed)
 var _lit_tick := -1
+var lines := {}                     # lines of sight between cells, as Sight.clear_cached keeps them
+var _prep_tick := -1                # what every character looks like this tick (see _prepare)
+var _now := PackedInt64Array()      # per slot: place and look, packed as Player.known keeps them
+var _chunk := PackedInt32Array()    # per slot: the chunk it is in (x, and the row inside its deck << 16)
+var _shines := PackedInt32Array()   # per slot: 1 = it holds a lit flashlight
+var _dark_now := false              # no power: sight is worked out anew every tick (flashlights move)
+var _dark_ship := false             # a dark ship alongside: the same for whoever is on it or looks at it
 var _arcs_light: Array = []
 var _arcs_dark: Array = []
 
@@ -95,6 +102,8 @@ func chunk_of(x: int, y: int) -> int:
 
 func index_doors() -> void:
 	## Which doors are in which chunk (the other ship's doors move with it).
+	## Called whenever the grid changes shape, so the lines of sight are forgotten too.
+	lines.clear()
 	for c in _doors_in.size():
 		_doors_in[c] = PackedInt32Array()
 	for d in server.map.doors.size():
@@ -311,29 +320,50 @@ func sees(p: Player, q: Player) -> bool:
 	var cell := q.st.y * map.width + q.st.x
 	var dark := not server.powered() or _dark_cell(p.st.y * map.width + p.st.x)
 	if not dark and not _dark_cell(cell):
-		return Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_light, Sight.SIGHT_REACH + 1)
-	if dist <= Sight.DARK_REACH + 1.5 and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.DARK_REACH + 1):
+		return Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_light, Sight.SIGHT_REACH + 1, lines)
+	if dist <= Sight.DARK_REACH + 1.5 and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.DARK_REACH + 1, lines):
 		return true
-	return _lit_cells().has(cell) and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.SIGHT_REACH + 1)
+	return _lit_cells().has(cell) and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.SIGHT_REACH + 1, lines)
 
 
-func _seen_now(p: Player, q: Player) -> bool:
+func _prepare() -> void:
+	## What every character looks like this tick, worked out once for all the
+	## clients rather than once for every pair of them.
+	if _prep_tick == server.tick:
+		return
+	_prep_tick = server.tick
+	var n := server.players.size()
+	_now.resize(n)
+	_chunk.resize(n)
+	_shines.resize(n)
+	_dark_now = not server.powered()
+	_dark_ship = server.derelict.dark()
+	for q: Player in server.players:
+		if q == null:
+			continue
+		var lit := not Items.light(q.in_hand()).is_empty()
+		_shines[q.slot] = 1 if lit else 0
+		_now[q.slot] = _pack(q.st.x, q.st.y, Net.pack_look(q.st.facing, q.cond, q.st.slow, lit))
+		_chunk[q.slot] = (q.st.x >> Net.CHUNK_SHIFT) | ((server.map.local_y(q.st.y) >> Net.CHUNK_SHIFT) << 16)
+
+
+func _seen_now(p: Player, q: Player, a_mine: int) -> bool:
 	## sees(), remembered while neither has moved, turned or changed, and nothing
 	## that stops sight has changed either (in the dark it is worked out every tick).
+	## `a_mine`: p's own part of the key (see _characters).
 	if see_all:
 		return true
-	var dark := not server.powered() or server.derelict.here
-	var a := p.st.x | (p.st.y << 12) | (p.st.facing << 24) | (p.cond << 28) \
-		| (q.st.x << 32) | (q.st.y << 44)
-	var b := _sight_epoch * 64 + (8 if not Items.light(q.in_hand()).is_empty() else 0) + q.cond
 	var at := q.slot
+	var a := a_mine | (q.st.x << 32) | (q.st.y << 44)
+	var b := _sight_epoch * 64 + _shines[at] * 8 + q.cond
 	if p.vis_a.size() <= at:
 		p.vis_a.resize(at + 1)
 		p.vis_b.resize(at + 1)
 		p.vis_r.resize(at + 1)
 		p.vis_until.resize(at + 1)
 	var seen: bool
-	if not dark and p.vis_a[at] == a and p.vis_b[at] == b:
+	var redo := _dark_now or (_dark_ship and (_dark_cell(p.st.y * server.map.width + p.st.x) or _dark_cell(q.st.y * server.map.width + q.st.x)))
+	if not redo and p.vis_a[at] == a and p.vis_b[at] == b:
 		seen = p.vis_r[at] == 1
 	else:
 		seen = sees(p, q)
@@ -358,6 +388,7 @@ static func _pack(x: int, y: int, look_byte: int) -> int:
 func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 	## The records of the characters this client should hear about now: the ones
 	## it sees whose place or look changed, and the ones it has stopped seeing.
+	_prepare()
 	var recs := PackedByteArray()
 	if view_moved:
 		# the client forgets what is outside its new view by itself
@@ -365,25 +396,29 @@ func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 			var k: int = p.known[slot]
 			if not _in_view(p, k & 0xFFFF, (k >> 16) & 0xFFFF):
 				p.known.erase(slot)
+	var a_mine := p.st.x | (p.st.y << 12) | (p.st.facing << 24) | (p.cond << 28)
+	var known := p.known
 	for q: Player in server.players:
 		if q == null:
 			continue
-		var had: int = p.known.get(q.slot, -1)
-		if not _in_view(p, q.st.x, q.st.y):
+		var slot := q.slot
+		var had: int = known.get(slot, -1)
+		var now := _now[slot]
+		var ch := _chunk[slot]
+		if absi((ch & 0xFFFF) - p.view_cx) > 1 or absi((ch >> 16) - p.view_cy) > 1:
 			if had >= 0:
 				# it has gone out of the chunks shown: where it went (the client lets it go)
-				_put_record(recs, q.slot, q.st.x, q.st.y, look(q))
-				p.known.erase(q.slot)
+				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
+				known.erase(slot)
 			continue
-		if _seen_now(p, q):
-			var now := _pack(q.st.x, q.st.y, look(q))
+		if _seen_now(p, q, a_mine):
 			if now != had:
-				_put_record(recs, q.slot, q.st.x, q.st.y, look(q))
-				p.known[q.slot] = now
+				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
+				known[slot] = now
 		elif had >= 0:
 			# out of sight: the client is told where it last saw it, no more
-			_put_record(recs, q.slot, had & 0xFFFF, (had >> 16) & 0xFFFF, Net.FACING_HIDDEN)
-			p.known.erase(q.slot)
+			_put_record(recs, slot, had & 0xFFFF, (had >> 16) & 0xFFFF, Net.FACING_HIDDEN)
+			known.erase(slot)
 	return recs
 
 
@@ -438,7 +473,10 @@ func send() -> void:
 			out.append(cy)
 			p.view_cx = cx
 			p.view_cy = cy
+		var t0 := Time.get_ticks_usec()
 		var recs := _characters(p, view_moved)
+		if server.lap_at >= 0:
+			server.part_usec["send: sight"] = int(server.part_usec.get("send: sight", 0)) + Time.get_ticks_usec() - t0
 		if not recs.is_empty():
 			_append_ents(out, recs)
 		if check:

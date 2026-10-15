@@ -102,23 +102,46 @@ func _work_done(p: Player, cell: int, ticks: int) -> bool:
 
 
 func usable_ahead(p: Player) -> bool:
-	## Is there something in front of the character that the "use" key works on?
-	var cell := server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
+	## Is there something in front of the character that the "use" key works on
+	## (or that it opens a screen for)? The same things, in the same order, as
+	## GameClient.use_target finds before somebody lying, things on the floor and ladders.
+	var map := server.map
+	var cell := map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 	if cell < 0:
 		return false
-	var door := server.map.door_of[cell]
-	return server.air.holes.has(cell) or server.ship.broken.has(cell) or server.map.oxygen.has(cell) \
-		or server.map.chart.has(cell) or server.map.helm.has(cell) or server.map.locker.has(cell) or server.map.lock_pump.has(cell) \
-		or server.map.gun_console.has(cell) or server.map.guns.has(cell) \
-		or (door >= 0 and (server.doors.is_sealed(door) or (server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1 or server.doors.faulty[door] == 1))
+	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
+			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
+			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell):
+		return true
+	var door := map.door_of[cell]
+	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
+		or server.doors.faulty[door] == 1 or server.doors.is_sealed(door) or server.doors.barred(door, map.door_access[door], p.st.access))
+
+
+func _lying_near(p: Player) -> bool:
+	## Is somebody lying (out cold or dead) in the cell ahead or underfoot? The
+	## "use" key searches them then (the client asks for that), and takes nothing else.
+	var ahead := server.map.cell_ahead(p.st.x, p.st.y, p.st.facing)
+	var here := p.st.y * server.map.width + p.st.x
+	for q: Player in server.players:
+		if q != null and q != p and q.cond != Net.COND_OK:
+			var cell := q.st.y * server.map.width + q.st.x
+			if cell == ahead or cell == here:
+				return true
+	return false
 
 
 func press(p: Player) -> void:
 	## The "use" key went down (on the tick the client pressed it). Most of what
-	## it does is holding it (see update); a press itself picks up a thing
-	## lying in front or underfoot, or else takes a ladder.
+	## it does is holding it (see update); a press itself starts or stops an
+	## airlock pump, or picks up a thing lying in front or underfoot, or else
+	## takes a ladder: in the order GameClient.use_target shows the player.
+	if p.cond != Net.COND_OK or p.corpse:
+		return
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
-	if ahead >= 0 and server.map.lock_pump.has(ahead) and p.cond == Net.COND_OK and not p.corpse:
+	if ahead >= 0 and server.map.lock_pump.has(ahead):
 		server.systems.toggle_pump(p, ahead)
+	elif usable_ahead(p) or _lying_near(p):
+		return
 	elif not server.inventory.pick_up(p):
 		server.movement.climb(p)

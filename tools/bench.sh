@@ -19,7 +19,7 @@ if [ "$PIN" = "1" ] && [ "$CPUS" -gt 1 ] && command -v taskset > /dev/null; then
 fi
 LAST=$(python3 -c "print(int(1.5 + $N * $STAGGER + 4))")   # every client is aboard by then
 $SPIN "$GODOT" --headless --path . -- --server --no-events campaign=off port=$PORT bots=0 \
-  bench="$OUT/server.json" quit_after=$((SECS + LAST + 6)) > "$OUT/server.log" 2>&1 & SP=$!
+  bench="$OUT/server.json" quit_after=$((SECS + LAST + 15)) > "$OUT/server.log" 2>&1 & SP=$!
 sleep 1.5
 CP=""
 for i in $(seq 1 $N); do
@@ -59,6 +59,9 @@ line("server tick, whole run", ticks)
 line(f"server tick, all {n} clients aboard", full)
 over = sum(1 for t in full if t > 50.0)
 print(f"ticks over the 50 ms budget while all aboard: {over} of {len(full)}")
+parts = s.get("parts", {})
+if parts:
+    print("where the tick time went: " + ", ".join(f"{k} {v / max(s.get('part_ticks', 1), 1) / 1000.0:.2f} ms" for k, v in sorted(parts.items())) + " (mean per tick)")
 json.dump({"clients": n, "cpus": cpus, "cpu": s["cpu"], "login_ms": login, "in_world_ms": world,
            "tick_ms_full": full}, open(os.path.join(out, "summary.json"), "w"))
 PY

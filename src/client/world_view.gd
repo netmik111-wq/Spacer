@@ -164,6 +164,11 @@ var _lit := {}                       # the cells lit right now (see GameClient.l
 var _dim := {}                       # the dim light around us in the dark: cell -> how strongly (Sight.glow)
 var _near := {}                      # the small pool around us seen all the way round (Sight.glow)
 var _light_textures := {}            # the pictures of light drawn last, one per pen (see _draw_light)
+var _light_made := {}                # and for each: [what it was made from, where it is drawn]
+var _mask_key := 0                   # what the picture of light was last drawn for
+var _look_key := 0                   # what the field of view was last drawn for (see _process)
+var _picture_key := 0                # the last picture of light made, and what from (see _light_picture)
+var _picture: Array = [null, Rect2()]
 # Darkness is a black sheet over the screen with holes where light falls. The holes
 # are drawn, soft-edged, into a picture of their own (the mask) that follows the camera.
 var _mask_view: SubViewport
@@ -483,9 +488,12 @@ func _update_ship(delta: float) -> void:
 	_near = _find_near()
 	_shade.queue_redraw()
 	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
-	_mask.queue_redraw()
-	_look.queue_redraw()
-	_cone.queue_redraw()
+	# where light falls is drawn again only when it may have changed
+	var mask_key := hash([_dark, _deck_shown, client.my_deck(), client.my_cond, client.other_changes, client.other_dark(),
+		_dim.hash(), _near.hash(), _lit.hash()])
+	if mask_key != _mask_key or not _shots.is_empty():
+		_mask_key = mask_key
+		_mask.queue_redraw()
 	_update_fan()
 	for i in range(_shots.size() - 1, -1, -1):
 		_shots[i][5] -= delta
@@ -529,7 +537,7 @@ func _find_dim() -> Dictionary:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return {}
-	return Sight.glow(client.map, client.doors, s[0], 0, DIM_RADIUS, 0.0)
+	return client.glow(s[0], 0, DIM_RADIUS, 0.0)
 
 
 func _find_near() -> Dictionary:
@@ -539,7 +547,7 @@ func _find_near() -> Dictionary:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return {}
-	return Sight.glow(client.map, client.doors, s[0], 0, NEAR_RADIUS, 0.0)
+	return client.glow(s[0], 0, NEAR_RADIUS, 0.0)
 
 
 func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) -> void:
@@ -549,6 +557,36 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 	## does not reach (one behind a wall) stays dark, so nothing leaks past walls.
 	## Drawn as a small picture, LIGHT_SUB pixels to a cell, stretched with
 	## smoothing over the deck. `tag` tells apart the pictures drawn by one pen.
+	## The picture is made again only when the light, the deck or the doors
+	## changed (the same light is often drawn by several pens in one frame).
+	var key := hash([light.hash(), _deck_shown, hash(client.doors.ready), client.other_changes])
+	var which := [pen.get_instance_id(), tag]
+	var texture: ImageTexture = _light_textures.get(which)
+	var made: Array = _light_made.get(which, [])
+	if made.is_empty() or made[0] != key or texture == null:
+		var pic := _light_picture(light, key)
+		made = [key, pic[1]]
+		_light_made[which] = made
+		if pic[0] == null:
+			return
+		var picture: Image = pic[0]
+		if texture == null or texture.get_size() != Vector2(picture.get_size()):
+			texture = ImageTexture.create_from_image(picture)
+			_light_textures[which] = texture
+		else:
+			texture.update(picture)
+	if made[1] == Rect2():
+		return
+	pen.draw_texture_rect(texture, made[1], false, colour)
+
+
+func _light_picture(light: Dictionary, key: int) -> Array:
+	## The picture _draw_light stretches over the deck, and where: [Image, Rect2],
+	## or [null, Rect2()] when the light falls nowhere on the deck shown.
+	if key == _picture_key:
+		return _picture
+	_picture_key = key
+	_picture = [null, Rect2()]
 	var map := client.map
 	var top := _deck_shown * _stride
 	var lo := Vector2i(map.width, map.deck_height)
@@ -564,7 +602,7 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 		lo = Vector2i(mini(lo.x, x), mini(lo.y, y))
 		hi = Vector2i(maxi(hi.x, x), maxi(hi.y, y))
 	if here.is_empty():
-		return
+		return _picture
 	# one cell more all round, so the open floor just past the light's edge can
 	# take the last of it: the pool fades out to nothing instead of stopping at
 	# a cell's edge (v47, the author: "smoother")
@@ -604,14 +642,11 @@ func _draw_light(pen: CanvasItem, light: Dictionary, colour: Color, tag: int) ->
 			data[k] = 255
 			data[k + 1] = clampi(roundi(v * 255.0), 0, 255)
 			k += 2
-	var picture := Image.create_from_data(w, h, false, Image.FORMAT_LA8, data)
-	var texture: ImageTexture = _light_textures.get([pen.get_instance_id(), tag])
-	if texture == null or texture.get_size() != Vector2(w, h):
-		texture = ImageTexture.create_from_image(picture)
-		_light_textures[[pen.get_instance_id(), tag]] = texture
-	else:
-		texture.update(picture)
-	pen.draw_texture_rect(texture, Rect2(Vector2(lo) * _tile, Vector2(hi - lo + Vector2i.ONE) * _tile), false, colour)
+	_picture = [Image.create_from_data(w, h, false, Image.FORMAT_LA8, data),
+		Rect2(Vector2(lo) * _tile, Vector2(hi - lo + Vector2i.ONE) * _tile)]
+	return _picture
+
+
 
 
 const SHIP_SHOT_COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.55, 0.15), Net.SHOT_ION: Color(0.35, 0.65, 1.0),
@@ -884,9 +919,14 @@ func _draw_look() -> void:
 		for k in LOOK_RAYS + 1:
 			var way := ahead.rotated(deg_to_rad(lerpf(float(arc[0]), float(arc[1]), float(k) / LOOK_RAYS)))
 			var t := 0.0
+			var was := Vector2i(-100000, 0)
 			while t < reach:
 				var at := origin + way * t
 				var c := Vector2i(floori(at.x / _tile), floori(at.y / _tile))
+				if c == was:
+					t += 4.0                 # still in the cell looked at last: nothing new
+					continue
+				was = c
 				cells[c] = true
 				if c != start_cell and Sight.blocks(client.map, client.doors, c.x, c.y + _deck_shown * _stride):
 					while t > 0.0 and Vector2i(((origin + way * (t - 1.0)) / _tile).floor()) == c:
@@ -1334,6 +1374,14 @@ func _process(delta: float) -> void:
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
+	# what our eyes reach is worked out again only when something it depends on changed
+	var mine_now := client.sample(client.my_id)
+	var look_key := hash([me.position if me != null else Vector2.INF, me != null and me.get_parent() == _decks[my_deck].chars,
+		mine_now[1] if not mine_now.is_empty() else 0, my_deck, client.my_cond, hash(client.doors.ready), client.other_changes])
+	if look_key != _look_key:
+		_look_key = look_key
+		_look.queue_redraw()
+		_cone.queue_redraw()
 	_me_over.visible = me != null and me.get_parent() == _decks[my_deck].chars and client.my_cond != Net.COND_DEAD
 	if _me_over.visible:
 		_me_over.global_transform = me.global_transform

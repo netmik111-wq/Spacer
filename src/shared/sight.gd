@@ -36,6 +36,41 @@ static func clear_line(map: ShipMap, doors: Doors, from: Vector2i, to: Vector2i)
 	return true
 
 
+static func clear_cached(map: ShipMap, doors: Doors, from: Vector2i, to: Vector2i, lines: Dictionary) -> bool:
+	## clear_line, with what the line passes through remembered in `lines`: the
+	## walls in its way never change while the ship keeps its shape, so only the
+	## doors it crosses are looked at again. Whoever keeps `lines` empties it when
+	## the ship changes shape (another ship comes, goes or docks).
+	var key := (from.y * map.width + from.x) * map.cells.size() + to.y * map.width + to.x
+	var crossed: Variant = lines.get(key)
+	if crossed == null:
+		crossed = _crossed(map, from, to)
+		lines[key] = crossed
+	for d: int in crossed:
+		if d < 0 or (doors.ready.size() > d and doors.is_shut(d)):
+			return false
+	return true
+
+
+static func _crossed(map: ShipMap, from: Vector2i, to: Vector2i) -> PackedInt32Array:
+	## The doors the straight line between two cells passes through (as clear_line
+	## walks it), or [-1] if a wall stops it.
+	var out := PackedInt32Array()
+	var d := Vector2(to - from)
+	var steps := int(ceilf(d.length() * 4.0))
+	for k in range(1, steps):
+		var at := Vector2(from) + d * (float(k) / steps)
+		var c := Vector2i(roundi(at.x), roundi(at.y))
+		if c == from or c == to:
+			continue
+		if c.x < 0 or c.y < 0 or c.x >= map.width or c.y >= map.height or map.opaque[c.y * map.width + c.x] == 1:
+			return PackedInt32Array([-1])
+		var door := map.door_of[c.y * map.width + c.x]
+		if door >= 0 and not out.has(door):
+			out.append(door)
+	return out
+
+
 static func cone(map: ShipMap, doors: Doors, origin: Vector2, facing: int, width_deg: float, reach: int) -> Dictionary:
 	## The cells a light (or a look) from `origin` (in cells; the middle of a
 	## cell is a whole number) facing that way reaches: cell -> how strongly,
@@ -185,9 +220,10 @@ static func in_arcs(ahead: Vector2, v: Vector2, arcs: Array) -> bool:
 	return false
 
 
-static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vector2i, arcs: Array, reach: int) -> bool:
+static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vector2i, arcs: Array, reach: int, lines: Variant = null) -> bool:
 	## Can somebody at `from` (in cells), facing that way, see the cell `to`
 	## (same deck, inside the arcs, within reach, nothing in the way)?
+	## `lines`: a Dictionary to remember lines in (see clear_cached), or null.
 	if facing < 1 or facing > 4:
 		return false
 	var at := Vector2i(roundi(from.x), roundi(from.y))
@@ -198,4 +234,6 @@ static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vec
 		return false
 	if not in_arcs(Vector2(Net.DX[facing], Net.DY[facing]), v, arcs):
 		return false
-	return v.length() < 0.75 or clear_line(map, doors, at, to)
+	if v.length() < 0.75:
+		return true
+	return clear_line(map, doors, at, to) if lines == null else clear_cached(map, doors, at, to, lines)

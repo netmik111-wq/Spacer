@@ -112,12 +112,12 @@ func _sees(p, q) -> bool:
 	if from.distance_to(Vector2(to)) <= 1.5:
 		return true                          # right next to it: felt, if not seen
 	if server.powered():
-		return Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(false), Sight.SIGHT_REACH)
-	if Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(true), Sight.DARK_REACH):
+		return Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(false), Sight.SIGHT_REACH, server.replication.lines)
+	if Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(true), Sight.DARK_REACH, server.replication.lines):
 		return true
 	# in the dark a lit flashlight gives its holder away from afar, whichever way the pirate looks
 	var lit: bool = not Items.light(q.in_hand()).is_empty()
-	return lit and Sight.clear_line(map, server.doors, Vector2i(p.st.x, p.st.y), to)
+	return lit and Sight.clear_cached(map, server.doors, Vector2i(p.st.x, p.st.y), to, server.replication.lines)
 
 
 func think(p) -> void:

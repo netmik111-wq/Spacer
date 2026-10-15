@@ -286,6 +286,9 @@ func remove(p: Player) -> void:
 		server.looting.let_go(p)
 	if p.dragged_by >= 0 and server.players[p.dragged_by] != null:
 		server.looting.let_go(server.players[p.dragged_by])
+	for q: Player in server.players:
+		if q != null and q != p and q.searching == p.slot:
+			server.looting.stop_search(q)    # (its slot may soon hold somebody else)
 	server.replication.forget(p.slot)
 	server.players[p.slot] = null
 	server.free_slots.append(p.slot)
