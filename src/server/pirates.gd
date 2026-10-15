@@ -13,7 +13,6 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
-const Doors := preload("res://src/shared/doors.gd")
 
 const SEE_EVERY := 4                 # ticks between looks around
 const PLAN_EVERY := 10               # ticks between working out the way

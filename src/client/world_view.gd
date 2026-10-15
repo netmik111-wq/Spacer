@@ -9,7 +9,6 @@ extends Node2D
 ## whoever stands on them.
 
 const Net := preload("res://src/shared/net.gd")
-const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
@@ -647,8 +646,6 @@ func _light_picture(light: Dictionary, key: int) -> Array:
 	return _picture
 
 
-
-
 const SHIP_SHOT_COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.55, 0.15), Net.SHOT_ION: Color(0.35, 0.65, 1.0),
 	Net.SHOT_ROCKET: Color(0.85, 0.85, 0.8), Net.SHOT_PLASMA: Color(0.4, 1.0, 0.45), Net.SHOT_BEAM: Color(0.9, 0.6, 1.0),
 	Net.SHOT_TRACTOR: Color(0.6, 1.0, 0.75), Net.SHOT_SIPHON: Color(0.35, 0.95, 1.0)}
@@ -832,18 +829,6 @@ func _light_kind(map: ShipMap, cell: int) -> int:
 	if map.cells[cell] < 0:
 		return 0
 	return 2 if client.dark_cell(cell) else 1
-
-
-func _soft_circle(pen: Node2D, mid: Vector2, full: float, gone: float, colour: Color) -> void:
-	## A disc in full colour out to `full`, fading to nothing by `gone`.
-	pen.draw_circle(mid, full, colour)
-	var ring := 24
-	var none := Color(colour, 0.0)
-	for k in ring:
-		var a0 := Vector2.RIGHT.rotated(TAU * k / ring)
-		var a1 := Vector2.RIGHT.rotated(TAU * (k + 1) / ring)
-		pen.draw_polygon(PackedVector2Array([mid + a0 * full, mid + a0 * gone, mid + a1 * gone, mid + a1 * full]),
-			PackedColorArray([colour, none, none, colour]))
 
 
 func _update_fan() -> void:

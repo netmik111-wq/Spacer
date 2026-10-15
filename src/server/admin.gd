@@ -128,17 +128,8 @@ func give(p: Player, item: int) -> void:
 	if p.add(item, true):
 		p.self_dirty = true
 		return
-	var cell := p.st.y * server.map.width + p.st.x
-	var things: PackedByteArray = server.floor_things.get(cell, PackedByteArray())
-	if things.is_empty():
-		things.resize(Net.FLOOR_STACK)
-	var at := things.find(Net.ITEM_NONE)
-	if at < 0:
+	if not server.put_on_floor(p.st.y * server.map.width + p.st.x, item):
 		server.chat.tell(p, "Некуда положить: руки, слоты и пол под ногами заняты.")
-		return
-	things[at] = item
-	server.floor_things[cell] = things
-	server.replication.floor_record(cell)
 
 
 func heal(q: Player) -> void:

@@ -25,7 +25,6 @@ const Doors := preload("res://src/shared/doors.gd")
 const Player := preload("res://src/server/player.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
-const Mover := preload("res://src/shared/mover.gd")
 
 const HEARTBEAT_TICKS := 10         # a client hears from the server at least this often
 const SELF_REFRESH_TICKS := 20      # own state is re-confirmed at least this often

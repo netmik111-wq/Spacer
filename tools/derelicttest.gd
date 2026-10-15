@@ -84,6 +84,12 @@ func _initialize() -> void:
 	_expect(why == "" and d.docked and Vector2i(p.st.x, p.st.y) == before + Vector2i(0, Derelict.GAP),
 		"it docks against the airlock, with the one aboard it (%s)" % why)
 	_expect(map.doors[theirs] == ours - Vector2i(0, 1) and map.door_vent[outer] == 0, "outer door against outer door")
+	_run(6)
+	var stale := 0
+	for c in map.walk.size():
+		if map.walk[c] == 0 and server.air.air[c] > 0.0:
+			stale += 1
+	_expect(stale == 0, "where it lay before is open space again, with no air left behind (%d cells)" % stale)
 
 	# back aboard, undocked, and away
 	p.st.place(ours.x, ours.y + 2)

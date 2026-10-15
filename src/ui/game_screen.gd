@@ -7,8 +7,6 @@ signal exit_requested
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
-const Sectors := preload("res://src/shared/sectors.gd")
-const Director := preload("res://src/server/director.gd")   # only for the list of events in the host's menu
 const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Options := preload("res://src/client/options.gd")

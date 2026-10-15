@@ -98,6 +98,12 @@ func _initialize() -> void:
 	b.wounds = 80.0
 	server.combat.use_at(a, server.tick, Vector2(9, 4))
 	_expect(b.health >= 60.0, "or on the one next to us")
+	a.slots[0] = Net.ITEM_MEDPATCH
+	b.health = 100.0
+	b.wounds = 0.0
+	_run(GameServer.Combat.BLOW_TICKS)
+	server.combat.use_at(a, server.tick, Vector2(9, 4))
+	_expect(a.slots[0] == Net.ITEM_MEDPATCH, "but is not wasted on one with no wounds")
 
 	print("wounds and healing")
 	a.st.place(8, 4)

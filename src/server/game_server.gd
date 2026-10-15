@@ -504,6 +504,20 @@ func engine_down() -> bool:
 	return ship.engine_down()
 
 
+func put_on_floor(cell: int, item: int) -> bool:
+	## Lays a thing on the floor of that cell, on top of what lies there. False if the cell is full.
+	var things: PackedByteArray = floor_things.get(cell, PackedByteArray())
+	if things.is_empty():
+		things.resize(Net.FLOOR_STACK)
+	var at := things.find(Net.ITEM_NONE)
+	if at < 0:
+		return false
+	things[at] = item
+	floor_things[cell] = things
+	replication.floor_record(cell)
+	return true
+
+
 func chunk_of(x: int, y: int) -> int:
 	return replication.chunk_of(x, y)
 

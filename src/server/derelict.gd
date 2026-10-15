@@ -22,7 +22,6 @@ extends RefCounted
 ## the ship leaves is remembered for that sector, so it is not there again.
 
 const Net := preload("res://src/shared/net.gd")
-const Items := preload("res://src/shared/items.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
@@ -326,16 +325,7 @@ func _pirates_board() -> void:
 
 
 func _drop(cells: PackedInt32Array, table: Array) -> void:
-	var c: int = cells[_rng.randi_range(0, cells.size() - 1)]
-	var things: PackedByteArray = server.floor_things.get(c, PackedByteArray())
-	if things.is_empty():
-		things.resize(Net.FLOOR_STACK)
-	var at := things.find(Net.ITEM_NONE)
-	if at < 0:
-		return
-	things[at] = _loot(table)
-	server.floor_things[c] = things
-	server.replication.floor_record(c)
+	server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], _loot(table))
 
 
 func _arrive() -> void:
