@@ -85,6 +85,8 @@ func jam_door() -> bool:
 	for d in server.map.other_first_door:
 		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0:
 			choice.append(d)
+	if choice.is_empty():
+		return false
 	var d := choice[server.rng.randi_range(0, choice.size() - 1)]
 	server.doors.jammed[d] = 1
 	server.doors.locked[d] = 0
@@ -104,6 +106,8 @@ func fault_shutter() -> bool:
 	for d in server.map.other_first_door:
 		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0:
 			choice.append(d)
+	if choice.is_empty():
+		return false
 	var d := choice[server.rng.randi_range(0, choice.size() - 1)]
 	server.doors.faulty[d] = 1
 	if server.rng.randf() < 0.5 and _door_free(d):

@@ -54,7 +54,7 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 		_strike(p, at, int(Items.INFO[item]["blow"]))
 	elif Items.INFO.has(item) and Items.INFO[item].has("heal"):
 		var who := _beside(p, at, true)
-		if who != null:
+		if who != null and who.wounds > 0.0:        # (a patch is not wasted on one who has no wounds)
 			heal(who, float(Items.INFO[item]["heal"]))
 			p.slots[p.hand] = Net.ITEM_NONE
 			if who != p:

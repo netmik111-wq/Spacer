@@ -13,7 +13,6 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
-const Doors := preload("res://src/shared/doors.gd")
 
 const SEE_EVERY := 4                 # ticks between looks around
 const PLAN_EVERY := 10               # ticks between working out the way
@@ -112,12 +111,12 @@ func _sees(p, q) -> bool:
 	if from.distance_to(Vector2(to)) <= 1.5:
 		return true                          # right next to it: felt, if not seen
 	if server.powered():
-		return Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(false), Sight.SIGHT_REACH)
-	if Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(true), Sight.DARK_REACH):
+		return Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(false), Sight.SIGHT_REACH, server.replication.lines)
+	if Sight.sees(map, server.doors, from, p.st.facing, to, Sight.eye_arcs(true), Sight.DARK_REACH, server.replication.lines):
 		return true
 	# in the dark a lit flashlight gives its holder away from afar, whichever way the pirate looks
 	var lit: bool = not Items.light(q.in_hand()).is_empty()
-	return lit and Sight.clear_line(map, server.doors, Vector2i(p.st.x, p.st.y), to)
+	return lit and Sight.clear_cached(map, server.doors, Vector2i(p.st.x, p.st.y), to, server.replication.lines)
 
 
 func think(p) -> void:
@@ -151,7 +150,7 @@ func think(p) -> void:
 	# badly hurt: patch itself up if it can, else fall back from whoever it fights
 	if p.health < FLEE_BELOW:
 		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
-		if patch >= 0 and now >= p.ready_tick:
+		if patch >= 0 and p.wounds > 0.0 and now >= p.ready_tick:
 			p.hand = patch
 			server.combat.use_at(p, now, here)
 			return

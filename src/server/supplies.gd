@@ -79,26 +79,23 @@ func can_trade() -> bool:
 	return server.powered() and server.navigation.sector_kind() == Sectors.TRADER and server.ship.in_reach
 
 
-func patches_aboard() -> int:
-	## Every patch the crew could still use: in the locker, in pockets, on bodies and on the floor.
-	var n: int = server.ship.store.get(Net.ITEM_PATCH, 0)
+func aboard(item: int) -> int:
+	## Every one of that thing the crew could still use: in the locker, in pockets, on bodies and on the floor.
+	var n: int = server.ship.store.get(item, 0)
 	for p: Player in server.players:
 		if p != null:
-			n += p.count(Net.ITEM_PATCH)
+			n += p.count(item)
 	for things: PackedByteArray in server.floor_things.values():
-		n += things.count(Net.ITEM_PATCH)
+		n += things.count(item)
 	return n
+
+
+func patches_aboard() -> int:
+	return aboard(Net.ITEM_PATCH)
 
 
 func fuel_aboard() -> int:
-	## Every can of fuel on board, wherever it is: in the locker, in pockets, on bodies and on the floor.
-	var n := server.ship.fuel()
-	for p: Player in server.players:
-		if p != null:
-			n += p.count(Net.ITEM_FUEL)
-	for things: PackedByteArray in server.floor_things.values():
-		n += things.count(Net.ITEM_FUEL)
-	return n
+	return aboard(Net.ITEM_FUEL)
 
 
 func find_fuel(cans: int) -> bool:

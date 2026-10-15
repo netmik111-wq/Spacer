@@ -127,6 +127,27 @@ func _initialize() -> void:
 	server.inventory.put_down(p)
 	server.repairs.press(p)
 	_expect(server.floor_things.has(at_locker), "facing the locker, E is for the locker and leaves the floor alone")
+	for kind: String in ["engine", "air_plant", "intercom", "holo"]:
+		var cells: Dictionary = map.get(kind)
+		if cells.is_empty():
+			continue
+		_face(p, cells.keys()[0])
+		var spot := p.st.y * map.width + p.st.x
+		p.slots[0] = Net.ITEM_PATCH
+		server.inventory.put_down(p)
+		server.repairs.press(p)
+		_expect(server.floor_things.has(spot), "facing the %s, E leaves the floor alone too (as the player is shown)" % kind)
+		server.floor_things.erase(spot)
+	q.st.place(2, 4)
+	p.st.place(3, 4)
+	p.st.facing = Net.DIR_LEFT
+	p.slots.fill(Net.ITEM_NONE)
+	p.slots[0] = Net.ITEM_PART
+	server.inventory.put_down(p)
+	server.repairs.press(p)
+	_expect(server.floor_things.has(underfoot) and p.count(Net.ITEM_PART) == 0,
+		"with somebody lying in front, E is for searching them: the thing underfoot stays")
+	q.st.place(10, 7)
 
 	print("light and sight")
 	var doors := server.doors

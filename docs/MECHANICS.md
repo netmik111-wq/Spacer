@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v50 (version 0.43).
+Last updated: build v51 (version 0.44).
 
 Contents:
 
@@ -234,8 +234,10 @@ Contents:
 - **Hand**: one slot is highlighted, that is what's in hand. Choose with: 1–6, mouse wheel, clicking
   a slot. A picked-up item goes into the hand if it is empty.
 - **G** — drop the item in hand on the floor at your feet. Up to **4** items per cell.
-- **E** — pick up: first what's ahead, then what's underfoot. A wall with a console
-  or locker ahead and a person lying down take priority (E goes to them).
+- **E** — pick up: first what's ahead, then what's underfoot. Whatever E works on in the wall ahead
+  (a console, locker, machine, oxygen rack, intercom, holomap, a breach or a door in trouble or locked to
+  you) and a person lying ahead or underfoot take priority: E goes to them and picks up nothing, and
+  takes no ladder (since v51 the server keeps exactly this order).
 - **Z** — use the item by itself (turn on the flashlight, put on clothing).
 - **Clicking** an item on the floor next to you or underfoot picks it up, like E (v45).
 - **Clicking** the world elsewhere — use the item at that spot (shot, blow, healing).
@@ -406,7 +408,8 @@ Contents:
 
 ## 15. Healing
 
-- **Plaster**: click yourself or a neighbour, it closes **40** wounds at once.
+- **Plaster**: click yourself or a neighbour, it closes **40** wounds at once. It is not used up on
+  somebody with no wounds (v51).
 - **Medkit**: click yourself or a neighbour, both stand still for **3 s**; it closes **30** wounds.
   Enough for **5** uses. If you move, treatment is interrupted. 3 s is without skill; the medicine
   skill cuts the time by up to half (with skill 50 — 2.25 s).

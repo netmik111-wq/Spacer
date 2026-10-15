@@ -53,17 +53,9 @@ func put_down(p: Player) -> bool:
 	var item := p.in_hand()
 	if p.cond != Net.COND_OK or p.corpse or item == Net.ITEM_NONE:
 		return false
-	var cell := p.st.y * server.map.width + p.st.x
-	var things: PackedByteArray = server.floor_things.get(cell, PackedByteArray())
-	if things.is_empty():
-		things.resize(Net.FLOOR_STACK)
-	var at := things.find(Net.ITEM_NONE)
-	if at < 0:
+	if not server.put_on_floor(p.st.y * server.map.width + p.st.x, item):
 		return false                         # the cell is full
-	things[at] = item
-	server.floor_things[cell] = things
 	p.slots[p.hand] = Net.ITEM_NONE
-	server.replication.floor_record(cell)
 	server.chat.sound(Net.SOUND_DROP, p.st.x, p.st.y, p.slot)
 	return true
 

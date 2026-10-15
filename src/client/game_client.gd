@@ -96,6 +96,7 @@ var drag_id := -1                    # the lying character we last took hold of 
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
 var other_wreck := false            # the ship alongside is a pirate ship our guns wrecked: dark and dead
+var _glows := {}                     # pools of light worked out lately (see glow)
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
 var gun_weapon := PackedByteArray()  # per gun mount: the weapon on it (Weapons.*; see Net.S_GUNS)
 var gun_charge := PackedByteArray()  # per gun mount: 0..100, Net.GUN_BROKEN, Net.GUN_JAMMED
@@ -487,10 +488,24 @@ func lit_cells() -> Dictionary:
 		if s.is_empty():
 			continue
 		var pool := Items.light(Net.ITEM_FLASHLIGHT_ON)
-		var cells := Sight.glow(map, doors, s[0], s[1], float(pool[0]), float(pool[1]))
+		var cells := glow(s[0], s[1], float(pool[0]), float(pool[1]))
 		for cell: int in cells.keys():
 			out[cell] = maxf(float(out.get(cell, 0.0)), float(cells[cell]))
 	return out
+
+
+func glow(origin: Vector2, facing: int, radius: float, ahead: float) -> Dictionary:
+	## Sight.glow on our map and doors, remembered: the same pool of light is
+	## asked for many times while nobody moves and no door changes.
+	var key := hash([origin, facing, radius, ahead, hash(doors.ready), other_changes])
+	var known: Variant = _glows.get(key)
+	if known != null:
+		return known
+	if _glows.size() > 64:
+		_glows.clear()
+	var cells := Sight.glow(map, doors, origin, facing, radius, ahead)
+	_glows[key] = cells
+	return cells
 
 
 func other_here() -> bool:

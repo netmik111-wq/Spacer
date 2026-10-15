@@ -205,14 +205,6 @@ const CATEGORIES: Array = [
 ]
 
 
-static func category_of(item: int) -> int:
-	## Its place in CATEGORIES, or -1.
-	for k in CATEGORIES.size():
-		if (CATEGORIES[k][1] as Array).has(kind_of(item)):
-			return k
-	return -1
-
-
 static func spawnable() -> PackedInt32Array:
 	## One of every thing, as it comes new (a pistol loaded, a kit full, a suit's
 	## tank full, a flashlight off): for the admin panel.

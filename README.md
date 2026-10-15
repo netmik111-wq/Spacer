@@ -54,9 +54,9 @@ The author's third plan is now under way; all of it is written in `docs/VISION.m
 | `art_src/` | Source art references |
 | `tools/` | Building graphics and maps, network tests |
 | `dist_files/` | Files placed next to the game in the Windows archive |
-| `docs/` | The game's vision in the author's words (`VISION.md`) and a description of all mechanics (`MECHANICS.md`) |
+| `docs/` | The game's vision in the author's words (`VISION.md`), a description of all mechanics (`MECHANICS.md`), the reasons behind them (`DECISIONS.md`), the plans and builds so far (`HISTORY.md`), load measurements (`BENCHMARK.md`) |
 | `research/` | Measurements of networking, threads and atmosphere that the technical decisions rest on |
-| `CLAUDE.md` | Working notes: agreements, reasons for decisions, check procedure, pitfalls |
+| `CLAUDE.md` | Working notes: agreements, check procedure, where the code is, pitfalls |
 
 ## How to change the map
 

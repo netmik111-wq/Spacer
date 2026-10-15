@@ -111,8 +111,8 @@ func tick() -> void:
 		_do(str(item[1]))
 	if server.over != Net.OVER_NONE:
 		return                               # the campaign is over: nothing more happens
-	if auto:
-		_watch_fuel(now)
+	if auto and now % Net.TICK_HZ == 0:
+		_watch_fuel(now)                     # (once a second: it counts every can aboard)
 	if not auto or now < _next_tick:
 		return
 	var report := assess()
