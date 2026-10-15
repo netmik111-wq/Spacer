@@ -357,6 +357,18 @@ func shield_cell() -> int:
 	return server.map.shield.keys()[0] if not server.map.shield.is_empty() else -1
 
 
+func our_guns_silent() -> bool:
+	## (v54) Can none of our guns fire: no power, or every mounted gun broken or put out
+	## by ion? (A gun merely switched off still counts: it can be switched on.)
+	if not server.powered():
+		return true
+	var ship = server.ship
+	for i in ship.mounts.size():
+		if ship.mounts[i] != Weapons.NONE and not ship.broken.has(server.map.guns[i]) and not jammed(server.map.guns[i]):
+			return false
+	return true
+
+
 func jammed(cell: int) -> bool:
 	return server.tick < int(server.ship.jammed.get(cell, -1))
 

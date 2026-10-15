@@ -471,3 +471,9 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   space). When the floor past the outer door belongs to a docked ship with air (`ShipMap.lock_beyond`,
   `Systems.docked_air`), the pump works towards its pressure and stops within 0.05. Raising the shutter by
   hand still works, as before.
+- **Hits only wound the pirates' crew; a helpless ship is boarded** (v54, the author's answers after the
+  build): a hit into a room wounds each one in it 60% of the time and kills nobody (`EnemyCrew.KILL_CHANCE` 0;
+  hits on the quarters still kill, as since v41: that is how a boarding party is beaten). A raider closes in and
+  boards only when all our guns are silent and the engine or the jump is gone (`Derelict._raid_closes_in`,
+  `Gunnery.our_guns_silent`, `Navigation.cannot_jump`); the author named "the jump drive": we have none as a
+  device, so the jump counts as gone without the engine, fuel or a working sector console. 30 s to board is mine.
