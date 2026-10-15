@@ -48,8 +48,10 @@ var map: ShipMap
 var here := false                    # a ship lies alongside now
 var ship: Ship = null                # and that is it, with its own network id (see GameServer.ships_packet)
 var kind := Net.OTHER_DERELICT       # which kind it is (Net.OTHER_*)
+var layout := Net.OTHER_DERELICT     # its drawing: its number in Net.OTHER_MAPS (v53: a pirate ship has several)
+var design := {}                     # (a pirate ship) what Shipyard rolled for it
 var docked := false
-var _spots := {}                     # kind -> [where its corner lies alongside, where docked], for the kinds that fit
+var _spots := {}                     # drawing -> [where its corner lies alongside, where docked], for the drawings that fit
 var _pirates_dock_at := -1           # the tick a pirate ship alongside docks by force (-1 = it has)
 var _pirates_party := 0             # its crew (or boarding party) still alive
 var raid := false                    # (a pirate ship) it came to fight at a distance, not to board
@@ -91,12 +93,24 @@ func setup(p_server: Node) -> void:
 
 
 func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
-	return _spots.has(of_kind)
+	if of_kind == Net.OTHER_DERELICT:
+		return _spots.has(Net.OTHER_DERELICT)
+	return not _pirate_spots().is_empty()
 
 
-func _comes(of_kind: int) -> void:
+func _pirate_spots() -> Array:
+	## The pirate ships' drawings that can lie off our airlock.
+	var out := []
+	for k: int in _spots.keys():
+		if k >= Net.OTHER_PIRATE:
+			out.append(k)
+	return out
+
+
+func _comes(of_kind: int, of_layout: int, of_name: String) -> void:
 	## A ship of that kind comes alongside: it gets a network id of its own.
 	kind = of_kind
+	layout = of_layout
 	here = true
 	docked = false
 	raid = false
@@ -107,7 +121,8 @@ func _comes(of_kind: int) -> void:
 	ship = Ship.new()
 	ship.id = server.new_ship_id()
 	ship.kind = Net.SHIP_PIRATE if of_kind == Net.OTHER_PIRATE else Net.SHIP_DERELICT
-	ship.name = "Пиратский корабль" if of_kind == Net.OTHER_PIRATE else "Брошенный корабль"
+	ship.name = of_name
+	ship.layout = of_layout
 	ship.map = map
 
 
@@ -127,23 +142,27 @@ func pirates_come(party: int, p_raid: bool = false) -> bool:
 	## (a raid) to fight it out at a distance.
 	if not pirates_can_come():
 		return false
-	_comes(Net.OTHER_PIRATE)
+	design = server.shipyard.make(party, p_raid, _pirate_spots())
+	_comes(Net.OTHER_PIRATE, int(design["layout"]), str(design["name"]))
 	raid = p_raid
-	_place(_spots[kind][0])
+	_place(_spots[layout][0])
 	for c in map.other_cells:
 		if map.walk[c] == 1:
 			server.air.air[c] = 1.0
 	_pirates_dock_at = -1 if raid else server.tick + PIRATE_WARNING_TICKS
-	_pirates_party = party
-	_crew_total = party
-	for i in _rng.randi_range(2, 4):
+	_pirates_party = int(design["crew"])
+	_crew_total = _pirates_party
+	var loot: Array = design["loot"]
+	for i in _rng.randi_range(loot[0], loot[1]):
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
-	server.gunnery.enemy_arrives(party, raid)
+	server.gunnery.enemy_arrives(design, raid)
+	var who := "Пиратский корабль" if design.has("classic") else str(design["name"])
 	if raid:
-		server.chat.say("Тревога! Пиратский корабль выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать.")
+		server.chat.say("Тревога! %s выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать. Его отсеки пока не видны: их покажут сканеры, попадания и зонд." % who)
 	else:
-		server.chat.say("Тревога! К шлюзу подходит пиратский корабль и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % (PIRATE_WARNING_TICKS / Net.TICK_HZ))
+		server.chat.say("Тревога! К шлюзу подходит %s и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % [
+			who if design.has("classic") else who.substr(0, 1).to_lower() + who.substr(1), PIRATE_WARNING_TICKS / Net.TICK_HZ])
 	return true
 
 
@@ -201,7 +220,7 @@ func dock(on: bool) -> String:
 	if kind == Net.OTHER_PIRATE and on and not wreck:
 		return "Стыковаться с пиратами по своей воле никто не станет."
 	var from: Vector2i = map.other_at
-	var to: Vector2i = _spots[kind][1] if on else _spots[kind][0]
+	var to: Vector2i = _spots[layout][1] if on else _spots[layout][0]
 	if _anyone_in_way(from, to):
 		return "Стыковка невозможна: между кораблями кто-то есть." if on else "Расстыковка невозможна: рядом кто-то есть."
 	_move(from, to)
@@ -235,7 +254,7 @@ func becomes_wreck() -> void:
 	raid = false
 	wreck = true
 	ship.kind = Net.SHIP_WRECK
-	ship.name = "Разбитый пиратский корабль"
+	ship.name = "Разбитый пиратский корабль" if design.has("classic") else "Обломки: " + ship.name.substr(0, 1).to_lower() + ship.name.substr(1)
 	for d in range(map.other_first_door, map.doors.size()):
 		server.doors.dead[d] = 1
 	var alive := _pirates_party
@@ -303,7 +322,7 @@ func _watch_boarding() -> void:
 func _pirates_board() -> void:
 	## The pirate ship docks by force, breaks the airlock open and its crew comes aboard.
 	var from: Vector2i = map.other_at
-	var to: Vector2i = _spots[kind][1]
+	var to: Vector2i = _spots[layout][1]
 	if _anyone_in_way(from, to):
 		return                               # it waits until the way is clear
 	_pirates_dock_at = -1
@@ -329,8 +348,8 @@ func _drop(cells: PackedInt32Array, table: Array) -> void:
 
 
 func _arrive() -> void:
-	_comes(Net.OTHER_DERELICT)
-	_place(_spots[kind][0])
+	_comes(Net.OTHER_DERELICT, Net.OTHER_DERELICT, "Брошенный корабль")
+	_place(_spots[layout][0])
 	var key := Sectors.key(server.sectors.cell[server.ship.sector])
 	var cells := _floor_cells()
 	# air: room by room, some empty, the rest thin
@@ -419,7 +438,7 @@ func _move(from: Vector2i, to: Vector2i) -> void:
 
 func _place(at: Vector2i) -> void:
 	## Lays it into the grid there, and sets everything that depends on the shape of the ship.
-	map.place_other(at, kind)
+	map.place_other(at, layout)
 	if ship != null:
 		ship.at = at
 	for d in range(map.other_first_door, map.doors.size()):

@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v52 (version 0.45).
+Last updated: build v53 (version 0.46).
 
 Contents:
 
@@ -284,7 +284,7 @@ Contents:
 - **Credits**: **15** for the first jump into each new sector (no other income yet).
 - **Trader**: fly the ship up to it; trading is done at the locker, power is needed.
   The **trader's window** (v49) sorts its goods into categories on the left: all, repair and fuel, equipment,
-  medicine, personal weapons, ship weapons, ammunition, services and upgrades. Each row shows the item, how many
+  medicine, personal weapons, ship weapons, ammunition, scouting (v53: the probe), services and upgrades. Each row shows the item, how many
   the locker holds, a **buy** button (its price) and a **sell** button: the trader buys any priced item from the
   locker for **half** its price (things you carry must be put in the locker first).
   It sells all ordinary items, rockets (4) and EMP rockets (6), **4 of the 10** kinds of ship weapon (the same
@@ -349,6 +349,8 @@ Contents:
 - Since v52 a room's corner wall is seen when the floor diagonally in front of it is seen, and whole cells
   are decided only by these checks, never by whether a drawn ray happened to graze them, so walls and
   corners no longer blink on and off as you walk. The picture moves on by an even amount every frame.
+- Since v53 a window or an open door in a wall is told the same way as a wall: seen whole, never with a wedge
+  cut out of it.
 - What's outside your gaze is darkened: walls and floor
   are dimly visible, people and their names are not visible.
 - When unconscious you see nothing.
@@ -453,7 +455,7 @@ someone is outside):
 - **«Пиратский корабль: абордаж»** ("Pirate ship: boarding"): it comes to board us, as before (below).
 - **«Пиратский корабль: бой»** ("Pirate ship: fight"): a raid. It takes the same place above the airlock
   but **never docks**: it fights at a distance until it is wrecked, runs, or we jump away. Its crew is
-  as large as a boarding party would be (1 + half the crew, no more than 4).
+  its class's (see "Kinds of pirate ship").
 
 The boarding ship:
 
@@ -468,10 +470,50 @@ The boarding ship:
   air into space until the doors are repaired.
 - Either ship is left behind if our ship jumps to another sector before it is done with us.
 
+### Kinds of pirate ship
+
+Since v53 (the author's request: many different enemies, a different setup for each) every pirate ship is
+**rolled** when it comes. Its hull is one of its class's hand-drawn hulls; everything inside is rolled anew:
+which room holds which system, its guns, whether it has a shield, its crew size, its temper and its name
+(«Пиратский катер «Гиена»»). Bigger ships come only farther from the start, and they are harder through what
+they carry and how they fight, not only through more hull.
+
+| Class | Hulls | Comes from | How often | Hull | System strength | Guns (more far out) | Shield | Guns charge | Our hit chance | Raid crew | Reward | Things aboard |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Катер (cutter) | 2 (6 rooms) | the start | 3 | 8 | 2 | 1, 2 from 4 jumps | 40% | 1.15× slower | −12% (small, nimble) | 2–3 | 25 | 1–3 |
+| Рейдер (raider) | 2 (6–7 rooms) | the start | 4 | 12 | 3 | 2, 3 from 5 jumps | 70% | 1.3× slower | as usual | 2–4 | 40 | 2–4 |
+| Канонерка (gunship) | 2 (9 rooms) | 2 jumps out | 3 | 14 | 3 | 3, 4 from 8 jumps | 60% | 1.5× slower | as usual | 3–4 | 55 | 3–5 |
+| Крейсер (cruiser) | 1 (10 rooms) | 4 jumps out | 2 | 20 | 4 | 3, 4 from 7 jumps | always, refills 1.4× faster | 1.7× slower | +10% (big target) | 4–6 | 80 | 4–6 |
+
+- **Guns** come from the class's own list: cutter: laser, rapid, ion, blaster; raider: laser, rapid, blaster,
+  ion, rockets, heavy; gunship: laser, heavy, rapid, blaster, rockets, ion, EMP; cruiser: heavy, laser, ion
+  cannon, rockets, EMP, siege laser. The first gun is always the first of its list.
+- **Rooms.** Each of its systems (guns, bridge, engine, quarters, jump drive, shields if it has them) stands
+  in a room of its own, picked by lot. The rooms left over are **empty**: a hit there only takes hull.
+- A boarding ship's crew is the boarding party (as before); a raid's crew is its class's range.
+- **Temper** (how it fights), one of four by lot:
+
+| Temper | Runs at | Shots at our guns (while one works) | Of the rest, at consoles/shield generator | Guns charge |
+|---|---|---|---|---|
+| Расчётливый (calculating) | a third of its hull | 55% | 40% | as usual |
+| Осторожный (cautious) | half its hull | 70% | 30% | as usual |
+| Отчаянный (reckless) | never | 30% | 20% (the rest at the hull, where people are) | 15% faster |
+| Охотник (hunter) | a third of its hull | 35% | 75% | as usual |
+
+### Scanning the enemy
+
+- A ship that comes is **unknown inside**: the gun console's plan shows its rooms with **«?»**.
+- Our **sensors** make out one more room every **7 s** while our ship has power.
+- A shot that **gets through** shows what is in the room it hit («пусто» if nothing).
+- Its guns **firing** give away its gun room.
+- A **scanning probe** («Зонд-сканер», cargo, **12** credits at traders, the ship sets out with **1**) is
+  launched from the gun console («Запустить зонд-сканер»): it shows every room at once, its crew and its temper.
+- The guns can aim at any room, known or not: click it on the plan. Unknown rooms have no system button.
+
 ### Wrecked raider
 
 - A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a
-  dead hulk: no power, no light, doors open by hand. The ship is paid **40 credits** for it (no canister).
+  dead hulk: no power, no light, doors open by hand. The ship is paid its class's **reward** (25–80 credits; no canister).
 - It can be reached through open space or **docked with** from the ship-control console
   («Пристыковаться к разбитому кораблю»). Aboard: what it carried (2–4 things on the floor plus 1–3 more),
   and the bodies of its dead with their weapons.
@@ -526,22 +568,20 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   time. A broken generator is repaired like any machine.
 - **Shield hardening**: a rare upgrade, offered by about **1 trader in 3** for **80** credits. With it the shield
   stops rockets and EMP rockets too, like lasers. Once bought, it stays.
-- The only target is the pirate ship, until it docks. Its hull takes **12** damage. A boarding ship, once
-  wrecked, leaves with its crew, and the ship is credited **40 credits** and **1** fuel canister; a raider
-  stays as a wreck (see "Wrecked raider").
-- **Its shield and guns.** 70% of pirate ships have a shield generator (a sixth room, «Щиты»), with the same rules
-  as ours. Every pirate ship has a laser and one more gun, drawn from laser, rapid laser, blaster, ion gun, rocket
-  launcher and heavy laser; **5** or more jumps from the start it has a third one (heavy, rapid, blaster, ion
-  cannon, rockets or EMP). Its guns charge **1.3 times** slower than ours, and slower still as its weapons room is
-  worn. Its rockets never run out.
-- **Aiming at its systems.** The console shows the pirate ship's plan with six compartments, each with
-  a system; a click on a compartment (or its button) aims all guns there, "Куда попадёт" ("wherever it
+- The only target is the pirate ship, until it docks. Its hull takes its class's damage (**8–20**). A boarding
+  ship, once wrecked, leaves with its crew, and the ship is credited its class's reward and **1** fuel canister;
+  a raider stays as a wreck (see "Wrecked raider").
+- **Its shield and guns** depend on its class (see "Kinds of pirate ship"); its shield has the same rules as
+  ours. Its guns charge slower than ours by its class, and slower still as its weapons room is worn. Its rockets
+  never run out.
+- **Aiming at its systems.** The console shows the pirate ship's plan with its rooms (see "Scanning the enemy");
+  a click on a room (or a known system's button) aims all guns there, "Куда попадёт" ("wherever it
   lands") hits a random compartment. The aim is shared by everyone at the console. A hit that gets through
   takes its damage from the hull and from the system there, and makes a breach next to that compartment
   (a rocket: half the time):
   | Compartment | Strength | When knocked out |
   |---|---|---|
-  | Weapons (Орудия) | 3 | it stops shooting; worn, it fires slower (at 1 of 3, three times slower) |
+  | Weapons (Орудия) | 3 (its class's: cutter 2, cruiser 4) | it stops shooting; worn, it fires slower (at 1 of 3, three times slower) |
   | Bridge (Рубка) | 3 | its shots hit half as often, ours hit 20% more often (up to 95%) |
   | Engine (Двигатель) | 3 | it can't close in (the countdown to docking stands still) and can't jump away |
   | Quarters (Кубрик) | 2 per crewman | every 2 damage kills one of its crew; a boarding ship with none left breaks off and leaves (no reward), a raider becomes a dead wreck |
@@ -549,15 +589,15 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   | Shields (Щиты) | 3 (or none) | worn, its shield refills slower; knocked out, its shield falls to 0 |
 - Ion or EMP put a system out for their time: it works as if knocked out (on the shields: the shield stops
   protecting and refilling), then comes back by itself.
-- **It runs when beaten** (v44): with its hull at **4** or less, or its guns knocked out and its hull at
-  half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**, worn
+- **It runs when beaten** (v44): with its hull down to its temper's share (a third, or half for a cautious
+  one; a reckless one never runs), or its guns knocked out and its hull at half or less, it charges its jump drive to get away. With the drive whole that takes **20 s**, worn
   longer in proportion; with the drive or its engine knocked out, the charge stands still until it is
   mended. A ship that gets away pays nothing. While it runs it doesn't close in to dock either.
 - Its crew repairs one point of a worn system (not the quarters) every **15 s**: a system knocked out
   comes before one only worn; while it runs, the jump drive and engine first, otherwise its guns, then its shields.
-- **Its shots at us.** While one of our guns works it aims **55%** of its shots at our guns (75% while it runs);
-  of the rest, 60% hit the hull, half of those next to a crew member, and the others a bridge console or the shield
-  generator. A shot our shield stops shows as a blue ripple off the hull. What gets through: a gun, console or the
+- **Its shots at us.** While one of our guns works it aims its temper's share of its shots at our guns (20% more
+  while it runs); of the rest, its temper's share go at a bridge console or the shield generator, and the others
+  hit the hull, half of those next to a crew member. A shot our shield stops shows as a blue ripple off the hull. What gets through: a gun, console or the
   generator breaks (hull −3 per damage); a hull hit makes a breach (hull −5 per damage; a rocket breaches half the
   time); ion or EMP put a gun or the shield generator out for 3 or 6 s. A broken gun is repaired like machines
   (E, 6 s with a spare part).
@@ -753,6 +793,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | G | drop the item on the floor |
 | Mouse click | on something within reach: as E (pick up, console, machine, repair while held); elsewhere: shot, blow, healing |
 | R | return after death (takes one from the reserve) |
+| Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off |
 | I, Tab | inventory window |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
 | T | chat straight into the radio |

@@ -56,6 +56,18 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_line(at + Vector2(11, 6) * u, at + Vector2(14, 3) * u, nose, 2.6 * u)
 		canvas.draw_line(at + Vector2(2, 11) * u, at + Vector2(5, 14) * u, Color(0.3, 0.3, 0.36), 1.4 * u)
 		return
+	if item == Net.ITEM_PROBE:
+		# a probe: a round body with a sensor eye, two antennae and small fins
+		canvas.draw_circle(at + Vector2(8.5, 9) * u, 5.2 * u, Color(0.12, 0.12, 0.15))
+		canvas.draw_circle(at + Vector2(8.5, 9) * u, 4.2 * u, Color(0.62, 0.66, 0.72))
+		canvas.draw_circle(at + Vector2(8.5, 9) * u, 1.8 * u, Color(0.3, 0.85, 1.0))
+		canvas.draw_line(at + Vector2(6, 5) * u, at + Vector2(3.5, 1.5) * u, Color(0.12, 0.12, 0.15), 1.0 * u)
+		canvas.draw_line(at + Vector2(11, 5) * u, at + Vector2(13.5, 1.5) * u, Color(0.12, 0.12, 0.15), 1.0 * u)
+		canvas.draw_rect(Rect2(at + Vector2(3, 3) * u, Vector2(1.2, 1.2) * u), Color(0.95, 0.35, 0.3))
+		canvas.draw_rect(Rect2(at + Vector2(13, 3) * u, Vector2(1.2, 1.2) * u), Color(0.95, 0.35, 0.3))
+		canvas.draw_rect(Rect2(at + Vector2(2, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
+		canvas.draw_rect(Rect2(at + Vector2(12, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
+		return
 	match item:
 		Net.ITEM_JUMPSUIT:
 			# a folded jumpsuit with a collar and a pocket

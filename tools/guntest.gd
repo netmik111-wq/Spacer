@@ -39,6 +39,7 @@ func _initialize() -> void:
 	server.director.auto = false
 	var map := server.map
 	var g: Gunnery = server.gunnery
+	server.shipyard.classic = true          # (the checks below were written for the old pirate ship: see shiptest for the rolled ones)
 	g.shield_chance = 0.0                    # (the old checks below are about a pirate ship with no shield)
 	g.loadout_for_test = PackedByteArray([Weapons.LASER])
 	var d: Derelict = server.derelict

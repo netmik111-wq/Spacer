@@ -1042,6 +1042,7 @@ func _process(delta: float) -> void:
 		return
 	# which way to walk: the most recently pressed of the held direction keys
 	var busy := _chat_input.visible or _pause.visible or _console.visible or _open(_options)
+	_world.hover = not busy
 	_update_console()
 	for m: Array in MOVES:
 		var dir: int = m[1]

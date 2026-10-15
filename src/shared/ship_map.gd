@@ -46,6 +46,9 @@ var guns := PackedInt32Array()       # wall cells with the ship's guns, in the o
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
 var shield := {}                     # wall cells with the shield generator (see Gunnery)
+var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
+                                     # PackedInt32Array of cells each, top-left room first (see _find_rooms)
+var room_of := PackedInt32Array()    # per cell: its number in `rooms`, -1 = in none
 var zones: Array = []                # (a ship others fight) the rooms its systems stand in: per Net.ESYS_*,
                                      # the cells of its own drawing (see Gunnery); empty = none named
 var lock_pump := {}                  # wall cells with an airlock pump: cell -> {"chamber": cells of the
@@ -189,6 +192,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		while zones.size() <= at:
 			zones.append(PackedInt32Array())
 		zones[at] = PackedInt32Array(z[1])
+	_find_rooms()
 	for i in cells.size():
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
@@ -325,6 +329,36 @@ func _find_airlocks() -> String:
 		door_partner[outer] = inner
 		lock_pump[i] = {"chamber": PackedInt32Array(seen.keys()), "inner": inner, "outer": outer}
 	return ""
+
+
+func _find_rooms() -> void:
+	## Splits the floor into rooms: cells reached from one another without
+	## passing a wall or a door. Numbered in the order their first cell comes,
+	## row by row, so the server and every client number them alike.
+	rooms = []
+	room_of = PackedInt32Array()
+	room_of.resize(width * height)
+	room_of.fill(-1)
+	for start in cells.size():
+		if walk[start] == 0 or door_of[start] >= 0 or room_of[start] >= 0:
+			continue
+		var n := rooms.size()
+		var room := PackedInt32Array([start])
+		room_of[start] = n
+		var i := 0
+		while i < room.size():
+			var c: int = room[i]
+			i += 1
+			for step: int in [1, -1, width, -width]:
+				var j := c + step
+				if j < 0 or j >= cells.size() or (step == 1 and j % width == 0) or (step == -1 and c % width == 0):
+					continue
+				if walk[j] == 0 or door_of[j] >= 0 or room_of[j] >= 0:
+					continue
+				room_of[j] = n
+				room.append(j)
+		room.sort()
+		rooms.append(room)
 
 
 func add_other(name: String) -> int:

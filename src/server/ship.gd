@@ -21,6 +21,7 @@ var kind := Net.SHIP_CREW             # Net.SHIP_*
 var name := ""
 var at := Vector2i.ZERO               # the corner of its drawing in the grid
 var docked := false                   # (another ship) right up against our airlock
+var layout := 0                       # (another ship) its drawing: its number in Net.OTHER_MAPS
 
 # where it is
 var sector := 0                       # the sector it is in: its number in the window GameServer.sectors holds
@@ -93,13 +94,14 @@ func entry() -> PackedByteArray:
 	## Its line in Net.S_SHIPS.
 	var name_bytes := name.to_utf8_buffer()
 	var out := PackedByteArray()
-	out.resize(9)
+	out.resize(10)
 	out.encode_u16(0, id)
 	out.encode_u8(2, kind)
 	out.encode_u8(3, 1 if docked else 0)
 	out.encode_s16(4, at.x)
 	out.encode_s16(6, at.y)
-	out.encode_u8(8, name_bytes.size())
+	out.encode_u8(8, layout)
+	out.encode_u8(9, name_bytes.size())
 	out.append_array(name_bytes)
 	return out
 

@@ -1,0 +1,10 @@
+; Pirate raider, second hull (class "рейдер"). One deck; the outer door at the bottom docks
+; with the ship's airlock by force. Systems go into its rooms by lot (see Shipyard).
+= Пиратский рейдер
+  ##W#T##3##W###
+  #....A..#....#
+  #....#..#....#
+###D####D###D#####
+#...A....A....A..#
+#...#....#....#..#
+###D#######6######
