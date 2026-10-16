@@ -28,6 +28,7 @@ extends RefCounted
 ##   weight    how often it comes, against the others that may
 ##   reward    credits for wrecking it
 ##   loot      [fewest, most] things lying about aboard it
+##   boss      (v57) the flagship's kind (1 battleship, 2 carrier): never rolled by chance
 
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
@@ -45,6 +46,18 @@ const CLASSES := {
 	Net.ECLASS_CRUISER: {"name": "пиратский крейсер", "layouts": [5], "hull": 20, "strength": 4, "guns": [3, 4], "more_from": 7,
 		"pool": [Weapons.HEAVY, Weapons.LASER, Weapons.ION_CANNON, Weapons.ROCKET, Weapons.EMP, Weapons.SIEGE],
 		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6]},
+	# (v57) the flagship at the goal point, in the author's two kinds. Never rolled by chance
+	# ("boss"): it waits in its own sector (Sectors.FLAGSHIP); see Shipyard.flagship and Flagship.
+	# Its guns are its whole "pool"; "extra" are those it adds, one for each of our guns better than the
+	# plain laser we start with (the author's notebook: enemies grow with the ship's gear).
+	Net.ECLASS_BATTLESHIP: {"name": "флагман пиратов", "layouts": [8], "hull": 30, "strength": 5, "guns": [4, 4], "more_from": 0,
+		"pool": [Weapons.HEAVY, Weapons.LASER, Weapons.LASER, Weapons.ROCKET], "extra": [Weapons.ION, Weapons.LASER, Weapons.HEAVY],
+		"shield": 1.0, "regen": 1.5, "slower": 2.1, "dodge": -0.05, "crew": [7, 7], "from": 9999, "weight": 0, "reward": 200,
+		"loot": [5, 7], "boss": 1},
+	Net.ECLASS_CARRIER: {"name": "абордажный флагман", "layouts": [9], "hull": 26, "strength": 5, "guns": [3, 3], "more_from": 0,
+		"pool": [Weapons.LASER, Weapons.NEURAL, Weapons.NEURAL], "extra": [Weapons.LASER, Weapons.NEURAL, Weapons.HEAVY],
+		"shield": 1.0, "regen": 1.3, "slower": 1.3, "dodge": 0.0, "crew": [6, 6], "from": 9999, "weight": 0, "reward": 200,
+		"loot": [5, 7], "boss": 2},
 }
 
 # How it fights (the old pirate's ways are "расчётливый"):
@@ -63,6 +76,11 @@ const TEMPERS := {
 		"flee": 0.0, "at_guns": 0.3, "devices": 0.2, "pace": 1.15},
 	Net.TEMPER_HUNTER: {"name": "охотник", "about": "выбивает щит и пульты мостика, бежит на трети корпуса",
 		"flee": 1.0 / 3.0, "at_guns": 0.35, "devices": 0.75, "pace": 1.0},
+	# (v57) the flagships' own ways (never rolled for an ordinary pirate: "boss")
+	Net.TEMPER_SIEGE: {"name": "флагман", "about": "бьёт прицельно: сначала генератор щита, потом двигатель, потом орудия; не бежит и не сдаётся",
+		"flee": 0.0, "at_guns": 0.0, "devices": 0.0, "pace": 1.0, "boss": true},
+	Net.TEMPER_STORM: {"name": "абордажник", "about": "оглушает экипаж нейроизлучателями и высаживает людей телепортом прямо на мостик, чтобы захватить корабль; не бежит и не сдаётся",
+		"flee": 0.0, "at_guns": 0.3, "devices": 0.0, "pace": 1.0, "boss": true},
 }
 
 const NAMES: Array[String] = ["Чёрная вдова", "Ржавый клинок", "Кровавая Мэри", "Последний вздох", "Гиена", "Шакал",
@@ -77,6 +95,10 @@ static func info(klass: int) -> Dictionary:
 
 static func temper(t: int) -> Dictionary:
 	return TEMPERS.get(t, TEMPERS[Net.TEMPER_CALCULATING])
+
+
+static func is_boss(klass: int) -> bool:
+	return info(klass).has("boss")
 
 
 static func class_of_layout(layout: int) -> int:

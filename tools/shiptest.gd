@@ -42,7 +42,8 @@ func _initialize() -> void:
 	_expect(map.others.size() == Net.OTHER_MAPS.size(), "every other ship's drawing loads (%d)" % map.others.size())
 	for k in range(Net.OTHER_PIRATE, map.others.size()):
 		var o = map.others[k]
-		_expect(o.rooms.size() >= Net.ESYS_COUNT, "%s has a room for every system (%d rooms)" % [o.map_name, o.rooms.size()])
+		var needs := Net.ESYS_COUNT if Hulls.class_of_layout(k) == Net.ECLASS_CARRIER else Net.ESYS_COUNT - 1   # (v57: only the carrier has a teleporter)
+		_expect(o.rooms.size() >= needs, "%s has a room for every system (%d rooms)" % [o.map_name, o.rooms.size()])
 		_expect(d._spots.has(k), "%s fits off our airlock" % o.map_name)
 		_expect(Hulls.class_of_layout(k) >= 0 and (Hulls.info(Hulls.class_of_layout(k))["layouts"] as Array).has(k),
 			"%s belongs to a class" % o.map_name)
@@ -59,6 +60,8 @@ func _initialize() -> void:
 	_expect(not seen.has(Net.ECLASS_GUNSHIP) and not seen.has(Net.ECLASS_CRUISER) and seen.has(Net.ECLASS_CUTTER) and seen.has(Net.ECLASS_RAIDER),
 		"near the start only cutters and raiders come (%s)" % str(seen.keys()))
 	for k: int in Hulls.CLASSES.keys():
+		if Hulls.is_boss(k):
+			continue                         # (v57: the flagships are never rolled; see flagshiptest)
 		yard.force_class = k
 		var design: Dictionary = yard.make(2, true, d._pirate_spots())
 		_expect(int(design["klass"]) == k and int(design["hull"]) == int(Hulls.info(k)["hull"]), "a %s can be rolled (hull %d)" % [Hulls.class_name_of(k), int(design["hull"])])
@@ -166,6 +169,8 @@ func _initialize() -> void:
 
 	# a boarding ship of each class can come and dock
 	for k: int in Hulls.CLASSES.keys():
+		if Hulls.is_boss(k):
+			continue
 		yard.force_class = k
 		_expect(d.pirates_come(2) and not d.raid and d.layout >= Net.OTHER_PIRATE, "a %s can come to board" % Hulls.class_name_of(k))
 		d._leave(true)
@@ -180,7 +185,7 @@ func _check_design(design: Dictionary) -> void:
 	var ok: bool = rooms.size() == server.map.others[int(design["layout"])].rooms.size()
 	for system in Net.ESYS_COUNT:
 		var n: int = rooms.count(system)
-		if system == Net.ESYS_SHIELDS and not design["shield"]:
+		if (system == Net.ESYS_SHIELDS and not design["shield"]) or (system == Net.ESYS_TELEPORT and not design.get("teleport", false)):
 			ok = ok and n == 0
 		else:
 			ok = ok and n == 1

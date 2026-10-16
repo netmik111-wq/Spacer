@@ -82,7 +82,7 @@ func board(count: int, layout: int) -> void:
 	_passable.resize(o.cells.size())
 	for c in o.cells.size():
 		_passable[c] = 1 if o.cells[c] >= 0 and (o.walk[c] == 1 or o.door_of[c] >= 0) else 0
-	var posts := [Net.ESYS_HELM, Net.ESYS_WEAPONS, Net.ESYS_SHIELDS]
+	var posts := [Net.ESYS_HELM, Net.ESYS_WEAPONS, Net.ESYS_SHIELDS, Net.ESYS_TELEPORT]
 	for i in count:
 		var system: int = posts[i] if i < posts.size() else Net.ESYS_CREW
 		var room: int = server.gunnery.room_of_system(system)
@@ -222,6 +222,7 @@ func _plan() -> void:
 			needs.append([k, 1])
 	needs.append([Net.ESYS_WEAPONS, 0])
 	needs.append([Net.ESYS_SHIELDS, 0])
+	needs.append([Net.ESYS_TELEPORT, 0])      # (v57) the carrier's teleporter sends nobody with nobody at it
 	var free: Array = []
 	for i in at.size():
 		if not hurt(i):
@@ -230,7 +231,7 @@ func _plan() -> void:
 			_send(i, Net.ESYS_CREW, 0)
 	for need: Array in needs:
 		var room: int = g.room_of_system(need[0])
-		if room < 0 or free.is_empty() or (need[0] == Net.ESYS_SHIELDS and g.systems_full[Net.ESYS_SHIELDS] == 0):
+		if room < 0 or free.is_empty() or g.systems_full[need[0]] == 0:
 			continue
 		# whoever is already on it keeps it; else the nearest
 		var best := -1

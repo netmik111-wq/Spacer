@@ -42,6 +42,12 @@ func update_chart() -> void:
 	else:
 		text.text += "\nТоплива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях, станция снабжения даёт немного."
 	text.text += "\nДо начала пути отсюда прыжков: %d. Карта показывает только окрестности корабля." % client.sectors.far_from_start(client.sector)
+	var goal := client.sectors.jumps_to_goal(client.sector)
+	if client.won:
+		text.text += "\nФлагман пиратов повержен: цель пути достигнута. Летите куда хотите."
+	else:
+		text.text += ("\nФлагман пиратов здесь, в этом секторе: уйти прыжком он не даст." if goal == 0 else
+			"\nЦель пути, флагман пиратов: %d прыжк%s отсюда (красная метка на карте)." % [goal, _jumps_word(goal)])
 	# one button per sector within reach; rebuilt when the ship has moved
 	var place_key := Sectors.key(client.sectors.cell[client.sector]) * 2    # the buttons belong to this place in space
 	if buttons_for != place_key:
@@ -60,6 +66,14 @@ func update_chart() -> void:
 			(go as Button).disabled = jumping or wait > 0.0 or fuel < 1
 	if jumping:
 		chart.queue_redraw()
+
+
+static func _jumps_word(n: int) -> String:
+	if n % 10 == 1 and n % 100 != 11:
+		return "ок"
+	if n % 10 >= 2 and n % 10 <= 4 and (n % 100 < 12 or n % 100 > 14):
+		return "а"
+	return "ов"
 
 
 func update_helm() -> void:
@@ -185,7 +199,8 @@ func _draw_chart() -> void:
 	if client.jump_to != Net.NO_SECTOR:
 		chart.draw_line(place.call(client.sector), place.call(client.jump_to), Color(1, 1, 1, 0.9), 3.0)
 	var font := ThemeDB.fallback_font
-	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8), Color(0.78, 0.5, 0.88)]   # one per Sectors.KIND_NAMES
+	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8), Color(0.78, 0.5, 0.88),
+		GOAL]   # one per Sectors.KIND_NAMES
 	for id in sectors.count:
 		var at: Vector2 = place.call(id)
 		var known := client.knows_sector(id)
@@ -198,6 +213,9 @@ func _draw_chart() -> void:
 		if id == client.sector:
 			chart.draw_arc(at, 12.0, 0.0, TAU, 32, Color.WHITE, 2.0)
 		chart.draw_string(font, at + Vector2(-70, 24), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, Color(0.85, 0.95, 0.88))
+		if sectors.kind[id] == Sectors.FLAGSHIP:
+			chart.draw_arc(at, 11.0, 0.0, TAU, 32, GOAL, 2.0)
+	_draw_goal(area)
 	# legend: what the colours are, then what the marks are
 	var ink := Color(0.7, 0.8, 0.74)
 	var x := 8.0
@@ -231,6 +249,38 @@ func _draw_chart() -> void:
 				text = "заданный прыжок"
 		chart.draw_string(font, Vector2(x + 16, y + 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ink)
 		x += 30.0 + font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+
+
+const GOAL := Color(1.0, 0.25, 0.25)      # (v57) the flagship's sector, and the way to it
+
+
+func _draw_goal(area: Rect2) -> void:
+	## (v57) The flagship lies off the chart: an arrow at its edge points the way,
+	## with how many jumps there are to go.
+	var sectors := client.sectors
+	if client.won:
+		return                                   # (beaten: there is nowhere one must go any more)
+	for id in sectors.count:
+		if sectors.cell[id] == sectors.goal:
+			return                               # it is on the chart: its own mark says enough
+	var here := sectors.cell[sectors.here]
+	var way := Vector2(sectors.goal - here)
+	# where the window's edge is, in sectors from the middle; the arrow sits there
+	var half := Vector2(Sectors.REACH_X + 0.5, Sectors.REACH_Y + 0.5)
+	var k := minf(half.x / maxf(absf(way.x), 0.001), half.y / maxf(absf(way.y), 0.001))
+	var at_cells := way * k
+	var mid := area.position + area.size * 0.5
+	var tip := mid + Vector2(at_cells.x / half.x, at_cells.y / half.y) * area.size * 0.5
+	tip = tip.clamp(area.position + Vector2(8, 8), area.end - Vector2(8, 8))
+	var dir := way.normalized()
+	var side := dir.orthogonal()
+	chart.draw_line(tip - dir * 40.0, tip - dir * 12.0, GOAL, 3.0)
+	chart.draw_colored_polygon(PackedVector2Array([tip, tip - dir * 18.0 + side * 7.0, tip - dir * 18.0 - side * 7.0]), GOAL)
+	var label := "флагман: %d прыжк%s" % [sectors.jumps_to_goal(sectors.here), _jumps_word(sectors.jumps_to_goal(sectors.here))]
+	var font := ThemeDB.fallback_font
+	var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	var pos := (tip - dir * 40.0 + Vector2(-w / 2.0, 22.0)).clamp(Vector2(4, 14), chart.size - Vector2(w + 4, 4))
+	chart.draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, GOAL)
 
 
 func _draw_helm() -> void:

@@ -79,6 +79,7 @@ var bot_plan_tick := -1000           # when it last worked out its way
 var bot_from := -1                   # the cell it worked it out from
 var bot_step := 0                    # its next step: a direction, -1 for the ladder underfoot, 0 = none
 var home := -1                       # (v55) a pirate on its own ship: its post, a cell of that ship's drawing
+var hold := -1                       # (v57) a pirate the flagship put aboard: the cell of our bridge it holds
 var job := 0                         # Net.JOB_*: its access (st.access) and which skills grow quickly
 var skills := PackedByteArray([0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
 var slow_work := 0                   # pieces of work outside its job (every Net.SKILL_SLOW_EVERY-th one teaches)

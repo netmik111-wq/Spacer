@@ -138,12 +138,13 @@ func pirates_can_come() -> bool:
 	return possible(Net.OTHER_PIRATE) and not here and not someone_outside()
 
 
-func pirates_come(party: int, p_raid: bool = false) -> bool:
+func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> bool:
 	## A pirate ship shows up off the airlock: to dock by force before long, or
-	## (a raid) to fight it out at a distance.
+	## (a raid) to fight it out at a distance. (v57) `given` is a ship already
+	## made (the flagship, Flagship.call_in); else Shipyard rolls one.
 	if not pirates_can_come():
 		return false
-	design = server.shipyard.make(party, p_raid, _pirate_spots())
+	design = given if not given.is_empty() else server.shipyard.make(party, p_raid, _pirate_spots())
 	_comes(Net.OTHER_PIRATE, int(design["layout"]), str(design["name"]))
 	raid = p_raid
 	_place(_spots[layout][0])
@@ -159,7 +160,11 @@ func pirates_come(party: int, p_raid: bool = false) -> bool:
 	server.air.wake()
 	server.gunnery.enemy_arrives(design, raid)
 	var who := "Пиратский корабль" if design.has("classic") else str(design["name"])
-	if raid:
+	if design.has("boss"):
+		server.chat.say(("Тревога! Из тени выходит %s, флагман пиратов. Это цель пути: бой до конца, он не бежит и не сдаётся. Разбейте его, и игра выиграна. " % who) +
+			("Он бьёт прицельно: сначала по генератору щита, потом по двигателю. Держите ремонтников наготове." if int(design["boss"]) == 1 else
+			"Его нейроизлучатели оглушают всех в отсеке, а телепорт высаживает абордажников прямо на мостик. Не отдавайте мостик!"))
+	elif raid:
 		server.chat.say("Тревога! %s выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать. Его отсеки пока не видны: их покажут сканеры, попадания и зонд." % who)
 	else:
 		server.chat.say("Тревога! К шлюзу подходит %s и открывает огонь. Через %d секунд он пристыкуется силой и вскроет шлюз, если его не разбить из орудий (пульт орудий на мостике)." % [
@@ -304,6 +309,8 @@ func _raid_closes_in() -> void:
 	## It warns, closes in and docks by force after RAID_BOARD_TICKS; if one of
 	## our guns speaks again before then, it pulls back to its distance.
 	var g = server.gunnery
+	if g.boss > 0:
+		return                               # (v57) the flagship does not close in: it has its own ways
 	var helpless: bool = g.fighting() and not g.fleeing() and g.ransom == 0 \
 		and g.our_guns_silent() and server.navigation.cannot_jump()
 	if helpless and _pirates_dock_at < 0:

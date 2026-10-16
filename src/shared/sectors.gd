@@ -13,13 +13,20 @@ extends RefCounted
 ## Routes join a sector to some of its four neighbours on the grid. Every
 ## sector has a route north or east, so there is always a way further out,
 ## and never a pocket of space with no way out of it.
+##
+## (v57, the author: "a linear point in the game where we go") Every game has
+## one goal: the pirates' flagship waits in the sector `goal` names, a fixed
+## number of jumps out (east and north). Along its row and its column every
+## route is open, so a ship heading out east and north comes upon the lane.
 
 const EMPTY := 0                     # nothing in particular
 const METEORS := 1                   # a meteor stream: the hull takes hits
 const TRADER := 2                    # a trader: sells supplies
 const STATION := 3                   # a supply station: the ship's air is topped up
 const DERELICT := 4                  # a derelict: an abandoned ship to search
-const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль"]
+const FLAGSHIP := 5                  # (v57) the goal: the pirates' flagship waits here
+const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль", "флагман пиратов"]
+const GOAL_JUMPS := 12               # (v57) how far out the flagship waits, in jumps from the start
 
 const NAMES: Array[String] = [
 	"Тихая заводь", "Кеплер", "Пояс Хадли", "Рубеж", "Стеклянное море", "Маяк Орта",
@@ -55,6 +62,7 @@ var links: Array = []                # pairs [a, b] with a < b
 var spot := PackedVector2Array()     # where its main thing is: the middle of the meteor stream, the station, the trader
 var reach := PackedByteArray()       # how far that thing reaches: the stream's radius, or DOCK_RANGE; 0 = nothing there
 var entry := PackedVector2Array()    # where a ship arriving by jump appears
+var goal := Vector2i.ZERO            # (v57) where in space the flagship waits (it may lie outside the window)
 
 
 static func key(at: Vector2i) -> int:
@@ -83,9 +91,24 @@ static func _north(seed_value: int, at: Vector2i) -> bool:
 	return (_mix(seed_value, at.x, at.y, 1) & 1) == 1 or _unit(seed_value, at.x, at.y, 3) < EXTRA_ROUTE
 
 
+static func goal_of(seed_value: int) -> Vector2i:
+	## (v57) The flagship's sector: GOAL_JUMPS out, mostly east, some of it north.
+	var north := 3 + _mix(seed_value, 0, 0, 11) % 3
+	return Vector2i(GOAL_JUMPS - north, -north)
+
+
+static func jumps_between(a: Vector2i, b: Vector2i) -> int:
+	return absi(a.x - b.x) + absi(a.y - b.y)
+
+
 static func joined(seed_value: int, a: Vector2i, b: Vector2i) -> bool:
-	## Is there a route between two sectors of space?
+	## Is there a route between two sectors of space? (v57) Along the goal's row
+	## and its column every route is there: a lane straight to the flagship that
+	## any way out east and north must cross (unless it has already gone past it).
 	var d := b - a
+	var g := goal_of(seed_value)
+	if jumps_between(a, b) == 1 and ((a.x == g.x and b.x == g.x) or (a.y == g.y and b.y == g.y)):
+		return true
 	if d == Vector2i(1, 0):
 		return _east(seed_value, a)
 	if d == Vector2i(-1, 0):
@@ -101,6 +124,8 @@ static func kind_at(seed_value: int, at: Vector2i) -> int:
 	## What a sector holds. The start is quiet; further out meteor streams get commoner.
 	if at == Vector2i.ZERO:
 		return EMPTY
+	if at == goal_of(seed_value):
+		return FLAGSHIP
 	var far := absi(at.x) + absi(at.y)
 	var meteors := clampf(NEAR_METEORS + FAR_METEORS * far, NEAR_METEORS, MOST_METEORS)
 	var roll := _unit(seed_value, at.x, at.y, 4)
@@ -131,6 +156,7 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary) -> void:
 	reach.resize(count)
 	entry.resize(count)
 	links.clear()
+	goal = goal_of(seed_value)
 	var rng := RandomNumberGenerator.new()
 	var i := 0
 	for dy in range(-REACH_Y, REACH_Y + 1):
@@ -199,6 +225,11 @@ func far_from_start(id: int) -> int:
 	return absi(cell[id].x) + absi(cell[id].y)
 
 
+func jumps_to_goal(id: int) -> int:
+	## (v57) How many jumps from that sector to the flagship's, at the least.
+	return jumps_between(cell[id], goal)
+
+
 func describe(id: int) -> String:
 	return "«%s», %s" % [names[id], KIND_NAMES[kind[id]]]
 
@@ -206,7 +237,7 @@ func describe(id: int) -> String:
 func pack() -> PackedByteArray:
 	## For the network: u8 count, u8 here; per sector s16 cell x, s16 cell y, u8 kind, u8 visited,
 	## u8 x, u8 y on the chart, u8 spot x, u8 spot y, u8 reach, u8 entry x, u8 entry y,
-	## u8 name length, name; u8 links; pairs u8, u8.
+	## u8 name length, name; u8 links; pairs u8, u8; (v57) s16 goal x, s16 goal y.
 	var out := PackedByteArray([count, here])
 	for i in count:
 		var name_bytes := names[i].to_utf8_buffer()
@@ -229,6 +260,10 @@ func pack() -> PackedByteArray:
 	for l: Array in links:
 		out.append(int(l[0]))
 		out.append(int(l[1]))
+	var o := out.size()
+	out.resize(o + 4)
+	out.encode_s16(o, goal.x)
+	out.encode_s16(o + 2, goal.y)
 	return out
 
 
@@ -261,3 +296,4 @@ func unpack(data: PackedByteArray, at: int) -> void:
 	for i in link_count:
 		links.append([data[at], data[at + 1]])
 		at += 2
+	goal = Vector2i(data.decode_s16(at), data.decode_s16(at + 2))

@@ -33,6 +33,8 @@ const BOARDING := 9
 const PIRATE_SHIP := 10
 const FUEL_DRIFT := 11
 const PIRATE_RAID := 12
+const FLAGSHIP_BATTLESHIP := 13
+const FLAGSHIP_CARRIER := 14
 
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
@@ -62,6 +64,11 @@ const EVENTS: Array[Dictionary] = [
 	# (v44, the author's request) a pirate ship that fights at a distance and does not board; wrecked, it can be searched
 	{"id": PIRATE_RAID, "name": "Пиратский корабль: бой", "size": BIG,
 		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+	# (v57) never by chance: the flagship waits at the goal point; these call it here for the host's tests
+	{"id": FLAGSHIP_BATTLESHIP, "name": "Флагман: линкор", "size": CATASTROPHE,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP], "weight": 0},
+	{"id": FLAGSHIP_CARRIER, "name": "Флагман: абордажник", "size": CATASTROPHE,
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP], "weight": 0},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -192,6 +199,10 @@ func _run(event_id: int) -> void:
 			server.derelict.pirates_come(_party())
 		PIRATE_RAID:
 			server.derelict.pirates_come(_party(), true)
+		FLAGSHIP_BATTLESHIP:
+			server.flagship.call_in(1)
+		FLAGSHIP_CARRIER:
+			server.flagship.call_in(2)
 		FUEL_DRIFT:
 			server.supplies.find_fuel(RESCUE_FUEL)
 		METEOR_VOLLEY:
@@ -227,6 +238,8 @@ func _can_happen(e: Dictionary, here: int) -> bool:
 			return server.pirates.aboard() == 0
 		PIRATE_SHIP, PIRATE_RAID:
 			return server.pirates.aboard() == 0 and server.derelict.pirates_can_come()
+		FLAGSHIP_BATTLESHIP, FLAGSHIP_CARRIER:
+			return server.derelict.pirates_can_come()
 	return true
 
 

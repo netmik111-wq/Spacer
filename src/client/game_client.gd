@@ -164,6 +164,7 @@ var sectors_seen := 0
 var farthest := 0
 var jumps := 0
 var voyage_seconds := 0
+var won := false                     # (v57) the flagship is beaten: the game is won, the voyage goes on
 # our own job and skills (see Net.S_ME)
 var job := Net.JOB_CREWMAN
 var skills := PackedByteArray([0, 0, 0])
@@ -634,8 +635,9 @@ func server_now() -> float:
 
 
 func knows_sector(id: int) -> bool:
-	## The crew knows what is in a sector it has been to or can reach in one jump.
-	return sectors.visited[id] == 1 or sectors.linked(sector, id)
+	## The crew knows what is in a sector it has been to or can reach in one jump,
+	## and (v57) where the flagship waits: the goal of the voyage is on every chart.
+	return sectors.visited[id] == 1 or sectors.linked(sector, id) or sectors.kind[id] == Sectors.FLAGSHIP
 
 
 func send_suit(on: bool) -> void:
@@ -1279,6 +1281,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				farthest = pkt.decode_u16(6)
 				jumps = pkt.decode_u16(8)
 				voyage_seconds = pkt.decode_u32(10)
+				won = pkt.size() > 14 and pkt[14] == 1
 		Net.S_ME:
 			if pkt.size() >= 2 + Net.SKILLS:
 				job = pkt[1]

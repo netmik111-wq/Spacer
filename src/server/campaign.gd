@@ -102,7 +102,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"pos": [server.ship.pos.x, server.ship.pos.y],
 		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits,
 		"reserve": server.reserve, "hull": server.ship.hull, "voyage": server.voyage_ticks,
-		"jumps": server.jumps, "farthest": server.farthest, "dead_names": server.dead_names.keys(),
+		"jumps": server.jumps, "farthest": server.farthest, "won": server.won, "dead_names": server.dead_names.keys(),
 		"holes": holes, "broken": broken,
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty),
@@ -161,6 +161,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])
+	server.won = bool(data.get("won", false))
 	server.admin.names.clear()
 	for n in data.get("admins", []):
 		server.admin.names[str(n)] = true

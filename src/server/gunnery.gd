@@ -71,7 +71,8 @@ const HITS_PER_BOARDER := 2          # damage on its quarters that kills one of 
 const ENEMY_REPAIR_SECONDS := 15.0   # its crew mends one point of a worn system this often
 const ENEMY_BREACH_SHARE := 0.6      # of its hits not at our guns, those that hole the hull (the rest put a console or the shield out)
 const DOWN_TEXT: Array[String] = ["Пираты не могут стрелять.", "Пираты не могут уклоняться и стреляют мимо.",
-	"Пираты не могут ни подойти, ни уйти прыжком.", "", "Пираты не могут уйти прыжком.", "Щит пиратов погас."]
+	"Пираты не могут ни подойти, ни уйти прыжком.", "", "Пираты не могут уйти прыжком.", "Щит пиратов погас.",
+	"Телепорт пиратов молчит: новых абордажников не будет, пока его не починят."]
 const FLEE_HULL := 4                 # hull left at which a calculating raider gives up and runs (v53: per temper)
 const FLEE_SECONDS := 20.0           # to charge its jump with the drive whole (the author's number); worn, longer
 const AIM_GUNS := 0.55               # share of its shots that go for our guns while one of them works
@@ -131,6 +132,9 @@ var _rng := RandomNumberGenerator.new()
 var flies := true                    # (v56) shots take their flight before they land (tests set false: at once)
 var _flying: Array = []              # (v56) shots on their way: [the tick they land, what they do then]
 var _fx := RandomNumberGenerator.new()   # (v56) for what is only drawn (so the game's own lots stay as they were)
+var boss := 0                        # (v57) the flagship at the goal point: 1 battleship, 2 carrier (0 = an ordinary pirate)
+const STUN_FLOOR := -10.0           # (v57) a neural shot takes health no lower than this: down for a while, not dead
+const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what it means to hit this often (else the hull near the crew)
 
 
 func setup(p_server: Node) -> void:
@@ -170,6 +174,7 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	_regen = design["regen"]
 	_slower = design["slower"]
 	_dodge = design["dodge"]
+	boss = int(design.get("boss", 0))
 	raid = p_raid
 	flee = -1.0
 	_mend_next = server.tick
@@ -177,7 +182,7 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	var shielded: bool = design["shield"]
 	var strength: int = design["strength"]
 	systems_full = PackedByteArray([strength, strength, strength, maxi(boarders, 1) * HITS_PER_BOARDER,
-		strength, strength if shielded else 0])
+		strength, strength if shielded else 0, strength if design.get("teleport", false) else 0])
 	systems = systems_full.duplicate()
 	systems_out = PackedInt32Array()
 	systems_out.resize(Net.ESYS_COUNT)
@@ -279,6 +284,7 @@ func hull_full() -> int:
 
 func enemy_gone() -> void:
 	enemy_hull = 0
+	boss = 0
 	enemy_full = 0
 	room_sys = PackedByteArray()
 	revealed = PackedByteArray()
@@ -1029,6 +1035,8 @@ func _shot_kind(w: int) -> int:
 			return Net.SHOT_PLASMA
 		Weapons.CLASS_BEAM:
 			return Net.SHOT_BEAM
+		Weapons.CLASS_NEURAL:
+			return Net.SHOT_NEURAL
 	return Net.SHOT_CANNON
 
 
@@ -1128,8 +1136,8 @@ func _hole_near(room: int) -> void:
 func mend_order() -> Array:
 	## What its crew mends first (its quarters are not mended): while it runs, its
 	## jump drive and engine; else its guns. A system knocked out comes before one only worn.
-	var order: Array = [Net.ESYS_JUMP, Net.ESYS_ENGINE, Net.ESYS_WEAPONS, Net.ESYS_SHIELDS, Net.ESYS_HELM] if fleeing() \
-		else [Net.ESYS_WEAPONS, Net.ESYS_SHIELDS, Net.ESYS_HELM, Net.ESYS_ENGINE, Net.ESYS_JUMP]
+	var order: Array = [Net.ESYS_JUMP, Net.ESYS_ENGINE, Net.ESYS_WEAPONS, Net.ESYS_SHIELDS, Net.ESYS_HELM, Net.ESYS_TELEPORT] if fleeing() \
+		else [Net.ESYS_WEAPONS, Net.ESYS_TELEPORT, Net.ESYS_SHIELDS, Net.ESYS_HELM, Net.ESYS_ENGINE, Net.ESYS_JUMP]
 	var out: Array = []
 	for k: int in order:
 		if k < systems.size() and systems[k] == 0 and systems_full[k] > 0:
@@ -1229,6 +1237,13 @@ func _wrecked() -> void:
 		server.chat.say("Пиратский корабль захвачен: его экипаж перебит! Корабль разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать." % [paid, CAPTURE_PARTS])
 		server.supplies.tell_store()
 		return
+	if boss > 0:
+		# (v57) the flagship at the goal point: the game is won; its wreck stays to be searched
+		server.ship.credits += reward
+		server.derelict.becomes_wreck()
+		server.supplies.tell_store()
+		server.flagship.won(captured)
+		return
 	server.ship.credits += reward
 	if raid or server.stations.ours_aboard:
 		# it stays alongside, dead: what it holds is there for the taking
@@ -1271,12 +1286,19 @@ func _enemy_fires(w: int) -> void:
 			_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.MISSED, -1, -1, Vector2.ZERO))
 			continue
 		var target := _enemy_target()
+		if Weapons.klass(w) == Weapons.CLASS_NEURAL:
+			target = -1                      # (v57) it is aimed at people, not at a machine
 		if _meets_shield(w, ship.hardened) and our_shield_up() and _rng.randf() >= Weapons.through_chance(shield):
 			shield = maxf(shield - Weapons.shield_damage(w), 0.0)
 			var spot := _draw_theirs(w, target if target >= 0 else _hull_near_crew(), 0, delay)
 			_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, 0, -1, -1, spot))
 			continue
 		var cell := target
+		if Weapons.klass(w) == Weapons.CLASS_NEURAL:
+			cell = _crew_cell()
+			var spot := _draw_theirs(w, _hull_nearest(cell), Net.LANDED, delay)
+			_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.LANDED, -1, cell, spot))
+			continue
 		if Weapons.info(w).has("disable"):
 			cell = target if target >= 0 and (map.guns.has(target) or target == shield_cell()) else _jam_choice()
 		elif target < 0:
@@ -1304,7 +1326,9 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		var damage: int = info.get("damage", 0)
 		var heavy := damage >= 2 or Weapons.klass(w) == Weapons.CLASS_ROCKET
 		server.combat.jolt(Net.JOLT_HEAVY if heavy else Net.JOLT_HULL, _shot_kind(w), spot)
-		if info.has("disable"):
+		if Weapons.klass(w) == Weapons.CLASS_NEURAL:
+			said.append(_stun_room(cell, float(info["stun"])))
+		elif info.has("disable"):
 			# ion and EMP: a gun or the shield stops for a while, no damage
 			ship.jammed[cell] = maxi(int(ship.jammed.get(cell, 0)), server.tick + roundi(float(info["disable"]) * Net.TICK_HZ))
 			said.append("%s выключено на %d с." % [_cap(map.device_name(cell)), int(info["disable"])])
@@ -1313,7 +1337,11 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 			ship.broken[target] = true
 			server.to_all(ship.devices_packet())
 			server.crew.hull_hit(Net.HULL_PER_SYSTEM_HIT * damage)
-			said.append("Не работает: %s." % map.device_name(target))
+			if map.engine.has(target):
+				server.systems.power_changed()        # (v57: the battleship aims at it) the whole ship goes dark
+				said.append("Двигатель выбит: корабль обесточен! Почините его на нижней палубе.")
+			else:
+				said.append("Не работает: %s." % map.device_name(target))
 		elif Weapons.klass(w) != Weapons.CLASS_ROCKET or _rng.randf() < Weapons.ROCKET_HOLE:
 			said.append("Обшивка пробита.")
 			if server.systems.breach(cell):
@@ -1359,6 +1387,8 @@ func _enemy_target() -> int:
 	for g: int in map.guns:
 		if not server.ship.broken.has(g) and server.ship.mounts[map.guns.find(g)] != Weapons.NONE:
 			guns.append(g)
+	if boss == 1:
+		return _boss_target(guns)
 	var t: Dictionary = Hulls.temper(temper)
 	var at_guns := 0.0 if guns.is_empty() else minf(float(t["at_guns"]) + (0.2 if fleeing() else 0.0), 0.95)
 	var devices := PackedInt32Array()
@@ -1375,6 +1405,81 @@ func _enemy_target() -> int:
 	if roll < at_guns + (1.0 - at_guns) * float(t["devices"]) and not devices.is_empty():
 		return devices[_rng.randi_range(0, devices.size() - 1)]
 	return -1
+
+
+func _boss_target(guns: PackedInt32Array) -> int:
+	## (v57, the author: "better AI to target our engine and shield room, not
+	## random rooms") The battleship goes for our shield generator while it works,
+	## then the engine (which darkens the whole ship), then our guns. The rule of
+	## one way out does not hold against it (the author: "you win or you lose").
+	if _rng.randf() >= BOSS_AIM:
+		return -1
+	var gen := shield_cell()
+	if gen >= 0 and not server.ship.broken.has(gen) and server.ship.shield_on:
+		return gen
+	var engine: Array = server.map.engine.keys().filter(func(c: int) -> bool: return not server.ship.broken.has(c))
+	if not engine.is_empty():
+		return engine[_rng.randi_range(0, engine.size() - 1)]
+	if not guns.is_empty():
+		return guns[_rng.randi_range(0, guns.size() - 1)]
+	return -1
+
+
+func _crew_cell() -> int:
+	## (v57) Where one of our people stands, by lot (a neural shot is aimed at
+	## people; those at the posts first, as they see them): -1 = nobody aboard.
+	var map = server.map
+	var crew: Array = []
+	for p in server.players:
+		if p != null and not p.pirate and not p.corpse and p.cond != Net.COND_DEAD and map.on_ship(p.st.y * map.width + p.st.x):
+			crew.append(p)
+	if crew.is_empty():
+		return -1
+	var who = crew[_rng.randi_range(0, crew.size() - 1)]
+	return who.st.y * map.width + who.st.x
+
+
+func _hull_nearest(cell: int) -> int:
+	## (v57) The cell of our hull nearest that place, on its deck (any, if it cannot tell).
+	var map = server.map
+	if map.hull.is_empty():
+		return -1
+	if cell < 0:
+		return map.hull[_fx.randi_range(0, map.hull.size() - 1)]
+	var best := -1
+	var best_d := INF
+	for c: int in map.hull:
+		if map.deck_of(c / map.width) != map.deck_of(cell / map.width):
+			continue
+		var d := Vector2(c % map.width, c / map.width).distance_squared_to(Vector2(cell % map.width, cell / map.width))
+		if d < best_d:
+			best_d = d
+			best = c
+	return best if best >= 0 else map.hull[0]
+
+
+func _stun_room(cell: int, stun: float) -> String:
+	## (v57) A neural shot bursts at that cell: everybody of ours in its room
+	## (or on that very cell, in a doorway) is struck senseless for a while. It
+	## leaves no wound: they come round by themselves, if nobody finishes them.
+	var map = server.map
+	if cell < 0:
+		return "Нейроудар пришёлся в пустоту."
+	var room: int = map.room_of[cell]
+	var names := PackedStringArray()
+	for p in server.players:
+		if p == null or p.pirate or p.corpse or p.cond == Net.COND_DEAD:
+			continue
+		var at: int = p.st.y * map.width + p.st.x
+		if at != cell and (room < 0 or map.room_of[at] != room):
+			continue
+		if p.cond == Net.COND_OK:
+			server.chat.sound(Net.SOUND_CRY, p.st.x, p.st.y, p.slot)
+		p.health = maxf(p.health - stun, minf(p.health, STUN_FLOOR))
+		names.append(p.name)
+	if names.is_empty():
+		return "Нейроудар пришёлся в пустой отсек."
+	return "Нейроудар оглушил: %s." % ", ".join(names)
 
 
 func _hull_near_crew() -> int:

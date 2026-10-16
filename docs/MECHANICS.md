@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v56 (version 0.49).
+Last updated: build v57 (version 0.50).
 
 Contents:
 
@@ -635,6 +635,36 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 - It stays until our ship moves (a course or a jump); while someone is on it or it is docked, the ship
   doesn't move, as with a derelict.
 
+### Pirate flagship: the goal of the game (v57)
+
+- Every game has a **goal point**: the pirates' flagship waits in a sector **12 jumps** from the start
+  (3–5 rows north, the rest east; the place comes from the game's seed). The chart always shows that
+  sector in red with a ring; while it is out of the chart's window, a red arrow at the window's edge points
+  to it with «флагман: N прыжков». There is always a way there: routes run along the goal's row and column.
+- Arriving in its sector, the flagship comes out **5 s** later. Which of the two it is stays hidden until
+  then (the author: "no courage to fight if you know who you will fight"); it is fixed per game by lot.
+- **No way out** (the author: "you win or you lose, no other exit"): while it fights, no jump can be set
+  and a jump being charged is cut off; it never runs and never offers a ransom; it does not dock by force.
+  Leave its sector before it comes out and it comes again when you return.
+- **Battleship «Владыка пустоты»**: hull **30** points, strength 5, always shielded (regen 1.5×), 7 crew,
+  guns: heavy laser, two lasers, rocket. It **aims well**: 80% of its shots go at our shield generator while
+  it works, then at the engine (an engine hit leaves the whole ship without power), then at our guns;
+  20% at the hull anywhere.
+- **Carrier «Пожиратель»**: hull **26**, always shielded, 6 crew, a laser and two **neural emitters**
+  (charge 9 s, 80% to hit, no damage to the ship: they **stun everyone in the room** they hit by 40 health
+  points, without wounds, down to −10 at most). It has a **teleporter** room: 20 s into the fight and then
+  every **40 s** it puts **2** boarders straight onto our bridge (8 in all, never more than 4 aboard). They
+  hold the bridge and fight whoever comes. The teleporter works only while it is not knocked out and one
+  of its crew is at it; our guns can aim at it, and the gun console shows its room.
+- **Capture**: if every one of our crew is down (unconscious or dead) while its boarders are aboard,
+  for **10 s**, the ship is taken and the campaign ends. Anyone getting back on their feet stops it.
+- **It grows with our gear**: for every mounted gun other than a plain laser it gets one more gun from its
+  list (battleship: ion, laser, heavy laser; carrier: laser, neural, heavy laser), up to 3.
+- **Winning**: wreck it, or board it and kill its whole crew. Everyone sees «ПОБЕДА» for 15 s and the chart
+  says the flagship is beaten; its reward is **200** credits and the wreck can be searched. The voyage
+  goes on after that; the flagship does not come back.
+- The eventer has «Флагман: линкор» and «Флагман: абордажник» to call either one in for testing.
+
 ### Ship weapons
 
 Since v49 (the author's request) guns can be changed, the ship has a shield, and there are ten kinds of ship weapon; v50 added two more beams, the tractor and the siphon (the author chose them).
@@ -768,7 +798,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 - Every sector has a route north or east (no dead ends) and, with probability
   0.3, one more in each direction; no more than 4.
 - Sector kinds: calm space, meteor shower, trader, supply station,
-  derelict ship.
+  derelict ship, and (v57) the pirates' flagship, one per game (section 17, "Pirate flagship").
   The share of meteor showers grows with distance from the start: from 20% to 45%.
 - **Jump**: 8 s of preparation, then 15 s for the engine to recharge.
 - **Fuel**: a jump burns **1** canister from the supply locker at the moment of the jump. Without fuel
@@ -798,6 +828,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | Pirate ship: boarding | large | calm space, trader, derelict ship |
 | Pirate ship: fight | large | calm space, trader, derelict ship |
 | Drifting fuel (2 canisters) | small | by itself, only when there is no fuel on board |
+| Flagship: battleship, Flagship: carrier (v57) | catastrophe | only on an admin's command |
 
 - Pace: once every 3–6 minutes in a calm sector and at a trader, once every 25–45 s in a meteor
   shower; no events at a station. More often with a large crew (up to 2.5 times).
@@ -878,12 +909,13 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 
 ## 23. Campaign: hull, end, saving
 
-- The **goal** is to hold out as long as possible. The top line (F1) shows the reserve and hull integrity.
+- The **goal** (since v57) is to reach the pirates' flagship 12 jumps away and beat it (section 17); after
+  that the game is won and the voyage may go on. Until then, hold out. The top line (F1) shows the reserve and hull integrity.
 - **Hull**: integrity **200** (100 until v49; an older save has its hull doubled). Each breach takes **5**, each
   pirate hit on a gun, console or the shield generator **3** per point of its damage. At **50** and below the ship warns you. It is patched at a trader
   and at a supply station (section 10).
-- **End of campaign**: the hull reaches zero (the ship is destroyed) or the whole crew has died
-  and nobody is in reserve. The game stops: no more jumps, the screen shows a summary — how many
+- **End of campaign**: the hull reaches zero (the ship is destroyed), the whole crew has died
+  and nobody is in reserve, or (v57) the carrier flagship's boarders have taken the ship. The game stops: no more jumps, the screen shows a summary — how many
   sectors were passed, how far from the start, how many jumps and how long you held out.
   To start over, create a new game.
 - **Saving**: the campaign saves itself — once a minute, after every jump and when

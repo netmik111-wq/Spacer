@@ -537,3 +537,36 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   folder), so a sound can be changed without a new build; the names are in `Sounds.NAMES` and `FIGHT_NAMES`
   and in `dist_files/sounds/README.txt`. Footsteps are softer and quieter (the author: "killing ears") with
   their own setting.
+
+- **The goal of the game is the pirates' flagship** (v57, the author: "a linear point in the game where we go...
+  a boss fight with a big ship... win the boss, end of the game"). It waits in one sector per game,
+  `Sectors.goal_of(seed)`: 3–5 rows north and the rest east, 12 jumps in all (the author: "12 jumps away
+  for now is ok"). Routes are random, so a lane is laid along the goal's row and column (`Sectors.joined`):
+  any path that reaches the lane reaches the goal (flagshiptest checks 300 seeds). The sector is always
+  known on the chart, with an arrow at the window's edge when it is off it.
+- **Two flagships, the kind hidden** (the author's two variants; "no courage to fight if you know who you
+  will fight"). Kind by lot from the seed (`Flagship.kind`). Both are their own classes in `Hulls`
+  (`ECLASS_BATTLESHIP`, `ECLASS_CARRIER`, weight 0, so `Shipyard.make` never rolls them) with hand-drawn
+  38-wide hulls (`maps/pirate08.txt`, `pirate09.txt`) and their own tempers (no fleeing, no ransom).
+- **The battleship aims** (the author: "better AI to target our engine and shield room"). `Gunnery._boss_target`:
+  80% (`BOSS_AIM`) at the shield generator while it is unbroken and on, then the engine, then the guns; the
+  rest at the hull. The engine is hit even when breaking it would leave no way out: the escape rule does not
+  hold against bosses (the author: "you win or you lose, no other exit"), so no jump while it fights either
+  (`Flagship.holds_jump`). Its numbers came from `fightbench`: at "slower" 1.6 it won every fight against our
+  starting ship, 2.0 about half, 2.1 about 65% ours, 2.4 about 90% ours. I chose 2.1 with a pilot at the
+  controls: a final fight that a prepared crew mostly wins and an unprepared one often loses.
+- **The carrier stuns and boards** (the author: "guns that damage crew directly and a teleport to send a board
+  team... knocking down crew and taking control over the ship"). Neural emitters (`Weapons.NEURAL`, enemy only)
+  stun a room by 40 health without wounds, down to −10 (`Gunnery.STUN_FLOOR`) so a stun never kills by itself.
+  The teleporter is a seventh enemy system (`Net.ESYS_TELEPORT`), only on the carrier, so it can be shot out
+  like FTL's. Every 40 s, 2 boarders onto our bridge (8 in all, at most 4 aboard): the bridge because taking
+  control of the ship means its controls. They hold it (`Player.hold`). Capture (the author: "all crew are
+  down and nobody can resist") is every non-pirate down for 10 s while its boarders are aboard
+  (`Flagship._watch_crew`), and ends the campaign (`Net.OVER_CAPTURED`). fightbench cannot show its danger:
+  its guns do little to the hull; its threat is the stun and the boarders, which need real people.
+- **The flagship grows with our gear** (the author agreed to my suggestion, notebook page1016-08). For each
+  mounted gun other than the plain laser (`Shipyard.upgrades`; spares in the cargo don't count, we have only 3
+  mounts) it takes one more from its `extra` list, up to 3.
+- **After the win the voyage goes on** (the author: "you can roam around after we kill the flagship").
+  `GameServer.won` is saved with the campaign and sent in `S_CAMPAIGN`; the flagship does not come again;
+  the victory panel shows only to those who were there (not to someone joining later).
