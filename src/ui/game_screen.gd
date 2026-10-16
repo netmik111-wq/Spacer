@@ -13,6 +13,7 @@ const Options := preload("res://src/client/options.gd")
 const OptionsPanel := preload("res://src/ui/options_panel.gd")
 const AdminPanel := preload("res://src/ui/admin_panel.gd")
 const InventoryPanel := preload("res://src/ui/inventory_panel.gd")
+const CrewPanel := preload("res://src/ui/crew_panel.gd")
 const StoreView := preload("res://src/ui/store_view.gd")
 const GunsView := preload("res://src/ui/guns_view.gd")
 const TradeView := preload("res://src/ui/trade_view.gd")
@@ -98,6 +99,7 @@ var _pause_admin: Button             # opens the admin panel; shown while the se
 var _options: OptionsPanel
 var _admin: AdminPanel
 var _inventory: InventoryPanel
+var _crew: CrewPanel
 var _root: Control                   # (the windows above are made when first opened: making them
                                      # while joining would hold up the client's clock)
 var _held: Array[int] = []
@@ -368,6 +370,15 @@ func _inventory_panel() -> InventoryPanel:
 	return _inventory
 
 
+func _crew_panel() -> CrewPanel:
+	if _crew == null:
+		_crew = CrewPanel.new()
+		_root.add_child(_crew)
+		_crew.setup(client)
+		_root.move_child(_crew, _pause.get_index())
+	return _crew
+
+
 func _admin_panel() -> AdminPanel:
 	if _admin == null:
 		_admin = AdminPanel.new()
@@ -392,9 +403,9 @@ static func _open(panel: Control) -> bool:
 func _show_keys() -> void:
 	## The keys, as the player has set them (see Options).
 	_hand_shown = -1                     # (the line over the slots names keys too)
-	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: взять, пульт, машина или применить    %s: применить    %s: положить" % [
+	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: экипаж    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: взять, пульт, машина или применить    %s: применить    %s: положить" % [
 		Options.key_text("move_up"), Options.key_text("move_left"), Options.key_text("move_down"), Options.key_text("move_right"), Options.key_text("use"), Options.key_text("drag"),
-		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
+		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("crew"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
 
 
 func _skills_text() -> String:
@@ -791,6 +802,8 @@ func open_panel(which: String) -> void:
 	match which.get_slice(":", 0):
 		"inventory":
 			_inventory_panel().toggle()
+		"crew":
+			_crew_panel().toggle()
 		"admin":
 			_admin_panel().toggle()
 			_admin_panel().show_tab(tab)
@@ -915,8 +928,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_chat()
 		elif _console.visible:
 			_open_console(0)
-		elif _open(_inventory) or _open(_admin):
-			for panel: Control in [_inventory, _admin]:
+		elif _open(_inventory) or _open(_admin) or _open(_crew):
+			for panel: Control in [_inventory, _admin, _crew]:
 				if panel != null:
 					panel.visible = false
 		else:
@@ -954,6 +967,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_act()
 	elif Options.pressed(event, "inventory"):
 		_inventory_panel().toggle()
+	elif Options.pressed(event, "crew"):
+		_crew_panel().toggle()
 	elif Options.pressed(event, "admin"):
 		if client.is_admin:
 			_admin_panel().toggle()

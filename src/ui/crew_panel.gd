@@ -1,0 +1,159 @@
+extends PanelContainer
+## (v55) The crew window (its own key, O by default): who mans the posts in a
+## fight, the battle position, and the captain's orders to the bots, a row of
+## buttons per bot. Anybody may look; orders go through only from the captain,
+## or from anybody while no captain is aboard (the server decides). The
+## character can walk while it is open.
+
+const Net := preload("res://src/shared/net.gd")
+const GameClient := preload("res://src/client/game_client.gd")
+
+var client: GameClient
+var _status: Label
+var _rows: GridContainer
+var _hint: Label
+var _shown_ids := PackedInt32Array()
+var _labels: Array = []              # per bot row: its Label
+var _buttons: Array = []             # per bot row: its Buttons, one per Net.POST_*
+var _all: Button
+var _free: Button
+
+
+func setup(p_client: GameClient) -> void:
+	client = p_client
+	visible = false
+	set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	grow_horizontal = Control.GROW_DIRECTION_BOTH
+	grow_vertical = Control.GROW_DIRECTION_BOTH
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.07, 0.08, 0.11, 0.95)
+	style.border_color = Color(0.7, 0.6, 0.4)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	style.set_content_margin_all(14)
+	add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	add_child(box)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var title := Label.new()
+	title.text = "Экипаж и посты"
+	title.add_theme_font_size_override("font_size", 20)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var shut := Button.new()
+	shut.text = "Закрыть"
+	shut.focus_mode = Control.FOCUS_NONE
+	shut.pressed.connect(func() -> void: visible = false)
+	head.add_child(shut)
+	_status = Label.new()
+	_status.add_theme_font_size_override("font_size", 14)
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.custom_minimum_size = Vector2(720, 0)
+	box.add_child(_status)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	_all = Button.new()
+	_all.text = "Все по местам"
+	_all.tooltip_text = "Каждый бот к посту, который не занят игроком: штурвал, орудия, щиты, двигатель; остальные чинят"
+	_all.focus_mode = Control.FOCUS_NONE
+	_all.pressed.connect(func() -> void: client.send_order(Net.NOBODY, Net.POST_ALL))
+	row.add_child(_all)
+	_free = Button.new()
+	_free.text = "Отбой"
+	_free.tooltip_text = "Все боты свободны и бродят по кораблю"
+	_free.focus_mode = Control.FOCUS_NONE
+	_free.pressed.connect(func() -> void: client.send_order(Net.NOBODY, Net.POST_FREE))
+	row.add_child(_free)
+	_rows = GridContainer.new()
+	_rows.columns = 1 + Net.POSTS
+	_rows.add_theme_constant_override("h_separation", 4)
+	_rows.add_theme_constant_override("v_separation", 4)
+	box.add_child(_rows)
+	_hint = Label.new()
+	_hint.add_theme_font_size_override("font_size", 12)
+	_hint.modulate = Color(1, 1, 1, 0.6)
+	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint.custom_minimum_size = Vector2(720, 0)
+	box.add_child(_hint)
+
+
+func toggle() -> void:
+	visible = not visible
+	_shown_ids = PackedInt32Array([-1])
+
+
+func _process(_delta: float) -> void:
+	if not visible:
+		return
+	var may := client.may_order()
+	_status.text = _status_text()
+	_all.disabled = not may or client.crew_bots.is_empty()
+	_free.disabled = not may or client.crew_bots.is_empty()
+	_hint.text = ("" if may else "Приказы отдаёт капитан. ") + \
+		"Человек или бот у пульта управления уклоняет корабль от выстрелов пиратов, у двигателя добавляет уклонения, у генератора щита ускоряет его восстановление. Бот у пульта орудий сам стреляет готовыми орудиями туда, куда они наведены. Бот на ремонте берёт запчасти и заплатки из трюма."
+	var ids := PackedInt32Array()
+	for b: Array in client.crew_bots:
+		ids.append(int(b[0]))
+	if ids != _shown_ids:
+		_shown_ids = ids
+		_build_rows()
+	for i in client.crew_bots.size():
+		var b: Array = client.crew_bots[i]
+		var doing: String = "бродит по кораблю" if int(b[1]) == Net.POST_FREE and int(b[2]) == Net.DOING_IDLE \
+			else Net.DOING_NAMES[clampi(int(b[2]), 0, Net.DOING_NAMES.size() - 1)]
+		(_labels[i] as Label).text = "%s: %s" % [client.player_name(int(b[0])), doing]
+		var buttons: Array = _buttons[i]
+		for post in Net.POSTS:
+			var button: Button = buttons[post]
+			button.button_pressed = int(b[1]) == post
+			button.disabled = not may
+
+
+func _build_rows() -> void:
+	for old in _rows.get_children():
+		old.queue_free()
+	_labels = []
+	_buttons = []
+	if client.crew_bots.is_empty():
+		var none := Label.new()
+		none.text = "Ботов на борту нет. Их число задаётся при создании игры."
+		_rows.add_child(none)
+		for k in Net.POSTS:
+			_rows.add_child(Control.new())
+		return
+	for b: Array in client.crew_bots:
+		var id := int(b[0])
+		var name := Label.new()
+		name.custom_minimum_size = Vector2(200, 0)
+		_rows.add_child(name)
+		_labels.append(name)
+		var buttons: Array = []
+		for post in Net.POSTS:
+			var button := Button.new()
+			button.text = Net.POST_NAMES[post]
+			button.toggle_mode = true
+			button.focus_mode = Control.FOCUS_NONE
+			button.add_theme_font_size_override("font_size", 13)
+			button.pressed.connect(func() -> void: client.send_order(id, post))
+			_rows.add_child(button)
+			buttons.append(button)
+		_buttons.append(buttons)
+
+
+func _status_text() -> String:
+	var posts := PackedStringArray()
+	var names := ["Штурвал", "Орудия", "Двигатель", "Щиты"]
+	for k in 4:
+		posts.append("%s: %s" % [names[k], "занят" if client.posts_manned & (1 << k) else "никого"])
+	var lines := PackedStringArray([", ".join(posts) + "."])
+	if client.fighting():
+		var pos := "Позиция в бою: %s" % Net.POS_NAMES[client.battle_pos].to_lower()
+		if client.battle_goal != Net.POS_NONE:
+			pos += ", манёвр на «%s», ещё %d с" % [Net.POS_NAMES[client.battle_goal].to_lower(), client.battle_left]
+		lines.append(pos + ". Уклонение от выстрелов пиратов: %d%%." % client.our_dodge)
+	else:
+		lines.append("Боя нет.")
+	return "\n".join(lines)

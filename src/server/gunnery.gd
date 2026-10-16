@@ -83,6 +83,10 @@ const RANSOM_CHANCE := 0.5           # (v54) a beaten ship that would run offers
 const RANSOM_SHARE := 0.6            # of the reward for wrecking it
 const RANSOM_SECONDS := 20.0         # the offer stands this long; then it runs
 const RANSOM_PRISONER := 0.3         # and one of its crew is handed over with it this often (into our reserve)
+const ENEMY_EDGE := 0.05             # (v55, the author: "a little stronger" now that our pilot dodges) added to its hit chance
+const CAPTURE_SHARE := 1.5           # (v55) a ship taken by boarding is salvaged: this much of its reward...
+const CAPTURE_PARTS := 2             # ... and spare parts and fuel stripped from it
+const SABOTAGE_TEXT := "Наши на борту пиратов ломают: %s (%d из %d)."
 
 var enemy_hit_chance := -1.0         # (tests set it to 0 or 1: their shots always miss or always hit)
 var shield_chance := ENEMY_SHIELD_CHANCE   # (tests set it)
@@ -464,7 +468,7 @@ func tick() -> void:
 	if gen < 0 or not ship.shield_on or not server.powered() or ship.broken.has(gen):
 		ship.shield = 0.0
 	elif not jammed(gen):
-		ship.shield = minf(ship.shield + Weapons.SHIELD_REGEN / Net.TICK_HZ, Weapons.SHIELD_FULL)
+		ship.shield = minf(ship.shield + Weapons.SHIELD_REGEN * server.stations.shield_pace() / Net.TICK_HZ, Weapons.SHIELD_FULL)
 	if fighting():
 		var runs: float = Hulls.temper(temper)["flee"]
 		if not fleeing() and ransom == 0 and runs > 0.0 and (enemy_hull <= roundi(hull_full() * runs) or (down(Net.ESYS_WEAPONS) and enemy_hull * 2 <= hull_full())):
@@ -477,7 +481,9 @@ func tick() -> void:
 		_scan_tick()
 		if (down(Net.ESYS_ENGINE) or fleeing() or held()) and server.derelict._pirates_dock_at >= 0:
 			server.derelict._pirates_dock_at += 1          # it drifts, runs or is held: the time to fight it off stands still
-		if fleeing() and not held():
+		elif server.stations.slows_docking() and server.derelict._pirates_dock_at >= 0 and server.tick % 2 == 0:
+			server.derelict._pirates_dock_at += 1          # (v55) we keep our distance: it closes in at half the pace
+		if fleeing() and not held() and not server.stations.ours_aboard:
 			flee += _jump_rate()
 			if flee >= FLEE_SECONDS * Net.TICK_HZ:
 				_escaped()
@@ -659,7 +665,7 @@ func _settle() -> bool:
 		_wrecked()
 		return true
 	if systems.size() > 0 and enemy_hull > 0 and systems[Net.ESYS_CREW] == 0:
-		if raid:
+		if raid or server.stations.ours_aboard:
 			_wrecked()                       # nobody left alive aboard: it drifts, a dead hulk
 		else:
 			_broken_off()
@@ -679,7 +685,7 @@ func _broken_off() -> void:
 func _hit_chance(w: int) -> float:
 	## Ours: better while its bridge is out (it cannot dodge) and while our tractor beam holds it.
 	var dodge := _dodge if server.enemy_crew.manned(Net.ESYS_HELM) else minf(_dodge, 0.0)
-	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge, 0.05, Weapons.BEST_HIT)
+	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge + server.stations.our_hit_bonus(), 0.05, Weapons.BEST_HIT)
 	var bonus := (Weapons.BLIND_BONUS if down(Net.ESYS_HELM) else 0.0) + (Weapons.TRACTOR_BONUS if held() else 0.0)
 	if bonus > 0.0:
 		hit = maxf(hit, minf(hit + bonus, Weapons.BEST_HIT))
@@ -999,6 +1005,9 @@ func _ransom_ends(why: String) -> void:
 func ransom_taken(p) -> void:
 	if ransom <= 0 or not fighting():
 		return
+	if server.stations.ours_aboard:
+		server.chat.tell(p, "Наши люди на борту пиратского корабля: пока они там, отпустить его нельзя.")
+		return
 	var ship = server.ship
 	ship.credits += ransom
 	ship.store[Net.ITEM_FUEL] = int(ship.store.get(Net.ITEM_FUEL, 0)) + 1
@@ -1016,10 +1025,21 @@ func ransom_taken(p) -> void:
 
 func _wrecked() -> void:
 	_over = true
+	var captured: bool = server.stations.ours_aboard and systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0
 	enemy_hull = 0
 	beam_left.fill(0)
+	if captured:
+		# (v55, the author) taken by boarding, whole: it is salvaged for more than a wreck gives
+		var paid := roundi(reward * CAPTURE_SHARE)
+		server.ship.credits += paid
+		server.ship.store[Net.ITEM_PART] = int(server.ship.store.get(Net.ITEM_PART, 0)) + CAPTURE_PARTS
+		server.ship.store[Net.ITEM_FUEL] = int(server.ship.store.get(Net.ITEM_FUEL, 0)) + 1
+		server.derelict.becomes_wreck()
+		server.chat.say("Пиратский корабль захвачен: его экипаж перебит! Корабль разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать." % [paid, CAPTURE_PARTS])
+		server.supplies.tell_store()
+		return
 	server.ship.credits += reward
-	if raid:
+	if raid or server.stations.ours_aboard:
 		# it stays alongside, dead: what it holds is there for the taking
 		server.derelict.becomes_wreck()
 		server.chat.say("Пиратский корабль разбит! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать." % reward)
@@ -1044,6 +1064,9 @@ func _enemy_fires(w: int) -> void:
 	reveal(room_of_system(Net.ESYS_WEAPONS), "Вспышки выстрелов выдали отсек пиратов")
 	var shots: int = Weapons.info(w)["shots"]
 	var chance: float = float(Weapons.info(w)["hit"]) if enemy_hit_chance < 0.0 else enemy_hit_chance
+	if enemy_hit_chance < 0.0:
+		# (v55) our pilot's dodge and the battle position
+		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus() - server.stations.our_dodge(), 0.05, 0.95)
 	if down(Net.ESYS_HELM):
 		chance *= BLIND_ENEMY_HIT
 	var misses := 0
@@ -1190,3 +1213,32 @@ func _outward(cell: int) -> Vector2i:
 		if map.is_space(x + d.x, y + d.y):
 			return d
 	return Vector2i(0, -1)
+
+
+# ---------------------------------------------------------------- (v55) our boarders
+
+func crew_lost(alive: int) -> void:
+	## Its crew, come to life as pirates (EnemyCrew.in_world), are down to `alive`:
+	## the count of its crew follows, and the fight may be over.
+	if systems.size() <= Net.ESYS_CREW or _over:
+		return
+	var was := boarders_left()
+	systems[Net.ESYS_CREW] = mini(systems[Net.ESYS_CREW], maxi(alive, 0) * HITS_PER_BOARDER)
+	server.derelict._pirates_party = boarders_left()
+	if boarders_left() < was and boarders_left() > 0:
+		server.chat.say("На пиратском корабле убит пират: их осталось %d." % boarders_left())
+	_settle()
+
+
+func wear_by_hand(system: int) -> void:
+	## One of our boarders wrecks a point of the system in the room it stands in.
+	if system < 0 or system >= systems.size() or systems[system] == 0 or system == Net.ESYS_CREW:
+		return
+	systems[system] -= 1
+	reveal(room_of_system(system))
+	if systems[system] == 0:
+		if system == Net.ESYS_SHIELDS:
+			enemy_shield = 0.0
+		server.chat.say("Наши на борту пиратов вывели из строя: %s. %s" % [Net.ESYS_NAMES[system].to_lower(), DOWN_TEXT[system]])
+	else:
+		server.chat.say(SABOTAGE_TEXT % [Net.ESYS_NAMES[system].to_lower(), systems[system], systems_full[system]])

@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v54 (version 0.47).
+Last updated: build v55 (version 0.48).
 
 Contents:
 
@@ -555,6 +555,56 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 - Our shot is a refusal; so is silence for 20 s. Either way it then charges its jump to run, as below.
 - The guns can aim at any room, known or not: click it on the plan. Unknown rooms have no system button.
 
+### Our crew at their posts (v55)
+
+Since v55 our own crew matter in a fight the way the pirates' do. A post counts as manned when somebody (a player
+or a bot) stands facing its machine, conscious, the machine whole and the ship powered.
+- **Ship's controls** (pilot): the pirates' shots miss more often: **15%** less chance to hit, **20%** with a
+  pilot by job. Somebody also at the **engine** adds **5%** more. Nobody at the controls: **nothing is dodged**
+  (as before v55). No dodge with the engine down or without power.
+- **Shield generator**: with somebody at it the shield refills **25%** faster.
+- **Gun console**: shots are fired from it, as before; a bot there fires every ready gun by itself.
+- The pirates were made a little stronger to match (the author's word): **+5%** to every shot of theirs.
+
+### Battle position (v55)
+
+Chosen on the ship's controls during a fight, by whoever stands there (buttons under the sector map):
+| Position | Our hits | Their hits | Other |
+|---|---|---|---|
+| Вплотную (close in; every fight starts here) | as is | as is | our people can cross to them through space |
+| На дистанции (at a distance) | −15% | −15% | their docking countdown runs at half speed |
+| С фланга (on its flank) | +15% | as is | our dodge counts half |
+- Changing takes an **8 s** manoeuvre; during it we **don't dodge**. It needs the engine working.
+- Away from "close in" the ship needs somebody at the controls and the engine going: **5 s** without them and it
+  falls back to close in. It also comes back close in at once if anybody of ours is out in space (and you can't
+  leave close in while somebody is outside).
+
+### Bots under orders (v55)
+
+- The **crew window** (key **O**) shows which posts are manned, our dodge and position, and a row per bot with
+  its order and what it is doing. Orders: **free** (wanders, as before), **controls**, **guns**, **engine**,
+  **shields**, **repair**, **follow me**. «Все по местам» sends every bot to a post no player mans (controls, guns,
+  shields, engine; the rest repair); «Отбой» frees them all.
+- Orders come from the **captain**; while no captain is aboard, from anybody.
+- Bots walk the ship by the shortest way (ladders included), never go out into space, and avoid rooms with
+  under half the normal air. A **repair** bot goes to the nearest broken machine, jammed or faulty door, or hole
+  (if a patch is to be had), taking a **spare part** or **patch** from the hold; it mends like a player.
+  A **gun** bot fires every ready gun where the guns aim, but holds fire while a ransom is offered.
+
+### Boarding a pirate ship (v55)
+
+- While close in, our people can push off through space from our airlock to the pirate ship (**3** cells) and
+  go in through its outer door.
+- The moment the first of us steps aboard, its crew **come to life**: each becomes a real armed pirate where it
+  stood, and they fight. With no boarder in sight they go back to their posts. A pirate standing in a system's
+  room mends it as before.
+- Each of ours standing in a room with a system in it **wrecks it by 1 point every 8 s** (two together, twice
+  as fast); the quarters can't be wrecked this way.
+- While any of ours is aboard it **can't jump away** and a ransom **can't be taken**. Our own guns hitting a room
+  may wound our boarders there too (25 health, 60% each).
+- When its whole crew is dead the ship is **captured** and salvaged: **150%** of its reward, **2 spare parts** and
+  a **can of fuel** into the hold. It stays alongside dead and dark, to be searched like a wreck.
+
 ### Wrecked raider
 
 - A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a
@@ -781,7 +831,8 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   - There's no coming back at all if everyone has died and nobody is in reserve: the campaign is over
     (section 23).
 - Bots wander the ship, sometimes playing with the flashlight and items; a dead bot returns
-  after 15 s and doesn't use the reserve.
+  after 15 s and doesn't use the reserve. Since v55 they take orders (section 17, "Bots under orders"); an
+  order stays through death.
 
 ## 22. Speech, radio, intercom
 
@@ -841,6 +892,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 | R | return after death (takes one from the reserve) |
 | Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off; since v54 it hugs the thing itself (a machine on a wall, things on the floor, a body), a door, hole or ladder keeps its cell's square |
 | I, Tab | inventory window |
+| O | (v55) crew window: posts, battle position, orders to bots |
 | Enter | chat: aloud; «;» — radio, «!» — intercom at a panel |
 | T | chat straight into the radio |
 | F2 | admin panel (host and admins) |

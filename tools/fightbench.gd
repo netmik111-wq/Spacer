@@ -1,7 +1,7 @@
 extends SceneTree
 ## Measures how long ship fights last (v54, the author: "balance out fights so
 ## they don't go too long"). Not a test: it prints a table and always passes.
-##   godot --headless --path . --script res://tools/fightbench.gd -- [fights per cell] [far] [mend seconds]
+##   godot --headless --path . --script res://tools/fightbench.gd -- [fights per cell] [far] [mend seconds] [pilot]
 ## For every class and temper it brings a pirate ship for a raid (a fight to the
 ## end) against our ship as it starts (three lasers, shield on) and fights it on
 ## a real server stepped by hand. Our gunner fires every gun that is ready and
@@ -9,6 +9,7 @@ extends SceneTree
 ## then at its guns, its jump drive while it runs, else anywhere. Our crew mends
 ## one broken device every `mend` seconds (10 unless given; 0: nobody mends) (patching holes is left out: it does not
 ## change the fight). `far` is how many jumps from the start (more enemy guns).
+## `pilot` 1 (v55) puts a pilot by job at the ship's controls (it dodges); 0 (the default) nobody.
 ## A ransom offered is taken. Prints the median fight length, how fights ended
 ## and our hull lost.
 
@@ -18,6 +19,7 @@ const Net := preload("res://src/shared/net.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 
+var pilot = null                     # (v55) our pilot at the controls, or null
 var mend := 10.0                     # seconds for our crew to put one broken device right (0 = nobody mends)
 const LIMIT := 900                   # seconds: a fight still on by then is counted as "too long"
 
@@ -39,8 +41,15 @@ func _initialize() -> void:
 	server.director.auto = false
 	var p := server.crew.new_player("Канонир")
 	var map := server.map
+	if args.size() > 3 and int(args[3]) == 1:
+		pilot = server.crew.new_player("Пилот")
+		pilot.take_job(Net.JOB_PILOT)
+		var s: Array = server.stations.spots[Net.POST_HELM][0]
+		pilot.st.place(int(s[0]) % map.width, int(s[0]) / map.width)
+		pilot.st.facing = int(s[1])
 	var console: int = map.gun_console.keys()[0]
-	print("fights per cell: %d, jumps from start: %d, our crew mends a device every %s s" % [n, far, str(mend) if mend > 0.0 else "(never)"])
+	print("fights per cell: %d, jumps from start: %d, our crew mends a device every %s s, pilot: %s" % [n, far, str(mend) if mend > 0.0 else "(never)",
+		"yes" if pilot != null else "no"])
 	print("%-22s %-12s %8s %8s %8s   %s" % ["class", "temper", "median", "longest", "hull-", "ended"])
 	for k: int in Hulls.CLASSES.keys():
 		for t: int in Hulls.TEMPERS.keys():
@@ -92,6 +101,13 @@ func _fight(p, console: int, klass: int, temper: int, far: int) -> Array:
 		p.wounds = 0.0
 		p.cond = Net.COND_OK
 		p.st.down = false
+		if pilot != null:
+			pilot.supply = true
+			pilot.tank = 1.0e9
+			pilot.health = 100.0
+			pilot.wounds = 0.0
+			pilot.cond = Net.COND_OK
+			pilot.st.down = false
 		if g.ransom > 0:
 			_ransomed = true
 			g.ransom_taken(p)                # a sensible crew takes it

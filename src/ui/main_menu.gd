@@ -94,7 +94,7 @@ func _ready() -> void:
 	_bots.min_value = 0
 	_bots.max_value = 8
 	_bots.value = 2
-	_bots.tooltip_text = "Боты просто бродят по кораблю: с ними видно, как выглядят другие игроки"
+	_bots.tooltip_text = "Боты — члены экипажа: бродят по кораблю, пока капитан не отдаст им приказ (окно «Экипаж», клавиша O)"
 	host_row.add_child(_bots)
 	var saved := Campaign.summary()
 	if saved != "":

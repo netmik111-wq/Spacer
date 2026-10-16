@@ -134,6 +134,23 @@ Open problems:
 
 ## Build notes
 
+### v55 (our crew at fight stations, bots under orders, battle position, boarding; the author's notebook)
+- The author's paper notes (2026-10-16) became notebook entries; he agreed the next build: our own crew at
+  posts in a fight (mirroring the pirates' crew), bots as crew who follow the captain's orders (note 5), and
+  the pilot choosing a battle position (my halfway version of note 2, "the engine moves the ship about the
+  battlefield", one choice instead of steering). Our boarding of enemy ships was agreed on 2026-10-15.
+- `src/server/stations.gd`: posts (controls, guns, engine, shield) count when somebody stands facing them; the
+  controls give dodge (none before v55), the engine a little more, the shield generator refills faster.
+  Battle positions close / far / flank (8 s manoeuvre). Bot orders (C_ORDER) with a crew window
+  (`src/ui/crew_panel.gd`, key O); bots path over our ship, a gun bot fires, a repair bot mends with parts
+  from the hold. Boarding: the first of us on a live pirate ship brings its crew to life as pirates
+  (`EnemyCrew.come_to_life`), our people wreck systems by standing in their rooms, a captured ship is
+  salvaged for 150% of its reward plus parts and fuel.
+- The author's answers before the build: anybody may order while no captain is aboard; the pirates a little
+  stronger (+5% to their hits); a captured ship salvaged for more than a wreck.
+- New test `tools/stationtest.gd` (18 in all); `tools/fightbench.gd` takes a fourth argument, a pilot at the
+  controls. Protocol 33.
+
 ### v54 (pirate crew, scouting drone, ransom; the list the author agreed after v53)
 - The author agreed three things after v53: the probe also shows the enemy's crew moving (about 20 s),
   fights that don't drag on (measure first), and the drone from his notebook steered from a monitor.

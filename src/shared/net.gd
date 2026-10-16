@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 32
+const PROTOCOL := 33
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -214,6 +214,40 @@ const S_ECREW := 34                 # (v54) the enemy's crew we can see now (a p
                                     # stands in, u8 flags (ECREW_*)
 const ECREW_MENDING := 1            # mending the system in its room
 const ECREW_HURT := 2               # wounded: it goes to lie low in its quarters
+# (v55) our own crew at their posts in a fight, bots under orders, the battle position (see Stations)
+const C_ORDER := 26                 # u16 id of a bot (NOBODY = every bot: POST_ALL sends them to the posts
+                                    # nobody mans, POST_FREE stands them all down), u8 POST_*: the captain's order
+const C_POSITION := 27              # u8 POS_*: the pilot takes the ship to that battle position, from the ship's controls
+const S_STATIONS := 35              # to all, after the ship's id: u8 position (POS_*), u8 the one it is going to
+                                    # (POS_NONE = none), u8 seconds of the manoeuvre left, u8 our dodge in %, u8 our hit
+                                    # +100 in %, u8 theirs +100 in %, u8 posts manned (STATION_* bits), u8 count,
+                                    # then per bot u16 id, u8 order (POST_*), u8 what it does (DOING_*)
+const POST_FREE := 0                # no order: it goes about as it likes
+const POST_HELM := 1                # at the ship's controls (it dodges the enemy's shots)
+const POST_GUNS := 2                # at the gun console (a bot there fires what is ready)
+const POST_ENGINE := 3              # at the engine (a little more dodge)
+const POST_SHIELD := 4              # at the shield generator (it refills faster)
+const POST_REPAIR := 5              # mending what is broken, holes in the hull included
+const POST_FOLLOW := 6              # after the one who gave the order
+const POSTS := 7
+const POST_ALL := 255               # (with NOBODY) every bot to a post nobody mans
+const POST_NAMES: Array[String] = ["Свободен", "Штурвал", "Орудия", "Двигатель", "Щиты", "Ремонт", "За мной"]
+const STATION_HELM := 1
+const STATION_GUNS := 2
+const STATION_ENGINE := 4
+const STATION_SHIELD := 8
+const DOING_IDLE := 0               # nothing to do (free, or no work for it)
+const DOING_GOING := 1              # on its way
+const DOING_POST := 2               # at its post
+const DOING_WORK := 3               # mending
+const DOING_DOWN := 4               # out cold or dead
+const DOING_NO_WAY := 5             # it cannot get there
+const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "чинит", "без сознания", "не может пройти"]
+const POS_CLOSE := 0                # close in: both fire as before; boarding either way
+const POS_FAR := 1                  # at a distance: both hit less, their boarding comes slower
+const POS_FLANK := 2                # on its flank: we hit better, but dodge worse
+const POS_NONE := 255
+const POS_NAMES: Array[String] = ["Вплотную", "На дистанции", "С фланга"]
 # The enemy ship's systems: each stands in a room of its drawing (ShipMap.rooms; which room is
 # rolled for every ship, see Shipyard; a hand-made drawing may name them with ShipMap.zones). A hit
 # there wears it down; at nothing it stops working until the enemy's crew mends it.

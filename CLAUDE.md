@@ -34,8 +34,8 @@ needs:
 
 ## Where things stand
 
-Build v54 (version 0.47) is the latest. Plans one to four are done except the darkness front (the
-author is still thinking it through); builds v40 to v54 were the author's own requests, one build each.
+Build v55 (version 0.48) is the latest. Plans one to four are done except the darkness front (the
+author is still thinking it through); builds v40 to v55 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -64,7 +64,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 17 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 18 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -82,6 +82,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/holotest.gd
     godot --headless --path . --script res://tools/shiptest.gd  (rolled pirate ships, scanning, the probe)
     godot --headless --path . --script res://tools/dronetest.gd (since v54: the pirates' crew, the drone, ransom)
+    godot --headless --path . --script res://tools/stationtest.gd (since v55: our posts, bot orders, position, boarding)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -101,10 +102,11 @@ the server gets CPU 0 to itself; it also prints where the tick time went (player
 sending). Results are in `docs/BENCHMARK.md`. Sight alone, without a network:
 `godot --headless --path . --script res://tools/sightbench.gd -- 32 400` (bots, ticks).
 How long ship fights last, per class and temper (since v54; rerun after changing fight numbers):
-`godot --headless --path . --script res://tools/fightbench.gd -- 4 0 10` (fights per cell, jumps out, our mend seconds).
+`godot --headless --path . --script res://tools/fightbench.gd -- 4 0 10 1` (fights per cell, jumps out, our mend seconds,
+1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 17 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 18 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -127,7 +129,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `chat`, `crew`, `movement`, `inventory`, `looting`, `combat`, `repairs`, `systems`, `navigation`,
   `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`,
   and `shipyard`, which rolls every pirate ship since v53; since v54 `enemy_crew`, the pirate ship's crew at
-  their posts, and `drone`, the scouting drone).
+  their posts, and `drone`, the scouting drone; since v55 `stations`: our crew at posts, bot orders, the
+  battle position, our boarders).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -166,7 +169,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   world, light and sight drawing), `sounds.gd`, `options.gd`, `item_art.gd`.
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
-  draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`,
+  draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`, `crew_panel.gd` (v55, key O),
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`.
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`. `maps/`: ship blueprints (`*.txt`, built to `*.json`).
@@ -203,7 +206,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   after a boarding (`directortest` failed now and then).
 - The pirate ship's own crew during a fight are not Players (v54): they are cells of its drawing in
   `EnemyCrew`. Their count must stay equal to `Gunnery.boarders_left()` and `Derelict._pirates_party`:
-  kill them through `Gunnery.crew_hit` or quarters hits, which keep all three in step.
+  kill them through `Gunnery.crew_hit` or quarters hits, which keep all three in step. Since v55 they become
+  Players once one of ours boards (`EnemyCrew.in_world`); then `Stations._boarding` calls `Gunnery.crew_lost`
+  each tick to keep the counts in step, and nothing may spawn them again (docking, the wreck).
 - A node with a negative `z_index` is drawn under what its parent draws itself (the stars
   in `WorldView._draw`). So decks are ordered with non-negative numbers.
 - Air falls asleep (`Air.settled`) while a door is still opening: it must also be woken

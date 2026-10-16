@@ -67,6 +67,8 @@ func climb(p: Player) -> bool:
 
 
 func bot_think(p: Player) -> void:
+	if server.stations.bot_think(p):
+		return                       # (v55) it has an order from the captain
 	var st := p.st
 	var blocked := st.dir != 0 and (not server.map.walkable(st.x + Net.DX[st.dir], st.y + Net.DY[st.dir]) or _would_vent(st.x, st.y, st.dir))
 	if blocked:

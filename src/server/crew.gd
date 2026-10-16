@@ -98,6 +98,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.gunnery.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.drone.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.enemy_crew.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.stations.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	for q: Player in server.players:
 		if q != null and q != p:
 			peer.send(0, look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
