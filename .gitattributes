@@ -5,6 +5,7 @@
 # Files meant to be opened on Windows keep Windows line endings.
 *.bat text eol=crlf
 dist_files/*.txt text eol=crlf
+dist_files/sounds/*.txt text eol=crlf
 
 # Never touch these.
 *.png binary

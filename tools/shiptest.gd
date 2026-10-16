@@ -31,6 +31,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.gunnery.flies = false              # (v56) shots land the moment they are fired here
 	var map := server.map
 	var g: Gunnery = server.gunnery
 	g.ransom_chance = 0.0                # (its checks of tempers are about ships that run)

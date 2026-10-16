@@ -8,6 +8,10 @@ extends Node2D
 ## cannot see (behind a wall or a door), or reaches a character standing in
 ## thin air, is muffled: quieter, and only its low part comes through.
 ## A vacuum carries nothing; the server only sends what can be heard at all.
+##
+## (v56) Any sound can be swapped for a file of one's own: put NAME.ogg or
+## NAME.wav (NAMES below: step.wav, hull_hit.ogg ...) into a folder "sounds"
+## next to the game, and that file plays instead of the one made here.
 
 const Net := preload("res://src/shared/net.gd")
 const Options := preload("res://src/client/options.gd")
@@ -16,8 +20,25 @@ const RATE := 22050
 const VOICES := 16                   # sounds that can play at once
 const MUFFLED_BUS := "Muffled"
 
-static var _streams := {}            # sound kind -> Array of AudioStreamWAV (variants), made once
-static var _hum_stream: AudioStreamWAV
+# (v56) the name of each sound, for files that replace it (see above)
+const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: "hiss", Net.SOUND_THUD: "thud",
+	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow"}
+# (v56) sounds of the ship fight (Net.JOLT_*), by name
+const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
+const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
+const GUN_ROCKET := "gun_rocket"     # a rocket or EMP leaving its launcher
+const GUN_ION := "gun_ion"           # an ion gun
+const GUN_BEAM := "gun_beam"         # a beam burning (cutter, tractor, siphon)
+const HULL_HIT := "hull_hit"         # a shot landing on our hull: a boom carried through the ship
+const HULL_HEAVY := "hull_heavy"     # a heavy one, a rocket or a meteor: a deep boom and the hull groaning
+const SHIELD_HIT := "shield_hit"     # our shield taking a shot: an electric crack and hum
+const THEIR_HIT := "their_hit"       # one of ours blowing up on the pirate ship
+const THEIR_SHIELD := "their_shield" # their shield stopping one of ours
+const FIGHT_NAMES := [GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD]
+
+static var _streams := {}            # sound kind (or name) -> Array of AudioStream (variants), made once
+static var own_files := PackedStringArray()   # (v56) the sounds replaced by files (told in the log)
+static var _hum_stream: AudioStream
 static var _rng := RandomNumberGenerator.new()
 var _players: Array[AudioStreamPlayer2D] = []
 var _next := 0
@@ -39,7 +60,56 @@ static func prepare() -> void:
 	_streams[Net.SOUND_LADDER] = [_ladder(1.0), _ladder(1.08)]
 	_streams[Net.SOUND_SHOT] = [_shot()]
 	_streams[Net.SOUND_BLOW] = [_blow()]
+	_streams[GUN_LASER] = [_gun_laser(1.0), _gun_laser(1.07)]
+	_streams[GUN_HEAVY] = [_gun_heavy()]
+	_streams[GUN_ROCKET] = [_gun_rocket()]
+	_streams[GUN_ION] = [_gun_ion()]
+	_streams[GUN_BEAM] = [_gun_beam()]
+	_streams[HULL_HIT] = [_hull_hit(1.0), _hull_hit(0.9)]
+	_streams[HULL_HEAVY] = [_hull_heavy()]
+	_streams[SHIELD_HIT] = [_shield_hit()]
+	_streams[THEIR_HIT] = [_their_hit(1.0), _their_hit(0.88)]
+	_streams[THEIR_SHIELD] = [_their_shield()]
 	_hum_stream = _engine_hum()
+	# (v56) files of one's own in place of these
+	for kind in NAMES:
+		_own_file(kind, NAMES[kind])
+	for name: String in FIGHT_NAMES:
+		_own_file(name, name)
+	var hum = _load_own("hum")
+	if hum != null:
+		_hum_stream = hum
+		own_files.append("hum")
+	if not own_files.is_empty():
+		print("sounds of one's own: %s" % ", ".join(own_files))
+
+
+static func _own_file(key, name: String) -> void:
+	var stream = _load_own(name)
+	if stream != null:
+		_streams[key] = [stream]
+		own_files.append(name)
+
+
+static func sound_dirs() -> PackedStringArray:
+	## Where files of one's own are looked for: next to the game, and (run from the project) in its folder.
+	return PackedStringArray([OS.get_executable_path().get_base_dir().path_join("sounds"),
+		ProjectSettings.globalize_path("res://").path_join("sounds")])
+
+
+static func _load_own(name: String) -> AudioStream:
+	for dir in sound_dirs():
+		var ogg := dir.path_join(name + ".ogg")
+		if FileAccess.file_exists(ogg):
+			var o := AudioStreamOggVorbis.load_from_file(ogg)
+			if o != null:
+				return o
+		var wav := dir.path_join(name + ".wav")
+		if FileAccess.file_exists(wav):
+			var w := AudioStreamWAV.load_from_file(wav)
+			if w != null:
+				return w
+	return null
 
 
 func _ready() -> void:
@@ -67,8 +137,8 @@ func _ready() -> void:
 	add_child(_hum)
 
 
-func play(kind: int, at: Vector2, reach_cells: float, muffled: bool, volume_db: float = 0.0) -> void:
-	## Plays a sound of that kind at a place of the shown deck (pixels).
+func play(kind, at: Vector2, reach_cells: float, muffled: bool, volume_db: float = 0.0) -> void:
+	## Plays a sound of that kind (Net.SOUND_*, or a name of the fight's) at a place of the shown deck (pixels).
 	var variants: Array = _streams.get(kind, [])
 	if variants.is_empty():
 		return
@@ -156,11 +226,11 @@ static func _fade(out: PackedFloat32Array, attack: float) -> void:
 
 static func _step(pitch: float) -> AudioStreamWAV:
 	# a boot on a metal deck plate: a dull knock and a short ring of the plate
-	var out := _buffer(0.16)
-	_noise(out, 0.0, 0.16, 0.35, 45.0, 0.85)
-	_tone(out, 0.0, 95.0 * pitch, 0.35, 40.0)
-	_tone(out, 0.0, 410.0 * pitch, 0.06, 60.0)
-	_fade(out, 0.002)
+	# (v56: the author found them hurting the ears: softer, duller, no ring)
+	var out := _buffer(0.14)
+	_noise(out, 0.0, 0.14, 0.16, 55.0, 0.9)
+	_tone(out, 0.0, 90.0 * pitch, 0.16, 45.0)
+	_fade(out, 0.006)
 	return _wav(out)
 
 
@@ -234,6 +304,141 @@ static func _blow() -> AudioStreamWAV:
 	var out := _buffer(0.2)
 	_noise(out, 0.0, 0.2, 0.55, 40.0, 0.88)
 	_tone(out, 0.0, 120.0, 0.35, 30.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+# (v56) the ship fight
+
+static func _gun_laser(pitch: float) -> AudioStreamWAV:
+	# a laser bolt leaving its mount: a bright falling zap over a thump of the mount
+	var out := _buffer(0.55)
+	_tone(out, 0.0, 1500.0 * pitch, 0.32, 9.0, -2200.0)
+	_tone(out, 0.0, 760.0 * pitch, 0.22, 7.0, -900.0)
+	_noise(out, 0.0, 0.12, 0.3, 40.0, 0.3)
+	_noise(out, 0.0, 0.5, 0.5, 11.0, 0.93)
+	_tone(out, 0.0, 70.0, 0.35, 10.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _gun_heavy() -> AudioStreamWAV:
+	# a heavy laser: a deep charged blast that rattles the plates
+	var out := _buffer(1.1)
+	_tone(out, 0.0, 900.0, 0.3, 5.0, -1100.0)
+	_tone(out, 0.0, 300.0, 0.3, 4.0, -150.0)
+	_noise(out, 0.0, 1.1, 0.75, 5.5, 0.95)
+	_tone(out, 0.0, 48.0, 0.5, 4.0)
+	_noise(out, 0.03, 0.5, 0.18, 9.0, 0.6)
+	_fade(out, 0.003)
+	return _wav(out)
+
+
+static func _gun_rocket() -> AudioStreamWAV:
+	# a rocket launched: a clunk of the rack, then a roaring rush fading away
+	var out := _buffer(1.3)
+	_tone(out, 0.0, 140.0, 0.4, 25.0)
+	_noise(out, 0.0, 0.08, 0.5, 50.0, 0.7)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf((t - 0.05) / 0.08, 0.0, 1.0) * exp(-2.6 * maxf(t - 0.12, 0.0))
+		out[i] += _rng.randf_range(-1.0, 1.0) * 0.32 * env
+	var low := 0.0
+	for i in out.size():
+		low = lerpf(out[i], low, 0.55)
+		out[i] = low * 1.5
+	_noise(out, 0.0, 1.0, 0.4, 3.5, 0.96)
+	return _wav(out)
+
+
+static func _gun_ion() -> AudioStreamWAV:
+	# an ion gun: a rising whine and a crackling snap
+	var out := _buffer(0.7)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf(t / 0.12, 0.0, 1.0) * exp(-7.0 * maxf(t - 0.12, 0.0))
+		out[i] += sin(TAU * (500.0 + 2400.0 * t) * t) * 0.18 * env
+		if _rng.randf() < 0.04 * env:
+			out[i] += _rng.randf_range(-0.8, 0.8)
+	_noise(out, 0.12, 0.7, 0.35, 14.0, 0.2)
+	_tone(out, 0.12, 90.0, 0.3, 12.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _gun_beam() -> AudioStreamWAV:
+	# a beam burning for a second: a buzzing hum with a hiss in it
+	var out := _buffer(1.0)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf(t / 0.05, 0.0, 1.0) * clampf((1.0 - t) / 0.2, 0.0, 1.0)
+		out[i] += (sin(TAU * 220.0 * t) * 0.16 + sin(TAU * 330.0 * t) * 0.08 + signf(sin(TAU * 110.0 * t)) * 0.05) * env
+		out[i] += _rng.randf_range(-1.0, 1.0) * 0.05 * env
+	return _wav(out)
+
+
+static func _hull_hit(pitch: float) -> AudioStreamWAV:
+	# a shot bursting on our hull, heard from inside: a sharp crack, a boom
+	# through the frame and the plates ringing after
+	var out := _buffer(1.6)
+	_noise(out, 0.0, 0.2, 0.9, 30.0, 0.2)
+	_noise(out, 0.0, 1.6, 1.0, 4.0, 0.96)
+	_tone(out, 0.0, 52.0 * pitch, 0.6, 3.5)
+	_tone(out, 0.0, 180.0 * pitch, 0.18, 6.0)
+	_tone(out, 0.02, 523.0 * pitch, 0.07, 3.0)
+	_tone(out, 0.02, 811.0 * pitch, 0.05, 3.5)
+	_noise(out, 0.15, 1.2, 0.12, 3.0, 0.5)              # bits falling on the deck
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _hull_heavy() -> AudioStreamWAV:
+	# a heavy blow: a deep boom, the whole frame groaning after it
+	var out := _buffer(2.6)
+	_noise(out, 0.0, 0.25, 1.0, 22.0, 0.25)
+	_noise(out, 0.0, 2.6, 1.2, 2.2, 0.97)
+	_tone(out, 0.0, 38.0, 0.7, 2.0)
+	_tone(out, 0.0, 76.0, 0.3, 3.0)
+	for i in range(int(0.4 * RATE), out.size()):
+		var t := float(i) / RATE - 0.4
+		var env := clampf(t / 0.3, 0.0, 1.0) * exp(-1.6 * t)
+		out[i] += sin(TAU * (130.0 - 25.0 * t + 6.0 * sin(TAU * 3.0 * t)) * t) * 0.12 * env   # the metal groaning
+	_noise(out, 0.2, 2.0, 0.1, 2.0, 0.5)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _shield_hit() -> AudioStreamWAV:
+	# our shield taking a shot: an electric crack and a falling hum
+	var out := _buffer(1.0)
+	_noise(out, 0.0, 0.1, 0.6, 45.0, 0.1)
+	_tone(out, 0.0, 420.0, 0.3, 4.5, -180.0)
+	_tone(out, 0.0, 630.0, 0.15, 6.0, -260.0)
+	_tone(out, 0.0, 60.0, 0.35, 5.0)
+	for i in out.size():
+		var t := float(i) / RATE
+		out[i] *= 0.8 + 0.2 * sin(TAU * 31.0 * t)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _their_hit(pitch: float) -> AudioStreamWAV:
+	# one of ours bursting on the pirate ship (as the ship's sensors give it): a punchy boom
+	var out := _buffer(1.3)
+	_noise(out, 0.0, 0.15, 0.7, 30.0, 0.4)
+	_noise(out, 0.0, 1.3, 1.0, 4.5, 0.95)
+	_tone(out, 0.0, 60.0 * pitch, 0.5, 4.5)
+	_tone(out, 0.0, 120.0 * pitch, 0.2, 8.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _their_shield() -> AudioStreamWAV:
+	# their shield stopping one of ours: a dull electric thud
+	var out := _buffer(0.7)
+	_noise(out, 0.0, 0.08, 0.4, 50.0, 0.3)
+	_tone(out, 0.0, 300.0, 0.22, 7.0, -150.0)
+	_tone(out, 0.0, 75.0, 0.3, 8.0)
 	_fade(out, 0.002)
 	return _wav(out)
 

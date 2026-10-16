@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 33
+const PROTOCOL := 34
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -277,7 +277,8 @@ const TEMPER_HUNTER := 3
 const TEMPER_UNKNOWN := 255
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
-                                    # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing
+                                    # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing; (v56) then
+                                    # u8 ticks before it shows, u8 ticks it flies (0 = a trace drawn at once)
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
 const SHOT_CANNON := 3              # a ship's gun firing, or the enemy's shot landing on us
@@ -287,7 +288,25 @@ const SHOT_PLASMA := 6              # a blaster's pellet: green
 const SHOT_BEAM := 7                # a pulse of the cutting beam: a thin white-violet line
 const SHOT_TRACTOR := 8             # (v50) the tractor beam: a pale green line
 const SHOT_SIPHON := 9              # (v50) a pulse of the siphon beam: a cyan line
-# (for a ship's shot, hit 0 = it was stopped by a shield short of the hull)
+# (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
+const LANDED := 1
+const MISSED := 2
+const S_VOLLEY := 36                # (v56) a ship's shot, to all, for the gun console's plan: u8 whose (VOLLEY_*),
+                                    # u8 kind (SHOT_*), u8 how it ends (0 shield, LANDED, MISSED), u8 room of the
+                                    # enemy's drawing (ours: where it lands; theirs: where it was fired from;
+                                    # 255 = none), u8 ticks before it is fired, u8 ticks it flies
+const VOLLEY_OURS := 0
+const VOLLEY_THEIRS := 1
+const S_JOLT := 37                  # (v56) the sound of the ship fight, to everyone: u8 kind (JOLT_*),
+                                    # u8 the shot's kind (SHOT_*; for JOLT_FIRE the weapon, Weapons.*), s16 x, s16 y of where it happened. Blows to our own
+                                    # hull are felt everywhere aboard (the screen shakes); all of it is heard only where
+                                    # there is air round the one who hears (the author asked for the fight to be heard)
+const JOLT_HULL := 1                # a shot landing on our hull
+const JOLT_HEAVY := 2               # a heavy blow to it: a rocket, a heavy laser, a meteor
+const JOLT_SHIELD := 3              # our shield taking a shot
+const JOLT_FIRE := 4                # one of our guns firing
+const JOLT_THEIR_HIT := 5           # a shot of ours blowing up on the pirate ship
+const JOLT_THEIR_SHIELD := 6        # its shield stopping one of ours
 const S_SHIPS := 26                 # every ship in the world: u8 count, then per ship u16 id, u8 kind (SHIP_*),
                                     # u8 docked, s16 x, s16 y of its corner in the grid, u8 its drawing (its
                                     # number in OTHER_MAPS; 0 for our own), u8 name length, name.

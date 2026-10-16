@@ -208,13 +208,35 @@ func hurt(q: Player, damage: int, by: Player) -> void:
 		server.pirates.attacked(q, by)
 
 
-func tell_shot(kind: int, hit: bool, from: Vector2, to: Vector2, row: int) -> void:
-	var msg := PackedByteArray([Net.S_SHOT, kind, 1 if hit else 0, 0, 0, 0, 0, 0, 0, 0, 0])
+func tell_shot(kind: int, hit, from: Vector2, to: Vector2, row: int, delay := 0, flight := 0) -> void:
+	## Draws a shot for everybody near either end of it on its deck. `hit` is a
+	## bool for a hand weapon, or (a ship's shot) 0 shield, Net.LANDED, Net.MISSED.
+	## (v56) A ship's shot shows `delay` ticks from now and flies `flight` ticks.
+	var msg := PackedByteArray([Net.S_SHOT, kind, int(hit), 0, 0, 0, 0, 0, 0, 0, 0, clampi(delay, 0, 255), clampi(flight, 0, 255)])
 	msg.encode_s16(3, roundi(from.x * 16.0))
 	msg.encode_s16(5, roundi(from.y * 16.0))
 	msg.encode_s16(7, roundi(to.x * 16.0))
 	msg.encode_s16(9, roundi(to.y * 16.0))
 	for q: Player in server.players:
 		if q != null and q.peer != null and server.map.deck_of(q.st.y) == server.map.deck_of(row) \
-				and Vector2(q.st.x, q.st.y).distance_to(from) <= SHOT_SEEN:
+				and minf(Vector2(q.st.x, q.st.y).distance_to(from), Vector2(q.st.x, q.st.y).distance_to(to)) <= SHOT_SEEN:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func tell_volley(whose: int, kind: int, ends: int, room: int, delay: int, flight: int) -> void:
+	## (v56) A ship's shot for the plan on the gun console (and the drone monitor): to all.
+	server.to_all(PackedByteArray([Net.S_VOLLEY, whose, kind, ends, room if room >= 0 and room < 255 else 255,
+		clampi(delay, 0, 255), clampi(flight, 0, 255)]))
+
+
+func jolt(kind: int, shot: int, at: Vector2) -> void:
+	## (v56) A sound of the ship fight (Net.JOLT_*) at that place: everybody is
+	## told, wherever they are. Blows to the hull of the ship one stands on shake the screen;
+	## whether they hear it the client decides by the air round them (the author's
+	## rule: a vacuum carries no sound, though the deck plates still shake).
+	var msg := PackedByteArray([Net.S_JOLT, kind, shot, 0, 0, 0, 0])
+	msg.encode_s16(3, roundi(at.x))
+	msg.encode_s16(5, roundi(at.y))
+	for q: Player in server.players:
+		if q != null and q.peer != null:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)

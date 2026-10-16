@@ -5,6 +5,9 @@ extends RefCounted
 ## the room the guns aim at has sights on it; holes in its hull are crosses.
 ## On top (v54): its crew where we can see them (after a probe, or near our
 ## drone; red, a white ring while mending, dim while wounded) and our drone.
+## (v56, the author's video of FTL) Its shield's bubble while it is up, and the
+## shots of the fight: ours flying in from the left to burst in a room, ripple
+## on the bubble or fly past ("ПРОМАХ"); its own leaving its weapons room.
 
 const Net := preload("res://src/shared/net.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")    # only for its numbers
@@ -19,6 +22,10 @@ const AIM := Color(1.0, 0.92, 0.35)
 const ION := Color(0.45, 0.7, 1.0)
 const PIRATE := Color(0.95, 0.25, 0.2)
 const DRONE := Color(0.35, 0.95, 1.0)
+const SHIELD := Color(0.45, 0.8, 1.0)
+const FightFx := preload("res://src/client/fight_fx.gd")
+const BOOM_SECONDS := 0.6            # a burst on the plan
+const MISS_SECONDS := 1.1            # "ПРОМАХ" floats up this long
 
 
 static func fighting(client) -> bool:
@@ -158,5 +165,134 @@ static func draw(canvas: Control, client, size: Vector2, time: float, hover_room
 		canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.6, Vector2(s, s) * 1.2), Color(0, 0, 0, 0.7))
 		canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.45, Vector2(s, s) * 0.9), DRONE)
 		canvas.draw_arc(mid, s * 1.6, 0.0, TAU, 20, Color(DRONE, 0.35 + 0.35 * pulse), 1.5)
+	_draw_fight(canvas, client, o, px, at, size, font)
 	if client.ecrew_probe > 0:
 		canvas.draw_string(font, Vector2(6, 14), "Зонд показывает экипаж: ещё %d с" % client.ecrew_probe, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, PIRATE.lightened(0.3))
+
+
+static func _bubble(o, px: float, at: Vector2) -> Array:
+	## Its shield's bubble on the plan: [centre, radii].
+	var r := Vector2(o.width, o.height) * px * 0.5
+	return [at + r, r + Vector2(px * 0.9, px * 0.9)]
+
+
+static func _ellipse(canvas: Control, centre: Vector2, radii: Vector2, colour: Color, width: float) -> void:
+	var points := PackedVector2Array()
+	for i in 49:
+		points.append(centre + Vector2(cos(TAU * i / 48.0), sin(TAU * i / 48.0)) * radii)
+	canvas.draw_polyline(points, colour, width, true)
+
+
+static func _room_point(o, px: float, at: Vector2, room: int, seed: int) -> Vector2:
+	## A cell of that room on the plan, picked by the shot's own number (or the middle of the ship).
+	if room < 0 or room >= o.rooms.size() or (o.rooms[room] as PackedInt32Array).is_empty():
+		return at + Vector2(o.width, o.height) * px * 0.5
+	var cells: PackedInt32Array = o.rooms[room]
+	var local: int = cells[absi(seed) % cells.size()]
+	return at + (Vector2(local % o.width, local / o.width) + Vector2(0.5, 0.5)) * px
+
+
+static func _draw_fight(canvas: Control, client, o, px: float, at: Vector2, size: Vector2, font: Font) -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	var b := _bubble(o, px, at)
+	var centre: Vector2 = b[0]
+	var radii: Vector2 = b[1]
+	# the bubble flares where a shot of ours meets it
+	var flare := 0.0
+	for v: Array in client.volleys:
+		if int(v[0]) == Net.VOLLEY_OURS and int(v[2]) == 0:
+			var since := now - float(v[4]) - float(v[5])
+			if since >= 0.0 and since < BOOM_SECONDS:
+				flare = maxf(flare, 1.0 - since / BOOM_SECONDS)
+	if client.enemy_shield > 0 or flare > 0.0:
+		var strength := clampf(client.enemy_shield / 100.0, 0.0, 1.0)
+		_ellipse(canvas, centre, radii, Color(SHIELD, 0.12 + 0.25 * strength + 0.6 * flare), 1.5 + 2.5 * flare)
+	for v: Array in client.volleys:
+		var whose: int = v[0]
+		var kind: int = v[1]
+		var ends: int = v[2]
+		var room: int = v[3]
+		var t := now - float(v[4])
+		var flight: float = v[5]
+		var seed: int = v[6]
+		if t < 0.0:
+			continue
+		var colour: Color = FightFx.COLOURS.get(kind, FightFx.COLOURS[Net.SHOT_CANNON])
+		if whose == Net.VOLLEY_THEIRS:
+			# its shot leaves its weapons room for the left edge (where we are)
+			if t > flight * 0.6:
+				continue
+			var from := _room_point(o, px, at, room, seed)
+			var to := Vector2(-10.0, from.y + float(seed % 40 - 20))
+			var k := t / (flight * 0.6)
+			if k < 0.25:
+				canvas.draw_circle(from, px * 0.5 * (1.0 - k * 4.0) + 2.0, Color(colour.lightened(0.4), 0.9 * (1.0 - k * 4.0)))
+			_bolt(canvas, kind, from, to, k, colour)
+			continue
+		var target := _room_point(o, px, at, room, seed)
+		var from := Vector2(-10.0, clampf(target.y + float(seed % 80 - 40), 4.0, size.y - 4.0))
+		var to := target
+		if ends == 0:
+			to = _bubble_entry(from, target, centre, radii)
+		elif ends == Net.MISSED:
+			to = target + (target - from).normalized() * size.x
+		if FightFx.beam_like(kind):
+			# a second of a beam: a line burning in
+			if t <= flight:
+				var w := 2.0 + sin(t * 40.0)
+				canvas.draw_line(from, to, Color(colour, 0.3), w + 5.0)
+				canvas.draw_line(from, to, Color(colour.lightened(0.5), 0.9), w)
+				canvas.draw_circle(to, 4.0 + 2.0 * sin(t * 30.0), colour.lightened(0.6))
+			continue
+		var reach := flight if ends != Net.MISSED else flight * 1.6
+		if t < reach:
+			_bolt(canvas, kind, from, to, t / reach if ends == Net.MISSED else t / flight, colour)
+		var since := t - flight
+		if since < 0.0:
+			continue
+		if ends == Net.LANDED and since < BOOM_SECONDS:
+			var k := since / BOOM_SECONDS
+			if room >= 0 and room < o.rooms.size():
+				for local: int in o.rooms[room]:
+					canvas.draw_rect(Rect2(at + Vector2(local % o.width, local / o.width) * px, Vector2(px, px)), Color(1.0, 0.3, 0.15, 0.35 * (1.0 - k)))
+			var big := px * (1.4 if kind == Net.SHOT_ROCKET else 1.0)
+			canvas.draw_circle(target, big * (0.4 + 0.8 * k), Color(colour, 0.5 * (1.0 - k)))
+			canvas.draw_circle(target, big * 0.45 * (1.0 - k), Color(1.0, 0.92, 0.7, 1.0 - k))
+			canvas.draw_arc(target, big * (0.3 + 1.4 * k), 0.0, TAU, 24, Color(1.0, 0.8, 0.5, 0.7 * (1.0 - k)), 2.0)
+		elif ends == 0 and since < BOOM_SECONDS:
+			var k := since / BOOM_SECONDS
+			canvas.draw_circle(to, px * 0.6 * (1.0 - k) + 1.0, Color(SHIELD.lightened(0.5), 1.0 - k))
+		elif ends == Net.MISSED and since < MISS_SECONDS:
+			var k := since / MISS_SECONDS
+			var word := "ПРОМАХ"
+			var spot := target + Vector2(-40.0, -10.0 - 22.0 * k)
+			canvas.draw_string(font, spot + Vector2(1, 1), word, HORIZONTAL_ALIGNMENT_CENTER, 80.0, 14, Color(0, 0, 0, 0.8 * (1.0 - k)))
+			canvas.draw_string(font, spot, word, HORIZONTAL_ALIGNMENT_CENTER, 80.0, 14, Color(1.0, 1.0, 1.0, 1.0 - k * k))
+
+
+static func _bolt(canvas: Control, kind: int, from: Vector2, to: Vector2, k: float, colour: Color) -> void:
+	var head := from.lerp(to, clampf(k, 0.0, 1.0))
+	var dir := (to - from).normalized()
+	var tail := head - dir * minf(26.0, from.distance_to(head))
+	match kind:
+		Net.SHOT_ROCKET:
+			canvas.draw_line(tail, head, Color(0.8, 0.8, 0.8, 0.35), 4.0)
+			canvas.draw_line(head - dir * 6.0, head, Color(0.85, 0.85, 0.9), 3.0)
+			canvas.draw_circle(head - dir * 7.0, 2.5, Color(1.0, 0.7, 0.3))
+		Net.SHOT_ION:
+			canvas.draw_circle(head, 5.0, Color(colour, 0.35))
+			canvas.draw_circle(head, 3.0, colour.lightened(0.5))
+		_:
+			canvas.draw_line(tail, head, Color(colour, 0.3), 5.0)
+			canvas.draw_line(tail.lerp(head, 0.4), head, colour.lightened(0.3), 2.0)
+			canvas.draw_circle(head, 2.0, Color(1.0, 0.95, 0.85))
+
+
+static func _bubble_entry(from: Vector2, to: Vector2, centre: Vector2, radii: Vector2) -> Vector2:
+	var p := from
+	var step := (to - from).normalized() * 2.0
+	for i in roundi(from.distance_to(to) / 2.0):
+		if ((p - centre) / radii).length_squared() <= 1.0:
+			return p
+		p += step
+	return to

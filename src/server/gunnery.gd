@@ -128,6 +128,9 @@ var _offered := false                # it has made its offer this fight
 var _over := false                   # this enemy is settled (wrecked or broken off): _settle does nothing more
 var _told := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
+var flies := true                    # (v56) shots take their flight before they land (tests set false: at once)
+var _flying: Array = []              # (v56) shots on their way: [the tick they land, what they do then]
+var _fx := RandomNumberGenerator.new()   # (v56) for what is only drawn (so the game's own lots stay as they were)
 
 
 func setup(p_server: Node) -> void:
@@ -151,6 +154,7 @@ func setup(p_server: Node) -> void:
 	aim = Net.AIM_ANY
 	_told = PackedByteArray()
 	_rng.randomize()
+	_fx.randomize()
 
 
 func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
@@ -289,6 +293,7 @@ func enemy_gone() -> void:
 	enemy_charge = PackedFloat32Array()
 	beam_left.fill(0)
 	ransom = 0
+	_flying.clear()                      # (whatever was still on its way misses: one of the ships is gone)
 	if server.enemy_crew != null:
 		server.enemy_crew.clear()
 
@@ -457,6 +462,7 @@ func tick() -> void:
 	for cell: int in ship.jammed.keys():
 		if server.tick >= int(ship.jammed[cell]):
 			ship.jammed.erase(cell)
+	_land_due()
 	for i in charge.size():
 		var w: int = ship.mounts[i]
 		if w == Weapons.NONE or ship.armed[i] == 0:
@@ -696,12 +702,12 @@ func _tractor(i: int, w: int) -> void:
 	## The tractor beam: it never misses; unless the shield stops it, it holds the ship.
 	var map = server.map
 	var cell: int = map.guns[i]
-	var at := Vector2(cell % map.width, cell / map.width)
-	server.combat.tell_shot(Net.SHOT_TRACTOR, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
 	if _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
+		_draw_beam(cell, Net.SHOT_TRACTOR, 0, -1, w)
 		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
 		server.chat.say("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
 		return
+	_draw_beam(cell, Net.SHOT_TRACTOR, Net.LANDED, -1, w)
 	var hold := float(Weapons.info(w)["hold"]) if Weapons.info(w).has("hold") else Weapons.TRACTOR_HOLD
 	held_until = maxi(held_until, server.tick + roundi(hold * Net.TICK_HZ))
 	server.chat.say("Орудие %d (захватный луч): пиратский корабль схвачен на %d с: не уклоняется, не уходит прыжком и не подходит к шлюзу.%s" % [
@@ -709,46 +715,226 @@ func _tractor(i: int, w: int) -> void:
 
 
 func _our_volley(i: int, w: int) -> void:
-	## One gun's shot (or burst) at the enemy, told in one line.
+	## One gun's shot (or burst) at the enemy. (v56) Each shot is rolled now (hit
+	## or miss, the room, whether the shield will stop it) and drawn on its way;
+	## it lands Weapons.flight_ticks later, and the volley is told in one line
+	## when its last shot has landed.
 	var map = server.map
 	var cell: int = map.guns[i]
 	var x: int = cell % map.width
 	var y: int = cell / map.width
-	var out := _outward(cell)
-	server.chat.sound(Net.SOUND_SHOT, x, y)
+	server.combat.jolt(Net.JOLT_FIRE, w, Vector2(x, y))
 	var shots: int = Weapons.info(w)["shots"]
-	var misses := 0
-	var stopped := 0
-	var hits := PackedStringArray()
-	var said := PackedStringArray()
+	var log := {"gun": i, "w": w, "left": shots, "misses": 0, "stopped": 0, "hits": PackedStringArray(), "said": PackedStringArray()}
+	var shield := enemy_shield              # as the shield will be when each shot meets it
 	for s in shots:
 		var hit := _rng.randf() < _hit_chance(w)
-		var spread := Vector2(out).orthogonal() * (s - shots / 2.0) * 0.6
-		server.combat.tell_shot(_shot_kind(w), hit, Vector2(x, y), Vector2(x, y) + Vector2(out) * 12.0 + spread, y)
-		if not hit:
-			misses += 1
-			continue
-		var room := _aimed_room()
-		if room < 0:
-			room = _any_room()
-		var r := _land_on_enemy(w, system_in(room), room)
-		if r == "":
-			stopped += 1
-		else:
-			hits.append(_room_word(room))
-			if r != "+":
-				said.append(r)
-		if enemy_hull <= 0 or (systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0):
-			break
+		var room := -1
+		var stop := false
+		if hit:
+			room = _aimed_room()
+			if room < 0:
+				room = _any_room()
+			if _meets_shield(w, false) and _enemy_shield_up() and shield > 0.0 and _rng.randf() >= Weapons.through_chance(shield):
+				stop = true
+				shield = maxf(shield - Weapons.shield_damage(w), 0.0)
+		var delay := s * Weapons.BURST_GAP_TICKS
+		var ends := (0 if stop else Net.LANDED) if hit else Net.MISSED
+		var spot := _draw_ours(cell, w, ends, room, delay)
+		_after(delay + Weapons.flight_ticks(w), _our_shot_lands.bind(log, hit, room, stop, spot))
+
+
+func _our_shot_lands(log: Dictionary, hit: bool, room: int, stop: bool, spot: Vector2) -> void:
+	## One shot of ours arrives (see _our_volley).
+	log["left"] -= 1
+	var w: int = log["w"]
+	if not fighting() or _over:
+		return                               # it is wrecked, gone or docked by now: the shot finds nothing
+	if not hit:
+		log["misses"] += 1
+	elif stop:
+		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
+		log["stopped"] += 1
+		server.combat.jolt(Net.JOLT_THEIR_SHIELD, _shot_kind(w), spot)
+	else:
+		server.combat.jolt(Net.JOLT_THEIR_HIT, _shot_kind(w), spot)
+		var r := _land_through(w, system_in(room), room)
+		(log["hits"] as PackedStringArray).append(_room_word(room))
+		if r != "+":
+			(log["said"] as PackedStringArray).append(r)
+	var over := enemy_hull <= 0 or (systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0)
+	if int(log["left"]) <= 0 or over:
+		log["left"] = 0
+		_tell_volley(log)
+	if over or int(log["left"]) <= 0:
+		_settle()
+
+
+func _tell_volley(log: Dictionary) -> void:
+	var hits: PackedStringArray = log["hits"]
+	var said: PackedStringArray = log["said"]
 	var parts := PackedStringArray()
 	if not hits.is_empty():
 		parts.append(("попадание: " if hits.size() == 1 else "попадания (%d): " % hits.size()) + ", ".join(_unique(hits)))
-	if stopped > 0:
-		parts.append("щит остановил" + ("" if stopped == 1 else " %d" % stopped))
-	if misses > 0:
-		parts.append("промах" + ("" if misses == 1 else " ×%d" % misses))
-	server.chat.say("Орудие %d (%s): %s.%s%s" % [i + 1, Weapons.name_of(w).to_lower(), "; ".join(parts),
+	if int(log["stopped"]) > 0:
+		parts.append("щит остановил" + ("" if int(log["stopped"]) == 1 else " %d" % int(log["stopped"])))
+	if int(log["misses"]) > 0:
+		parts.append("промах" + ("" if int(log["misses"]) == 1 else " ×%d" % int(log["misses"])))
+	if parts.is_empty():
+		return
+	server.chat.say("Орудие %d (%s): %s.%s%s" % [int(log["gun"]) + 1, Weapons.name_of(int(log["w"])).to_lower(), "; ".join(parts),
 		"" if said.is_empty() else " " + " ".join(_unique(said)), _enemy_state()])
+
+
+# ---------------------------------------------------------------- (v56) drawing shots on their way
+
+const OUT_CELLS := 16.0              # how far into space a shot is drawn leaving its gun, or coming in
+const BUBBLE := 1.6                  # cells between a ship's hull and its shield's bubble
+
+
+func _draw_ours(cell: int, w: int, ends: int, room: int, delay: int) -> Vector2:
+	## A shot of ours on its way: out of our gun into space (half its flight), then
+	## in at the pirate ship from the side, to the room (or into its shield's bubble,
+	## or past it). Told to those near either end, and to the gun console's plan.
+	## Where it ends, in cells (-1, -1: the enemy is not drawn).
+	var map = server.map
+	var kind := _shot_kind(w)
+	var flight := Weapons.flight_ticks(w)
+	var half := flight / 2
+	var at := Vector2(cell % map.width, cell / map.width)
+	var out := Vector2(_outward(cell))
+	server.combat.tell_shot(kind, Net.MISSED, at, at + out * OUT_CELLS, int(at.y), delay, half)
+	server.combat.tell_volley(Net.VOLLEY_OURS, kind, ends, room, delay, flight)
+	var spot := _room_spot(room if room >= 0 else _fx_room())
+	if spot.x < 0.0:
+		return spot
+	var box := _enemy_box()
+	var side := Vector2(-1.0 if spot.x < box.get_center().x else 1.0, _fx.randf_range(-0.35, 0.35)).normalized()
+	var from := spot + side * OUT_CELLS
+	var to := spot
+	if ends == 0:
+		to = _bubble_entry(from, spot, box)
+	elif ends == Net.MISSED:
+		to = spot - side * OUT_CELLS + side.orthogonal() * _fx.randf_range(-2.5, 2.5)
+	server.combat.tell_shot(kind, ends, from, to, int(spot.y), delay + half, flight - half)
+	return to
+
+
+func _draw_theirs(w: int, cell: int, ends: int, delay: int) -> Vector2:
+	## One of its shots on its way: a flash out of its weapons room, then in at
+	## our hull from space at that cell (or into our bubble, or past us). Where it ends.
+	var map = server.map
+	var kind := _shot_kind(w)
+	var flight := Weapons.flight_ticks(w)
+	var half := flight / 2
+	var gun_room := room_of_system(Net.ESYS_WEAPONS)
+	server.combat.tell_volley(Net.VOLLEY_THEIRS, kind, ends, gun_room, delay, flight)
+	var muzzle := _room_spot(gun_room)
+	if muzzle.x >= 0.0:
+		var box := _enemy_box()
+		var side := Vector2(-1.0 if muzzle.x < box.get_center().x else 1.0, 0.0)
+		server.combat.tell_shot(kind, Net.MISSED, muzzle, muzzle + side * OUT_CELLS, int(muzzle.y), delay, half)
+	if cell < 0:
+		return Vector2(-1, -1)
+	var at := Vector2(cell % map.width, cell / map.width)
+	var out := Vector2(_outward(cell))
+	var along := out.orthogonal() * (1.0 if _fx.randf() < 0.5 else -1.0)
+	var from := at + out * OUT_CELLS + along * _fx.randf_range(-3.0, 3.0)
+	var to := at
+	if ends == 0:
+		to = at + (from - at).normalized() * BUBBLE
+	elif ends == Net.MISSED:
+		# it grazes past, just off the hull
+		from = at + out * (OUT_CELLS * 0.7) + along * 10.0
+		to = at + out * 1.2 - along * 12.0
+	server.combat.tell_shot(kind, ends, from, to, int(at.y), delay + half, flight - half)
+	return to
+
+
+func _draw_beam(cell: int, kind: int, ends: int, room: int, w: int) -> void:
+	## A second of a beam: a line out of our gun, and one across into the pirate
+	## ship (its room, or its shield's bubble; a siphon or tractor is drawn to its middle).
+	var map = server.map
+	var at := Vector2(cell % map.width, cell / map.width)
+	server.combat.tell_shot(kind, Net.MISSED, at, at + Vector2(_outward(cell)) * OUT_CELLS, int(at.y))
+	server.combat.jolt(Net.JOLT_FIRE, w, at)
+	server.combat.tell_volley(Net.VOLLEY_OURS, kind, ends, room, 0, Weapons.BEAM_PULSE_TICKS)
+	var box := _enemy_box()
+	var spot := _room_spot(room) if room >= 0 else (box.get_center() if box.size.x > 0.0 else Vector2(-1, -1))
+	if spot.x < 0.0:
+		return
+	var side := Vector2(-1.0 if spot.x < box.get_center().x else 1.0, -0.2).normalized()
+	var from := spot + side * OUT_CELLS
+	var to := _bubble_entry(from, spot, box) if ends == 0 else spot
+	server.combat.tell_shot(kind, ends, from, to, int(spot.y))
+	if kind == Net.SHOT_BEAM:
+		server.combat.jolt(Net.JOLT_THEIR_SHIELD if ends == 0 else Net.JOLT_THEIR_HIT, kind, to)
+
+
+func _room_spot(room: int) -> Vector2:
+	## A cell of that room of the pirate ship, by lot, in the grid's cells (-1, -1: none).
+	var o = server.map.other
+	if o == null or room < 0 or room >= o.rooms.size() or server.map.other_at == server.map.NO_OTHER:
+		return Vector2(-1, -1)
+	var cells: Array = Array(o.rooms[room])
+	if cells.is_empty():
+		return Vector2(-1, -1)
+	var c: int = server.derelict._cell(server.map.other_at, int(cells[_fx.randi_range(0, cells.size() - 1)]))
+	return Vector2(c % server.map.width, c / server.map.width)
+
+
+func _fx_room() -> int:
+	return _fx.randi_range(0, room_sys.size() - 1) if room_sys.size() > 0 else -1
+
+
+func _enemy_box() -> Rect2:
+	## The pirate ship's drawing in the grid's cells.
+	var o = server.map.other
+	var at: Vector2i = server.map.other_at
+	return Rect2(Vector2(at), Vector2(o.width, o.height)) if o != null else Rect2()
+
+
+func _bubble_entry(from: Vector2, to: Vector2, box: Rect2) -> Vector2:
+	## Where a line from `from` to `to` first meets the pirate ship's shield
+	## bubble: an ellipse a little wider than its drawing.
+	var c := box.get_center()
+	var r := box.size / 2.0 + Vector2(BUBBLE, BUBBLE)
+	var p := from
+	var step := (to - from).normalized() * 0.25
+	for i in roundi(from.distance_to(to) / 0.25):
+		var d := (p - c) / r
+		if d.length_squared() <= 1.0:
+			return p
+		p += step
+	return to
+
+
+func _after(ticks: int, landing: Callable) -> void:
+	## (v56) What a shot does when it gets there, that many ticks from now.
+	if not flies or ticks <= 0:
+		landing.call()
+	else:
+		_flying.append([server.tick + ticks, landing])
+
+
+func _land_due() -> void:
+	## (v56) The shots that get there this tick, in the order they were fired.
+	if _flying.is_empty():
+		return
+	var due: Array = []
+	var still: Array = []
+	for f: Array in _flying:
+		(due if server.tick >= int(f[0]) else still).append(f)
+	if due.is_empty():
+		return
+	_flying = still
+	for f: Array in due:
+		(f[1] as Callable).call()
+
+
+func in_flight() -> int:
+	## (v56) Shots on their way now (tests).
+	return _flying.size()
 
 
 func _beam_pulse(i: int) -> void:
@@ -762,12 +948,11 @@ func _beam_pulse(i: int) -> void:
 		_siphon_pulse(i)
 		return
 	var cell: int = map.guns[i]
-	var at := Vector2(cell % map.width, cell / map.width)
-	server.combat.tell_shot(Net.SHOT_BEAM, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
 	var room := _aimed_room()
 	if room < 0:
 		room = _beam_room[i]
 	var r := _land_on_enemy(w, system_in(room), room)
+	_draw_beam(cell, Net.SHOT_BEAM, 0 if r == "" else Net.LANDED, room, w)
 	var log: Array = _beam_log[i]
 	if r == "":
 		log[1] += 1
@@ -795,8 +980,7 @@ func _siphon_pulse(i: int) -> void:
 	var map = server.map
 	var ship = server.ship
 	var cell: int = map.guns[i]
-	var at := Vector2(cell % map.width, cell / map.width)
-	server.combat.tell_shot(Net.SHOT_SIPHON, true, at, at + Vector2(_outward(cell)) * 12.0, int(at.y))
+	_draw_beam(cell, Net.SHOT_SIPHON, 0 if enemy_shield > 0.0 else Net.LANDED, -1, ship.mounts[i])
 	var log: Array = _beam_log[i]
 	var take := minf(enemy_shield, Weapons.SIPHON_DRAIN)
 	enemy_shield -= take
@@ -874,6 +1058,13 @@ func _land_on_enemy(w: int, system: int, room: int = -1) -> String:
 	if _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
 		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
 		return ""
+	return _land_through(w, system, room)
+
+
+func _land_through(w: int, system: int, room: int) -> String:
+	## A shot of ours past the shield, in that room: what came of it ("+" = nothing to tell).
+	if room < 0:
+		room = room_of_system(system)
 	reveal(room)
 	var info := Weapons.info(w)
 	if info.has("disable"):
@@ -1069,51 +1260,74 @@ func _enemy_fires(w: int) -> void:
 		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus() - server.stations.our_dodge(), 0.05, 0.95)
 	if down(Net.ESYS_HELM):
 		chance *= BLIND_ENEMY_HIT
-	var misses := 0
-	var stopped := 0
-	var said := PackedStringArray()
+	# (v56) every shot is rolled now and lands when its flight is over
+	var log := {"w": w, "left": shots, "misses": 0, "stopped": 0, "said": PackedStringArray()}
+	var shield: float = ship.shield
 	for s in shots:
+		var delay := s * Weapons.BURST_GAP_TICKS
 		if _rng.randf() >= chance:
-			misses += 1
+			var by: int = map.hull[_fx.randi_range(0, map.hull.size() - 1)] if map.hull.size() > 0 else -1
+			_draw_theirs(w, by, Net.MISSED, delay)
+			_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.MISSED, -1, -1, Vector2.ZERO))
 			continue
 		var target := _enemy_target()
-		if _meets_shield(w, ship.hardened) and our_shield_up() and _rng.randf() >= Weapons.through_chance(ship.shield):
-			ship.shield = maxf(ship.shield - Weapons.shield_damage(w), 0.0)
-			stopped += 1
-			_tracer_to(target if target >= 0 else _hull_near_crew(), _shot_kind(w), false)
+		if _meets_shield(w, ship.hardened) and our_shield_up() and _rng.randf() >= Weapons.through_chance(shield):
+			shield = maxf(shield - Weapons.shield_damage(w), 0.0)
+			var spot := _draw_theirs(w, target if target >= 0 else _hull_near_crew(), 0, delay)
+			_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, 0, -1, -1, spot))
 			continue
+		var cell := target
+		if Weapons.info(w).has("disable"):
+			cell = target if target >= 0 and (map.guns.has(target) or target == shield_cell()) else _jam_choice()
+		elif target < 0:
+			cell = _hull_near_crew()
+		var spot := _draw_theirs(w, cell, Net.LANDED, delay)
+		_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.LANDED, target, cell, spot))
+
+
+func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot: Vector2) -> void:
+	## One of its shots arrives (see _enemy_fires): what it does, and the volley
+	## told in one line once its last shot is in.
+	var map = server.map
+	var ship = server.ship
+	var w: int = log["w"]
+	var said: PackedStringArray = log["said"]
+	log["left"] -= 1
+	if ends == Net.MISSED:
+		log["misses"] += 1
+	elif ends == 0:
+		ship.shield = maxf(ship.shield - Weapons.shield_damage(w), 0.0)
+		log["stopped"] += 1
+		server.combat.jolt(Net.JOLT_SHIELD, _shot_kind(w), spot)
+	elif cell >= 0:
 		var info := Weapons.info(w)
+		var damage: int = info.get("damage", 0)
+		var heavy := damage >= 2 or Weapons.klass(w) == Weapons.CLASS_ROCKET
+		server.combat.jolt(Net.JOLT_HEAVY if heavy else Net.JOLT_HULL, _shot_kind(w), spot)
 		if info.has("disable"):
 			# ion and EMP: a gun or the shield stops for a while, no damage
-			var what := target if target >= 0 and (map.guns.has(target) or target == shield_cell()) else _jam_choice()
-			if what >= 0:
-				ship.jammed[what] = maxi(int(ship.jammed.get(what, 0)), server.tick + roundi(float(info["disable"]) * Net.TICK_HZ))
-				_tracer_to(what, _shot_kind(w), true)
-				said.append("%s выключено на %d с." % [_cap(map.device_name(what)), int(info["disable"])])
-			continue
-		var damage: int = info["damage"]
-		if target >= 0:
+			ship.jammed[cell] = maxi(int(ship.jammed.get(cell, 0)), server.tick + roundi(float(info["disable"]) * Net.TICK_HZ))
+			said.append("%s выключено на %d с." % [_cap(map.device_name(cell)), int(info["disable"])])
+		elif target >= 0:
 			# a gun, a console or the shield generator put out of order
 			ship.broken[target] = true
 			server.to_all(ship.devices_packet())
 			server.crew.hull_hit(Net.HULL_PER_SYSTEM_HIT * damage)
-			_tracer_to(target, _shot_kind(w), true)
 			said.append("Не работает: %s." % map.device_name(target))
-			continue
-		var c := target if target >= 0 else _hull_near_crew()
-		if c < 0:
-			continue
-		_tracer_to(c, _shot_kind(w), true)
-		if Weapons.klass(w) != Weapons.CLASS_ROCKET or _rng.randf() < Weapons.ROCKET_HOLE:
+		elif Weapons.klass(w) != Weapons.CLASS_ROCKET or _rng.randf() < Weapons.ROCKET_HOLE:
 			said.append("Обшивка пробита.")
-			if server.systems.breach(c):
+			if server.systems.breach(cell):
 				server.crew.hull_hit(Net.HULL_PER_HOLE * (damage - 1))
 			else:
 				server.crew.hull_hit(Net.HULL_PER_HOLE * damage)
 		else:
 			server.crew.hull_hit(Net.HULL_PER_HOLE * damage)
 			said.append("Ракета разорвалась на обшивке: прочность %d из %d." % [ship.hull, Net.HULL_MAX])
+	if int(log["left"]) > 0:
+		return
 	var parts := PackedStringArray()
+	var stopped: int = log["stopped"]
+	var misses: int = log["misses"]
 	if stopped > 0:
 		parts.append("щит отразил" + ("" if stopped == 1 else " %d" % stopped) + " (щит %d)" % roundi(ship.shield))
 	if misses > 0:
@@ -1190,18 +1404,6 @@ func _hull_near_crew() -> int:
 			best_d = d
 			best = c
 	return best if best >= 0 else choice[_rng.randi_range(0, choice.size() - 1)]
-
-
-func _tracer_to(cell: int, kind: int = Net.SHOT_CANNON, landed: bool = true) -> void:
-	## Draws its shot coming in from space at a cell of our ship (short of it, if the shield stopped it).
-	if cell < 0:
-		return
-	var map = server.map
-	var at := Vector2(cell % map.width, cell / map.width)
-	var out := Vector2(_outward(cell))
-	server.combat.tell_shot(kind, landed, at + out * 12.0, at if landed else at + out * 2.5, int(at.y))
-	if landed:
-		server.chat.sound(Net.SOUND_THUD, int(at.x), int(at.y))
 
 
 func _outward(cell: int) -> Vector2i:

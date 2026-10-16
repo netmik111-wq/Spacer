@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v55 (version 0.48).
+Last updated: build v56 (version 0.49).
 
 Contents:
 
@@ -399,6 +399,21 @@ Contents:
 - **In a vacuum it is silent**: if the listener or the source is in a compartment without air (under 20%
   of normal), only what is very close (up to 1.5 cells) is heard.
 - A scream or hiss marker in one place is placed no more than once every 1.8 s.
+- **Footsteps are quieter** (v56, the author: they hurt the ears): softer and duller, your own −12 dB and
+  others' −8 dB below the rest, times the "Шаги" setting (50% by default).
+- **The ship fight is heard** (v56, the author asked for it): our guns firing (a different sound for
+  lasers and blasters, heavy and siege lasers, rockets and EMP, ion, beams), their shots bursting on our hull
+  (a boom through the frame; a heavier one for rockets, heavy shots and meteors), our shield taking a shot
+  (an electric crack and hum), and our shots bursting on the pirate ship or on its shield. These are heard
+  everywhere aboard our ship, whatever the deck: from where they happen on your own deck, muffled from
+  another deck, the pirate ship's a little quieter. Only with air round you: in a vacuum you hear nothing,
+  but a blow to the hull still **shakes the screen** (harder close by: up to 9 screen pixels for a heavy
+  blow, 5 for a shot; the "Тряска при попаданиях" setting). Our boarders aboard the pirate ship feel and
+  hear our shots landing there instead. The "Бой кораблей" setting sets how loud all of this is.
+- **Your own sounds** (v56): any sound can be replaced with a file. Put `NAME.ogg` or `NAME.wav` into a
+  folder `sounds` next to the game; the names are `step`, `door`, `hiss`, `thud`, `drop`, `ladder`, `shot`,
+  `blow`, `hum`, `gun_laser`, `gun_heavy`, `gun_rocket`, `gun_ion`, `gun_beam`, `hull_hit`, `hull_heavy`,
+  `shield_hit`, `their_hit`, `their_shield` (the list is in `sounds/README.txt` in the archive).
 
 ## 14. Weapons and combat
 
@@ -636,6 +651,18 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   The ship sets out with 3 lasers and the shield on: 5 of 8.
 - A powered gun charges by itself (each weapon its own time) while the ship has power and the mount is whole.
   Buttons: fire one gun or a volley of all ready ones.
+- **Shots fly** (v56, the author's video of FTL). A shot is decided when it is fired (hit or miss, the room,
+  whether the shield will stop it) but lands only when its flight is over, and the hole, the damage and the
+  chat line come then: lasers 0.7 s (rapid 0.6 s, siege 0.8 s), blasters 0.7 s, ion 0.9 s, rockets and EMP
+  1.3 s; the shots of a burst leave 0.15 s apart. Beams (cutter, tractor, siphon) have no flight. The same
+  holds for the pirates' shots at us. A shot still on its way when either ship leaves is lost.
+- **What is seen.** In the world: a bright bolt with a trail leaves the gun into space; at the other ship it
+  comes in from the side (from space onto our hull) and bursts: a flash that lights the dark, sparks, bits of
+  hull and smoke (an ion hit crackles blue; a rocket trails smoke and bursts bigger), or makes a blue ripple
+  on the shield's bubble, or flies past. On the gun console's plan (and the drone monitor's): the pirates'
+  shield bubble while it is up (brighter the stronger), our shots flying in from the left and bursting in
+  their room (the room flashes red), flaring the bubble where the shield stops them, or flying past with
+  «ПРОМАХ»; their shots leaving their weapons room.
 
 | Weapon | Charge | Shots | Hit | Damage | Power | Price | What else |
 |---|---|---|---|---|---|---|---|
@@ -904,9 +931,11 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 ### Settings
 
 - From the main menu and from the game's menu (Esc); kept in `user://options.cfg`, they take effect at once.
-- **Sound**: overall volume, sounds on the ship, engine hum (each 0–100%), mute.
+- **Sound**: overall volume, sounds on the ship, engine hum, footsteps (v56, 50% by default), the ship
+  fight (v56) (each 0–100%), mute.
 - **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
-  in the top left corner (shown even while F1's status is hidden), the white flash after a jump.
+  in the top left corner (shown even while F1's status is hidden), the white flash after a jump,
+  the screen shaking when the hull is hit (v56, 0–100%).
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
