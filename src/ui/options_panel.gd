@@ -117,6 +117,8 @@ func _sound_tab() -> Control:
 	_slider(page, "Общая громкость", Options.volume, func(v: float) -> void: Options.volume = v)
 	_slider(page, "Звуки на корабле", Options.world_volume, func(v: float) -> void: Options.world_volume = v)
 	_slider(page, "Гул двигателя", Options.hum_volume, func(v: float) -> void: Options.hum_volume = v)
+	_slider(page, "Шаги", Options.steps_volume, func(v: float) -> void: Options.steps_volume = v)
+	_slider(page, "Бой кораблей", Options.fight_volume, func(v: float) -> void: Options.fight_volume = v)
 	_check(page, "Выключить звук", Options.muted, func(on: bool) -> void:
 		Options.muted = on
 		Options.apply_sound())
@@ -148,6 +150,7 @@ func _video_tab() -> Control:
 	row.add_child(fps)
 	_check(page, "Показывать число кадров в секунду", Options.show_fps, func(on: bool) -> void: Options.show_fps = on)
 	_check(page, "Белая вспышка после прыжка", Options.flash, func(on: bool) -> void: Options.flash = on)
+	_slider(page, "Тряска при попаданиях", Options.shake, func(v: float) -> void: Options.shake = v)
 	return page.get_parent()
 
 

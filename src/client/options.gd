@@ -45,6 +45,9 @@ const ACTIONS: Array = [
 static var volume := 0.8             # 0..1, everything
 static var world_volume := 1.0       # 0..1, sounds of the game
 static var hum_volume := 1.0         # 0..1, the engine's hum
+static var steps_volume := 0.5       # (v56) 0..1, footsteps (the author found them too loud)
+static var fight_volume := 1.0       # (v56) 0..1, the ship fight: guns, hits, the shield
+static var shake := 1.0              # (v56) 0..1, how hard the screen shakes when the hull is hit
 static var muted := false
 static var fullscreen := false
 static var vsync := true
@@ -52,6 +55,11 @@ static var max_fps := 60
 static var show_fps := false
 static var flash := true             # the white flash after a jump
 static var keys := {}                # action -> Array of {"key": physical keycode, "ctrl", "shift", "alt"}
+
+
+static func db_of(v: float) -> float:
+	## (v56) A 0..1 setting as a change of loudness (silence at 0).
+	return linear_to_db(maxf(v, 0.0001))
 
 
 static func defaults() -> Dictionary:
@@ -71,6 +79,9 @@ static func load_all() -> void:
 		volume = clampf(float(cfg.get_value("sound", "volume", volume)), 0.0, 1.0)
 		world_volume = clampf(float(cfg.get_value("sound", "world", world_volume)), 0.0, 1.0)
 		hum_volume = clampf(float(cfg.get_value("sound", "hum", hum_volume)), 0.0, 1.0)
+		steps_volume = clampf(float(cfg.get_value("sound", "steps", steps_volume)), 0.0, 1.0)
+		fight_volume = clampf(float(cfg.get_value("sound", "fight", fight_volume)), 0.0, 1.0)
+		shake = clampf(float(cfg.get_value("video", "shake", shake)), 0.0, 1.0)
 		muted = bool(cfg.get_value("sound", "muted", muted))
 		fullscreen = bool(cfg.get_value("video", "fullscreen", fullscreen))
 		vsync = bool(cfg.get_value("video", "vsync", vsync))
@@ -94,6 +105,9 @@ static func save_all() -> void:
 	cfg.set_value("sound", "volume", volume)
 	cfg.set_value("sound", "world", world_volume)
 	cfg.set_value("sound", "hum", hum_volume)
+	cfg.set_value("sound", "steps", steps_volume)
+	cfg.set_value("sound", "fight", fight_volume)
+	cfg.set_value("video", "shake", shake)
 	cfg.set_value("sound", "muted", muted)
 	cfg.set_value("video", "fullscreen", fullscreen)
 	cfg.set_value("video", "vsync", vsync)

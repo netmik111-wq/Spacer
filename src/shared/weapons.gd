@@ -151,6 +151,24 @@ static func charge_ticks(w: int) -> int:
 	return roundi(float(INFO[w]["charge"]) * Net.TICK_HZ) if INFO.has(w) else 1
 
 
+static func flight_ticks(w: int) -> int:
+	## (v56) How long a shot of this weapon takes from the muzzle to where it lands:
+	## lasers are quickest, ion slower, rockets slowest. Beams have no flight.
+	match klass(w):
+		CLASS_LASER:
+			return 12 if w == RAPID else (16 if w == SIEGE else 14)
+		CLASS_BLASTER:
+			return 14
+		CLASS_ION:
+			return 18
+		CLASS_ROCKET:
+			return 26
+	return 0
+
+
+const BURST_GAP_TICKS := 3           # (v56) between the shots of one burst
+
+
 static func ammo(w: int) -> int:
 	return int(INFO[w].get("ammo", 0)) if INFO.has(w) else 0
 

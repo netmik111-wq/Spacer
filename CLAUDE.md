@@ -34,8 +34,8 @@ needs:
 
 ## Where things stand
 
-Build v55 (version 0.48) is the latest. Plans one to four are done except the darkness front (the
-author is still thinking it through); builds v40 to v55 were the author's own requests, one build each.
+Build v56 (version 0.49) is the latest. Plans one to four are done except the darkness front (the
+author is still thinking it through); builds v40 to v56 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -44,7 +44,8 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 - The engine powers the whole ship: when it stops, every system stops but nothing breaks. Anything new
   aboard asks `GameServer.powered()` (client `GameClient.powered()`).
 - While any bridge console works there is a way to escape; there are never two obstacles to escape at once.
-- Lack of air is not drawn (only the holomap shows pressure, at his request). Vacuum is silent.
+- Lack of air is not drawn (only the holomap shows pressure, at his request). Vacuum is silent (the listener
+  needs air), but the ship fight is heard aboard and blows to the hull shake the screen (v56).
 - The dark is dim, not pitch black: the room in view is made out, the flashlight is clearly brighter.
 - Each step adds items at the trader. The author's sub-items (1.1, 2.1 ...) are groundwork for later.
 - Changes are gathered into one Windows build. Pull requests may be merged without asking once CI is green.
@@ -166,13 +167,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
-  world, light and sight drawing), `sounds.gd`, `options.gd`, `item_art.gd`.
+  world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
+  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`.
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
   draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`, `crew_panel.gd` (v55, key O),
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`.
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
-  `make_assets.py`. `maps/`: ship blueprints (`*.txt`, built to `*.json`).
+  `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
+  under xvfb-run). `maps/`: ship blueprints (`*.txt`, built to `*.json`).
 
 ## Pitfalls
 
@@ -231,9 +234,14 @@ The parameters for these checks are described in the header of `src/main.gd`.
   must go into the key, or the picture stays stale. Pictures of light are kept per light
   (`_light_made`) the same way.
 - `GameClient.glow` returns remembered dictionaries shared between callers: read them, never change them.
+- Ships' shots land later than they are fired (v56, `Gunnery._flying`). A test that checks a hit right after
+  `fire` or `_enemy_fires` must set `server.gunnery.flies = false` (the gun, ship, drone and station tests do).
+  Effects that are only drawn take their lots from `Gunnery._fx`, so the game's own rng sequence is unchanged.
 
 ## Delivering builds
 
+- The archive's first part carries `dist_files/sounds/README.txt` as `sounds/README.txt` (v56: the names of
+  the sounds the author may replace).
 - A file up to 30 MB goes through chat, and the Windows game weighs 36 MB archived. So it
   is split into `game.001` and `game.002` in two archives; `play.bat` joins them and checks
   the size. The size in `play.bat` is updated with every build.

@@ -40,6 +40,9 @@ extends Node
 ## the server's messages), door_trouble_after=SECONDS with door_trouble=jam|down|up
 ## (the door the character faces jams open, or its shutter fails down or up),
 ## dock_after=SECONDS (the ship is put right at the sector's station or trader).
+## volley_after=SECONDS (v56: from then on, every second, every gun of ours fires
+## at the pirate ship alongside and it fires a laser back that always hits; with
+## --noshield our shield is off first, so its shots land on the hull).
 ## drag_after=SECONDS (take hold of whoever lies next to the character),
 ## search_after=SECONDS (go through their pockets), loot_after=SECONDS (take
 ## the first thing found there), faint_after=SECONDS with --inproc (the other
@@ -135,6 +138,7 @@ var _picked := false
 var _given := false
 var _boarded := false
 var _goto_at := 0
+var _next_volley := 0.0
 var _clicked := false
 var _trace: FileAccess = null
 
@@ -471,6 +475,17 @@ func _process(_delta: float) -> void:
 			if _server.sectors.kind[i] == int(_opt.get("warp_kind", 1)):
 				_server.navigation.start_jump(i, "Тест")
 				break
+	if _opt.has("volley_after") and _server != null and _screen != null and t >= float(_opt["volley_after"]) \
+			and t >= _next_volley and _server.gunnery.fighting():
+		_next_volley = t + 1.0
+		var g = _server.gunnery
+		if _flags.has("noshield"):
+			_server.ship.shield_on = false
+		g.enemy_hit_chance = 1.0
+		for i in g.charge.size():
+			if _server.ship.mounts[i] != 0:
+				g._our_volley(i, _server.ship.mounts[i])
+		g._enemy_fires(1)
 	if _opt.has("break_helm_after") and not _helm_broken and _server != null and _screen != null and t >= float(_opt["break_helm_after"]):
 		_helm_broken = true
 		_server.ship.broken[_server.map.helm.keys()[0]] = true

@@ -14,6 +14,9 @@ const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Sounds := preload("res://src/client/sounds.gd")
+const Options := preload("res://src/client/options.gd")
+const FightFx := preload("res://src/client/fight_fx.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
@@ -217,6 +220,8 @@ var _last_cell := Vector2i(-1, -1)   # where our character was, for its own foot
 var _hum_timer := 0.0
 var _sound_pen: Node2D               # draws them over everything, in screen space
 var _shots: Array = []               # shots and blows to draw: [kind, hit, from, to (deck pixels), deck, seconds left]
+var _fight := FightFx.new()          # (v56) the ships' shots flying and bursting
+var _shake := 0.0                    # (v56) how far the screen is thrown now, in screen pixels (dies away)
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
 var _dark_sheet: ColorRect
@@ -412,6 +417,7 @@ func setup(p_client: GameClient) -> void:
 	_audio = Sounds.new()
 	add_child(_audio)
 	client.shot.connect(_on_shot)
+	client.jolt.connect(_on_jolt)
 
 	# a fixed scatter of stars around the ship
 	var rng := RandomNumberGenerator.new()
@@ -534,7 +540,8 @@ func _update_ship(delta: float) -> void:
 	# where light falls is drawn again only when it may have changed
 	var mask_key := hash([_dark, _deck_shown, client.my_deck(), client.my_cond, client.other_changes, client.other_dark(),
 		_dim.hash(), _near.hash(), _lit.hash()])
-	if mask_key != _mask_key or not _shots.is_empty():
+	_fight.update(delta)
+	if mask_key != _mask_key or not _shots.is_empty() or _fight.busy():
 		_mask_key = mask_key
 		_mask.queue_redraw()
 	for i in range(_shots.size() - 1, -1, -1):
@@ -692,17 +699,20 @@ func _light_picture(light: Dictionary, key: int) -> Array:
 	return _picture
 
 
-const SHIP_SHOT_COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.55, 0.15), Net.SHOT_ION: Color(0.35, 0.65, 1.0),
-	Net.SHOT_ROCKET: Color(0.85, 0.85, 0.8), Net.SHOT_PLASMA: Color(0.4, 1.0, 0.45), Net.SHOT_BEAM: Color(0.9, 0.6, 1.0),
-	Net.SHOT_TRACTOR: Color(0.6, 1.0, 0.75), Net.SHOT_SIPHON: Color(0.35, 0.95, 1.0)}
 
 
-func _on_shot(kind: int, hit: bool, from: Vector2, to: Vector2) -> void:
+func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float) -> void:
 	var map := client.map
 	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
+	if kind >= Net.SHOT_CANNON:
+		# (v56) a ship's gun: it flies, then bursts (FightFx); drawn at the middle of the cells
+		var lift := Vector2(_tile * 0.5, _tile * 0.5)
+		_fight.add(kind, hit, Vector2(from.x, from.y - deck * _stride) * _tile + lift, Vector2(to.x, to.y - deck * _stride) * _tile + lift,
+			deck, delay, flight)
+		return
 	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
 	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
-	_shots.append([kind, hit, a, b, deck, SHOT_SECONDS * (3.0 if kind >= Net.SHOT_CANNON else 1.0)])
+	_shots.append([kind, hit != 0, a, b, deck, SHOT_SECONDS])
 
 
 func cell_under_mouse() -> Vector2:
@@ -976,18 +986,6 @@ func _draw_shade() -> void:
 		var left := float(sh[5]) / SHOT_SECONDS
 		var a: Vector2 = sh[2]
 		var b: Vector2 = sh[3]
-		if int(sh[0]) >= Net.SHOT_CANNON:
-			# a ship's gun: a trace coloured by what it fires and a burst where it lands
-			# (a ripple of the shield where one stopped it: hit = 0)
-			var k := int(sh[0])
-			var c: Color = SHIP_SHOT_COLOURS.get(k, SHIP_SHOT_COLOURS[Net.SHOT_CANNON])
-			var fade := minf(left, 1.0)
-			_shade.draw_line(a, b, Color(c, 0.9 * fade), 2.0 if k == Net.SHOT_BEAM or k == Net.SHOT_TRACTOR or k == Net.SHOT_SIPHON else (5.0 if k == Net.SHOT_ROCKET else 4.0))
-			if bool(sh[1]):
-				_shade.draw_circle(b, 14.0 * left + 4.0, Color(c.lightened(0.3), 0.8 * fade))
-			else:
-				_shade.draw_arc(b, 22.0 - 6.0 * left, PI * 0.0, TAU, 24, Color(0.45, 0.75, 1.0, 0.8 * fade), 3.0)
-			continue
 		if int(sh[0]) == Net.SHOT_BULLET:
 			_shade.draw_line(a, b, Color(1.0, 0.9, 0.5, 0.85 * left), 1.5)
 			_shade.draw_circle(a + (b - a).normalized() * 10.0, 5.0 * left, Color(1.0, 0.85, 0.4, left))
@@ -995,6 +993,7 @@ func _draw_shade() -> void:
 			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
 		if bool(sh[1]):
 			_shade.draw_circle(b, 6.0 * left + 2.0, Color(0.9, 0.1, 0.1, 0.9 * left))
+	_fight.draw(_shade, _deck_shown)
 	_draw_light(_shade, _lit, Color(BEAM, 0.16 + 0.16 * _dark), 0)
 
 
@@ -1051,6 +1050,7 @@ func _draw_mask() -> void:
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
+	_fight.draw_light(_mask, _deck_shown)
 	_draw_light(_mask, _lit, Color(0, 0, 1, FLASH), 1)       # flashlights: soft round pools
 
 
@@ -1330,7 +1330,8 @@ func _on_heard(kind: int, x: int, y: int) -> void:
 		return
 	var seen := can_see(x, y)
 	if map.deck_of(y) == client.my_deck():
-		_audio.play(kind, _feet(Vector2(x, map.local_y(y))), Net.SOUND_RANGE[kind], not seen or _thin_air_here())
+		_audio.play(kind, _feet(Vector2(x, map.local_y(y))), Net.SOUND_RANGE[kind], not seen or _thin_air_here(),
+			(-8.0 + Options.db_of(Options.steps_volume)) if kind == Net.SOUND_STEP else 0.0)
 	if seen or (kind != Net.SOUND_HISS and kind != Net.SOUND_CRY):
 		return
 	var far := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y))
@@ -1345,6 +1346,63 @@ func _on_heard(kind: int, x: int, y: int) -> void:
 	_sounds.append([kind, _feet(at) + Vector2(0, -14), map.deck_of(y), SOUND_SECONDS])
 	if _sounds.size() > 24:
 		_sounds.pop_front()
+
+
+func _on_jolt(kind: int, shot: int, at: Vector2) -> void:
+	## (v56) A sound of the ship fight. Blows to the hull of the ship we stand on
+	## shake the screen however near (harder close by, less on another deck);
+	## every sound of it is heard only with air round us (a vacuum is silent, the
+	## author's rule), muffled from another deck. The pirate ship's bursts are
+	## heard aboard ours as the ship's sensors give them: farther off, not muffled.
+	var map := client.map
+	var cell := client.pred.y * map.width + client.pred.x
+	var here := Vector2(client.pred.x, client.pred.y)
+	var aboard_ours := map.on_ship(cell)
+	var aboard_theirs := map.is_other(cell) or (not aboard_ours and map.other_at != ShipMap.NO_OTHER
+		and Rect2(Vector2(map.other_at), Vector2(map.other.width, map.other.height)).has_point(here))
+	var same_deck := map.deck_of(roundi(at.y)) == client.my_deck()
+	var d := here.distance_to(at) + (0.0 if same_deck else 8.0)
+	var ours := kind <= Net.JOLT_FIRE                # it happens on our ship (theirs: on the pirate ship)
+	var on_it := aboard_ours if ours else aboard_theirs
+	if on_it and (kind == Net.JOLT_HULL or kind == Net.JOLT_HEAVY or kind == Net.JOLT_THEIR_HIT):
+		var hard := 9.0 if kind == Net.JOLT_HEAVY else 5.0
+		_shake = maxf(_shake, hard * Options.shake / (1.0 + d / 7.0))
+	var in_air := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR
+	if not in_air or not (aboard_ours or aboard_theirs):
+		return
+	var name := ""
+	match kind:
+		Net.JOLT_HULL:
+			name = Sounds.HULL_HIT
+		Net.JOLT_HEAVY:
+			name = Sounds.HULL_HEAVY
+		Net.JOLT_SHIELD:
+			name = Sounds.SHIELD_HIT
+		Net.JOLT_FIRE:
+			# (for a gun firing, `shot` is the weapon)
+			match Weapons.klass(shot):
+				Weapons.CLASS_ROCKET:
+					name = Sounds.GUN_ROCKET
+				Weapons.CLASS_ION:
+					name = Sounds.GUN_ION
+				Weapons.CLASS_BEAM, Weapons.CLASS_TRACTOR, Weapons.CLASS_SIPHON:
+					name = Sounds.GUN_BEAM
+				_:
+					name = Sounds.GUN_HEAVY if shot == Weapons.HEAVY or shot == Weapons.SIEGE else Sounds.GUN_LASER
+		Net.JOLT_THEIR_HIT:
+			name = Sounds.THEIR_HIT if aboard_ours or not on_it else Sounds.HULL_HIT
+		Net.JOLT_THEIR_SHIELD:
+			name = Sounds.THEIR_SHIELD
+	if name == "":
+		return
+	var loud := Options.db_of(Options.fight_volume)
+	if on_it and same_deck:
+		# from where it happened: the gun, the hole
+		_audio.play(name, _feet(Vector2(at.x, map.local_y(roundi(at.y)))), 40.0, _thin_air_here(), loud)
+	elif on_it:
+		_audio.play(name, _feet(Vector2(here.x, map.local_y(client.pred.y))), 40.0, true, loud - 2.0)   # through the deck
+	else:
+		_audio.play(name, _feet(Vector2(here.x, map.local_y(client.pred.y))), 40.0, _thin_air_here(), loud - 7.0)   # the other ship's
 
 
 func _thin_air_here() -> bool:
@@ -1364,7 +1422,8 @@ func _update_audio(delta: float) -> void:
 		var in_air := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR \
 			and not map.floats(here.x, here.y)
 		if _last_cell.x >= 0 and map.deck_of(_last_cell.y) == map.deck_of(here.y) and client.my_cond == Net.COND_OK and in_air:
-			_audio.play(Net.SOUND_STEP, _feet(Vector2(here.x, map.local_y(here.y))), Net.SOUND_RANGE[Net.SOUND_STEP], _thin_air_here(), -7.0)
+			_audio.play(Net.SOUND_STEP, _feet(Vector2(here.x, map.local_y(here.y))), Net.SOUND_RANGE[Net.SOUND_STEP], _thin_air_here(),
+				-12.0 + Options.db_of(Options.steps_volume))   # (v56: quieter, the author's word)
 		_last_cell = here
 	_hum_timer -= delta
 	if _hum_timer > 0.0:
@@ -1675,6 +1734,10 @@ func _process(delta: float) -> void:
 	# one), so the rounding has to take the screen centre into account.
 	var screen_half := get_viewport_rect().size * 0.5
 	_camera.position = ((focus * zoom - screen_half).round() + screen_half) / zoom
+	# (v56) a blow to the hull throws the picture about, by whole screen pixels
+	_shake = move_toward(_shake * exp(-6.0 * delta), 0.0, delta)
+	if _shake >= 1.0:
+		_camera.position += Vector2(randf_range(-_shake, _shake), randf_range(-_shake, _shake)).round() / zoom
 	# the picture of where light falls follows the camera exactly
 	_mask_view.size = Vector2i(get_viewport_rect().size)
 	_mask_camera.position = _camera.position

@@ -309,7 +309,11 @@ func breach_random() -> bool:
 	for cell in server.map.hull:
 		if not server.air.holes.has(cell):
 			whole.append(cell)
-	return not whole.is_empty() and breach(whole[server.rng.randi_range(0, whole.size() - 1)])
+	if whole.is_empty():
+		return false
+	var cell := whole[server.rng.randi_range(0, whole.size() - 1)]
+	server.combat.jolt(Net.JOLT_HEAVY, 0, Vector2(cell % server.map.width, cell / server.map.width))   # (v56) a meteor strikes
+	return breach(cell)
 
 
 func seal_all() -> void:

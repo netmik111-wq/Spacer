@@ -508,3 +508,32 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
 - **A captured ship is salvaged** (the author: "if we capture an alive ship we salvage it for more resources,
   more credits like reward, for now"): 150% of its reward, 2 spare parts and a can of fuel; it then stays
   alongside as a dead wreck to search. Keeping it as a second ship may come later.
+
+- **Ship's shots fly, and land when they arrive** (v56, the author's video of FTL: "projectiles flying
+  around, effects on hits, sounds on hits"). Everything about a shot is rolled when it is fired (hit or miss,
+  the room or our cell, whether the shield stops it, against the shield as each earlier shot of the burst
+  leaves it), so the odds are as before; what it does is put off by `Weapons.flight_ticks` (lasers 0.7 s,
+  rockets 1.3 s) in `Gunnery._flying`, so the hole, the damage and the chat line come when the bolt gets
+  there. Beams stay instant (they burn, they don't fly). `Gunnery.enemy_gone` drops what is still on its way.
+  Tests set `Gunnery.flies = false` to keep their old checks exact; guntest checks the flight itself.
+  Only-drawn randomness (where a miss flies, which cell of a room) uses `Gunnery._fx`, not the game's rng.
+- **A shot is drawn in two legs** (`Gunnery._draw_ours`, `_draw_theirs`): out of the gun into space, then in
+  at the other ship from the side (ours) or from space straight at the hull cell (theirs). One straight line
+  from gun to target would cross our own decks (the pirate ship lies 3 cells off our airlock, our guns also
+  point down), and players see 9 cells, so nobody sees both legs at once. The gun console's plan gets its
+  own small packet (`S_VOLLEY`) because the console is too far from the pirate ship for `S_SHOT`'s 24 cells.
+- **The ship fight is heard, through the ship** (v56). The author's rule is that a vacuum is silent; the
+  author also asked that the fight be heard ("if no sound follows through battle it's not looking cool").
+  So every sound of it (`S_JOLT`) goes to everyone and plays where there is air round the listener: our guns
+  and blows to our hull through the frame (any deck, muffled from another), the pirate ship's bursts as
+  the ship's sensors give them, 7 dB quieter. In a vacuum only the shaking is left (`WorldView._on_jolt`).
+  Hits on the pirate ship were my question to the author (beeps from the console or the bursts themselves);
+  his answer chose the bursts.
+- **The screen shakes by whole screen pixels** (`WorldView._shake`, added to the camera after its rounding),
+  so the "world on whole pixels" pitfall holds; the mask and cone cameras copy it, so light and sight stay on
+  the world. A setting turns it down or off.
+- **Sounds can be files** (v56, the author: the sounds made in code are not good enough and he will replace
+  them). `Sounds.prepare` looks for `NAME.ogg` or `NAME.wav` in `sounds/` next to the game (and in the project
+  folder), so a sound can be changed without a new build; the names are in `Sounds.NAMES` and `FIGHT_NAMES`
+  and in `dist_files/sounds/README.txt`. Footsteps are softer and quieter (the author: "killing ears") with
+  their own setting.

@@ -17,7 +17,9 @@ signal lost(reason: String)          # dropped while playing
 signal roster_changed
 signal chat(from_id: int, channel: int, text: String)
 signal notice(text: String)
-signal shot(kind: int, hit: bool, from: Vector2, to: Vector2)   # a shot or a blow, in cells of the whole grid
+signal shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float)   # a shot or a blow, in cells
+	# of the whole grid; (v56) a ship's shot shows `delay` seconds from now and flies `flight` seconds
+signal jolt(kind: int, shot: int, at: Vector2)   # (v56) a sound of the ship fight (Net.JOLT_*), in cells
 signal heard(kind: int, x: int, y: int)   # a sound reached our character (see Net.SOUND_*)
 signal arrived                       # the ship has just landed in another sector
 
@@ -137,6 +139,8 @@ var trade := {}                      # what the trader alongside sells: thing ->
 var trade_flags := 0                 # Net.TRADE_*
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
+var volleys: Array = []              # (v56) ship's shots for the gun console's plan: [whose, kind, how it ends, room,
+                                     # second it is fired (by the clock below), seconds it flies, a number of its own]
 var enemy_docks_in := 0              # seconds until it docks by force
 var enemy_flags := 0                 # Net.ENEMY_*: it came for a raid, it is running
 var enemy_jumps_in := 0              # (while it runs) seconds until it jumps away; 65535 = it cannot now
@@ -1295,9 +1299,20 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			doors.manual = not _power
 			_rebuild_prediction()
 		Net.S_SHOT:
-			if pkt.size() >= 11:
-				shot.emit(pkt[1], pkt[2] != 0, Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,
-					Vector2(pkt.decode_s16(7), pkt.decode_s16(9)) / 16.0)
+			if pkt.size() >= 13:
+				shot.emit(pkt[1], pkt[2], Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,
+					Vector2(pkt.decode_s16(7), pkt.decode_s16(9)) / 16.0, float(pkt[11]) / Net.TICK_HZ, float(pkt[12]) / Net.TICK_HZ)
+		Net.S_VOLLEY:
+			if pkt.size() >= 7:
+				var now := Time.get_ticks_msec() / 1000.0
+				volleys.append([pkt[1], pkt[2], pkt[3], pkt[4] if pkt[4] != 255 else -1, now + float(pkt[5]) / Net.TICK_HZ,
+					maxf(float(pkt[6]) / Net.TICK_HZ, 0.05), randi()])
+				for i in range(volleys.size() - 1, -1, -1):
+					if float(volleys[i][4]) + float(volleys[i][5]) + 2.0 < now:
+						volleys.remove_at(i)
+		Net.S_JOLT:
+			if pkt.size() >= 7:
+				jolt.emit(pkt[1], pkt[2], Vector2(pkt.decode_s16(3), pkt.decode_s16(5)))
 		Net.S_SOUND:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))

@@ -37,6 +37,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.gunnery.flies = false              # (v56) shots land the moment they are fired here
 	var map := server.map
 	var g: Gunnery = server.gunnery
 	server.shipyard.classic = true          # (the checks below were written for the old pirate ship: see shiptest for the rolled ones)
@@ -302,6 +303,23 @@ func _v49(p) -> void:
 	ship.jammed[g.shield_cell()] = server.tick + 1000
 	g._enemy_fires(Weapons.LASER)
 	_expect(ship.hull < hull or not ship.broken.is_empty(), "with the shield down a laser gets through")
+	# (v56) shots fly before they land
+	ship.broken.clear()
+	g.enemy_charge.fill(0.0)
+	g.flies = true
+	hull = ship.hull
+	g._enemy_fires(Weapons.LASER)
+	_expect(ship.hull == hull and ship.broken.is_empty() and g.in_flight() == 1, "(v56) its shot is on its way: nothing is hit yet")
+	_run(Weapons.flight_ticks(Weapons.LASER))
+	_expect((ship.hull < hull or not ship.broken.is_empty()) and g.in_flight() == 0,
+		"and it lands %d ticks later" % Weapons.flight_ticks(Weapons.LASER))
+	var their_hull := g.enemy_hull
+	g.charge.fill(1.0)
+	g.fire(p, 0)
+	_expect(g.enemy_hull == their_hull and g.in_flight() == 1, "(v56) ours flies too: the pirate ship is untouched while it does")
+	_run(Weapons.flight_ticks(Weapons.LASER))
+	_expect(g.in_flight() == 0, "and lands (or misses) when its flight is over (their hull %d of %d)" % [g.enemy_hull, their_hull])
+	g.flies = false
 	ship.jammed.clear()
 	ship.broken.clear()
 	ship.shield = 49.0

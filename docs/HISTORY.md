@@ -134,6 +134,20 @@ Open problems:
 
 ## Build notes
 
+### v56 (the ship fight seen and heard; the author's video of FTL)
+- The author sent a video of FTL and asked for "projectiles flying around, effects on hits, sounds on hits",
+  then added that the fight must be heard, that footsteps hurt the ears, and that he will replace the sounds
+  made in code with better ones.
+- Shots fly (`Weapons.flight_ticks`, `Gunnery._flying`): rolled when fired, landing 0.6–1.3 s later.
+  Drawn in the world (`src/client/fight_fx.gd`: bolts, rocket smoke, bursts that light the dark, sparks,
+  debris, smoke, shield ripples) in two legs (`Gunnery._draw_ours`, `_draw_theirs`), and on the gun console's
+  plan (`EnemyPlan._draw_fight`, packet `S_VOLLEY`: the enemy's shield bubble, bursts in rooms, «ПРОМАХ»).
+- Sounds of the fight (`S_JOLT`, `WorldView._on_jolt`, ten new sounds in `Sounds`): heard aboard wherever
+  there is air, blows to the hull shake the screen even in a vacuum; meteors too. Quieter footsteps; settings
+  for footsteps, fight volume and shaking; any sound can be a file in `sounds/` next to the game.
+- `tools/fxshot.gd` draws the effects into a picture without a fight; `volley_after=S` (with `--inproc`)
+  makes a fight fire both ways every second for screenshots.
+
 ### v55 (our crew at fight stations, bots under orders, battle position, boarding; the author's notebook)
 - The author's paper notes (2026-10-16) became notebook entries; he agreed the next build: our own crew at
   posts in a fight (mirroring the pirates' crew), bots as crew who follow the captain's orders (note 5), and
