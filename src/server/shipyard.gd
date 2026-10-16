@@ -47,6 +47,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 	var total := 0
 	for k: int in Hulls.CLASSES.keys():
 		var c: Dictionary = Hulls.CLASSES[k]
+		if c.has("boss"):
+			continue                         # (v57) the flagship waits at the goal point; it is not met by chance
 		if force_class >= 0 and k != force_class:
 			continue
 		if int(c["from"]) > far and force_class < 0:
@@ -78,7 +80,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 		weapons.append(pool[_rng.randi_range(0, pool.size() - 1)])
 	var crew_range: Array = info["crew"]
 	var crew := _rng.randi_range(crew_range[0], crew_range[1]) if raid else party
-	var temper: int = Hulls.TEMPERS.keys()[_rng.randi_range(0, Hulls.TEMPERS.size() - 1)]
+	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool: return not Hulls.temper(t).has("boss"))
+	var temper: int = tempers[_rng.randi_range(0, tempers.size() - 1)]
 	return {
 		"klass": klass, "layout": layout, "temper": temper,
 		"name": "%s «%s»" % [_cap(str(info["name"])), Hulls.NAMES[_rng.randi_range(0, Hulls.NAMES.size() - 1)]],
@@ -88,7 +91,43 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 	}
 
 
-func _lay_out(layout: int, shielded: bool) -> PackedByteArray:
+func flagship(kind: int, fits: Array) -> Dictionary:
+	## (v57) The flagship at the goal point, of the author's kind 1 (a battleship:
+	## guns that aim well) or 2 (a carrier: neural guns and a teleporter). Its
+	## guns are its class's, all of them; its rooms are rolled like any other's.
+	## Empty if its hull cannot lie off our airlock.
+	var klass := Net.ECLASS_BATTLESHIP if kind == 1 else Net.ECLASS_CARRIER
+	var info: Dictionary = Hulls.CLASSES[klass]
+	var layout: int = (info["layouts"] as Array)[0]
+	if not fits.has(layout):
+		return {}
+	var teleport := kind == 2
+	var crew: int = (info["crew"] as Array)[0]
+	var weapons := PackedByteArray(info["pool"])
+	var extra: Array = info["extra"]
+	for i in mini(upgrades(), extra.size()):
+		weapons.append(extra[i])
+	return {
+		"klass": klass, "layout": layout, "temper": Net.TEMPER_SIEGE if kind == 1 else Net.TEMPER_STORM,
+		"name": "%s «%s»" % [_cap(str(info["name"])), "Владыка пустоты" if kind == 1 else "Пожиратель"],
+		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": true, "regen": float(info["regen"]),
+		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": crew,
+		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, true, teleport),
+		"boss": kind, "teleport": teleport,
+	}
+
+
+func upgrades() -> int:
+	## (v57) How far our ship is armed past its start: guns on their mounts other
+	## than the plain laser it set out with (spares in the cargo do not count).
+	var n := 0
+	for w in server.ship.mounts:
+		if w != Weapons.NONE and w != Weapons.LASER:
+			n += 1
+	return n
+
+
+func _lay_out(layout: int, shielded: bool, teleport: bool = false) -> PackedByteArray:
 	## Its systems, each in a room of the hull picked by lot; the rooms left over are empty.
 	var rooms: Array = server.map.others[layout].rooms
 	var out := PackedByteArray()
@@ -98,7 +137,7 @@ func _lay_out(layout: int, shielded: bool) -> PackedByteArray:
 	_shuffle(order)
 	var k := 0
 	for system in Net.ESYS_COUNT:
-		if system == Net.ESYS_SHIELDS and not shielded:
+		if (system == Net.ESYS_SHIELDS and not shielded) or (system == Net.ESYS_TELEPORT and not teleport):
 			continue
 		if k >= order.size():
 			break

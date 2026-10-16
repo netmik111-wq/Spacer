@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 34
+const PROTOCOL := 35
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -257,8 +257,9 @@ const ESYS_ENGINE := 2              # its engine: down, it cannot close in to do
 const ESYS_CREW := 3                # its quarters: every few hits there kill one of its crew
 const ESYS_JUMP := 4                # its jump drive: worn, it charges a jump slower; down, it cannot jump away
 const ESYS_SHIELDS := 5             # its shield generator: worn, the shield refills slower; down, it has none
-const ESYS_COUNT := 6
-const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты"]
+const ESYS_TELEPORT := 6           # (v57) the boarding flagship's teleporter: down, it sends nobody across
+const ESYS_COUNT := 7
+const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты", "Телепорт"]
 const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const ENEMY_HELD := 4               # (v50) our tractor beam holds it
@@ -270,10 +271,14 @@ const ECLASS_CUTTER := 0
 const ECLASS_RAIDER := 1
 const ECLASS_GUNSHIP := 2
 const ECLASS_CRUISER := 3
+const ECLASS_BATTLESHIP := 4        # (v57) the flagship at the goal point, first kind: guns that aim well
+const ECLASS_CARRIER := 5           # (v57) the flagship, second kind: crew-hurting guns and a teleporter
 const TEMPER_CALCULATING := 0
 const TEMPER_CAUTIOUS := 1
 const TEMPER_RECKLESS := 2
 const TEMPER_HUNTER := 3
+const TEMPER_SIEGE := 4             # (v57) the battleship's: shield first, then the engine
+const TEMPER_STORM := 5             # (v57) the carrier's: knocks the crew down, boards the bridge
 const TEMPER_UNKNOWN := 255
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
@@ -288,6 +293,7 @@ const SHOT_PLASMA := 6              # a blaster's pellet: green
 const SHOT_BEAM := 7                # a pulse of the cutting beam: a thin white-violet line
 const SHOT_TRACTOR := 8             # (v50) the tractor beam: a pale green line
 const SHOT_SIPHON := 9              # (v50) a pulse of the siphon beam: a cyan line
+const SHOT_NEURAL := 10             # (v57) the flagship's neural shot: a violet bolt that stuns whoever is in the room
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2
@@ -320,7 +326,8 @@ const SHIP_WRECK := 3               # a pirate ship our guns have wrecked: dark 
 const OTHER_DERELICT := 0
 const OTHER_PIRATE := 1
 # (v53) every drawing from OTHER_PIRATE on is a pirate ship's: see Hulls for which class each is
-const OTHER_MAPS: Array[String] = ["derelict01", "pirate01", "pirate02", "pirate03", "pirate04", "pirate05", "pirate06", "pirate07"]
+const OTHER_MAPS: Array[String] = ["derelict01", "pirate01", "pirate02", "pirate03", "pirate04", "pirate05", "pirate06", "pirate07",
+	"pirate08", "pirate09"]
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
@@ -355,10 +362,14 @@ const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirat
 # player comes back only by taking one of them. The hull has a strength that
 # every hole takes from; at nothing the ship breaks up. Either loss ends the campaign.
 const S_CAMPAIGN := 29              # u8 hull, u8 reserve, u8 over (OVER_*), u16 sectors visited, u16 farthest
-                                    # (jumps from the start), u16 jumps made, u32 seconds the voyage has lasted
+                                    # (jumps from the start), u16 jumps made, u32 seconds the voyage has lasted,
+                                    # (v57) u8 1 = the flagship is beaten (the game is won; the voyage goes on)
 const OVER_NONE := 0
 const OVER_WRECKED := 1             # the hull gave way
 const OVER_CREW_LOST := 2           # everyone dead, nobody left in the reserve
+const OVER_CAPTURED := 3            # (v57) the whole crew is down with the flagship's boarders aboard: the ship is theirs
+const OVER_TEXT: Array[String] = ["", "Корабль разрушен: обшивка не выдержала.", "Экипаж погиб, и заменить его некем.",
+	"Весь экипаж повержен, и абордажники флагмана захватили корабль."]
 const START_RESERVE := 3
 const RESERVE_MAX := 9
 const PRICE_CREW := 30

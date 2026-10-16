@@ -134,6 +134,17 @@ Open problems:
 
 ## Build notes
 
+### v57 (the pirates' flagship, the goal of the game; the author's request)
+- The author asked for a linear goal: a boss fight with a big flagship in two variants, a battleship whose
+  guns aim at our shield and engine, and a carrier that stuns the crew and teleports boarders to take the
+  ship. His answers: capture = all crew down; it grows with our gear; the voyage goes on after the win; no
+  escape from a boss; 12 jumps away; the variant stays hidden until it comes.
+- The goal sector (`Sectors.goal_of`, a lane along its row and column), the chart's red mark and arrow,
+  `src/server/flagship.gd` (arrival, teleporting boarders, capture, win, no jump), two hulls
+  (`maps/pirate08.txt`, `pirate09.txt`), the neural emitter, the teleporter room, the battleship's aim
+  (`Gunnery._boss_target`), the victory panel, `OVER_CAPTURED`, two eventer events, `tools/flagshiptest.gd`
+  (19 tests now). fightbench takes a fifth argument to run flagships only. Protocol 35.
+
 ### v56 (the ship fight seen and heard; the author's video of FTL)
 - The author sent a video of FTL and asked for "projectiles flying around, effects on hits, sounds on hits",
   then added that the fight must be heard, that footsteps hurt the ears, and that he will replace the sounds

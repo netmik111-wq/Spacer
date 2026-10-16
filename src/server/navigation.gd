@@ -105,6 +105,8 @@ func jump_asked(p: Player, target: int) -> void:
 		server.chat.say("Прыгнуть не на чем: в шкафу снабжения нет топлива.")
 		return
 	var held := server.derelict.holds_ship()
+	if held == "":
+		held = server.flagship.holds_jump()
 	if held != "":
 		server.chat.say(held)
 		return

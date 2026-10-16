@@ -26,6 +26,7 @@ extends Node
 ##   enemy_crew   (v54) the pirate ship's crew at their posts while it fights us
 ##   drone        (v54) the scouting drone, steered from the drone monitor
 ##   stations     (v55) our crew at their posts in a fight, bots under orders, the battle position, our boarders
+##   flagship     (v57) the goal: the pirates' flagship, its teleporter, winning and losing the ship
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -65,6 +66,7 @@ const Holomap := preload("res://src/server/holomap.gd")
 const EnemyCrew := preload("res://src/server/enemy_crew.gd")
 const Drone := preload("res://src/server/drone.gd")
 const Stations := preload("res://src/server/stations.gd")
+const Flagship := preload("res://src/server/flagship.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -107,6 +109,7 @@ var space_seed := 0                    # what this game's space is made from
 var been := {}                         # the sectors the ship has visited: Sectors.key -> true
 var reserve := 0                       # crew members waiting to replace the dead
 var over := Net.OVER_NONE              # how the campaign ended, or OVER_NONE while it goes on
+var won := false                       # (v57) the flagship is beaten: the game is won, and the voyage goes on
 var voyage_ticks := 0                  # ticks the campaign has lasted, over every evening it was played
 var jumps := 0
 var farthest := 0                      # the most jumps from the start the ship has been
@@ -136,6 +139,7 @@ var holomap := Holomap.new()
 var enemy_crew := EnemyCrew.new()
 var drone := Drone.new()
 var stations := Stations.new()
+var flagship := Flagship.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -206,6 +210,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	# the campaign
 	reserve = Net.START_RESERVE
 	over = Net.OVER_NONE
+	won = false
 	voyage_ticks = 0
 	jumps = 0
 	farthest = 0
@@ -224,6 +229,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	pirates.setup(self)
 	director.setup(self)
 	stations.setup(self)
+	flagship.setup(self)
 	rng.randomize()
 	tick = 0
 	_acc = 0.0
@@ -577,6 +583,7 @@ func _tick() -> void:
 	navigation.update_jump()
 	navigation.update()
 	derelict.update()
+	flagship.tick()
 	stations.tick()
 	gunnery.tick()
 	enemy_crew.tick()

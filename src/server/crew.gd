@@ -504,7 +504,7 @@ func end_campaign(how: int) -> void:
 	server.navigation.tell_nav()
 	server.ship.moving = false
 	server.to_all(server.ship.helm_packet(server.tick))
-	var why := "Корабль разрушен: обшивка не выдержала." if how == Net.OVER_WRECKED else "Экипаж погиб, и заменить его некем."
+	var why: String = Net.OVER_TEXT[how]
 	server.chat.say("%s Кампания окончена. Пройдено секторов: %d, дальше всего от начала: %d прыжков, продержались %s." % [
 		why, server.been.size(), server.farthest, voyage_text(server.voyage_ticks)])
 	tell_campaign()
@@ -524,7 +524,7 @@ static func voyage_text(ticks: int) -> String:
 
 func campaign_packet() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(14)
+	out.resize(15)
 	out.encode_u8(0, Net.S_CAMPAIGN)
 	out.encode_u8(1, server.ship.hull)
 	out.encode_u8(2, server.reserve)
@@ -533,12 +533,13 @@ func campaign_packet() -> PackedByteArray:
 	out.encode_u16(6, mini(server.farthest, 65535))
 	out.encode_u16(8, mini(server.jumps, 65535))
 	out.encode_u32(10, server.voyage_ticks / Net.TICK_HZ)
+	out.encode_u8(14, 1 if server.won else 0)
 	return out
 
 
 func tell_campaign() -> void:
 	## Tells everyone the state of the campaign when it changed (the time is only refreshed with the rest).
 	var now := campaign_packet()
-	if now.slice(0, 10) != _campaign_told.slice(0, 10):
+	if now.slice(0, 10) + now.slice(14) != _campaign_told.slice(0, 10) + _campaign_told.slice(14):
 		_campaign_told = now
 		server.to_all(now)

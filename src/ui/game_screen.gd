@@ -59,6 +59,10 @@ var _shade: ColorRect
 var _fate: Label
 var _over: PanelContainer            # the end of the campaign: what the voyage came to
 var _over_text: Label
+var _won_known := false              # (v57) we have seen the flagship beaten (shown once, for VICTORY_SECONDS)
+var _victory_left := 0.0
+var _life := 0.0                     # seconds this screen has been up
+const VICTORY_SECONDS := 15.0
 var _tank_bar: ColorRect
 var _tank_fill: ColorRect
 var _hint: Label
@@ -1307,10 +1311,19 @@ func _process(delta: float) -> void:
 			_fate.text = "Вы погибли. Резерв экипажа пуст: вернуться можно, когда товарищи наймут людей у торговца."
 	_fate.text = Options.keyed(_fate.text)
 	_fate.visible = client.my_cond != Net.COND_OK and client.over == Net.OVER_NONE
-	_over.visible = client.over != Net.OVER_NONE
-	if _over.visible:
+	# (v57) the flagship beaten: the game is won, shown for a while; the voyage goes on
+	if client.won and not _won_known:
+		_won_known = true
+		_victory_left = VICTORY_SECONDS if _life > 3.0 else 0.0      # (joining a game won before: not shown)
+	_victory_left = maxf(_victory_left - delta, 0.0)
+	_life += delta
+	_over.visible = client.over != Net.OVER_NONE or _victory_left > 0.0
+	if _over.visible and client.over == Net.OVER_NONE:
+		_over_text.text = "ПОБЕДА\n\nФлагман пиратов повержен: цель пути достигнута.\n\nПройдено секторов: %d\nПрыжков сделано: %d\nПуть занял: %s\n\nИгра выиграна. Можно лететь дальше: космос не кончается." % [
+			client.sectors_seen, client.jumps, _voyage(client.voyage_seconds)]
+	elif _over.visible:
 		_over_text.text = "КАМПАНИЯ ОКОНЧЕНА\n\n%s\n\nПройдено секторов: %d\nДальше всего от начала пути: %d прыжков\nПрыжков сделано: %d\nПродержались: %s\n\nНовую кампанию начинает хозяин игры: выйти в меню и создать игру заново." % [
-			"Корабль разрушен: обшивка не выдержала." if client.over == Net.OVER_WRECKED else "Экипаж погиб, и заменить его некем.",
+			Net.OVER_TEXT[clampi(client.over, 0, Net.OVER_TEXT.size() - 1)],
 			client.sectors_seen, client.farthest, client.jumps, _voyage(client.voyage_seconds)]
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
 

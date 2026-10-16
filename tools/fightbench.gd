@@ -1,7 +1,7 @@
 extends SceneTree
 ## Measures how long ship fights last (v54, the author: "balance out fights so
 ## they don't go too long"). Not a test: it prints a table and always passes.
-##   godot --headless --path . --script res://tools/fightbench.gd -- [fights per cell] [far] [mend seconds] [pilot]
+##   godot --headless --path . --script res://tools/fightbench.gd -- [fights per cell] [far] [mend seconds] [pilot] [flagships only]
 ## For every class and temper it brings a pirate ship for a raid (a fight to the
 ## end) against our ship as it starts (three lasers, shield on) and fights it on
 ## a real server stepped by hand. Our gunner fires every gun that is ready and
@@ -11,7 +11,8 @@ extends SceneTree
 ## change the fight). `far` is how many jumps from the start (more enemy guns).
 ## `pilot` 1 (v55) puts a pilot by job at the ship's controls (it dodges); 0 (the default) nobody.
 ## A ransom offered is taken. Prints the median fight length, how fights ended
-## and our hull lost.
+## and our hull lost. (v57) The two flagships come last, in their own ways
+## (their teleported boarders are left to the gunner, who is kept on their feet).
 
 const GameServer := preload("res://src/server/game_server.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
@@ -31,6 +32,7 @@ func _initialize() -> void:
 	var n := int(args[0]) if args.size() > 0 else 8
 	var far := int(args[1]) if args.size() > 1 else 0
 	mend = float(args[2]) if args.size() > 2 else mend
+	var bosses_only := args.size() > 4 and int(args[4]) == 1
 	server = GameServer.new()
 	get_root().add_child(server)
 	var problem := server.start(26320 + far + int(mend), "ship02", 0)
@@ -53,6 +55,10 @@ func _initialize() -> void:
 	print("%-22s %-12s %8s %8s %8s   %s" % ["class", "temper", "median", "longest", "hull-", "ended"])
 	for k: int in Hulls.CLASSES.keys():
 		for t: int in Hulls.TEMPERS.keys():
+			if Hulls.is_boss(k) != Hulls.temper(t).has("boss") or (bosses_only and not Hulls.is_boss(k)):
+				continue
+			if Hulls.is_boss(k) and int(Hulls.info(k)["boss"]) != t - Net.TEMPER_SIEGE + 1:
+				continue
 			var times: Array = []
 			var lost := 0
 			var ends := {}
@@ -78,14 +84,19 @@ func _fight(p, console: int, klass: int, temper: int, far: int) -> Array:
 	ship.jammed.clear()
 	ship.shield = Weapons.SHIELD_FULL
 	server.over = Net.OVER_NONE
+	server.won = false
 	for c: int in server.air.holes.keys():
 		server.air.set_hole(c, false)
 	if far > 0:
 		server.ship.sector = _sector_at(far)
 	server.shipyard.force_class = klass
-	if not d.pirates_come(2, true):
+	if Hulls.is_boss(klass):
+		if not server.flagship.call_in(int(Hulls.info(klass)["boss"])):
+			return [0, 0, "could not come"]
+	elif not d.pirates_come(2, true):
 		return [0, 0, "could not come"]
-	g.temper = temper
+	else:
+		g.temper = temper
 	p.st.place(console % map.width, console / map.width - 1)
 	p.st.facing = Net.DIR_DOWN
 	var start := server.tick
@@ -135,6 +146,9 @@ func _fight(p, console: int, klass: int, temper: int, far: int) -> Array:
 	if d.here:
 		d._leave(true)
 	g.enemy_gone()
+	for q in server.players:
+		if q != null and q.pirate:
+			server.crew.remove(q)            # (the flagship's teleported boarders)
 	return [took, hull - ship.hull, how]
 
 
@@ -150,6 +164,8 @@ func _aim(g: Gunnery) -> int:
 		want = [Net.ESYS_JUMP, Net.ESYS_ENGINE]
 	if g.systems.size() > Net.ESYS_SHIELDS and g.systems_full[Net.ESYS_SHIELDS] > 0 and not g.down(Net.ESYS_SHIELDS):
 		want.append(Net.ESYS_SHIELDS)
+	if g.systems_full.size() > Net.ESYS_TELEPORT and g.systems_full[Net.ESYS_TELEPORT] > 0:
+		want.append(Net.ESYS_TELEPORT)
 	want.append_array([Net.ESYS_WEAPONS, Net.ESYS_CREW])
 	for s: int in want:
 		var room := g.room_of_system(s)

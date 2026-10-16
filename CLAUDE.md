@@ -34,8 +34,8 @@ needs:
 
 ## Where things stand
 
-Build v56 (version 0.49) is the latest. Plans one to four are done except the darkness front (the
-author is still thinking it through); builds v40 to v56 were the author's own requests, one build each.
+Build v57 (version 0.50) is the latest. Plans one to four are done except the darkness front (the
+author is still thinking it through); builds v40 to v57 were the author's own requests, one build each.
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -44,6 +44,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 - The engine powers the whole ship: when it stops, every system stops but nothing breaks. Anything new
   aboard asks `GameServer.powered()` (client `GameClient.powered()`).
 - While any bridge console works there is a way to escape; there are never two obstacles to escape at once.
+  Except against the flagship (v57): "you win or you lose, no other exit".
 - Lack of air is not drawn (only the holomap shows pressure, at his request). Vacuum is silent (the listener
   needs air), but the ship fight is heard aboard and blows to the hull shake the screen (v56).
 - The dark is dim, not pitch black: the room in view is made out, the flashlight is clearly brighter.
@@ -65,7 +66,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 18 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 19 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -84,6 +85,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/shiptest.gd  (rolled pirate ships, scanning, the probe)
     godot --headless --path . --script res://tools/dronetest.gd (since v54: the pirates' crew, the drone, ransom)
     godot --headless --path . --script res://tools/stationtest.gd (since v55: our posts, bot orders, position, boarding)
+    godot --headless --path . --script res://tools/flagshiptest.gd (since v57: the goal, both flagships, win, capture)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -107,7 +109,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 18 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 19 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -131,7 +133,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `supplies`, `replication`, `holomap` (plus the older `director`, `pirates`, `derelict`, `gunnery`, `campaign`,
   and `shipyard`, which rolls every pirate ship since v53; since v54 `enemy_crew`, the pirate ship's crew at
   their posts, and `drone`, the scouting drone; since v55 `stations`: our crew at posts, bot orders, the
-  battle position, our boarders).
+  battle position, our boarders; since v57 `flagship`: the goal of the game, the boss fight, win and capture).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is

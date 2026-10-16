@@ -11,7 +11,7 @@ const Net := preload("res://src/shared/net.gd")
 
 const COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.45, 0.2), Net.SHOT_ION: Color(0.4, 0.7, 1.0),
 	Net.SHOT_ROCKET: Color(1.0, 0.75, 0.35), Net.SHOT_PLASMA: Color(0.45, 1.0, 0.45), Net.SHOT_BEAM: Color(0.9, 0.55, 1.0),
-	Net.SHOT_TRACTOR: Color(0.6, 1.0, 0.75), Net.SHOT_SIPHON: Color(0.35, 0.95, 1.0)}
+	Net.SHOT_TRACTOR: Color(0.6, 1.0, 0.75), Net.SHOT_SIPHON: Color(0.35, 0.95, 1.0), Net.SHOT_NEURAL: Color(1.0, 0.4, 0.85)}
 const SHIELD := Color(0.45, 0.8, 1.0)
 const TRAIL := 46.0                  # pixels of a bolt's trail
 const BEAM_SECONDS := 0.9            # how long a second of a beam is drawn

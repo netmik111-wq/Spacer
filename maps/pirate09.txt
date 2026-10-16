@@ -1,0 +1,11 @@
+; Pirate flagship, second kind (class "абордажный флагман", v57): the boss at the goal point, few
+; guns, a teleporter that sends boarders onto our bridge. One deck; the outer door at the bottom docks
+; with the ship's airlock by force. Systems go into its rooms by lot (see Shipyard.flagship).
+= Абордажный флагман
+    ####T#######3#######W###W#####
+    #.......A.......#............#
+    #.......#.......#............#
+########D########D########D###########
+#........A........A........A....A....#
+#........#........#........#....#....#
+#####T####D###########6#######T#######

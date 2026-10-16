@@ -35,7 +35,8 @@ const ION := 9                       # an ion gun
 const ION_CANNON := 10               # an ion cannon
 const TRACTOR := 11                  # (v50) the tractor beam: holds the enemy, no damage
 const SIPHON := 12                   # (v50) the siphon beam: drains the enemy's shield into ours
-const COUNT := 13
+const COUNT := 13                    # (our weapons: those below COUNT; the ones after are the enemy's only)
+const NEURAL := 20                   # (v57) the boarding flagship's neural emitter: stuns the crew in the room, no damage
 
 const CLASS_LASER := 0
 const CLASS_BEAM := 1
@@ -44,6 +45,7 @@ const CLASS_ROCKET := 3
 const CLASS_ION := 4
 const CLASS_TRACTOR := 5
 const CLASS_SIPHON := 6
+const CLASS_NEURAL := 7
 
 const REACTOR := 8                   # power the reactor gives the guns and the shield
 const SHIELD_POWER := 2
@@ -118,6 +120,10 @@ const INFO := {
 	SIPHON: {"name": "Сифон", "short": "Сифон", "class": CLASS_SIPHON, "charge": 12.0, "shots": 1, "hit": 1.0, "damage": 0,
 		"power": 2, "price": 65,
 		"about": "Луч-насос: 4 с тянет щит врага, по 12 в секунду, и отдаёт взятое нашему щиту (если наш генератор работает). Корпусу урона нет; по кораблю без щита бесполезен."},
+	# (v57) the flagship's only: never sold, never ours. "stun" is the health it takes from each one in the room hit
+	NEURAL: {"name": "Нейроизлучатель", "short": "Нейро", "class": CLASS_NEURAL, "charge": 9.0, "shots": 1, "hit": 0.8, "damage": 0,
+		"power": 2, "price": 0, "stun": 40.0,
+		"about": "Оружие флагмана: заряд проходит сквозь обшивку и оглушает всех в отсеке, куда попал (корпус цел). Щит его останавливает."},
 }
 
 const SHIELD_HARDEN_PRICE := 80      # the rare upgrade: the shield stops rockets too
@@ -163,6 +169,8 @@ static func flight_ticks(w: int) -> int:
 			return 18
 		CLASS_ROCKET:
 			return 26
+		CLASS_NEURAL:
+			return 16
 	return 0
 
 
