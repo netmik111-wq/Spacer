@@ -25,6 +25,7 @@ extends Node
 ##   holomap      the holomap monitors: the whole ship's air, holes and doors, to those watching
 ##   enemy_crew   (v54) the pirate ship's crew at their posts while it fights us
 ##   drone        (v54) the scouting drone, steered from the drone monitor
+##   stations     (v55) our crew at their posts in a fight, bots under orders, the battle position, our boarders
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -63,6 +64,7 @@ const Admin := preload("res://src/server/admin.gd")
 const Holomap := preload("res://src/server/holomap.gd")
 const EnemyCrew := preload("res://src/server/enemy_crew.gd")
 const Drone := preload("res://src/server/drone.gd")
+const Stations := preload("res://src/server/stations.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -133,6 +135,7 @@ var admin := Admin.new()
 var holomap := Holomap.new()
 var enemy_crew := EnemyCrew.new()
 var drone := Drone.new()
+var stations := Stations.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -220,6 +223,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	shipyard.setup(self)
 	pirates.setup(self)
 	director.setup(self)
+	stations.setup(self)
 	rng.randomize()
 	tick = 0
 	_acc = 0.0
@@ -414,6 +418,12 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_DRONE:
 		if pkt.size() > 2:
 			drone.asked(p, pkt[1], pkt[2])
+	elif kind == Net.C_ORDER:
+		if pkt.size() > 3:
+			stations.order_asked(p, pkt.decode_u16(1), pkt[3])
+	elif kind == Net.C_POSITION:
+		if pkt.size() > 1:
+			stations.position_asked(p, pkt[1])
 	elif kind == Net.C_WEAR:
 		if pkt.size() > 1 and pkt[1] < Net.WORN:
 			inventory.take_off(p, pkt[1])
@@ -567,6 +577,7 @@ func _tick() -> void:
 	navigation.update_jump()
 	navigation.update()
 	derelict.update()
+	stations.tick()
 	gunnery.tick()
 	enemy_crew.tick()
 	drone.tick()

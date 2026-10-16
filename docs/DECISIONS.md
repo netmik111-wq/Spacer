@@ -477,3 +477,34 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   boards only when all our guns are silent and the engine or the jump is gone (`Derelict._raid_closes_in`,
   `Gunnery.our_guns_silent`, `Navigation.cannot_jump`); the author named "the jump drive": we have none as a
   device, so the jump counts as gone without the engine, fuel or a working sector console. 30 s to board is mine.
+- **Our crew at their posts** (v55, the author's notebook and his yes to the plan; the numbers are mine). Posts
+  mirror the pirates' (`src/server/stations.gd`): a post is manned by whoever stands facing its machine, so
+  nothing new is drawn and players and bots man posts the same way. The controls give dodge (15%, 20% for a
+  pilot by job, +5% with the engine minded); nobody there gives none, which is how every fight was before
+  v55, so manning the helm is a reward, not a new penalty. The shield generator refills 25% faster when
+  manned. The gun console keeps its old role (shots are fired there); a bot at it fires what is ready.
+- **The pirates got +5% to hit** (`Gunnery.ENEMY_EDGE`, the author: "make it stronger a little bit") to
+  balance the new dodge. `tools/fightbench.gd -- 4 0 10 [pilot]` before and after: fights still end in
+  0.5–2 minutes for every class and temper, with or without a pilot (4 fights per cell, so the hull lost is
+  noisy). Tests that set `enemy_hit_chance` bypass both the edge and the dodge.
+- **Bots take orders from the captain, or from anybody while no captain is aboard** (the author's yes). Orders
+  are standing posts (free, controls, guns, engine, shields, repair, follow), not one-off tasks, so a bot
+  keeps working while the captain does other things; an order stays through a bot's death. Bots path only
+  over our own ship and avoid thin air: they have no suits, and walking in space would need its own AI.
+  A repair bot takes parts and patches from the hold itself (a player would have to fetch them).
+- **The battle position is one choice, not steering** (my halfway version of the author's note "the engine
+  moves the ship about the battlefield"; he agreed). Free flying would turn the FTL fight into another game.
+  Close in is as before; at a distance both sides hit 15% less and their docking clock runs at half speed
+  (not stopped, so boarders can't be avoided forever: the author agreed); on the flank we hit 15% better
+  but dodge half. An 8 s manoeuvre with no dodge makes switching a cost. Far and flank need somebody at the
+  controls (5 s grace) and nobody of ours outside: we would not leave a crewmate in space.
+- **Boarding brings the pirates' crew to life** (v55; the author agreed our boarding on 2026-10-15). Their
+  crew stay cells of the drawing (cheap, v54) until one of ours steps aboard; then each becomes a pirate
+  Player where it stood (`EnemyCrew.come_to_life`), and from then on `EnemyCrew` only reads their places off
+  those pirates, so the gun console, drone and mending keep working unchanged. Their count is kept in step
+  by `Gunnery.crew_lost` (the pitfall in CLAUDE.md). With a boarder aboard it can't jump away and a ransom
+  can't be taken (either would leave our people in space). Our boarders wreck a system by standing in its
+  room (a point per 8 s), as in FTL. Our own hits into a room may wound our boarders too.
+- **A captured ship is salvaged** (the author: "if we capture an alive ship we salvage it for more resources,
+  more credits like reward, for now"): 150% of its reward, 2 spare parts and a can of fuel; it then stays
+  alongside as a dead wreck to search. Keeping it as a second ship may come later.

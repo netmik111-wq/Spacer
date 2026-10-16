@@ -85,6 +85,13 @@ func update_helm() -> void:
 		lines.append("Разбитый пиратский корабль пристыкован к шлюзу." if client.other_docked else
 			"Над шлюзом разбитый пиратский корабль. До него можно добраться через открытый космос или пристыковаться.")
 		lines.append("Пока кто-то снаружи или корабли состыкованы, корабль не тронется и не прыгнет. Тронемся, и обломки останутся позади.")
+	if client.fighting():
+		# (v55) the battle position
+		var pos := "Позиция в бою: %s." % Net.POS_NAMES[client.battle_pos].to_lower()
+		if client.battle_goal != Net.POS_NONE:
+			pos += " Манёвр на «%s»: ещё %d с, пока он идёт, мы не уклоняемся." % [Net.POS_NAMES[client.battle_goal].to_lower(), client.battle_left]
+		lines.append(pos + " Уклонение от их выстрелов: %d%% (пока здесь стоит пилот)." % client.our_dodge)
+		lines.append("Вплотную: как обычно, можно перейти к ним на абордаж. На дистанции: обе стороны попадают реже, пираты подходят к шлюзу вдвое медленнее. С фланга: мы попадаем лучше, но уклоняемся вдвое хуже. Держать позицию можно только с кем-то за штурвалом.")
 	match sectors.kind[here]:
 		Sectors.METEORS:
 			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
@@ -105,7 +112,7 @@ func update_helm() -> void:
 			lines.append("В этом секторе идти некуда: вокруг пусто.")
 	text.text = "\n".join(lines)
 	var buttons_key := Sectors.key(sectors.cell[here]) * 64 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
-		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0)
+		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0)
 	if buttons_for != buttons_key:
 		buttons_for = buttons_key
 		for old in buttons.get_children():
@@ -123,9 +130,20 @@ func update_helm() -> void:
 			var on := not client.other_docked
 			dock.pressed.connect(func() -> void: client.send_dock(on))
 			buttons.add_child(dock)
+		if client.fighting():
+			for pos in [Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK]:
+				var go := Button.new()
+				go.text = ["Подойти вплотную", "Отойти на дистанцию", "Зайти с фланга"][pos]
+				go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				go.set_meta("pos", pos)
+				go.pressed.connect(func() -> void: client.send_position(pos))
+				buttons.add_child(go)
 	for b in buttons.get_children():
 		if b is Button:
 			(b as Button).disabled = leaving
+			if b.has_meta("pos"):
+				var pos: int = b.get_meta("pos")
+				(b as Button).disabled = pos == (client.battle_goal if client.battle_goal != Net.POS_NONE else client.battle_pos)
 	chart.queue_redraw()
 
 

@@ -124,6 +124,15 @@ var drones := 0                      # drones in the cargo
 var ecrew := PackedInt32Array()      # (v54) the enemy's crew we can see: per one, its cell of the enemy's drawing
 var ecrew_flags := PackedByteArray() # per one, Net.ECREW_*
 var ecrew_probe := 0                 # seconds a probe still shows them all
+# (v55) our crew at their posts (Net.S_STATIONS)
+var battle_pos := Net.POS_CLOSE      # the battle position
+var battle_goal := Net.POS_NONE      # the one the ship is manoeuvring to
+var battle_left := 0                 # seconds of the manoeuvre left
+var our_dodge := 0                   # in %
+var our_hit := 0                     # what the position adds to our hits, in % (may be below 0)
+var their_hit := 0                   # and to theirs
+var posts_manned := 0                # Net.STATION_* bits
+var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*)]
 var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
 var trade_flags := 0                 # Net.TRADE_*
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
@@ -451,6 +460,35 @@ func send_gunset(action: int, a: int, b: int) -> void:
 	## Sets the guns up (Net.GUNSET_*: power a gun, switch the shield, change a gun); only from the gun console.
 	if _peer != null:
 		_peer.send(0, PackedByteArray([Net.C_GUNSET, action, a, b]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_order(id: int, post: int) -> void:
+	## (v55) The captain's order to a bot (Net.NOBODY: to every bot, see Net.C_ORDER).
+	if _peer != null:
+		var msg := PackedByteArray([Net.C_ORDER, 0, 0, post])
+		msg.encode_u16(1, id)
+		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_position(pos: int) -> void:
+	## (v55) Takes the ship to a battle position (Net.POS_*); only from the ship's controls.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_POSITION, pos]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func may_order() -> bool:
+	## (v55) May we give the bots orders: we are the captain, or no captain is aboard (the server decides).
+	if job == Net.JOB_CAPTAIN:
+		return true
+	for id: int in roster.keys():
+		if int(roster[id]["kind"]) == Net.KIND_PLAYER and int(roster[id].get("job", 0)) == Net.JOB_CAPTAIN:
+			return false
+	return true
+
+
+func fighting() -> bool:
+	## A pirate ship lies off the airlock and fights us (it has not docked, it is not a wreck).
+	return enemy_hull > 0 and pirates_alongside() and not other_docked
 
 
 func send_drone(action: int, a: int = 0) -> void:
@@ -1176,6 +1214,21 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			drone_battery = pkt[4]
 			drone_coming = pkt[5]
 			drones = pkt[6]
+		Net.S_STATIONS:
+			if not _ours(pkt) or pkt.size() < 11:
+				return
+			battle_pos = pkt[3]
+			battle_goal = pkt[4]
+			battle_left = pkt[5]
+			our_dodge = pkt[6]
+			our_hit = pkt[7] - 100
+			their_hit = pkt[8] - 100
+			posts_manned = pkt[9]
+			crew_bots = []
+			for i in pkt[10]:
+				var at := 11 + i * 4
+				if pkt.size() >= at + 4:
+					crew_bots.append([pkt.decode_u16(at), pkt[at + 2], pkt[at + 3]])
 		Net.S_ECREW:
 			ecrew_probe = pkt[3]
 			ecrew = PackedInt32Array()

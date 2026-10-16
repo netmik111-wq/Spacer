@@ -183,7 +183,10 @@ func think(p) -> void:
 			return
 	# otherwise walk: to the one it hunts, to where it heard something, or about the ship
 	if p.ai_goal == Vector2i(p.st.x, p.st.y) or p.ai_goal.x < 0:
-		p.ai_goal = _somewhere(p)
+		p.ai_goal = _post(p) if p.home >= 0 else _somewhere(p)
+		if p.ai_goal == Vector2i(p.st.x, p.st.y):
+			_stop(p)
+			return                           # (v55) back at its post on its own ship: it stays
 	if now - p.ai_plan_tick >= PLAN_EVERY or p.st.dir == Net.DIR_NONE:
 		p.ai_plan_tick = now
 		p.ai_step = _first_step(p, p.ai_goal)
@@ -233,6 +236,16 @@ func _passable(x: int, y: int) -> bool:
 		return false
 	var d: int = map.door_at(x, y)
 	return d < 0 or not server.doors.is_sealed(d)
+
+
+func _post(p) -> Vector2i:
+	## (v55) Its post on its own ship, in our grid (where it stands if that ship has gone).
+	var d = server.derelict
+	if not d.here or server.map.other == null:
+		p.home = -1
+		return Vector2i(p.st.x, p.st.y)
+	var c: int = d._cell(server.map.other_at, p.home)
+	return Vector2i(c % server.map.width, c / server.map.width)
 
 
 func _somewhere(p) -> Vector2i:

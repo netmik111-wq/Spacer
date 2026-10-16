@@ -18,6 +18,13 @@ extends RefCounted
 ## Our hits find them: a shot that gets through into a room may kill or wound
 ## whoever is in it (Gunnery.crew_killed keeps its count of the crew in step).
 ## We see them only for a while after a probe, or near our drone (Drone.sees).
+##
+## (v55) Once one of our crew sets foot on their ship (Stations), they come to
+## life: each becomes a pirate in the world (a Player, see Pirates) where it
+## stood, and from then on their places here are only read off those pirates
+## every tick, so everything that asks about them above goes on working. They
+## leave their posts to fight the boarders and go back to them when none are
+## left in sight (Player.home).
 
 const Net := preload("res://src/shared/net.gd")
 
@@ -41,6 +48,9 @@ var _next_step := PackedInt32Array()
 var _passable := PackedByteArray()   # per cell of the drawing: 1 = they (and the drone) can stand there
 var _told := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
+var in_world := false                # (v55) they have come to life as pirates in the world
+var people: Array = []               # (in the world) per one of them, its Player, in the order of `at`
+const BOARDED_WOUND := 25            # (in the world) what a hit into the room does to each one wounded
 
 
 func setup(p_server: GameServer) -> void:
@@ -58,6 +68,8 @@ func clear() -> void:
 	hurt_until = PackedInt32Array()
 	_next_step = PackedInt32Array()
 	probe_until = 0
+	in_world = false
+	people = []
 
 
 func board(count: int, layout: int) -> void:
@@ -135,7 +147,9 @@ func tick() -> void:
 	var g = server.gunnery
 	if o != null and not g.fighting():
 		clear()
-	if o != null:
+	if o != null and in_world:
+		_read_world()
+	elif o != null:
 		if server.tick % PLAN_TICKS == 0:
 			_plan()
 		for i in at.size():
@@ -150,6 +164,8 @@ func tick() -> void:
 
 func hit_room(room: int) -> Array:
 	## A shot of ours got through into that room: [killed, wounded] of those in it.
+	if in_world:
+		return [0, _hurt_in_world(room)]
 	var killed := 0
 	var wounded := 0
 	var i := 0
@@ -169,6 +185,9 @@ func hit_room(room: int) -> Array:
 
 func keep(alive: int, room: int = -1) -> void:
 	## Its crew is down to `alive` (hits on its quarters): those in that room go first.
+	if in_world:
+		_keep_in_world(alive, room)
+		return
 	while at.size() > maxi(alive, 0):
 		var gone := at.size() - 1
 		for i in at.size():
@@ -318,3 +337,100 @@ func packet() -> PackedByteArray:
 			| (Net.ECREW_HURT if hurt(i) else 0))
 	out[4] = n
 	return out
+
+
+# ---------------------------------------------------------------- (v55) come to life
+
+func come_to_life() -> void:
+	## One of our crew is aboard: each of them becomes a pirate where it stands,
+	## its post remembered to go back to. The wounded are hurt.
+	if o == null or in_world:
+		return
+	in_world = true
+	people = []
+	var at_grid: Vector2i = server.map.other_at
+	for i in at.size():
+		var c: int = server.derelict._cell(at_grid, at[i])
+		var p = server.pirates.spawn(c % server.map.width, c / server.map.width, _rng.randf() < 0.6)
+		p.home = dest[i]
+		if hurt(i):
+			p.health = 45.0
+			p.wounds = 30.0
+		people.append(p)
+	_read_world()
+
+
+func _alive(p) -> bool:
+	return p != null and not p.corpse and p.cond != Net.COND_DEAD and server.map.is_other(p.st.y * server.map.width + p.st.x)
+
+
+func _read_world() -> void:
+	## Their places, as the pirates stand now: one in a system's room mends it.
+	var still: Array = []
+	for p in people:
+		if _alive(p) and server.players[p.slot] == p:
+			still.append(p)
+	people = still
+	var n := people.size()
+	at.resize(n)
+	dest.resize(n)
+	job.resize(n)
+	mends.resize(n)
+	hurt_until.resize(n)
+	_next_step.resize(n)
+	for i in n:
+		var p = people[i]
+		var local: int = server.derelict._local(p.st.y * server.map.width + p.st.x, server.map.other_at)
+		at[i] = local
+		dest[i] = local
+		var system: int = server.gunnery.system_in(o.room_of[local]) if local >= 0 and local < o.room_of.size() else -1
+		job[i] = system if system >= 0 else Net.ESYS_CREW
+		mends[i] = 1 if system >= 0 else 0
+		hurt_until[i] = server.tick + 1 if p.cond != Net.COND_OK else 0
+
+
+func _in_room_now(room: int) -> Array:
+	## Everybody alive standing in that room of their ship: their pirates and our boarders.
+	var out: Array = []
+	if room < 0:
+		return out
+	for p in server.players:
+		if p == null or p.corpse or p.cond == Net.COND_DEAD:
+			continue
+		var cell: int = p.st.y * server.map.width + p.st.x
+		if not server.map.is_other(cell):
+			continue
+		var local: int = server.derelict._local(cell, server.map.other_at)
+		if local >= 0 and local < o.room_of.size() and o.room_of[local] == room:
+			out.append(p)
+	return out
+
+
+func _hurt_in_world(room: int) -> int:
+	## Our hit wounds whoever stands in the room, our own boarders too.
+	var wounded := 0
+	for p in _in_room_now(room):
+		if _rng.randf() < WOUND_CHANCE:
+			server.combat.hurt(p, BOARDED_WOUND, null)
+			if p.pirate:
+				wounded += 1
+			else:
+				server.chat.say("Наш выстрел ранил %s на пиратском корабле!" % p.name)
+	return wounded
+
+
+func _keep_in_world(alive: int, room: int) -> void:
+	## Hits on their quarters kill: those in that room first.
+	var order: Array = []
+	for p in people:
+		if _alive(p) and room >= 0 and _in_room_now(room).has(p):
+			order.append(p)
+	for p in people:
+		if _alive(p) and not order.has(p):
+			order.append(p)
+	var living := order.size()
+	var k := 0
+	while living > maxi(alive, 0) and k < order.size():
+		server.combat.hurt(order[k], 999, null)
+		living -= 1
+		k += 1

@@ -261,6 +261,19 @@ func becomes_wreck() -> void:
 	for d in range(map.other_first_door, map.doors.size()):
 		server.doors.dead[d] = 1
 	var alive := _pirates_party
+	if server.enemy_crew.in_world:
+		# (v55) our boarders are aboard and its crew are pirates in the world already:
+		# whoever is alive goes on fighting, the dead lie where they fell
+		for p in server.enemy_crew.people:
+			if p != null:
+				p.home = -1
+		_outcome = "dead"
+		_boarded = true
+		_pirates_party = 0
+		for i in _rng.randi_range(1, 3):
+			_drop(_floor_cells(), PIRATE_LOOT)
+		server.replication.sight_changed()
+		return
 	if alive <= 0 or _rng.randf() < WRECK_ALL_DEAD:
 		_outcome = "dead"
 		alive = 0
@@ -354,6 +367,13 @@ func _pirates_board() -> void:
 		if server.doors.ready[d] == Doors.CLOSED:
 			server.doors.ready[d] = server.tick
 	server.air.wake()
+	if server.enemy_crew.in_world:
+		# (v55) they are in the world already (our boarders woke them): they just come across
+		for p in server.enemy_crew.people:
+			if p != null:
+				p.home = -1
+		server.chat.say("Пиратский корабль пристыковался силой и вскрыл обе двери шлюза! Его экипаж идёт к нам на борт. Двери шлюза заклинило: чинить, как обычную дверь.")
+		return
 	# they come out of their own door, one behind another
 	var theirs: Vector2i = map.doors[int(lock["outer"])] - Vector2i(0, 2)
 	for i in mini(_pirates_party, server.pirates.MAX_ABOARD):

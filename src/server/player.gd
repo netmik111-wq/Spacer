@@ -70,6 +70,15 @@ var last_packet_tick := -1000
 var chat_times: Array[int] = []
 var said: Array = []                 # [channel, from, text] this one heard, kept only for tests (see GameServer.keep_heard)
 var bot_until := 0
+var order := 0                       # (v55) a bot's standing order from the captain (Net.POST_*)
+var order_by := -1                   # the slot of whoever gave it (a bot told to follow goes after them)
+var doing := 0                       # what the bot does about it now (Net.DOING_*)
+var bot_goal := -1                   # the cell it is making for (-1 = none)
+var bot_face := 0                    # and which way it faces there
+var bot_plan_tick := -1000           # when it last worked out its way
+var bot_from := -1                   # the cell it worked it out from
+var bot_step := 0                    # its next step: a direction, -1 for the ladder underfoot, 0 = none
+var home := -1                       # (v55) a pirate on its own ship: its post, a cell of that ship's drawing
 var job := 0                         # Net.JOB_*: its access (st.access) and which skills grow quickly
 var skills := PackedByteArray([0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
 var slow_work := 0                   # pieces of work outside its job (every Net.SKILL_SLOW_EVERY-th one teaches)
