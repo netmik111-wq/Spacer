@@ -314,6 +314,8 @@ func _v49(p) -> void:
 	_expect((ship.hull < hull or not ship.broken.is_empty()) and g.in_flight() == 0,
 		"and it lands %d ticks later" % Weapons.flight_ticks(Weapons.LASER))
 	var their_hull := g.enemy_hull
+	ship.broken.clear()                       # its shot may have broken our gun
+	ship.jammed.erase(server.map.guns[0])
 	g.charge.fill(1.0)
 	g.fire(p, 0)
 	_expect(g.enemy_hull == their_hull and g.in_flight() == 1, "(v56) ours flies too: the pirate ship is untouched while it does")
