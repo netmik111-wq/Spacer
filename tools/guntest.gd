@@ -73,7 +73,7 @@ func _initialize() -> void:
 	_expect(g.aim == Net.ESYS_HELM, "the gun console aims them at the enemy's bridge")
 	var pkt := g.packet()
 	var at := 4 + 3 * map.guns.size() + 4 + 4
-	var end := pkt.size() - (map.guns.size() + 4 + g.enemy_weapons.size())     # (v58: the mounts' effects, the point defence, theirs)
+	var end := pkt.size() - (map.guns.size() + 4 + g.enemy_weapons.size() * 2)     # (v58: the mounts' effects, the point defence, theirs; v59: their charges)
 	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[end - 4] == 1 and pkt[end - 3] == Weapons.LASER and pkt[end - 2] == 0,
 		"clients are told where the guns aim, how the enemy's systems are and what guns it has")
 	var credits := server.ship.credits

@@ -90,6 +90,7 @@ TILES.append(("intercom", None, "wall"))
 TILES.append(("holo", None, "wall"))
 TILES.append(("shield", None, "wall"))
 TILES.append(("bench", None, "wall"))
+TILES.append(("bay", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -361,6 +362,18 @@ def make_machine(wall, what):
         rect(26, 10, 27, 11, (90, 220, 110, 255))                                       # a lamp
         for x in range(4, 28):
             o[x, 26] = HAZARD if (x // 2) % 2 == 0 else dark
+    elif what == "bay":
+        # the module bay: a rack with two slots side by side, each with a lamp and a latch
+        rect(4, 3, 27, 25, body); rect(4, 3, 27, 4, cap); rect(4, 25, 27, 25, mid)
+        for sx in (6, 17):
+            rect(sx, 7, sx + 8, 20, dark)                       # the slot
+            rect(sx + 1, 8, sx + 7, 9, mid)                     # its rails
+            rect(sx + 1, 18, sx + 7, 19, mid)
+            rect(sx + 2, 11, sx + 6, 16, (70, 96, 120, 255))    # a module in it
+            rect(sx + 3, 12, sx + 5, 13, (111, 190, 240, 255))
+            rect(sx + 3, 22, sx + 5, 22, (90, 220, 110, 255))   # its lamp
+        for x in range(4, 28):
+            o[x, 24] = HAZARD if (x // 2) % 2 == 0 else dark
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -403,6 +416,7 @@ def build_tiles():
         "holo": lambda: make_machine(images["wall_h"], "holo"),
         "shield": lambda: make_machine(images["wall_h"], "shield"),
         "bench": lambda: make_machine(images["wall_h"], "bench"),
+        "bay": lambda: make_machine(images["wall_h"], "bay"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -439,6 +453,7 @@ def build_tiles():
 #   'M'  wall with a holomap monitor on it (the whole ship: air, holes, what is broken)
 #   'Z'  wall with the shield generator in it
 #   'B'  (v58) wall with the workbench at it: engineers take guns apart, mend and upgrade them there
+#   'U'  (v59) wall with the module bay in it: two free slots for ship modules (armour, focusing array, phase drive)
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -459,7 +474,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZB")
+BAND_CHARS = set("#DW<>123456789TIMZBU")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -548,7 +563,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

@@ -37,6 +37,7 @@ const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Vitals := preload("res://src/server/vitals.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 const HELM_DODGE := 0.15             # the enemy's shots miss this much more often with somebody at the controls
 const PILOT_DODGE := 0.05            # and this much more again with a pilot by job there
@@ -46,6 +47,8 @@ const MANOEUVRE_SECONDS := 8.0       # to change the battle position, without do
 const FAR_HIT := 0.15                # at a distance both sides hit this much less
 const FLANK_HIT := 0.15              # from its flank we hit this much better...
 const FLANK_DODGE := 0.5             # ... and dodge only half as well
+const BEHIND_HIT := 0.25            # (v59) behind it (by the phase drive only) we hit this much better...
+const BEHIND_THEIR := 0.2            # ... and it hits this much worse
 const LAPSE_SECONDS := 5.0           # far or flank, nobody at the controls this long: back close in
 const SABOTAGE_SECONDS := 8.0        # one of our boarders in a system's room wrecks a point of it this often
 const BOT_PLAN_TICKS := 10           # how often a bot under orders looks again at where to go
@@ -147,7 +150,8 @@ func our_dodge() -> float:
 	var pilot: Player = _at.get(Net.POST_HELM, null)
 	if pilot == null:
 		return 0.0
-	var d := HELM_DODGE + (PILOT_DODGE if pilot.job == Net.JOB_PILOT else 0.0) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0)
+	var d := HELM_DODGE + (PILOT_DODGE if pilot.job == Net.JOB_PILOT else 0.0) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0) \
+		+ server.outfit.dodge_bonus()
 	return d * (FLANK_DODGE if position == Net.POS_FLANK else 1.0)
 
 
@@ -157,11 +161,18 @@ func our_hit_bonus() -> float:
 			return -FAR_HIT
 		Net.POS_FLANK:
 			return FLANK_HIT
+		Net.POS_BEHIND:
+			return BEHIND_HIT
 	return 0.0
 
 
 func their_hit_bonus() -> float:
-	return -FAR_HIT if position == Net.POS_FAR else 0.0
+	match position:
+		Net.POS_FAR:
+			return -FAR_HIT
+		Net.POS_BEHIND:
+			return -BEHIND_THEIR
+	return 0.0
 
 
 func shield_pace() -> float:
@@ -176,7 +187,7 @@ func slows_docking() -> bool:
 
 func position_asked(p: Player, to: int) -> void:
 	## The pilot at the ship's controls takes the ship to a battle position.
-	if not server.systems.at_console(p, server.map.helm) or to < 0 or to > Net.POS_FLANK:
+	if not server.systems.at_console(p, server.map.helm) or to < 0 or to > Net.POS_BEHIND:
 		return
 	if not server.gunnery.fighting():
 		server.chat.tell(p, "Боя нет: позицию выбирать не нужно.")
@@ -188,6 +199,22 @@ func position_asked(p: Player, to: int) -> void:
 		return
 	if to != Net.POS_CLOSE and server.derelict.someone_outside():
 		server.chat.tell(p, "Кто-то из наших снаружи корабля: без них не отойти.")
+		return
+	if server.outfit.phase_ready():
+		# (v59, the author's phase drive) a phase jump: there at once, then it recharges
+		server.outfit.phase_used()
+		position = to
+		goal = Net.POS_NONE
+		_lapse = 0
+		server.chat.say("%s включает фазовый привод: корабль мгновенно на позиции «%s». %s Привод перезаряжается %d с." % [
+			p.name, Net.POS_NAMES[to].to_lower(), _about(to), int(Gear.PHASE_SECONDS)])
+		server.chat.sound(Net.SOUND_PHASE, p.st.x, p.st.y)
+		return
+	if to == Net.POS_BEHIND:
+		if not server.outfit.phase():
+			server.chat.tell(p, "Зайти в тыл можно только фазовым приводом (модуль в модульной стойке).")
+		else:
+			server.chat.tell(p, "Фазовый привод перезаряжается: ещё %d с." % ceili(float(server.ship.phase_ready - server.tick) / Net.TICK_HZ))
 		return
 	goal = to
 	manoeuvre_until = server.tick + roundi(MANOEUVRE_SECONDS * Net.TICK_HZ)
@@ -235,6 +262,8 @@ static func _about(pos: int) -> String:
 			return "Обе стороны попадают реже (−%d%%), пираты подходят к шлюзу вдвое медленнее, на абордаж не перейти." % roundi(FAR_HIT * 100)
 		Net.POS_FLANK:
 			return "Мы попадаем лучше (+%d%%), но уклоняемся вдвое хуже; на абордаж не перейти." % roundi(FLANK_HIT * 100)
+		Net.POS_BEHIND:
+			return "Мы попадаем лучше (+%d%%), они хуже (−%d%%); на абордаж не перейти." % [roundi(BEHIND_HIT * 100), roundi(BEHIND_THEIR * 100)]
 	return "Бой как обычно; к пиратам можно перейти через открытый космос."
 
 

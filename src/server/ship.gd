@@ -57,7 +57,11 @@ var hardened := false                 # the shield stops rockets too (the rare u
 var jammed := {}                      # a gun or the shield generator put out by ion or EMP: wall cell -> the tick it is back
 var guard := 0                        # (v58) the point defence in its own mount (Weapons.GUARD, or NONE)
 var guard_armed := false              # it draws power and charges
-var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours has none until armour plating)
+var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours: by its armour plating, see Outfit)
+# (v59) its gear (see Gear, Outfit)
+var gear := PackedByteArray([1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)
+var modules := PackedByteArray([0, 0])      # per slot of the module bay: the crate in it (Gear.*; NONE = empty)
+var phase_ready := 0                  # the tick its phase drive is charged again
 
 
 func engine_down() -> bool:

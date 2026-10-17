@@ -8,6 +8,7 @@ const Player := preload("res://src/server/player.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 var server: GameServer
 var _offers := {}                    # what the trader alongside sells: thing -> price ("harden" -> true if it offers that)
@@ -68,7 +69,7 @@ func offers() -> Dictionary:
 	var kind := deal()
 	var gone: Array = bought.get(key, [])
 	for item in Items.kept_in_locker():
-		if Items.price(item) <= 0 or Weapons.of_item(item) != Weapons.NONE:
+		if Items.price(item) <= 0 or Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
 			continue
 		if item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS:
 			continue                         # (parts come from guns taken apart, not from traders)
@@ -95,16 +96,35 @@ func offers() -> Dictionary:
 		var item := Weapons.item_of(w, Weapons.roll_fx(w, rng))
 		if not gone.has(item):
 			_offers[item] = Items.price(item) * 3 / 2 if kind == Sectors.DEAL_BLACK else Items.price(item)   # (rare, and dear)
-	if kind == Sectors.DEAL_ARMS and rng.randf() < Weapons.HARDEN_CHANCE and not gone.has(-1):
-		_offers["harden"] = true
+	# (v59, the author's S1: guns and gear modules) crates of ship gear, one of each:
+	# an arms dealer 1..2 as tiered as its guns, a black market one a tier above,
+	# a junk dealer one, cheap. (The shield hardening is now the top shield generator.)
+	var crates := 0
+	match kind:
+		Sectors.DEAL_ARMS:
+			crates = rng.randi_range(1, 2)
+		Sectors.DEAL_BLACK, Sectors.DEAL_JUNK:
+			crates = 1
+	for i in crates:
+		var g := Gear.roll(far, rng, kind == Sectors.DEAL_BLACK)
+		var item := Gear.item_of(g)
+		if gone.has(item) or _offers.has(item):
+			continue
+		match kind:
+			Sectors.DEAL_BLACK:
+				_offers[item] = Items.price(item) * 3 / 2
+			Sectors.DEAL_JUNK:
+				_offers[item] = maxi(roundi(Items.price(item) * Sectors.JUNK_PRICES), 1)
+			_:
+				_offers[item] = Items.price(item)
 	return _offers
 
 
 func sell_share(item: int) -> float:
 	## What the trader alongside pays for one of that thing, against its price.
 	var shares: Array = Sectors.DEAL_SELL[deal()]
-	if Weapons.of_item(item) != Weapons.NONE:
-		return shares[1]
+	if Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
+		return shares[1]                     # (v59: gear goes as guns do)
 	return shares[2] if is_ammo(item) else shares[0]
 
 
@@ -196,8 +216,8 @@ func store_asked(p: Player, action: int, item: int) -> void:
 			if (server.ship.store.has(item) or Items.cargo(item)) and price > 0 and server.ship.credits >= price:
 				server.ship.credits -= price
 				server.ship.store[item] = int(server.ship.store.get(item, 0)) + 1
-				if Weapons.of_item(item) != Weapons.NONE:
-					# (v58) a trader has one of each ship gun: it is gone once bought
+				if Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
+					# (v58) a trader has one of each ship gun (v59: and crate of gear): it is gone once bought
 					_gone(item)
 					server.chat.say("%s покупает у торговца: %s." % [p.name, Items.name_of(item).to_lower()])
 		Net.STORE_SELL:
@@ -255,7 +275,7 @@ func _put_back(p: Player, at: int) -> void:
 	var kind := Items.kind_of(p.slots[at])
 	if p.slots[at] != Net.ITEM_NONE and (server.ship.store.has(kind) or Items.cargo(kind)) and Items.whole(p.slots[at]):
 		server.ship.store[kind] = int(server.ship.store.get(kind, 0)) + 1
-		if Weapons.of_item(kind) != Weapons.NONE:
+		if Weapons.of_item(kind) != Weapons.NONE or Items.gear_of(kind) != Gear.NONE:
 			server.chat.say("%s убирает в трюм: %s." % [p.name, Items.name_of(kind).to_lower()])
 		p.slots[at] = Net.ITEM_NONE
 

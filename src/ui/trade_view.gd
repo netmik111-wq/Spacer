@@ -131,7 +131,7 @@ func refresh() -> void:
 			_services()
 		elif not any:
 			_note("В этой категории торговцу нечего продать, а у нас в шкафу нечего ему предложить.")
-	_about.text = "Это %s: %s. Купленное ложится в шкаф снабжения (корабельное оружие и боеприпасы: в трюм, ставят их с пульта орудий). Каждое орудие у торговца одно: купили, и его больше нет. Продаётся только то, что лежит в шкафу: свои вещи сначала положите в шкаф. Проданное можно выкупить у того же торговца за ту же цену." % [
+	_about.text = "Это %s: %s. Купленное ложится в шкаф снабжения (корабельное оружие и боеприпасы: в трюм, ставят их с пульта орудий). Каждое орудие и каждый модуль у торговца один: купили, и его больше нет. Модули в ящиках ставит инженер (ящик в руке, держать E у машины или модульной стойки). Продаётся только то, что лежит в шкафу: свои вещи сначала положите в шкаф. Проданное можно выкупить у того же торговца за ту же цену." % [
 		Sectors.DEAL_NAMES[client.trade_deal], Sectors.DEAL_ABOUT[client.trade_deal]]
 
 
@@ -226,13 +226,13 @@ func _services() -> void:
 		"Ещё одна жизнь: погибший игрок вернётся новым членом экипажа из резерва.")
 	_button(row, "Нанять: %d кр." % Net.PRICE_CREW, client.credits >= Net.PRICE_CREW and client.reserve < Net.RESERVE_MAX,
 		func() -> void: client.send_store(Net.STORE_HIRE))
-	var hardened := (client.shield_flags & Net.SHF_HARDENED) != 0
-	var offered := (client.trade_flags & Net.TRADE_HARDEN) != 0
-	row = _row(Net.ITEM_NONE, "Закалка щита (редкое улучшение)",
-		"уже установлена" if hardened else ("этот торговец её предлагает" if offered else "у этого торговца нет"),
-		"Щит начинает останавливать и ракеты (обычные и ЭМИ), как лазеры. Ставится один раз и навсегда.")
-	_button(row, "Купить: %d кр." % Weapons.SHIELD_HARDEN_PRICE, offered and not hardened and client.credits >= Weapons.SHIELD_HARDEN_PRICE,
-		func() -> void: client.send_store(Net.STORE_HARDEN))
+	if (client.trade_flags & Net.TRADE_HARDEN) != 0:
+		# (before v59 a trader could offer the hardening; it is now the top shield generator, «Эгида»)
+		var hardened := (client.shield_flags & Net.SHF_HARDENED) != 0
+		row = _row(Net.ITEM_NONE, "Закалка щита (редкое улучшение)", "уже установлена" if hardened else "этот торговец её предлагает",
+			"Щит начинает останавливать и ракеты (обычные и ЭМИ), как лазеры. Ставится один раз и навсегда.")
+		_button(row, "Купить: %d кр." % Weapons.SHIELD_HARDEN_PRICE, not hardened and client.credits >= Weapons.SHIELD_HARDEN_PRICE,
+			func() -> void: client.send_store(Net.STORE_HARDEN))
 
 
 static func _ammo(item: int) -> bool:

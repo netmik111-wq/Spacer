@@ -37,9 +37,9 @@ const DEAL_ARMS := 0
 const DEAL_JUNK := 1
 const DEAL_BLACK := 2
 const DEAL_NAMES: Array[String] = ["оружейник", "барахольщик", "чёрный рынок"]
-const DEAL_ABOUT: Array[String] = ["продаёт корабельное оружие и боеприпасы, оружие покупает за половину цены",
-	"оружия не держит, обычные вещи у него дешевле; покупает всё, но дёшево",
-	"одно-два редких орудия и боеприпасы, дорого; покупает за треть цены"]
+const DEAL_ABOUT: Array[String] = ["продаёт корабельное оружие, модули и боеприпасы, оружие и модули покупает за половину цены",
+	"оружия не держит, обычные вещи и модуль у него дешевле; покупает всё, но дёшево",
+	"одно-два редких орудия, редкий модуль и боеприпасы, дорого; покупает за треть цены"]
 const DEAL_ARMS_NEAR := 2            # every trader up to this many jumps from the start is an arms dealer
 # what each buys a thing of ours back at: [plain things, ship guns, ammunition and gun parts]
 const DEAL_SELL: Array = [[0.2, 0.5, 0.5], [0.2, 0.2, 0.2], [0.3, 0.3, 0.3]]

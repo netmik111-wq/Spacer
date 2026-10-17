@@ -15,6 +15,7 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")    # only for its numbers, to explain them
 const Weapons := preload("res://src/shared/weapons.gd")
+const Gear := preload("res://src/shared/gear.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
 const EnemyPlan := preload("res://src/ui/enemy_plan.gd")
 const UNKNOWN := Color(0.22, 0.26, 0.34)
@@ -228,7 +229,10 @@ func refresh(delta: float) -> void:
 		var names := PackedStringArray()
 		for k in client.enemy_weapons.size():
 			var ew: int = client.enemy_weapons[k]
-			names.append(Weapons.lower_name(ew, client.enemy_fx[k] if k < client.enemy_fx.size() else Weapons.FX_NONE))
+			var seen := ""
+			if k < client.enemy_charge.size() and client.enemy_charge[k] != 255:
+				seen = " (заряд %d%%)" % client.enemy_charge[k]   # (v59) our top sensors see it charging
+			names.append(Weapons.lower_name(ew, client.enemy_fx[k] if k < client.enemy_fx.size() else Weapons.FX_NONE) + seen)
 		if client.enemy_guard:
 			names.append("точечная оборона (сбивает ракеты)")
 		var has_shield: bool = client.enemy_sys_full[Net.ESYS_SHIELDS] > 0
@@ -291,7 +295,10 @@ func refresh(delta: float) -> void:
 	else:
 		lines.append("Без наводки снаряд ложится в случайный отсек. Попадание отнимает урон у корпуса и у системы в отсеке и показывает, что в отсеке.")
 	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину; снаряды (автопушка) щит ослабляет, а рельса пробивает насквозь. Выбитую систему пираты чинят, только когда кто-то из них стоит в её отсеке: единица за %d с. Попадание в отсек может ранить пиратов в нём: раненый уходит в кубрик и не чинит (их показывают зонд и дрон)." % [
-		str(Weapons.SHIELD_REGEN), int(Gunnery.ENEMY_REPAIR_SECONDS)])
+		str(Gear.SHIELD_REGEN[client.gear_tiers[Gear.SYS_SHIELD]] if client.gear_tiers.size() > Gear.SYS_SHIELD else Weapons.SHIELD_REGEN),
+		int(Gunnery.ENEMY_REPAIR_SECONDS)])
+	if Gear.has_module(client.gear_modules, Gear.MOD_FOCUS):
+		lines.append("Фокусирующая решётка: лазеры, выпущенные одним залпом («Залп») в наведённый отсек, сводятся в общий луч; щит для них слабее на %d за каждый лазер сверх первого." % int(Gear.FOCUS_PIERCE))
 	_about.text = "\n".join(lines)
 	_plan.queue_redraw()
 
@@ -319,7 +326,7 @@ func _update_power() -> void:
 		state = "нет питания"
 	elif client.shield < Weapons.SHIELD_HOLDS:
 		state += ", пропускает"
-	_shield_label.text = "Щит: %s%s" % [state, " (закалён)" if f & Net.SHF_HARDENED else ""]
+	_shield_label.text = "Щит: %s%s" % [state, " (держит и ракеты)" if f & Net.SHF_HARDENED else ""]
 	_fill(_shield_bar, client.shield / 100.0)
 	_shield_bar.color = ION if f & Net.SHF_JAMMED else (SHIELD if client.shield >= Weapons.SHIELD_HOLDS else WARN)
 

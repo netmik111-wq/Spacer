@@ -611,3 +611,36 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   locker; parts and spare parts come from the locker too. Times 6 / 10 / 15 s, quicker with the repair skill;
   the work goes on by itself while the engineer stays (`Workshop.update`, progress through `Player.work`).
   No power and no breakdowns: it is a bench of tools.
+- **Gear: systems with tiers plus two module slots** (v59, the author's G2 "both", G3 B, R6 "a module in a
+  crate"; `src/shared/gear.gd`, `src/server/outfit.gd`). Four systems (shield generator, reactor, engine,
+  sensors) have a tier kept in `Ship.gear`; tier 1 is built in and leaves nothing when replaced. Armour, the
+  focusing array and the phase drive are modules in the bay's 2 slots (`Ship.modules`), one of each sort. A crate
+  is a plain u8 thing (`Net.ITEM_GEAR + g`), so trade, floor, locker and saves needed no new fields. The reactor
+  and the engine both install at the engine because the ship has no separate reactor machine (several reactors
+  is a later question round: it breaks the one-engine rule). Sensors install at a holomap (the nearest thing to
+  a sensor machine the ship has).
+- **Only engineers install gear** (my default, asked the author; it extends his workbench pick). 10 s to install,
+  5 s to take a module out, halved at most by the repair skill; it reuses `Repairs` work progress, so a broken
+  machine is mended first and hover hints come from the same `can()` on both sides (`GameClient.gear_here`).
+- **The middle shield tier refills faster instead of a bigger pool** (my call, asked the author): 2.5 → 3.5 →
+  4.5 a second. A bigger pool would break the 50-point "stopped" rule all weapons are balanced on. The top
+  generator stops rockets, so it replaces the shield hardening (nobody sells that any more; a saved ship that
+  bought it keeps it).
+- **Reactor 8 / 10 / 12, engine dodge +5 / +10% while someone flies, jumps ¾ / ½ charge, ¼ / ½ free jumps,
+  sensors 7 / 4 / 2.5 s and the top one shows pirate guns charging** (my numbers; the plan named the effects).
+  A weaker reactor going in cuts guns from the last mount, then the point defence, then the shield.
+- **Armour on our ship** (deferred from v58): a hit takes 15/30/45% less off the hull, 15/30/45% of holes don't
+  happen, 10/20/30% of kinetic shells ricochet (as the pirates' armour). No rng is drawn without armour, so old
+  tests and fights replay the same.
+- **The focusing array is the author's "mirror system" note** (page1016-01; my advice there was a volley bonus,
+  and he took the focusing array in G10): lasers fired in one volley at one room count the shield 45 weaker per
+  extra laser. Not for a volley aimed "anywhere": they would not land in one room.
+- **The phase drive replaces the cloak** (the author's G15/R7): the battle position changes at once and
+  "behind them" (+25% our hits, −20% theirs, my numbers) opens; 60 s recharge, no fuel. Behind them is reached
+  only by phase, so the manoeuvre rules of v55 stay as they were.
+- **Gear in loot and at traders** (the author's S1 B: "4 guns + 2 modules"; D2 30%): half of the rare wreck and
+  derelict finds are a crate instead of a gun (`Gunnery.WRECK_GEAR`, `Derelict.DERELICT_GEAR`), so guns don't get
+  rarer per wreck in total but each kind does. Arms dealer 1–2 crates, black market 1 a tier higher at ×1.5,
+  junk dealer 1 at its 20% discount.
+- **The flagship grows with our gear at half its tier points** (my default, asked the author): as +2 hull and a
+  10% quicker shield per step, not more guns, so gear makes the boss tougher but not deadlier.

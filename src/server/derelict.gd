@@ -41,6 +41,8 @@ const PIRATE_LOOT := [
 ]
 const DERELICT_GUN := 0.25           # (v58) the share of derelicts with a ship gun aboard
 const DERELICT_GUN_DAMAGED := 0.6    # and of those guns, the share that are damaged
+const DERELICT_GEAR := 0.5           # (v59) the share of those finds that are a crate of ship gear instead
+var derelict_gear_chance := DERELICT_GEAR   # (tests set it)
 # what may lie about on a derelict: [thing, weight]
 const LOOT := [
 	[Net.ITEM_PATCH, 6], [Net.ITEM_PART, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_MAG, 3],
@@ -438,6 +440,8 @@ func _arrive() -> void:
 			var choice: Array = Weapons.OURS.filter(func(w: int) -> bool: return Weapons.tier(w) == t and not Weapons.unique(w) and w != Weapons.GUARD)
 			var w: int = choice[_rng.randi_range(0, choice.size() - 1)]
 			var item := Weapons.item_of(w, Weapons.roll_fx(w, _rng), _rng.randf() < DERELICT_GUN_DAMAGED)
+			if _rng.randf() < derelict_gear_chance:
+				item = server.outfit.loot(far, _rng)     # (v59) or a crate of ship gear
 			server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], item)
 	server.air.wake()
 	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")

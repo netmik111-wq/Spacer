@@ -22,7 +22,8 @@ const MUFFLED_BUS := "Muffled"
 
 # (v56) the name of each sound, for files that replace it (see above)
 const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: "hiss", Net.SOUND_THUD: "thud",
-	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow"}
+	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow",
+	Net.SOUND_PHASE: "phase"}
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -71,6 +72,7 @@ static func prepare() -> void:
 	_streams[Net.SOUND_LADDER] = [_ladder(1.0), _ladder(1.08)]
 	_streams[Net.SOUND_SHOT] = [_shot()]
 	_streams[Net.SOUND_BLOW] = [_blow()]
+	_streams[Net.SOUND_PHASE] = [_phase()]
 	_streams[GUN_LASER] = [_gun_laser(1.0), _gun_laser(1.07)]
 	_streams[GUN_HEAVY] = [_gun_heavy()]
 	_streams[GUN_ROCKET] = [_gun_rocket()]
@@ -424,6 +426,21 @@ static func _gun_rail() -> AudioStreamWAV:
 	_noise(out, 0.24, 1.0, 0.3, 5.0, 0.4)
 	_tone(out, 0.22, 60.0, 0.4, 8.0)
 	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _phase() -> AudioStreamWAV:
+	# (v59) the phase drive: a falling warble as the ship slips out, a soft thump as it lands
+	var out := _buffer(1.1)
+	for i in out.size():
+		var t := float(i) / RATE
+		if t < 0.7:
+			var f := 1400.0 - 1500.0 * t + 90.0 * sin(TAU * 11.0 * t)
+			out[i] += sin(TAU * f * t) * 0.18 * sin(PI * t / 0.7)
+	_noise(out, 0.0, 0.7, 0.12, 4.0, 0.95)
+	_tone(out, 0.7, 70.0, 0.4, 7.0)
+	_noise(out, 0.7, 0.3, 0.25, 12.0, 0.6)
+	_fade(out, 0.004)
 	return _wav(out)
 
 

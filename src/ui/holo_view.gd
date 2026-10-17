@@ -10,6 +10,7 @@ extends VBoxContainer
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 const MAX_WIDTH := 820.0
 const MAX_CELL := 20.0
@@ -102,8 +103,9 @@ func refresh(delta: float) -> void:
 	## Called every frame while the screen is shown.
 	_time += delta
 	_plan.queue_redraw()
-	if client.holo_changes != _seen:
-		_seen = client.holo_changes
+	var key := client.holo_changes * 1000 + hash(client.gear_tiers + client.gear_modules) % 1000
+	if key != _seen:
+		_seen = key
 		_summary.text = _sum_up()
 	_under.text = _describe(_hover)
 
@@ -196,7 +198,24 @@ func _sum_up() -> String:
 			low += 1
 	var air := "Давление везде в норме." if low + empty == 0 else "Отсеков с пониженным давлением: %d, почти без воздуха: %d." % [low, empty]
 	lines.append("%s Аварийных заслонок опущено: %d. Заклинивших дверей: %d." % [air, shutters, jams])
+	lines.append(gear_line(client))
 	return "\n".join(lines)
+
+
+static func gear_line(c: GameClient) -> String:
+	## (v59) The ship's gear in one line: each system's crate, the modules in the bay.
+	var parts := PackedStringArray()
+	for sys in Gear.SYSTEMS:
+		var t: int = c.gear_tiers[sys] if sys < c.gear_tiers.size() else 1
+		var g := Gear.for_system(sys, t)
+		parts.append(Gear.name_of(g) if g != Gear.NONE else Gear.SYS_BUILT_IN[sys].substr(0, 1).to_upper() + Gear.SYS_BUILT_IN[sys].substr(1))
+	var mods := PackedStringArray()
+	for g in c.gear_modules:
+		if g != Gear.NONE:
+			mods.append(Gear.name_of(g))
+	return "Оснащение: %s (реактор %d энергии). Модульная стойка: %s." % [", ".join(parts),
+		Gear.REACTOR_POWER[clampi(c.gear_tiers[Gear.SYS_REACTOR] if c.gear_tiers.size() > Gear.SYS_REACTOR else 1, 1, 3)],
+		", ".join(mods) if not mods.is_empty() else "пусто"]
 
 
 func _draw_plan() -> void:

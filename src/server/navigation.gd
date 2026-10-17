@@ -115,9 +115,10 @@ func jump_asked(p: Player, target: int) -> void:
 
 func start_jump(target: int, by: String) -> void:
 	server.ship.jump_to = target
-	server.ship.jump_tick = server.tick + Net.JUMP_TICKS
+	var charge := roundi(Net.JUMP_TICKS * server.outfit.jump_share())      # (v59) a better engine charges it quicker
+	server.ship.jump_tick = server.tick + charge
 	tell_nav()
-	server.chat.say("%s задаёт курс: %s. Прыжок через %d секунд." % [by, server.sectors.describe(target), Net.JUMP_TICKS / Net.TICK_HZ])
+	server.chat.say("%s задаёт курс: %s. Прыжок через %d секунд." % [by, server.sectors.describe(target), charge / Net.TICK_HZ])
 	if server.ship.moving and not server.ship.pos.is_equal_approx(server.ship.dest):
 		# The ship is leaving for the jump: the course it was on no longer counts.
 		# It coasts straight on, on its inertia, until the jump takes it.
@@ -150,13 +151,16 @@ func update_jump() -> void:
 		tell_nav()
 		server.chat.say("Прыжок сорван: в шкафу снабжения не осталось топлива.")
 		return
-	server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() - 1      # the jump burns one can
+	if server.outfit.free_fuel() > 0.0 and server.rng.randf() < server.outfit.free_fuel():
+		server.chat.say("Двигатель взял прыжок без топлива: канистра цела.")   # (v59) a better engine is thriftier
+	else:
+		server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() - 1      # the jump burns one can
 	server.supplies.tell_store()
 	# The ship is somewhere else now: the chart is drawn anew around the new
 	# sector, which is how space goes on for ever without being kept anywhere.
 	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to]
 	server.ship.jump_to = Net.NO_SECTOR
-	server.ship.drive_ready = server.tick + Net.DRIVE_REST_TICKS
+	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1
 	if not server.been.has(Sectors.key(arrived)):
 		server.ship.credits += Net.EXPLORE_REWARD

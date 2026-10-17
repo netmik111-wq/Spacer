@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v58 (version 0.51).
+Last updated: build v59 (version 0.52).
 
 Contents:
 
@@ -295,9 +295,9 @@ Contents:
   trader's window:
   | Trader | Sells | Buys at (plain things / guns / ammunition and parts) |
   |---|---|---|
-  | Оружейник (arms dealer) | ordinary items, rockets (4), EMP rockets (6), shells (3), **3–5 ship guns** (tiered by how far out it is, like the pirates'), the shield hardening at about 1 in 3 | 20% / 50% / 50% |
-  | Барахольщик (junk dealer) | ordinary items **20% cheaper**; no guns, no ammunition | 20% / 20% / 20% |
-  | Чёрный рынок (black market) | ordinary items, ammunition, **1–2 guns a tier above** what is usual there, at **1.5×** the price | 30% / 30% / 30% |
+  | Оружейник (arms dealer) | ordinary items, rockets (4), EMP rockets (6), shells (3), **3–5 ship guns** (tiered by how far out it is, like the pirates'), **1–2 crates of ship gear** (v59) | 20% / 50% / 50% |
+  | Барахольщик (junk dealer) | ordinary items **20% cheaper**, **1 crate of gear** 20% cheaper (v59); no guns, no ammunition | 20% / 20% / 20% |
+  | Чёрный рынок (black market) | ordinary items, ammunition, **1–2 guns a tier above** what is usual there, **1 crate of gear a tier above** (v59), at **1.5×** the price | 30% / 30% / 30% |
   Every trader within **2 jumps** of the start is an arms dealer. A trader has **one** of each ship gun: once
   bought it is gone from that trader. A gun of tier 3 is offered with its effect already rolled. Whatever you
   sold a trader can be **bought back** at the price it paid (a guard against a mistaken click; the list shows
@@ -538,7 +538,7 @@ they carry and how they fight, not only through more hull.
 ### Scanning the enemy
 
 - A ship that comes is **unknown inside**: the gun console's plan shows its rooms with **«?»**.
-- Our **sensors** make out one more room every **7 s** while our ship has power.
+- Our **sensors** make out one more room every **7 s** while our ship has power (v59: 4 s or 2.5 s with better sensors).
 - A shot that **gets through** shows what is in the room it hit («пусто» if nothing).
 - Its guns **firing** give away its gun room.
 - A **scanning probe** («Зонд-сканер», cargo, **12** credits at traders, the ship sets out with **1**) is
@@ -601,6 +601,7 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 | Вплотную (close in; every fight starts here) | as is | as is | our people can cross to them through space |
 | На дистанции (at a distance) | −15% | −15% | their docking countdown runs at half speed |
 | С фланга (on its flank) | +15% | as is | our dodge counts half |
+| В тыл (behind it; v59, only by the phase drive) | +25% | −20% | our people can't cross to them |
 - Changing takes an **8 s** manoeuvre; during it we **don't dodge**. It needs the engine working.
 - Away from "close in" the ship needs somebody at the controls and the engine going: **5 s** without them and it
   falls back to close in. It also comes back close in at once if anybody of ours is out in space (and you can't
@@ -688,7 +689,7 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   weapon from the **cargo** (the supply locker); the one taken down goes into the cargo. "Снять в трюм" leaves the
   mount empty. A weapon just put on is unpowered and uncharged. Ship weapons and rockets are cargo: the locker
   shows them, but they can't be taken into the hands.
-- **Reactor power: 8.** Every powered gun draws its power, the shield **2**. A gun is powered or cut with
+- **Reactor power: 8** (v59: 10 or 12 with a better reactor, see "Ship gear"). Every powered gun draws its power, the shield **2**. A gun is powered or cut with
   "Питание" on the console; one that doesn't fit in what is left won't power up. A cut gun loses its charge.
   The ship sets out with 3 lasers and the shield on: 5 of 8.
 - A powered gun charges by itself (each weapon its own time) while the ship has power and the mount is whole.
@@ -746,8 +747,9 @@ cutting beam → Reaper; autocannon → railgun → Hammer.
   access). It needs power and can be switched off from the gun console (then it frees 2 power). Without power,
   broken, or switched off, the shield is at 0; put out by ion or EMP it stops protecting and refilling for that
   time. A broken generator is repaired like any machine.
-- **Shield hardening**: a rare upgrade, offered by about **1 trader in 3** for **80** credits. With it the shield
-  stops rockets and EMP rockets too, like lasers. Once bought, it stays.
+- **Shield hardening** (v49–v58): with it the shield stops rockets and EMP rockets too, like lasers. Since v59 nobody
+  sells it: the top shield generator «Эгида» does the same (see "Ship gear"). A ship that bought it keeps it.
+- Since v59 the shield's refill and the reactor's power depend on the **gear** installed (see "Ship gear").
 - The only target is the pirate ship, until it docks. Its hull takes its class's damage (**8–20**). A boarding
   ship, once wrecked, leaves with its crew, and the ship is credited its class's reward and **1** fuel canister;
   a raider stays as a wreck (see "Wrecked raider").
@@ -809,8 +811,8 @@ The author's tiers plan, part 1 (part 2, ship gear and its tiers, comes in v59).
 - **Kinetic guns** (the author's notebook): a shield takes **1** off each shell's damage and wears by **15**
   (the autocannon's 1-damage shells only wear a shield; the Hammer's slug goes through with 3). A railgun passes
   any shield. **Armour** turns kinetic shots aside: «РИКОШЕТ», the shot does nothing. Pirate ships have armour
-  by class: cutter none, raider 10%, gunship 20%, cruiser and battleship 30%, carrier 20%. Our ship has no
-  armour yet (ship armour comes with the gear in v59).
+  by class: cutter none, raider 10%, gunship 20%, cruiser and battleship 30%, carrier 20%. Our ship gets
+  armour from an armour module (v59, see "Ship gear").
 - **Point defence «Заслон».** It goes on its own mount from the gun console ("Точечная оборона": put on from the
   cargo, take down, power), not on a gun's mount, and draws 1 power. Charged (5 s), it shoots at the next rocket
   coming at us and brings it down **60%** of the time («СБИТА»), then charges again. Pirate ships 4+ jumps out
@@ -841,6 +843,50 @@ The author's tiers plan, part 1 (part 2, ship gear and its tiers, comes in v59).
   `gun_phoenix`, `gun_storm`, `gun_devastator`, `gun_reaper`, `gun_flak`, `gun_nova`; replaceable like the others,
   see `sounds\README.txt`). In the cargo a gun's frame is plain, steel or gold by its tier, a gun with an effect
   has a little star, a damaged one is scorched.
+
+### Ship gear: systems, modules, phase drive (v59)
+
+The author's tiers plan, part 2. Gear comes in **crates** (things you carry in a hand, kept in the supply locker,
+bought, sold and found; not cargo). Like guns, a tier is hidden: each crate has its own name, and its card says in
+numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distance like the guns'.
+
+- **Systems.** The ship sets out with a built-in tier 1 shield generator, reactor, engine and sensors. A crate of
+  tier 2 or 3 is installed at its machine: the shield generator at the shield generator, the reactor and the engine
+  both at the **engine**, the sensors at a **holomap**. The one it replaces comes out into the hand as a crate (a
+  built-in one leaves nothing). A weaker one may go back in.
+  | System | Tier 1 (built in) | Tier 2 | Tier 3 |
+  |---|---|---|---|
+  | Генератор щита (shield) | refills 2.5/s | «Бастион» 100 cr: 3.5/s | «Эгида» 200 cr: 4.5/s, and stops rockets and EMP rockets |
+  | Реактор (reactor) | 8 power | «Факел» 120 cr: 10 | «Солнце» 240 cr: 12 |
+  | Двигатель (engine) | – | «Стриж» 90 cr: dodge +5% (while someone flies), jump charges in ¾ the time, 1 jump in 4 burns no fuel | «Сокол» 180 cr: dodge +10%, jump in half the time, 1 jump in 2 burns no fuel |
+  | Сканеры (sensors) | a room every 7 s | «Око» 60 cr: every 4 s | «Всевидящее око» 120 cr: every 2.5 s, and the gun console shows each pirate gun's charge |
+  The jump drive's rest after a jump shortens like its charge. A weaker reactor going in cuts guns (then the point
+  defence, then the shield) until the power fits.
+- **Modules** go in the **module bay** (модульная стойка, 'U' on the map: in engine room 1 on the lower deck of
+  ship02, in the lower wall of the middle hall on ship01). It has **2 slots**, one module of each sort. A module of a sort already in the
+  bay swaps with it; with both slots taken by other sorts, take one out first. With empty hands at the bay an
+  engineer takes out the last module put in (5 s).
+  | Module | Price | What it does |
+  |---|---|---|
+  | Броня «Стальные листы» (armour, tier 1) | 50 | a pirate hit takes 15% less off the hull, 15% of hull holes don't happen, 10% of kinetic shells ricochet |
+  | Броня «Композит» (tier 2) | 125 | 30% / 30% / 20% |
+  | Броня «Керамит» (tier 3) | 250 | 45% / 45% / 30% |
+  | Фокусирующая решётка (focusing array; the author's "mirror" note) | 120 | lasers fired **in one volley at one room** join into one beam: for each laser past the first, the shield counts **45** weaker for all of them |
+  | Фазовый привод (phase drive; replaces the cloak in the plan) | 150 | the battle position changes **at once** (no manoeuvre) and opens **«В тыл»** (behind them: we hit +25%, they hit −20%); then it recharges **60 s**, during which positions change by the usual manoeuvre and "behind them" is closed. No fuel |
+- **Installing.** Only an **engineer** installs or takes out gear: face the machine (or the bay) with the crate in
+  hand and hold **E** for **10 s** (the repair skill makes it up to twice as quick). A broken machine must be
+  mended first. Hovering shows what will happen or why it can't (wrong machine, already installed, slots full,
+  not an engineer).
+- **Where it shows.** The holomap's summary lists every system's tier and the modules; the gun console shows the
+  shield's refill, «держит и ракеты» for the top generator, the focusing array, and (top sensors) the pirate guns'
+  charge; the ship's controls show the phase drive and its «Фазой в тыл» button. A phase jump has its own sound
+  (`phase`, replaceable).
+- **Finding gear.** A wreck that leaves loot (see "Gun tiers") leaves a crate of gear instead of a gun **half** the
+  time; a derelict's hidden find is a crate half the time. Traders sell crates (see the trader table).
+- **The flagship grows** with our gear too: half our gear's tier points (each system of tier 2 counts 1, of tier 3
+  counts 2; armour the same; the focusing array and the phase drive 1 each), each step giving it **+2 hull** and
+  a **10%** quicker shield.
+- Gear is saved with the campaign.
 
 ## 18. Bridge and flight within a sector
 
