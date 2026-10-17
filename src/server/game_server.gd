@@ -28,6 +28,7 @@ extends Node
 ##   stations     (v55) our crew at their posts in a fight, bots under orders, the battle position, our boarders
 ##   flagship     (v57) the goal: the pirates' flagship, its teleporter, winning and losing the ship
 ##   workshop     (v58) the workbench: guns taken apart, mended and upgraded by engineers
+##   outfit       (v59) the ship's gear: its systems' tiers, the module bay, engineers installing crates
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -69,6 +70,7 @@ const Drone := preload("res://src/server/drone.gd")
 const Stations := preload("res://src/server/stations.gd")
 const Flagship := preload("res://src/server/flagship.gd")
 const Workshop := preload("res://src/server/workshop.gd")
+const Outfit := preload("res://src/server/outfit.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -143,6 +145,7 @@ var drone := Drone.new()
 var stations := Stations.new()
 var flagship := Flagship.new()
 var workshop := Workshop.new()
+var outfit := Outfit.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -234,6 +237,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	director.setup(self)
 	stations.setup(self)
 	flagship.setup(self)
+	outfit.setup(self)
 	rng.randomize()
 	tick = 0
 	_acc = 0.0
@@ -594,6 +598,7 @@ func _tick() -> void:
 	flagship.tick()
 	stations.tick()
 	gunnery.tick()
+	outfit.tick()
 	enemy_crew.tick()
 	drone.tick()
 	holomap.tick()

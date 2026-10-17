@@ -8,6 +8,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 var client: GameClient
 var chart: Control                   # the picture
@@ -106,6 +107,10 @@ func update_helm() -> void:
 			pos += " Манёвр на «%s»: ещё %d с, пока он идёт, мы не уклоняемся." % [Net.POS_NAMES[client.battle_goal].to_lower(), client.battle_left]
 		lines.append(pos + " Уклонение от их выстрелов: %d%% (пока здесь стоит пилот)." % client.our_dodge)
 		lines.append("Вплотную: как обычно, можно перейти к ним на абордаж. На дистанции: обе стороны попадают реже, пираты подходят к шлюзу вдвое медленнее. С фланга: мы попадаем лучше, но уклоняемся вдвое хуже. Держать позицию можно только с кем-то за штурвалом.")
+		if _has_phase():
+			# (v59) the phase drive
+			lines.append(("Фазовый привод готов: следующая смена позиции мгновенная, можно зайти в тыл (мы попадаем лучше, они хуже)."
+				if client.phase_left == 0 else "Фазовый привод перезаряжается: ещё %d с. Пока что позиция меняется обычным манёвром." % client.phase_left))
 	match sectors.kind[here]:
 		Sectors.METEORS:
 			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
@@ -125,8 +130,9 @@ func update_helm() -> void:
 		_:
 			lines.append("В этом секторе идти некуда: вокруг пусто.")
 	text.text = "\n".join(lines)
-	var buttons_key := Sectors.key(sectors.cell[here]) * 64 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
-		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0)
+	var buttons_key := Sectors.key(sectors.cell[here]) * 128 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
+		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0) \
+		+ (64 if _has_phase() else 0)
 	if buttons_for != buttons_key:
 		buttons_for = buttons_key
 		for old in buttons.get_children():
@@ -145,9 +151,9 @@ func update_helm() -> void:
 			dock.pressed.connect(func() -> void: client.send_dock(on))
 			buttons.add_child(dock)
 		if client.fighting():
-			for pos in [Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK]:
+			for pos in ([Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK, Net.POS_BEHIND] if _has_phase() else [Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK]):
 				var go := Button.new()
-				go.text = ["Подойти вплотную", "Отойти на дистанцию", "Зайти с фланга"][pos]
+				go.text = ["Подойти вплотную", "Отойти на дистанцию", "Зайти с фланга", "Фазой в тыл"][pos]
 				go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				go.set_meta("pos", pos)
 				go.pressed.connect(func() -> void: client.send_position(pos))
@@ -157,8 +163,13 @@ func update_helm() -> void:
 			(b as Button).disabled = leaving
 			if b.has_meta("pos"):
 				var pos: int = b.get_meta("pos")
-				(b as Button).disabled = pos == (client.battle_goal if client.battle_goal != Net.POS_NONE else client.battle_pos)
+				(b as Button).disabled = pos == (client.battle_goal if client.battle_goal != Net.POS_NONE else client.battle_pos) \
+					or (pos == Net.POS_BEHIND and client.phase_left > 0)
 	chart.queue_redraw()
+
+
+func _has_phase() -> bool:
+	return Gear.has_module(client.gear_modules, Gear.MOD_PHASE)
 
 
 func helm_area() -> Rect2:

@@ -17,12 +17,14 @@ extends RefCounted
 ##   cargo    true: kept in the supply locker as the ship's cargo, never carried
 ##            (ship weapons and their rockets)
 ##   gun      the ship weapon (Weapons.*) it is: its name, words and price come from there
+##   gear     (v59) the crate of ship gear (Gear.*) it is: the same; carried, and kept in the locker
 ## Later things will add their own properties here (damage, what it protects
 ## from, which layer of clothing it is), so a new kind of thing does not need
 ## new code where things are moved about.
 
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
@@ -105,6 +107,8 @@ static func _made() -> Dictionary:
 		if Weapons.damaged(item):
 			e["damaged"] = true
 		out[item] = e
+	for g in Gear.all():
+		out[Gear.item_of(g)] = {"gear": g}
 	for k in Weapons.KINDS:
 		out[Net.ITEM_GUN_PARTS + k] = {"name": "Детали: %s" % Weapons.KIND_NAMES[k], "cargo": true, "price": 12,
 			"about": "Детали орудий, %s. Получаются, когда инженер разбирает такое орудие на верстаке; ими же он улучшает орудия этого рода. Хранятся в трюме." % Weapons.KIND_NAMES[k]}
@@ -159,6 +163,8 @@ static func name_of(item: int) -> String:
 	if INFO[item].has("gun"):
 		var n := Weapons.full_name(int(INFO[item]["gun"]), int(INFO[item].get("fx", 0)))
 		return ("Повреждённое орудие: " + Weapons.lower_name(int(INFO[item]["gun"]))) if INFO[item].has("damaged") else n
+	if INFO[item].has("gear"):
+		return Gear.name_of(int(INFO[item]["gear"]))
 	return str(INFO[item]["name"])
 
 
@@ -169,6 +175,8 @@ static func about(item: int) -> String:
 			return "Повреждено: прежде чем ставить, его чинит инженер на верстаке (одна запчасть). " + str(Weapons.info(w)["about"])
 		var fx := int(INFO[item].get("fx", 0))
 		return str(Weapons.info(w)["about"]) + " Энергия: %d." % Weapons.power(w) + ("" if fx == 0 else " " + Weapons.about_fx(fx))
+	if INFO.has(item) and INFO[item].has("gear"):
+		return Gear.about(int(INFO[item]["gear"]))
 	return str(INFO[item].get("about", "")) if INFO.has(item) else ""
 
 
@@ -188,6 +196,8 @@ static func price(item: int) -> int:
 		if Weapons.unique(w):
 			return 0                         # (the flagship's gun: no trader deals in it)
 		return int(Weapons.info(w)["price"]) / (3 if INFO[item].has("damaged") else 1)
+	if INFO.has(item) and INFO[item].has("gear"):
+		return Gear.price(int(INFO[item]["gear"]))
 	return int(INFO[item].get("price", 0)) if INFO.has(item) else 0
 
 
@@ -209,7 +219,7 @@ static func kept_in_locker() -> PackedInt32Array:
 	## The things the supply locker holds, in the order they are shown.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) == item and (stock(item) > 0 or cargo(item)) and not INFO[item].has("fx") and not INFO[item].has("damaged"):
+		if kind_of(item) == item and (stock(item) > 0 or cargo(item) or INFO[item].has("gear")) and not INFO[item].has("fx") and not INFO[item].has("damaged"):
 			out.append(item)                 # ((v58) a gun's other states get a place in the locker when one comes)
 	return out
 
@@ -223,8 +233,14 @@ static var CATEGORIES: Array = [
 	["Корабельное оружие", Array(Weapons.gun_items())],
 	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET, Net.ITEM_SHELL]],
 	["Детали орудий", range(Net.ITEM_GUN_PARTS, Net.ITEM_GUN_PARTS + Weapons.KINDS)],
+	["Модули корабля", Gear.all().map(func(g: int) -> int: return Gear.item_of(g))],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
 ]
+
+
+static func gear_of(item: int) -> int:
+	## (v59) The crate of ship gear a thing is (Gear.*), or Gear.NONE.
+	return int(INFO[item]["gear"]) if INFO.has(item) and INFO[item].has("gear") else Gear.NONE
 
 
 static func gun_parts(kind: int) -> int:

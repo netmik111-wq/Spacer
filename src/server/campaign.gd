@@ -14,6 +14,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 const PATH := "user://campaign.json"
 const VERSION := 1
@@ -111,6 +112,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
+		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
 	}
 
 
@@ -194,6 +196,13 @@ static func restore(server: Node, data: Dictionary) -> String:
 		for e in data["sold"][str(k)]:
 			back.append([int(e[0]), int(e[1])])
 		server.supplies.sold[k] = back
+	# (v59) the ship's gear
+	var gear := PackedByteArray(data.get("gear", []))
+	server.ship.gear = gear if gear.size() == Gear.SYSTEMS else PackedByteArray([1, 1, 1, 1])
+	var modules := PackedByteArray(data.get("modules", []))
+	server.ship.modules = modules if modules.size() == Gear.MODULE_SLOTS else PackedByteArray([0, 0])
+	server.ship.phase_ready = 0
+	server.outfit.refresh()
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])

@@ -29,6 +29,7 @@ const Mover := preload("res://src/shared/mover.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
+const Gear := preload("res://src/shared/gear.gd")
 const Sight := preload("res://src/shared/sight.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
@@ -111,6 +112,12 @@ var guard_charge := 0                # its charge, 0..100
 var guard_flags := 0                 # Net.GUNF_ARMED when it is on
 var enemy_guard := false             # (v58) the enemy has point defence
 var enemy_fx := PackedByteArray()    # (v58) per enemy gun: its effect
+var enemy_charge := PackedByteArray() # (v59) per enemy gun: its charge 0..100 as our top sensors see it (255 = not seen)
+# (v59) our ship's gear (Net.S_GEAR)
+var gear_tiers := PackedByteArray([1, 1, 1, 1])   # per Gear.SYS_*: its tier
+var gear_modules := PackedByteArray([0, 0])       # per slot of the module bay: the crate in it (Gear.*)
+var phase_left := 0                  # seconds until the phase drive is charged (0 = ready, or none)
+var gear_flags := 0                  # Net.GEARF_*
 var power_used := 0                  # power the armed guns and the shield draw
 var power_max := 0                   # and what the reactor gives
 var shield := 0                      # our shield, 0..100
@@ -673,7 +680,9 @@ func use_target(facing: int = -1) -> int:
 	## 14 = something lying on the floor in front or underfoot, to pick up,
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
-	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54), 22 = the workbench (v58).
+	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54), 22 = the workbench (v58),
+	## 23 = (v59) where the crate of gear in hand goes (or the module bay, with empty hands): hold to install,
+	## 24 = the module bay with something else in hand.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -686,6 +695,10 @@ func use_target(facing: int = -1) -> int:
 			return 2
 		if broken.has(cell):
 			return 5
+		if gear_here(cell) != "-":
+			return 23
+		if map.bay.has(cell):
+			return 24
 		if map.chart.has(cell):
 			return 3
 		if map.helm.has(cell):
@@ -730,16 +743,53 @@ func use_target(facing: int = -1) -> int:
 	return 0
 
 
+func gear_here(cell: int) -> String:
+	## (v59) As Outfit.can on the server: "" if the crate of gear in our hand goes
+	## in at that wall cell (or, with empty hands at the module bay, a module comes
+	## out), "-" if that is not the place for it, else why not, in the player's words.
+	if cell < 0:
+		return "-"
+	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
+	var g := Items.gear_of(item)
+	if g != Gear.NONE:
+		var sys := Gear.system_of(g)
+		if sys >= 0:
+			var machines: Dictionary = map.shield if sys == Gear.SYS_SHIELD else (map.holo if sys == Gear.SYS_SENSORS else map.engine)
+			if not machines.has(cell):
+				return "-"
+			if gear_tiers.size() > sys and gear_tiers[sys] == Gear.tier(g):
+				return "Это уже установлено: %s." % Gear.name_of(g).to_lower()
+		else:
+			if not map.bay.has(cell):
+				return "-"
+			if gear_modules.has(g):
+				return "Этот модуль уже стоит в стойке."
+			var room := gear_modules.has(Gear.NONE)
+			for m in gear_modules:
+				room = room or (m != Gear.NONE and Gear.module_of(m) == Gear.module_of(g))
+			if not room:
+				return "Обе ячейки стойки заняты: сначала выньте модуль (держите E с пустыми руками)."
+	elif item == Net.ITEM_NONE and map.bay.has(cell):
+		if gear_modules.count(Gear.NONE) == gear_modules.size():
+			return "Модульная стойка пуста: модули в ящиках носят из шкафа снабжения."
+	else:
+		return "-"
+	if job != Net.JOB_ENGINEER:
+		return "Корабельные модули ставят и снимают только инженеры."
+	return ""
+
+
 func usable_at(cell: int) -> bool:
 	## Is there something in that cell the "use" key (or a click) works on, near
 	## or not: a thing on a wall, a door, a hole, things on the floor, somebody
 	## lying, a ladder? For the outline under the mouse (WorldView._draw_hover).
 	if cell < 0 or cell >= map.cells.size():
 		return false
-	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell):
+	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell) \
+			or gear_here(cell) != "-":
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench]:
+			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay]:
 		if things.has(cell):
 			return true
 	for e: Ent in ents.values():
@@ -1240,6 +1290,20 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				guard_flags = pkt[at + 2]
 				enemy_guard = pkt[at + 3] == 1
 				enemy_fx = pkt.slice(at + 4, at + 4 + enemy_weapons.size())
+				# (v59) its guns' charges, seen by the top sensors (255 = not seen)
+				enemy_charge = pkt.slice(at + 4 + enemy_weapons.size(), at + 4 + enemy_weapons.size() * 2)
+		Net.S_GEAR:
+			if not _ours(pkt) or pkt.size() < 4:
+				return
+			var at := 3
+			var n: int = pkt[at]
+			gear_tiers = pkt.slice(at + 1, at + 1 + n)
+			at += 1 + n
+			n = pkt[at]
+			gear_modules = pkt.slice(at + 1, at + 1 + n)
+			at += 1 + n
+			phase_left = pkt[at] if pkt.size() > at else 0
+			gear_flags = pkt[at + 1] if pkt.size() > at + 1 else 0
 		Net.S_DRONE:
 			drone_state = pkt[1]
 			drone_at = pkt.decode_u16(2)

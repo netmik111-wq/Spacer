@@ -134,6 +134,18 @@ Open problems:
 
 ## Build notes
 
+### v59 (ship gear, part 2 of the tiers plan)
+- Ship gear in crates (`src/shared/gear.gd`, server part `src/server/outfit.gd`): four systems with three hidden
+  tiers each (shield generator, reactor, engine, sensors; tier 1 built in) and a module bay ('U' on the map) with
+  two slots for armour (3 tiers), the focusing array (the author's mirror note) and the phase drive (replaces the
+  cloak). Only engineers install them, holding E at the machine; the replaced crate comes out into the hand.
+- Our ship's armour (deferred from v58): less hull damage, fewer holes, kinetic ricochets. The phase drive moves
+  the ship to a battle position at once and opens "behind them" (+25% / −20%), 60 s recharge.
+- The top shield generator replaces the shield hardening; the top sensors show pirate guns charging on the gun
+  console; a better engine charges jumps quicker and sometimes saves fuel.
+- Traders sell crates, half of rare wreck and derelict finds are crates, the flagship grows with our gear
+  (hull and shield refill), gear is saved. New test `tools/geartest.gd` (21 tests now). Protocol 37.
+
 ### v58 (gun tiers, part 1; the author's tiers plan)
 - The author answered 65 questions on gear tiers ("Spacer Tier Questions"); the plan was split in two builds.
   Part 1: every gun has a hidden tier (1–3) and a kind of parts, five new named guns fill the tiers (Phoenix,

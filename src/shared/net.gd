@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 36
+const PROTOCOL := 37
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -137,6 +137,7 @@ const ITEM_SHELL := 83              # (v58) a shell for the autocannon and the �
 const ITEM_GUN_PARTS := 84          # (v58) parts of a gun's kind: ITEM_GUN_PARTS + Weapons.KIND_* (84..88; cargo)
 const ITEM_GUN_FX := 100            # (v58) a tier 3 gun with its effect: see Weapons.item_of (100..134; cargo)
 const ITEM_GUN_DAMAGED := 140       # (v58) a damaged gun, mended at the workbench: ITEM_GUN_DAMAGED + Weapons.* (cargo)
+const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gear.* (171..183; carried, kept in the locker)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -259,8 +260,13 @@ const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "
 const POS_CLOSE := 0                # close in: both fire as before; boarding either way
 const POS_FAR := 1                  # at a distance: both hit less, their boarding comes slower
 const POS_FLANK := 2                # on its flank: we hit better, but dodge worse
+const POS_BEHIND := 3               # (v59) behind it, only by the phase drive: we hit better, it hits worse
 const POS_NONE := 255
-const POS_NAMES: Array[String] = ["Вплотную", "На дистанции", "С фланга"]
+const POS_NAMES: Array[String] = ["Вплотную", "На дистанции", "С фланга", "В тыл"]
+const S_GEAR := 38                  # (v59) the ship's gear, to all, after the ship's id: u8 SYSTEMS, then per system its tier,
+                                    # u8 MODULE_SLOTS, then per slot the crate in it (Gear.*; NONE = empty), u8 seconds until
+                                    # the phase drive is charged (0 = ready), u8 flags (GEARF_*)
+const GEARF_HARDENED := 1           # the shield stops rockets (the top shield generator, or the old hardening)
 # The enemy ship's systems: each stands in a room of its drawing (ShipMap.rooms; which room is
 # rolled for every ship, see Shipyard; a hand-made drawing may name them with ShipMap.zones). A hit
 # there wears it down; at nothing it stops working until the enemy's crew mends it.
@@ -419,7 +425,8 @@ const SOUND_LADDER := 6             # somebody on a ladder
 const SOUND_SHOT := 7               # a gunshot
 const SOUND_BLOW := 8               # a blow struck
 const SOUND_CRY := 9                # somebody hurt crying out
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12]
+const SOUND_PHASE := 10             # (v59) the phase drive throwing the ship to its new position: heard all over it
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 

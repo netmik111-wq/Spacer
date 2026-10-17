@@ -51,6 +51,10 @@ func update(p: Player) -> void:
 			server.to_all(server.ship.devices_packet())
 			server.chat.say("%s заканчивает ремонт: %s снова работает." % [p.name, server.map.device_name(cell)])
 			server.systems.power_changed()
+	elif cell >= 0 and server.outfit.can(p, cell) == "":
+		# (v59) an engineer installs the crate of gear in hand (or takes a module out of the bay)
+		if _work_done(p, cell, server.outfit.ticks(p)):
+			server.outfit.finish(p, cell)
 	elif door >= 0 and server.doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
@@ -111,10 +115,12 @@ func usable_ahead(p: Player) -> bool:
 	var cell := map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 	if cell < 0:
 		return false
+	if server.outfit.can(p, cell) != server.outfit.NOT_HERE:
+		return true                          # (v59) a crate of gear where it goes, or the module bay
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
-			or map.drone_console.has(cell) or map.bench.has(cell):
+			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell):
 		return true
 	var door := map.door_of[cell]
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
@@ -142,8 +148,11 @@ func press(p: Player) -> void:
 	if p.cond != Net.COND_OK or p.corpse:
 		return
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+	var gear_why := server.outfit.can(p, server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes))
 	if ahead >= 0 and server.map.lock_pump.has(ahead):
 		server.systems.toggle_pump(p, ahead)
+	elif gear_why != "" and gear_why != server.outfit.NOT_HERE and not server.ship.broken.has(ahead):
+		server.chat.tell(p, gear_why)        # (v59) why that crate cannot go in here
 	elif usable_ahead(p) or _lying_near(p):
 		return
 	elif not server.inventory.pick_up(p):

@@ -118,7 +118,8 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 	return {
 		"klass": klass, "layout": layout, "temper": Net.TEMPER_SIEGE if kind == 1 else Net.TEMPER_STORM,
 		"name": "%s «%s»" % [_cap(str(info["name"])), "Владыка пустоты" if kind == 1 else "Пожиратель"],
-		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": true, "regen": float(info["regen"]),
+		"hull": int(info["hull"]) + GEAR_HULL * gear_upgrades(), "strength": int(info["strength"]), "shield": true,
+		"regen": float(info["regen"]) * (1.0 + GEAR_REGEN * gear_upgrades()),
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": crew,
 		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, true, teleport),
 		"boss": kind, "teleport": teleport,
@@ -131,6 +132,16 @@ func upgrades() -> int:
 	## start. (v58, the author: it grows by half of our tier points) A mounted gun
 	## of tier 2 is one point, of tier 3 two; spares in the cargo do not count.
 	return tier_points() / 2
+
+
+const GEAR_HULL := 2                 # (v59) the flagship's hull grows this much per step of our gear...
+const GEAR_REGEN := 0.1              # ... and its shield refills this much faster
+
+
+func gear_upgrades() -> int:
+	## (v59) Our gear grows the flagship too, by half its tier points (Outfit.tier_points),
+	## as more hull and a quicker shield, not more guns (my default, put to the author).
+	return server.outfit.tier_points() / 2
 
 
 func tier_points() -> int:

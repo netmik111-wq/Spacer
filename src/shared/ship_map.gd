@@ -48,6 +48,7 @@ var drone_console := {}              # (v54) wall cells with the drone monitor (
 var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
 var shield := {}                     # wall cells with the shield generator (see Gunnery)
 var bench := {}                      # (v58) wall cells with the workbench: guns taken apart, mended, upgraded
+var bay := {}                        # (v59) wall cells with the module bay: ship modules go in its free slots
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
                                      # PackedInt32Array of cells each, top-left room first (see _find_rooms)
 var room_of := PackedInt32Array()    # per cell: its number in `rooms`, -1 = in none
@@ -89,7 +90,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
-	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench"]
+	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -187,6 +188,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	holo = {}
 	shield = {}
 	bench = {}
+	bay = {}
 	guns = PackedInt32Array()
 	gun_console = {}
 	drone_console = {}
@@ -216,6 +218,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			shield[i] = true
 		if cells[i] == tile_ids.get("bench", -1):
 			bench[i] = true
+		if cells[i] == tile_ids.get("bay", -1):
+			bay[i] = true
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
@@ -592,6 +596,8 @@ func device_name(cell: int) -> String:
 		return "голокарта"
 	if shield.has(cell):
 		return "генератор щита"
+	if bay.has(cell):
+		return "модульная стойка"
 	return ""
 
 

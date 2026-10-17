@@ -8,6 +8,7 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
 const Items := preload("res://src/shared/items.gd")
+const Gear := preload("res://src/shared/gear.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Options := preload("res://src/client/options.gd")
 const OptionsPanel := preload("res://src/ui/options_panel.gd")
@@ -896,6 +897,14 @@ func _on_notice(text: String) -> void:
 	_say("[color=#9aa3b5]%s[/color]" % _escape(text))
 
 
+func _bay_text() -> String:
+	## (v59) What the module bay holds, in words.
+	var names := PackedStringArray()
+	for g in client.gear_modules:
+		names.append(Gear.name_of(g).to_lower() if g != Gear.NONE else "пусто")
+	return ", ".join(names)
+
+
 func _capital(text: String) -> String:
 	return text.left(1).to_upper() + text.substr(1)
 
@@ -1171,6 +1180,19 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения (склад корабля)"
+	elif target == 23:
+		var gear_why := client.gear_here(client.use_cell())
+		var item: int = client.slots[client.hand]
+		if gear_why != "":
+			_hint.text = gear_why
+		elif _use_held and client.work > 0:
+			_hint.text = "Устанавливаю…" if item != Net.ITEM_NONE else "Вынимаю модуль…"
+		elif item != Net.ITEM_NONE:
+			_hint.text = "Держите E, чтобы установить: %s" % Items.name_of(item).to_lower()
+		else:
+			_hint.text = "Модульная стойка: %s. Держите E, чтобы вынуть последний модуль" % _bay_text()
+	elif target == 24:
+		_hint.text = "Модульная стойка: %s. Ящик с модулем в руке: держите E, чтобы поставить" % _bay_text()
 	elif target == 22:
 		_hint.text = "E: верстак (разобрать, починить, улучшить орудия)" if client.job == Net.JOB_ENGINEER \
 			else "Верстак: за ним работают только инженеры (E: посмотреть)"
