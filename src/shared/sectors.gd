@@ -28,6 +28,23 @@ const FLAGSHIP := 5                  # (v57) the goal: the pirates' flagship wai
 const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль", "флагман пиратов"]
 const GOAL_JUMPS := 12               # (v57) how far out the flagship waits, in jumps from the start
 
+# (v58, the author: traders have their speciality) What a trader deals in:
+#   an arms dealer: 3..5 ship guns and their ammunition; buys guns at half price, the rest cheap;
+#   a junk dealer: no guns, no ammunition, its things a little cheaper; buys everything, cheap;
+#   a black market: 1..2 rare guns (a tier above what the place would have) and ammunition.
+# The traders nearest the start are always arms dealers, so that no game goes long without guns for sale.
+const DEAL_ARMS := 0
+const DEAL_JUNK := 1
+const DEAL_BLACK := 2
+const DEAL_NAMES: Array[String] = ["оружейник", "барахольщик", "чёрный рынок"]
+const DEAL_ABOUT: Array[String] = ["продаёт корабельное оружие и боеприпасы, оружие покупает за половину цены",
+	"оружия не держит, обычные вещи у него дешевле; покупает всё, но дёшево",
+	"одно-два редких орудия и боеприпасы, дорого; покупает за треть цены"]
+const DEAL_ARMS_NEAR := 2            # every trader up to this many jumps from the start is an arms dealer
+# what each buys a thing of ours back at: [plain things, ship guns, ammunition and gun parts]
+const DEAL_SELL: Array = [[0.2, 0.5, 0.5], [0.2, 0.2, 0.2], [0.3, 0.3, 0.3]]
+const JUNK_PRICES := 0.8             # a junk dealer's prices for plain things, against the usual
+
 const NAMES: Array[String] = [
 	"Тихая заводь", "Кеплер", "Пояс Хадли", "Рубеж", "Стеклянное море", "Маяк Орта",
 	"Глухой угол", "Вега-Прайм", "Перекат", "Северный створ", "Ржавый брод", "Тёмная вода",
@@ -63,6 +80,7 @@ var spot := PackedVector2Array()     # where its main thing is: the middle of th
 var reach := PackedByteArray()       # how far that thing reaches: the stream's radius, or DOCK_RANGE; 0 = nothing there
 var entry := PackedVector2Array()    # where a ship arriving by jump appears
 var goal := Vector2i.ZERO            # (v57) where in space the flagship waits (it may lie outside the window)
+var deal := PackedByteArray()        # (v58) per sector: what its trader deals in (DEAL_*; for a trader only)
 
 
 static func key(at: Vector2i) -> int:
@@ -139,6 +157,14 @@ static func kind_at(seed_value: int, at: Vector2i) -> int:
 	return TRADER if roll < 0.72 else STATION
 
 
+static func deal_at(seed_value: int, at: Vector2i) -> int:
+	## (v58) What the trader in that sector deals in (DEAL_*).
+	if absi(at.x) + absi(at.y) <= DEAL_ARMS_NEAR:
+		return DEAL_ARMS
+	var roll := _unit(seed_value, at.x, at.y, 12)
+	return DEAL_ARMS if roll < 0.4 else (DEAL_JUNK if roll < 0.75 else DEAL_BLACK)
+
+
 static func name_at(seed_value: int, at: Vector2i) -> String:
 	var base := NAMES[_mix(seed_value, at.x, at.y, 5) % NAMES.size()]
 	return "%s-%d" % [base, 2 + _mix(seed_value, at.x, at.y, 6) % 98]
@@ -155,6 +181,7 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary) -> void:
 	spot.resize(count)
 	reach.resize(count)
 	entry.resize(count)
+	deal.resize(count)
 	links.clear()
 	goal = goal_of(seed_value)
 	var rng := RandomNumberGenerator.new()
@@ -166,6 +193,7 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary) -> void:
 			if dx == 0 and dy == 0:
 				here = i
 			kind[i] = kind_at(seed_value, at)
+			deal[i] = deal_at(seed_value, at)
 			names[i] = name_at(seed_value, at)
 			visited[i] = 1 if been.has(key(at)) else 0
 			# on the chart: a grid, each sector nudged a little off its place so it does not look like one
@@ -231,13 +259,15 @@ func jumps_to_goal(id: int) -> int:
 
 
 func describe(id: int) -> String:
+	if kind[id] == TRADER and deal.size() > id:
+		return "«%s», %s: %s" % [names[id], KIND_NAMES[kind[id]], DEAL_NAMES[deal[id]]]     # (v58)
 	return "«%s», %s" % [names[id], KIND_NAMES[kind[id]]]
 
 
 func pack() -> PackedByteArray:
 	## For the network: u8 count, u8 here; per sector s16 cell x, s16 cell y, u8 kind, u8 visited,
 	## u8 x, u8 y on the chart, u8 spot x, u8 spot y, u8 reach, u8 entry x, u8 entry y,
-	## u8 name length, name; u8 links; pairs u8, u8; (v57) s16 goal x, s16 goal y.
+	## u8 name length, name; u8 links; pairs u8, u8; (v57) s16 goal x, s16 goal y; (v58) per sector u8 deal.
 	var out := PackedByteArray([count, here])
 	for i in count:
 		var name_bytes := names[i].to_utf8_buffer()
@@ -264,6 +294,7 @@ func pack() -> PackedByteArray:
 	out.resize(o + 4)
 	out.encode_s16(o, goal.x)
 	out.encode_s16(o + 2, goal.y)
+	out.append_array(deal)
 	return out
 
 
@@ -297,3 +328,6 @@ func unpack(data: PackedByteArray, at: int) -> void:
 		links.append([data[at], data[at + 1]])
 		at += 2
 	goal = Vector2i(data.decode_s16(at), data.decode_s16(at + 2))
+	at += 4
+	deal = data.slice(at, at + count) if data.size() >= at + count else PackedByteArray()
+	deal.resize(count)

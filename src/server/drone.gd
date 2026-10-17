@@ -17,6 +17,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
 const FLY_SECONDS := 4.0
 const BATTERY_SECONDS := 60.0
@@ -99,6 +100,8 @@ func sees(cell: int) -> bool:
 func tick() -> void:
 	if state != Net.DRONE_NONE and (not server.gunnery.fighting() or server.enemy_crew.o == null):
 		_lost("Связь с дроном потеряна: пиратского корабля больше нет рядом.")
+	elif state == Net.DRONE_FLYING and server.tick >= _arrive and server.gunnery.enemy_guard and _rng.randf() < Weapons.GUARD_HIT:
+		_lost("Точечная оборона пиратов сбила дрона на подлёте.")    # (v58)
 	elif state == Net.DRONE_FLYING and server.tick >= _arrive:
 		at = _entry()
 		state = Net.DRONE_INSIDE

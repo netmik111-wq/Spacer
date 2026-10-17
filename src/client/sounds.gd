@@ -34,7 +34,18 @@ const HULL_HEAVY := "hull_heavy"     # a heavy one, a rocket or a meteor: a deep
 const SHIELD_HIT := "shield_hit"     # our shield taking a shot: an electric crack and hum
 const THEIR_HIT := "their_hit"       # one of ours blowing up on the pirate ship
 const THEIR_SHIELD := "their_shield" # their shield stopping one of ours
-const FIGHT_NAMES := [GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD]
+# (v58) the new guns: every named gun is known by its sound
+const GUN_AUTOCANNON := "gun_autocannon"   # an autocannon: a quick rattle of heavy thumps
+const GUN_RAIL := "gun_rail"               # a railgun: a charging whine and a sharp electric crack
+const GUN_HAMMER := "gun_hammer"           # the «Молот»: a huge deep slam
+const GUN_PHOENIX := "gun_phoenix"         # the «Феникс»: a roaring fiery blast
+const GUN_STORM := "gun_storm"             # the «Буря»: a deep crackling thunder
+const GUN_DEVASTATOR := "gun_devastator"   # the «Опустошитель»: a heavy rocket's long roar
+const GUN_REAPER := "gun_reaper"           # the «Жнец»: a low droning beam
+const GUN_FLAK := "gun_flak"               # point defence firing: a short burst of pops
+const GUN_NOVA := "gun_nova"               # the «Сверхновая»: a rising scream and a blinding boom
+const FIGHT_NAMES := [GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
+	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA]
 
 static var _streams := {}            # sound kind (or name) -> Array of AudioStream (variants), made once
 static var own_files := PackedStringArray()   # (v56) the sounds replaced by files (told in the log)
@@ -70,6 +81,15 @@ static func prepare() -> void:
 	_streams[SHIELD_HIT] = [_shield_hit()]
 	_streams[THEIR_HIT] = [_their_hit(1.0), _their_hit(0.88)]
 	_streams[THEIR_SHIELD] = [_their_shield()]
+	_streams[GUN_AUTOCANNON] = [_gun_autocannon(1.0), _gun_autocannon(1.06)]
+	_streams[GUN_RAIL] = [_gun_rail()]
+	_streams[GUN_HAMMER] = [_gun_hammer()]
+	_streams[GUN_PHOENIX] = [_gun_phoenix()]
+	_streams[GUN_STORM] = [_gun_storm()]
+	_streams[GUN_DEVASTATOR] = [_gun_devastator()]
+	_streams[GUN_REAPER] = [_gun_reaper()]
+	_streams[GUN_FLAK] = [_gun_flak()]
+	_streams[GUN_NOVA] = [_gun_nova()]
 	_hum_stream = _engine_hum()
 	# (v56) files of one's own in place of these
 	for kind in NAMES:
@@ -374,6 +394,126 @@ static func _gun_beam() -> AudioStreamWAV:
 		var env := clampf(t / 0.05, 0.0, 1.0) * clampf((1.0 - t) / 0.2, 0.0, 1.0)
 		out[i] += (sin(TAU * 220.0 * t) * 0.16 + sin(TAU * 330.0 * t) * 0.08 + signf(sin(TAU * 110.0 * t)) * 0.05) * env
 		out[i] += _rng.randf_range(-1.0, 1.0) * 0.05 * env
+	return _wav(out)
+
+
+# (v58) the new guns
+
+static func _gun_autocannon(pitch: float) -> AudioStreamWAV:
+	# three quick heavy thumps, each with a metallic clack of the breech
+	var out := _buffer(0.75)
+	for k in 3:
+		var at := k * 0.16
+		_tone(out, at, 95.0 * pitch, 0.45, 22.0, -40.0)
+		_noise(out, at, at + 0.12, 0.45, 35.0, 0.55)
+		_tone(out, at + 0.01, 1900.0 * pitch, 0.08, 60.0)
+	_noise(out, 0.0, 0.75, 0.18, 6.0, 0.93)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _gun_rail() -> AudioStreamWAV:
+	# a rising charge whine, then a sharp crack and a ringing hiss
+	var out := _buffer(1.0)
+	for i in out.size():
+		var t := float(i) / RATE
+		if t < 0.22:
+			out[i] += sin(TAU * (900.0 + 9000.0 * t) * t) * 0.12 * (t / 0.22)
+	_noise(out, 0.22, 0.3, 0.9, 45.0, 0.05)
+	_tone(out, 0.22, 2600.0, 0.2, 9.0, -1800.0)
+	_noise(out, 0.24, 1.0, 0.3, 5.0, 0.4)
+	_tone(out, 0.22, 60.0, 0.4, 8.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _gun_hammer() -> AudioStreamWAV:
+	# a huge slam that shakes the frame
+	var out := _buffer(1.4)
+	_tone(out, 0.0, 55.0, 0.8, 3.5, -10.0)
+	_tone(out, 0.0, 130.0, 0.45, 9.0)
+	_noise(out, 0.0, 0.15, 0.8, 30.0, 0.5)
+	_noise(out, 0.0, 1.4, 0.6, 3.0, 0.97)
+	_tone(out, 0.02, 1200.0, 0.06, 4.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _gun_phoenix() -> AudioStreamWAV:
+	# a roaring burst of fire with a bright laser zap on top
+	var out := _buffer(1.2)
+	_tone(out, 0.0, 1100.0, 0.25, 6.0, -1300.0)
+	_noise(out, 0.0, 1.2, 0.8, 3.2, 0.88)
+	_noise(out, 0.0, 0.6, 0.4, 7.0, 0.6)
+	_tone(out, 0.0, 65.0, 0.45, 5.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _gun_storm() -> AudioStreamWAV:
+	# a deep crackling thunder: an ion gun's whine an octave lower, and lightning in it
+	var out := _buffer(1.3)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf(t / 0.15, 0.0, 1.0) * exp(-3.0 * maxf(t - 0.15, 0.0))
+		out[i] += sin(TAU * (200.0 + 900.0 * t) * t) * 0.2 * env
+		if _rng.randf() < 0.07 * env:
+			out[i] += _rng.randf_range(-1.0, 1.0)
+	_noise(out, 0.15, 1.3, 0.5, 3.5, 0.9)
+	_tone(out, 0.15, 50.0, 0.4, 5.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _gun_devastator() -> AudioStreamWAV:
+	# a heavy rocket: a big clunk and a long, low roar
+	var out := _buffer(1.8)
+	_tone(out, 0.0, 90.0, 0.55, 14.0)
+	_noise(out, 0.0, 0.1, 0.6, 40.0, 0.7)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf((t - 0.06) / 0.1, 0.0, 1.0) * exp(-1.6 * maxf(t - 0.16, 0.0))
+		out[i] += _rng.randf_range(-1.0, 1.0) * 0.4 * env
+	var low := 0.0
+	for i in out.size():
+		low = lerpf(out[i], low, 0.7)
+		out[i] = low * 1.8
+	return _wav(out)
+
+
+static func _gun_reaper() -> AudioStreamWAV:
+	# a crimson beam: a low droning buzz, rougher than the cutting beam
+	var out := _buffer(1.0)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf(t / 0.05, 0.0, 1.0) * clampf((1.0 - t) / 0.2, 0.0, 1.0)
+		out[i] += (sin(TAU * 110.0 * t) * 0.2 + signf(sin(TAU * 55.0 * t)) * 0.09 + sin(TAU * 165.0 * t) * 0.07) * env
+		out[i] += _rng.randf_range(-1.0, 1.0) * 0.07 * env
+	return _wav(out)
+
+
+static func _gun_flak() -> AudioStreamWAV:
+	# point defence: a fast burst of small pops
+	var out := _buffer(0.6)
+	for k in 6:
+		var at := k * 0.07
+		_noise(out, at, at + 0.05, 0.5, 70.0, 0.3)
+		_tone(out, at, 260.0, 0.18, 50.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _gun_nova() -> AudioStreamWAV:
+	# a rising scream, then a blinding boom
+	var out := _buffer(2.0)
+	for i in out.size():
+		var t := float(i) / RATE
+		if t < 0.5:
+			out[i] += sin(TAU * (300.0 + 3000.0 * t) * t) * 0.16 * (t / 0.5)
+	_noise(out, 0.5, 2.0, 1.0, 2.6, 0.95)
+	_tone(out, 0.5, 45.0, 0.6, 3.0)
+	_tone(out, 0.5, 1600.0, 0.15, 6.0, -1200.0)
+	_fade(out, 0.003)
 	return _wav(out)
 
 

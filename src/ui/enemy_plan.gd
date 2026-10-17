@@ -236,6 +236,8 @@ static func _draw_fight(canvas: Control, client, o, px: float, at: Vector2, size
 			to = _bubble_entry(from, target, centre, radii)
 		elif ends == Net.MISSED:
 			to = target + (target - from).normalized() * size.x
+		elif ends == Net.SHOT_DOWN:
+			to = from.lerp(target, 0.75)          # (v58) their point defence caught it on the way
 		if FightFx.beam_like(kind):
 			# a second of a beam: a line burning in
 			if t <= flight:
@@ -255,17 +257,19 @@ static func _draw_fight(canvas: Control, client, o, px: float, at: Vector2, size
 			if room >= 0 and room < o.rooms.size():
 				for local: int in o.rooms[room]:
 					canvas.draw_rect(Rect2(at + Vector2(local % o.width, local / o.width) * px, Vector2(px, px)), Color(1.0, 0.3, 0.15, 0.35 * (1.0 - k)))
-			var big := px * (1.4 if kind == Net.SHOT_ROCKET else 1.0)
+			var big := px * (1.4 if FightFx.heavy(kind) else 1.0)
 			canvas.draw_circle(target, big * (0.4 + 0.8 * k), Color(colour, 0.5 * (1.0 - k)))
 			canvas.draw_circle(target, big * 0.45 * (1.0 - k), Color(1.0, 0.92, 0.7, 1.0 - k))
 			canvas.draw_arc(target, big * (0.3 + 1.4 * k), 0.0, TAU, 24, Color(1.0, 0.8, 0.5, 0.7 * (1.0 - k)), 2.0)
 		elif ends == 0 and since < BOOM_SECONDS:
 			var k := since / BOOM_SECONDS
 			canvas.draw_circle(to, px * 0.6 * (1.0 - k) + 1.0, Color(SHIELD.lightened(0.5), 1.0 - k))
-		elif ends == Net.MISSED and since < MISS_SECONDS:
+		elif (ends == Net.MISSED or ends == Net.RICOCHET or ends == Net.SHOT_DOWN) and since < MISS_SECONDS:
 			var k := since / MISS_SECONDS
-			var word := "ПРОМАХ"
-			var spot := target + Vector2(-40.0, -10.0 - 22.0 * k)
+			var word: String = {Net.MISSED: "ПРОМАХ", Net.RICOCHET: "РИКОШЕТ", Net.SHOT_DOWN: "СБИТА"}[ends]
+			if ends == Net.SHOT_DOWN and k < 0.4:
+				canvas.draw_circle(to, px * (0.4 + k), Color(1.0, 0.8, 0.5, 0.7 * (1.0 - k / 0.4)))
+			var spot := (to if ends == Net.SHOT_DOWN else target) + Vector2(-40.0, -10.0 - 22.0 * k)
 			canvas.draw_string(font, spot + Vector2(1, 1), word, HORIZONTAL_ALIGNMENT_CENTER, 80.0, 14, Color(0, 0, 0, 0.8 * (1.0 - k)))
 			canvas.draw_string(font, spot, word, HORIZONTAL_ALIGNMENT_CENTER, 80.0, 14, Color(1.0, 1.0, 1.0, 1.0 - k * k))
 
@@ -275,13 +279,15 @@ static func _bolt(canvas: Control, kind: int, from: Vector2, to: Vector2, k: flo
 	var dir := (to - from).normalized()
 	var tail := head - dir * minf(26.0, from.distance_to(head))
 	match kind:
-		Net.SHOT_ROCKET:
+		Net.SHOT_ROCKET, Net.SHOT_HEAVY_ROCKET:
 			canvas.draw_line(tail, head, Color(0.8, 0.8, 0.8, 0.35), 4.0)
 			canvas.draw_line(head - dir * 6.0, head, Color(0.85, 0.85, 0.9), 3.0)
 			canvas.draw_circle(head - dir * 7.0, 2.5, Color(1.0, 0.7, 0.3))
-		Net.SHOT_ION:
+		Net.SHOT_ION, Net.SHOT_STORM, Net.SHOT_NOVA:
 			canvas.draw_circle(head, 5.0, Color(colour, 0.35))
 			canvas.draw_circle(head, 3.0, colour.lightened(0.5))
+		Net.SHOT_SHELL, Net.SHOT_FLAK:
+			canvas.draw_line(head - dir * 8.0, head, colour, 2.0)
 		_:
 			canvas.draw_line(tail, head, Color(colour, 0.3), 5.0)
 			canvas.draw_line(tail.lerp(head, 0.4), head, colour.lightened(0.3), 2.0)

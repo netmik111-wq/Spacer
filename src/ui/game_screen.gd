@@ -19,6 +19,7 @@ const GunsView := preload("res://src/ui/guns_view.gd")
 const TradeView := preload("res://src/ui/trade_view.gd")
 const HoloView := preload("res://src/ui/holo_view.gd")
 const DroneView := preload("res://src/ui/drone_view.gd")
+const BenchView := preload("res://src/ui/bench_view.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
@@ -87,6 +88,7 @@ var _trade_view: TradeView           # the trader's screen, opened from the supp
 var _trading := false                # the locker's frame shows the trader's screen
 var _holo_view: HoloView
 var _drone_view: DroneView           # (v54) the drone monitor's screen, set up when first shown
+var _bench_view: BenchView           # (v58) the workbench's screen, set up when first shown
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _hand_shown := -1
@@ -474,6 +476,9 @@ func _build_console(root: Control) -> void:
 	_drone_view = DroneView.new()
 	_drone_view.visible = false
 	box.add_child(_drone_view)
+	_bench_view = BenchView.new()
+	_bench_view.visible = false
+	box.add_child(_bench_view)
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
@@ -497,8 +502,8 @@ func _build_console(root: Control) -> void:
 
 func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
-	## The bridge consoles and the holomap need power; the supply locker is opened by hand.
-	return target == 12 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21) and client.powered())
+	## The bridge consoles and the holomap need power; the supply locker and the workbench are worked by hand.
+	return target == 12 or target == 22 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21) and client.powered())
 
 
 func _open_console(kind: int) -> void:
@@ -509,37 +514,42 @@ func _open_console(kind: int) -> void:
 		client.send_holo(false)
 	if _console_kind == 21 and kind != 21:
 		_drone_view.closed()
+	if _console_kind == 22 and kind != 22:
+		_bench_view.closed()
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
 		return
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
 	if kind == 21 and _drone_view.client == null:
 		_drone_view.setup(client)
+	if kind == 22 and _bench_view.client == null:
+		_bench_view.setup(client)
 	_store_view.visible = kind == 12
 	_trade_view.visible = false
 	_guns_view.visible = kind == 17
 	_holo_view.visible = kind == 20
 	_drone_view.visible = kind == 21
+	_bench_view.visible = kind == 22
 	_chart.visible = not own_view
 	_console_text.visible = not own_view
 	_jump_box.visible = not own_view
 	_jump_box.columns = 2
 	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
-		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else Color(0.3, 0.75, 0.45))))
+		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 else Color(0.3, 0.75, 0.45)))))
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
-		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика"}.get(kind, "")
+		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения"}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
 	if kind == 21:
 		_drone_view.opened()
-	_console_shut.text = Options.keyed("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))
+	_console_shut.text = Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")))
 
 
 func _show_trade(on: bool) -> void:
@@ -583,6 +593,9 @@ func _update_console() -> void:
 		return
 	if _console_kind == 21:
 		_drone_view.refresh(get_process_delta_time())
+		return
+	if _console_kind == 22:
+		_bench_view.refresh()
 		return
 	if _console_kind == 4:
 		_bridge.update_helm()
@@ -1158,6 +1171,9 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения (склад корабля)"
+	elif target == 22:
+		_hint.text = "E: верстак (разобрать, починить, улучшить орудия)" if client.job == Net.JOB_ENGINEER \
+			else "Верстак: за ним работают только инженеры (E: посмотреть)"
 	elif target == 21:
 		_hint.text = "Монитор дрона обесточен: %s" % why if no_power else "E: монитор дрона-разведчика"
 	elif target == 20:

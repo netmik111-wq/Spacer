@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 35
+const PROTOCOL := 36
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -132,7 +132,11 @@ const ITEM_ROCKET := 61             # a rocket for the rocket launcher (cargo)
 const ITEM_EMP_ROCKET := 62         # an EMP rocket for the EMP launcher (cargo)
 const ITEM_PROBE := 63              # (v53) a scanning probe, launched from the gun console: shows the enemy's rooms (cargo)
 const ITEM_DRONE := 64              # (v54) a scouting drone, launched and steered from the drone monitor (cargo)
-const ITEM_GUN_MORE := 60           # (v50) weapons from Weapons.TRACTOR on: ITEM_GUN_MORE + Weapons.* (71, 72)
+const ITEM_GUN_MORE := 60           # (v50) weapons from Weapons.TRACTOR on: ITEM_GUN_MORE + Weapons.* (71..82)
+const ITEM_SHELL := 83              # (v58) a shell for the autocannon and the «Молот» (cargo)
+const ITEM_GUN_PARTS := 84          # (v58) parts of a gun's kind: ITEM_GUN_PARTS + Weapons.KIND_* (84..88; cargo)
+const ITEM_GUN_FX := 100            # (v58) a tier 3 gun with its effect: see Weapons.item_of (100..134; cargo)
+const ITEM_GUN_DAMAGED := 140       # (v58) a damaged gun, mended at the workbench: ITEM_GUN_DAMAGED + Weapons.* (cargo)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -171,7 +175,10 @@ const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (W
                                     # system in it (ESYS_*), ROOM_EMPTY, or ROOM_UNKNOWN (not scanned yet);
                                     # u8 probes in the cargo, then
                                     # u8 count, then u8 per weapon the enemy carries (Weapons.*);
-                                    # (v54) u8 credits of the ransom it offers (0 = none), u8 seconds the offer stands
+                                    # (v54) u8 credits of the ransom it offers (0 = none), u8 seconds the offer stands;
+                                    # (v58) per mount u8 the effect of its gun (Weapons.FX_*); u8 our point defence
+                                    # (Weapons.GUARD or NONE), u8 its charge (0..100, GUN_BROKEN, GUN_JAMMED), u8 GUNF_*;
+                                    # u8 1 if the enemy has point defence; per enemy weapon u8 its effect
 const ROOM_UNKNOWN := 255
 const ROOM_EMPTY := 254
 const GUN_BROKEN := 255
@@ -187,7 +194,8 @@ const SHF_HARDENED := 16            # the rare upgrade: it stops rockets too
 const C_GUNSET := 24                # u8 action (GUNSET_*), u8 a, u8 b: set the guns up, from the gun console
 const GUNSET_ARM := 1               # a = mount, b = 1 power it, 0 cut its power
 const GUNSET_SHIELD := 2            # b = 1 switch the shield on, 0 off
-const GUNSET_MOUNT := 3             # a = mount, b = the weapon from the cargo to put on it (Weapons.*; NONE = take it
+const GUARD_MOUNT := 200            # (v58) as a mount number: the point defence's own mount
+const GUNSET_MOUNT := 3             # a = mount, b = (v58) the thing from the cargo to put on it (ITEM_*; ITEM_NONE = take it
                                     # down into the cargo)
 const GUNSET_PROBE := 4             # (v53) launch a scanning probe from the cargo at the enemy
 const GUNSET_RANSOM := 5            # (v54) take the ransom a beaten pirate ship offers
@@ -218,6 +226,11 @@ const ECREW_HURT := 2               # wounded: it goes to lie low in its quarter
 const C_ORDER := 26                 # u16 id of a bot (NOBODY = every bot: POST_ALL sends them to the posts
                                     # nobody mans, POST_FREE stands them all down), u8 POST_*: the captain's order
 const C_POSITION := 27              # u8 POS_*: the pilot takes the ship to that battle position, from the ship's controls
+const C_BENCH := 28                 # (v58) u8 action (BENCH_*), u8 thing (a gun in the locker): work at the workbench
+const BENCH_STOP := 0               # put the work down
+const BENCH_APART := 1              # take the gun apart into parts of its kind
+const BENCH_MEND := 2               # mend a damaged gun (one spare part)
+const BENCH_UPGRADE := 3            # make it the next gun of its line (parts of its kind)
 const S_STATIONS := 35              # to all, after the ship's id: u8 position (POS_*), u8 the one it is going to
                                     # (POS_NONE = none), u8 seconds of the manoeuvre left, u8 our dodge in %, u8 our hit
                                     # +100 in %, u8 theirs +100 in %, u8 posts manned (STATION_* bits), u8 count,
@@ -294,9 +307,21 @@ const SHOT_BEAM := 7                # a pulse of the cutting beam: a thin white-
 const SHOT_TRACTOR := 8             # (v50) the tractor beam: a pale green line
 const SHOT_SIPHON := 9              # (v50) a pulse of the siphon beam: a cyan line
 const SHOT_NEURAL := 10             # (v57) the flagship's neural shot: a violet bolt that stuns whoever is in the room
+# (v58) every new gun has a look of its own (the author: guns are learnt by look and sound)
+const SHOT_SHELL := 11              # an autocannon's shell: a short yellow tracer
+const SHOT_RAIL := 12               # a railgun's slug: a long white-blue streak, very quick
+const SHOT_FLAK := 13               # point defence firing: a spray of small bursts
+const SHOT_PHOENIX := 14            # the «Феникс»: a big orange-gold bolt with a fiery tail
+const SHOT_STORM := 15              # the «Буря»: a crackling deep blue ball
+const SHOT_HEAVY_ROCKET := 16       # the «Опустошитель»: a fat rocket, red flame, thick smoke
+const SHOT_REAPER := 17             # the «Жнец»: a crimson beam
+const SHOT_NOVA := 18               # the «Сверхновая»: a blinding white-violet ball
+const SHOT_HAMMER := 19             # the «Молот»: a heavy glowing slug
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2
+const RICOCHET := 3                 # (v58) a kinetic shell turned aside by armour: it does nothing
+const SHOT_DOWN := 4                # (v58) a rocket shot down by point defence on its way
 const S_VOLLEY := 36                # (v56) a ship's shot, to all, for the gun console's plan: u8 whose (VOLLEY_*),
                                     # u8 kind (SHOT_*), u8 how it ends (0 shield, LANDED, MISSED), u8 room of the
                                     # enemy's drawing (ours: where it lands; theirs: where it was fired from;
@@ -341,10 +366,13 @@ const STORE_BUY := 4                # one of the thing named; this and the one b
 const STORE_BUY_AIR := 6
 const STORE_HIRE := 7               # take on one more crew member for the reserve (from a trader)
 const STORE_BUY_HULL := 8           # have the hull patched up by HULL_LOT (from a trader)
-const STORE_SELL := 10              # sell one of the thing named from the locker to a trader (Weapons.SELL_SHARE of its price)
+const STORE_SELL := 10              # sell one of the thing named from the locker to a trader (at its share: Sectors.DEAL_SELL)
 const STORE_HARDEN := 11            # buy the shield hardening from a trader who offers it
+const STORE_BUY_BACK := 12          # (v58) buy back from a trader a thing we sold it, at the price it paid
 const S_TRADE := 32                 # what the trader alongside offers (sent when it changes): u8 count, then per thing
-                                    # u8 ITEM_*, u16 price; then u8 TRADE_* flags. Count 0 = no trader.
+                                    # u8 ITEM_*, u16 price; then u8 TRADE_* flags. Count 0 = no trader. (v58) Then, with
+                                    # a trader: u8 deal (Sectors.DEAL_*), u8 x3 % it pays (plain, guns, ammunition),
+                                    # u8 count of things it sells back, pairs u8 ITEM_*, u16 price (see Supplies.trade_packet).
 const TRADE_HARDEN := 1             # it offers the shield hardening
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a

@@ -12,6 +12,7 @@ const GameClient := preload("res://src/client/game_client.gd")
 const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 const ALL := -1
 const SERVICES := -2
@@ -90,12 +91,12 @@ func _cat_button(k: int, text: String) -> void:
 
 func refresh() -> void:
 	## Called every frame while the screen is shown: rebuilt only when something changed.
-	var sig := "%d|%d|%s|%s|%d|%d|%d|%d|%d|%d" % [_cat, client.credits, str(client.store), str(client.trade), client.trade_flags,
+	var sig := "%d|%d|%s|%s|%d|%s|%d|%d|%d|%d|%d" % [_cat, client.credits, str(client.store), str(client.trade), client.trade_flags, str(client.trade_back),
 		client.hull, client.reserve, roundi(client.store_air), client.shield_flags, 1 if client.can_trade() else 0]
 	if sig == _shown:
 		return
 	_shown = sig
-	_credits.text = "Кредиты: %d" % client.credits
+	_credits.text = "Торговец: %s · Кредиты: %d" % [Sectors.DEAL_NAMES[client.trade_deal], client.credits]
 	for k: int in _cat_buttons.keys():
 		(_cat_buttons[k] as Button).set_pressed_no_signal(k == _cat)
 	for old in _rows.get_children():
@@ -122,13 +123,16 @@ func refresh() -> void:
 				_caption(Items.CATEGORIES[k][0])
 			for item: int in things:
 				_thing_row(item)
+		if _cat == ALL and not client.trade_back.is_empty():
+			_caption("Выкупить проданное")
+			_buy_back()
 		if _cat == ALL:
 			_caption("Услуги и улучшения")
 			_services()
 		elif not any:
 			_note("В этой категории торговцу нечего продать, а у нас в шкафу нечего ему предложить.")
-	_about.text = "Купленное ложится в шкаф снабжения (корабельное оружие и ракеты: в трюм, ставят их с пульта орудий). Продаётся только то, что лежит в шкафу, за половину цены: свои вещи сначала положите в шкаф. Корабельного оружия у торговца %d вида из %d; закалку щита предлагает лишь каждый третий." % [
-		Weapons.TRADER_WEAPONS, Weapons.COUNT - 1]
+	_about.text = "Это %s: %s. Купленное ложится в шкаф снабжения (корабельное оружие и боеприпасы: в трюм, ставят их с пульта орудий). Каждое орудие у торговца одно: купили, и его больше нет. Продаётся только то, что лежит в шкафу: свои вещи сначала положите в шкаф. Проданное можно выкупить у того же торговца за ту же цену." % [
+		Sectors.DEAL_NAMES[client.trade_deal], Sectors.DEAL_ABOUT[client.trade_deal]]
 
 
 func _note(text: String) -> void:
@@ -194,11 +198,14 @@ func _button(row: HBoxContainer, text: String, on: bool, action: Callable) -> vo
 func _thing_row(item: int) -> void:
 	var have := client.stock(item)
 	var price: int = client.trade.get(item, 0)
-	var sell := Weapons.sell_price(Items.price(item))
 	var w := Weapons.of_item(item)
+	var share := client.trade_shares[1] if w != Weapons.NONE else (client.trade_shares[2] if _ammo(item) else client.trade_shares[0])
+	var sell := Weapons.sell_price(Items.price(item), share / 100.0)
 	var detail := "в шкафу: %d" % have
 	if w != Weapons.NONE:
 		detail = "в трюме: %d · энергия %d · заряд %d с · урон %d" % [have, Weapons.power(w), int(Weapons.info(w)["charge"]), int(Weapons.info(w)["damage"])]
+		if Weapons.fx_of(item) != Weapons.FX_NONE:
+			detail += " · " + Weapons.fx_name(Weapons.fx_of(item))
 	var row := _row(item, Items.name_of(item), detail, "%s. %s" % [Items.name_of(item), Items.about(item)])
 	_button(row, ("Купить: %d кр." % price) if price > 0 else "Нет в продаже", price > 0 and client.credits >= price,
 		func() -> void: client.send_store(Net.STORE_BUY, item))
@@ -226,3 +233,24 @@ func _services() -> void:
 		"Щит начинает останавливать и ракеты (обычные и ЭМИ), как лазеры. Ставится один раз и навсегда.")
 	_button(row, "Купить: %d кр." % Weapons.SHIELD_HARDEN_PRICE, offered and not hardened and client.credits >= Weapons.SHIELD_HARDEN_PRICE,
 		func() -> void: client.send_store(Net.STORE_HARDEN))
+
+
+static func _ammo(item: int) -> bool:
+	return item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET or item == Net.ITEM_SHELL \
+		or (item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS)
+
+
+func _buy_back() -> void:
+	## (v58) What we sold this trader, to be bought back at the price it paid.
+	var seen := {}
+	for e: Array in client.trade_back:
+		var item: int = e[0]
+		var price: int = e[1]
+		var key := "%d:%d" % [item, price]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		var n := client.trade_back.filter(func(x: Array) -> bool: return int(x[0]) == item and int(x[1]) == price).size()
+		var row := _row(item, Items.name_of(item), "продано вами: %d · выкуп по той же цене" % n,
+			"%s. Проданное этому торговцу можно выкупить за ту же цену, по которой он его купил." % Items.name_of(item))
+		_button(row, "Выкупить: %d кр." % price, client.credits >= price, func() -> void: client.send_store(Net.STORE_BUY_BACK, item))

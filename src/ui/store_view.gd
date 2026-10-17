@@ -29,8 +29,9 @@ const DIM := Color(0.58, 0.62, 0.7)
 const GOOD := Color(0.45, 0.85, 0.55)
 const WARN := Color(0.95, 0.75, 0.3)
 const BAD := Color(0.95, 0.4, 0.35)
-# the groups of cards: caption, the things in it (anything the locker keeps that is in none goes last)
-const GROUPS: Array = Items.CATEGORIES
+# (the groups of cards are Items.CATEGORIES; anything the locker keeps that is in none goes last.
+# (v58) Ship weapons and gun parts show only what the cargo holds: there are too many kinds to show them all.)
+const ONLY_HELD: Array[String] = ["Корабельное оружие", "Детали орудий"]
 
 var client: GameClient
 var _gauges: Control
@@ -45,44 +46,21 @@ var _groups: Array = []              # [caption, PackedInt32Array of things, whe
 var _hover := -1                     # the thing under the mouse (a card), or -1
 var _hover_slot := -1                # our own slot under the mouse, or -1
 var _shown := PackedByteArray()
+var _scroll: ScrollContainer
+var _held := ""                      # (v58) the ship weapons and parts held, as the cards were laid out for
 
 
 func setup(p_client: GameClient) -> void:
 	client = p_client
 	add_theme_constant_override("separation", 8)
-	_groups = []
-	var placed := {}
-	var kept := Items.kept_in_locker()
-	for g: Array in GROUPS:
-		var things := PackedInt32Array()
-		for item: int in g[1]:
-			if kept.has(item):
-				things.append(item)
-				placed[item] = true
-		_groups.append([g[0], things])
-	var rest := PackedInt32Array()
-	for item in kept:
-		if not placed.has(item):
-			rest.append(item)
-	if not rest.is_empty():
-		_groups.append(["Прочее", rest])
-	# the groups flow left to right, onto a new row when the next would not fit
-	var x := 0.0
-	var row := 0
-	for g: Array in _groups:
-		var w := _group_width(g)
-		if x > 0.0 and x + w > MAX_WIDTH:
-			x = 0.0
-			row += 1
-		g.append(Vector2(x, row * (CARD.y + 24.0)))
-		x += w + GROUP_GAP
+	_lay_out()
 	_gauges = _canvas(Vector2(_width(), 50), _draw_gauges)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size = Vector2(_width() + 14.0, minf((row + 1) * (CARD.y + 24.0), CARDS_HIGH))
-	add_child(scroll)
-	_cards = _canvas(Vector2(_width(), (row + 1) * (CARD.y + 24.0)), _draw_cards)
-	_cards.reparent(scroll)
+	_scroll = ScrollContainer.new()
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child(_scroll)
+	_cards = _canvas(Vector2(_width(), 0), _draw_cards)
+	_cards.reparent(_scroll)
+	_size_cards()
 	_cards.gui_input.connect(_on_cards_input)
 	_cards.mouse_exited.connect(func() -> void: _hover = -1)
 	_about = Label.new()
@@ -98,6 +76,61 @@ func setup(p_client: GameClient) -> void:
 	add_child(_trade_box)
 	_put_all = _button("Положить всё обратно", func() -> void: client.send_store(Net.STORE_PUT_BACK))
 	_trade = _button("Торговля: купить и продать…", func() -> void: open_trade.call())
+
+
+func _held_now() -> String:
+	var out := PackedStringArray()
+	for item: int in client.store.keys():
+		if client.stock(item) > 0 and (Weapons.of_item(item) != Weapons.NONE or
+				(item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS)):
+			out.append(str(item))
+	out.sort()
+	return ",".join(out)
+
+
+func _lay_out() -> void:
+	## The groups of cards and where each starts: the groups flow left to right,
+	## onto a new row when the next would not fit.
+	_held = _held_now() if client != null else ""
+	_groups = []
+	var placed := {}
+	var kept := Items.kept_in_locker()
+	for g: Array in Items.CATEGORIES:
+		var things := PackedInt32Array()
+		for item: int in g[1]:
+			if ONLY_HELD.has(g[0]):
+				placed[item] = true
+				if client.stock(item) > 0:
+					things.append(item)
+			elif kept.has(item):
+				things.append(item)
+				placed[item] = true
+		if not things.is_empty():
+			_groups.append([g[0], things])
+	var rest := PackedInt32Array()
+	for item in kept:
+		if not placed.has(item):
+			rest.append(item)
+	if not rest.is_empty():
+		_groups.append(["Прочее", rest])
+	var x := 0.0
+	var row := 0
+	for g: Array in _groups:
+		var w := _group_width(g)
+		if x > 0.0 and x + w > MAX_WIDTH:
+			x = 0.0
+			row += 1
+		g.append(Vector2(x, row * (CARD.y + 24.0)))
+		x += w + GROUP_GAP
+	_rows = row + 1
+
+
+var _rows := 1
+
+
+func _size_cards() -> void:
+	_scroll.custom_minimum_size = Vector2(_width() + 14.0, minf(_rows * (CARD.y + 24.0), CARDS_HIGH))
+	_cards.custom_minimum_size = Vector2(_width(), _rows * (CARD.y + 24.0))
 
 
 func _group_width(g: Array) -> float:
@@ -133,10 +166,14 @@ func _button(text: String, action: Callable) -> Button:
 func refresh() -> void:
 	## Called every frame while the screen is shown.
 	var trading := client.can_trade()
+	if _held_now() != _held:
+		_lay_out()
+		_size_cards()
+		_shown = PackedByteArray()
 	var now := PackedByteArray([client.credits & 0xFF, client.credits >> 8, client.hull, client.reserve,
 		roundi(client.store_air), 1 if trading else 0, client.hand, _hover + 1, _hover_slot + 1])
-	for item in Items.kept_in_locker():
-		now.append(client.stock(item))
+	for item: int in client.store.keys():
+		now.append(client.stock(item) & 0xFF)
 	now.append_array(client.slots)
 	now.append_array(client.worn)
 	if now == _shown:
@@ -148,6 +185,8 @@ func refresh() -> void:
 	var keeps_any := false
 	for item in Items.kept_in_locker():
 		keeps_any = keeps_any or client.carried(item) > 0
+	for thing in client.slots:
+		keeps_any = keeps_any or (thing != Net.ITEM_NONE and Items.cargo(thing))     # (v58) a gun carried in from a wreck
 	_put_all.disabled = not keeps_any
 	_trade.visible = trading
 	_about.text = _about_text(trading)
@@ -160,11 +199,12 @@ func _about_text(trading: bool) -> String:
 		if trading and client.trade.has(_hover):
 			line += " У торговца: %d кр. (правый щелчок)." % client.trade[_hover]
 		if Items.cargo(_hover):
-			line += " Это груз корабля: в руки не берётся%s." % (", ставится на орудие с пульта орудий" if Weapons.of_item(_hover) != Weapons.NONE else "")
+			var gun := Weapons.of_item(_hover) != Weapons.NONE
+			line += " Это груз корабля: из шкафа не берётся%s." % ((", ставится на орудие с пульта орудий; разбирает и улучшает его инженер на верстаке" if not Weapons.damaged(_hover) else "") if gun else "")
 		lines.append(line)
 	elif _hover_slot >= 0 and client.slots[_hover_slot] != Net.ITEM_NONE:
 		var thing := client.slots[_hover_slot]
-		if not client.store.has(Items.kind_of(thing)):
+		if not client.store.has(Items.kind_of(thing)) and not Items.cargo(thing):
 			lines.append("%s: шкаф такое не хранит." % Items.name_of(thing))
 		elif not Items.whole(thing):
 			lines.append("%s: начатое назад не кладут." % Items.name_of(thing))
@@ -242,7 +282,10 @@ func _draw_cards() -> void:
 			ItemArt.draw(_cards, icon, item)
 			if n == 0:
 				_cards.draw_rect(icon, Color(0.05, 0.05, 0.07, 0.6))
-			var label := Weapons.short_of(Weapons.of_item(item)) if Weapons.of_item(item) != Weapons.NONE else Items.name_of(item)
+			var label := Items.name_of(item)
+			if Weapons.of_item(item) != Weapons.NONE:
+				label = ("× " if Weapons.damaged(item) else "") + Weapons.short_of(Weapons.of_item(item)) + \
+					("+" if Weapons.fx_of(item) != Weapons.FX_NONE else "")
 			var size := 12
 			while size > 9 and font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > CARD.x - 4:
 				size -= 1
@@ -308,7 +351,7 @@ func _draw_mine() -> void:
 			_mine.draw_rect(r, Color(0.05, 0.05, 0.07, 0.4))
 			continue
 		var thing := client.slots[i]
-		var back := thing != Net.ITEM_NONE and client.store.has(Items.kind_of(thing)) and Items.whole(thing)
+		var back := thing != Net.ITEM_NONE and (client.store.has(Items.kind_of(thing)) or Items.cargo(thing)) and Items.whole(thing)
 		_mine.draw_rect(r, Color(0.07, 0.08, 0.12, 0.92))
 		var edge := Color(0.98, 0.82, 0.35) if i == _hover_slot and back else (Color(0.4, 0.6, 0.45, 0.9) if back else Color(0.32, 0.35, 0.42, 0.9))
 		_mine.draw_rect(r, edge, false, 2.0 if i == _hover_slot else 1.0)

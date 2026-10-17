@@ -49,11 +49,15 @@ var hull := Net.HULL_MAX              # strength of the hull, 0..Net.HULL_MAX
 
 # its guns and shield (see Gunnery, Weapons)
 var mounts := PackedByteArray()       # per gun mount (ShipMap.guns): the weapon on it (Weapons.*; NONE = empty)
+var mount_fx := PackedByteArray()     # (v58) per gun mount: the effect its tier 3 gun carries (Weapons.FX_*)
 var armed := PackedByteArray()        # per gun mount: 1 = it draws power and charges
 var shield := 0.0                     # the shield, 0..Weapons.SHIELD_FULL
 var shield_on := true                 # the shield generator is switched on (it draws power)
 var hardened := false                 # the shield stops rockets too (the rare upgrade from a trader)
 var jammed := {}                      # a gun or the shield generator put out by ion or EMP: wall cell -> the tick it is back
+var guard := 0                        # (v58) the point defence in its own mount (Weapons.GUARD, or NONE)
+var guard_armed := false              # it draws power and charges
+var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours has none until armour plating)
 
 
 func engine_down() -> bool:

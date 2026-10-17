@@ -1380,7 +1380,13 @@ func _on_jolt(kind: int, shot: int, at: Vector2) -> void:
 			name = Sounds.SHIELD_HIT
 		Net.JOLT_FIRE:
 			# (for a gun firing, `shot` is the weapon)
-			match Weapons.klass(shot):
+			var own: String = {Weapons.AUTOCANNON: Sounds.GUN_AUTOCANNON, Weapons.RAILGUN: Sounds.GUN_RAIL,
+				Weapons.HAMMER: Sounds.GUN_HAMMER, Weapons.PHOENIX: Sounds.GUN_PHOENIX, Weapons.STORM: Sounds.GUN_STORM,
+				Weapons.DEVASTATOR: Sounds.GUN_DEVASTATOR, Weapons.REAPER: Sounds.GUN_REAPER, Weapons.GUARD: Sounds.GUN_FLAK,
+				Weapons.NOVA: Sounds.GUN_NOVA}.get(shot, "")     # (v58) the new guns, each with its own sound
+			match Weapons.klass(shot) if own == "" else -1:
+				-1:
+					name = own
 				Weapons.CLASS_ROCKET:
 					name = Sounds.GUN_ROCKET
 				Weapons.CLASS_ION:

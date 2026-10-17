@@ -109,7 +109,24 @@ static func snapshot(server: Node) -> Dictionary:
 		"floor": floor, "crew": crew, "admins": server.admin.names.keys(),
 		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
+		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
+		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
 	}
+
+
+static func _keyed(d: Dictionary) -> Dictionary:
+	## (v58) A dictionary by place in space (Sectors.key) with its keys as text, for JSON.
+	var out := {}
+	for k: int in d:
+		out[str(k)] = d[k]
+	return out
+
+
+static func _unkeyed(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k: String in d:
+		out[int(k)] = d[k]
+	return out
 
 
 static func character(p: RefCounted) -> Dictionary:
@@ -156,8 +173,27 @@ static func restore(server: Node, data: Dictionary) -> String:
 			server.ship.armed = armed
 		server.ship.shield_on = bool(data.get("shield_on", true))
 		server.ship.hardened = bool(data.get("hardened", false))
+		var fx := PackedByteArray(data.get("mount_fx", []))
+		server.ship.mount_fx.fill(0)
+		if fx.size() == server.ship.mount_fx.size():
+			server.ship.mount_fx = fx
+		server.ship.guard = int(data.get("guard", 0))
+		server.ship.guard_armed = bool(data.get("guard_armed", false))
 	else:
 		server.ship.hull = mini(server.ship.hull * 2, Net.HULL_MAX)   # saved before v49, when the hull was 100
+	server.supplies.bought.clear()
+	server.supplies.sold.clear()
+	server.supplies._offers_for = -1
+	for k: int in _unkeyed(data.get("bought", {})):
+		var gone: Array = []
+		for item in data["bought"][str(k)]:
+			gone.append(int(item))
+		server.supplies.bought[k] = gone
+	for k: int in _unkeyed(data.get("sold", {})):
+		var back: Array = []
+		for e in data["sold"][str(k)]:
+			back.append([int(e[0]), int(e[1])])
+		server.supplies.sold[k] = back
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])

@@ -30,7 +30,7 @@ const MEDKIT_HEAL := 30
 
 const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Z: надеть."
 
-const INFO := {
+const BASE := {
 	Net.ITEM_JUMPSUIT: {"name": "Комбинезон", "about": "Два кармана. Z: надеть.", "price": 8, "stock": 2, "wear": Net.WEAR_JUMPSUIT},
 	Net.ITEM_BACKPACK: {"name": "Рюкзак", "about": "Четыре места для вещей. Z: надеть.", "price": 15, "stock": 2, "wear": Net.WEAR_PACK},
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
@@ -70,21 +70,10 @@ const INFO := {
 	Net.ITEM_SUIT + 8: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 8},
 	Net.ITEM_SUIT + 9: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 9},
 	Net.ITEM_SUIT + 10: {"name": "Скафандр", "about": SUIT_ABOUT, "wear": Net.WEAR_SUIT, "tank": 10, "price": 40, "stock": 2},
-	# the ship's weapons off their mounts, and rockets: cargo
-	Net.ITEM_GUN + Weapons.LASER: {"gun": Weapons.LASER, "cargo": true},
-	Net.ITEM_GUN + Weapons.HEAVY: {"gun": Weapons.HEAVY, "cargo": true},
-	Net.ITEM_GUN + Weapons.SIEGE: {"gun": Weapons.SIEGE, "cargo": true},
-	Net.ITEM_GUN + Weapons.RAPID: {"gun": Weapons.RAPID, "cargo": true},
-	Net.ITEM_GUN + Weapons.BEAM: {"gun": Weapons.BEAM, "cargo": true},
-	Net.ITEM_GUN + Weapons.BLASTER: {"gun": Weapons.BLASTER, "cargo": true},
-	Net.ITEM_GUN + Weapons.ROCKET: {"gun": Weapons.ROCKET, "cargo": true},
-	Net.ITEM_GUN + Weapons.EMP: {"gun": Weapons.EMP, "cargo": true},
-	Net.ITEM_GUN + Weapons.ION: {"gun": Weapons.ION, "cargo": true},
-	Net.ITEM_GUN + Weapons.ION_CANNON: {"gun": Weapons.ION_CANNON, "cargo": true},
-	Net.ITEM_GUN_MORE + Weapons.TRACTOR: {"gun": Weapons.TRACTOR, "cargo": true},
-	Net.ITEM_GUN_MORE + Weapons.SIPHON: {"gun": Weapons.SIPHON, "cargo": true},
+	# rockets and shells: cargo (the ship's weapons off their mounts are added by _made, below)
 	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме.", "price": Weapons.ROCKET_PRICE, "cargo": true},
 	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме.", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
+	Net.ITEM_SHELL: {"name": "Снаряд", "about": "Снаряд для автопушки и «Молота». Хранится в трюме.", "price": Weapons.SHELL_PRICE, "cargo": true},
 	Net.ITEM_PROBE: {"name": "Зонд-сканер", "about": "Запускается с пульта орудий: показывает все отсеки пиратского корабля, его экипаж и повадки. Хранится в трюме.",
 		"price": 12, "stock": 1, "cargo": true},
 	Net.ITEM_DRONE: {"name": "Дрон-разведчик", "about": "Запускается с монитора дрона на мостике: залетает внутрь пиратского корабля, им управляют клавишами движения. Показывает отсеки, где побывал, и пиратов рядом; может взорваться в отсеке и повредить систему сквозь щит. Хранится в трюме.",
@@ -99,6 +88,28 @@ const INFO := {
 	Net.ITEM_PISTOL + 7: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 7},
 	Net.ITEM_PISTOL + 8: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 8},
 }
+
+# (v58) Every thing: BASE, and the ship's weapons in all their states (whole, with
+# a tier 3 effect, damaged) and the parts guns are taken apart into, made here
+# once (there are too many to write out by hand).
+static var INFO: Dictionary = _made()
+
+
+static func _made() -> Dictionary:
+	var out := BASE.duplicate()
+	for item in Weapons.gun_items():
+		var w := Weapons.of_item(item)
+		var e := {"gun": w, "cargo": true}
+		if Weapons.fx_of(item) != Weapons.FX_NONE:
+			e["fx"] = Weapons.fx_of(item)
+		if Weapons.damaged(item):
+			e["damaged"] = true
+		out[item] = e
+	for k in Weapons.KINDS:
+		out[Net.ITEM_GUN_PARTS + k] = {"name": "Детали: %s" % Weapons.KIND_NAMES[k], "cargo": true, "price": 12,
+			"about": "Детали орудий, %s. Получаются, когда инженер разбирает такое орудие на верстаке; ими же он улучшает орудия этого рода. Хранятся в трюме." % Weapons.KIND_NAMES[k]}
+	return out
+
 
 const PISTOL_DAMAGE := 30
 const PISTOL_RANGE := 14
@@ -146,13 +157,18 @@ static func name_of(item: int) -> String:
 	if not INFO.has(item):
 		return ""
 	if INFO[item].has("gun"):
-		return Weapons.name_of(int(INFO[item]["gun"]))
+		var n := Weapons.full_name(int(INFO[item]["gun"]), int(INFO[item].get("fx", 0)))
+		return ("Повреждённое орудие: " + Weapons.lower_name(int(INFO[item]["gun"]))) if INFO[item].has("damaged") else n
 	return str(INFO[item]["name"])
 
 
 static func about(item: int) -> String:
 	if INFO.has(item) and INFO[item].has("gun"):
-		return str(Weapons.info(int(INFO[item]["gun"]))["about"]) + " Энергия: %d." % Weapons.power(int(INFO[item]["gun"]))
+		var w := int(INFO[item]["gun"])
+		if INFO[item].has("damaged"):
+			return "Повреждено: прежде чем ставить, его чинит инженер на верстаке (одна запчасть). " + str(Weapons.info(w)["about"])
+		var fx := int(INFO[item].get("fx", 0))
+		return str(Weapons.info(w)["about"]) + " Энергия: %d." % Weapons.power(w) + ("" if fx == 0 else " " + Weapons.about_fx(fx))
 	return str(INFO[item].get("about", "")) if INFO.has(item) else ""
 
 
@@ -168,7 +184,10 @@ static func kind_of(item: int) -> int:
 
 static func price(item: int) -> int:
 	if INFO.has(item) and INFO[item].has("gun"):
-		return int(Weapons.info(int(INFO[item]["gun"]))["price"])
+		var w := int(INFO[item]["gun"])
+		if Weapons.unique(w):
+			return 0                         # (the flagship's gun: no trader deals in it)
+		return int(Weapons.info(w)["price"]) / (3 if INFO[item].has("damaged") else 1)
 	return int(INFO[item].get("price", 0)) if INFO.has(item) else 0
 
 
@@ -190,24 +209,27 @@ static func kept_in_locker() -> PackedInt32Array:
 	## The things the supply locker holds, in the order they are shown.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) == item and (stock(item) > 0 or cargo(item)):
-			out.append(item)
+		if kind_of(item) == item and (stock(item) > 0 or cargo(item)) and not INFO[item].has("fx") and not INFO[item].has("damaged"):
+			out.append(item)                 # ((v58) a gun's other states get a place in the locker when one comes)
 	return out
 
 
 # The kinds of thing, as the supply locker and the trader show them: caption, the things in it.
-const CATEGORIES: Array = [
+static var CATEGORIES: Array = [
 	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FUEL]],
 	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
 	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES]],
 	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON]],
-	["Корабельное оружие", [Net.ITEM_GUN + Weapons.LASER, Net.ITEM_GUN + Weapons.HEAVY, Net.ITEM_GUN + Weapons.SIEGE,
-		Net.ITEM_GUN + Weapons.RAPID, Net.ITEM_GUN + Weapons.BEAM, Net.ITEM_GUN + Weapons.BLASTER, Net.ITEM_GUN + Weapons.ROCKET,
-		Net.ITEM_GUN + Weapons.EMP, Net.ITEM_GUN + Weapons.ION, Net.ITEM_GUN + Weapons.ION_CANNON,
-		Net.ITEM_GUN_MORE + Weapons.TRACTOR, Net.ITEM_GUN_MORE + Weapons.SIPHON]],
-	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET]],
+	["Корабельное оружие", Array(Weapons.gun_items())],
+	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET, Net.ITEM_SHELL]],
+	["Детали орудий", range(Net.ITEM_GUN_PARTS, Net.ITEM_GUN_PARTS + Weapons.KINDS)],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
 ]
+
+
+static func gun_parts(kind: int) -> int:
+	## (v58) The thing that parts of that kind of gun are.
+	return Net.ITEM_GUN_PARTS + kind
 
 
 static func spawnable() -> PackedInt32Array:

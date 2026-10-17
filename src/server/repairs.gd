@@ -23,6 +23,8 @@ func update(p: Player) -> void:
 	## oxygen station fills the tank.
 	if server.combat.update_treatment(p):
 		return
+	if not p.bench.is_empty():
+		return                               # (v58) at work at the workbench (see Workshop.update)
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
 		return
@@ -112,7 +114,7 @@ func usable_ahead(p: Player) -> bool:
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
-			or map.drone_console.has(cell):
+			or map.drone_console.has(cell) or map.bench.has(cell):
 		return true
 	var door := map.door_of[cell]
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1

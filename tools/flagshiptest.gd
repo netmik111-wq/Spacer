@@ -149,11 +149,11 @@ func _initialize() -> void:
 	_expect(not d.here, "beaten, it does not come again")
 	server.won = false
 	# it grows with our gear
-	server.ship.mounts[0] = Weapons.HEAVY
-	server.ship.mounts[1] = Weapons.BEAM
+	server.ship.mounts[0] = Weapons.SIEGE
+	server.ship.mounts[1] = Weapons.PHOENIX
 	server.ship.store[Weapons.item_of(Weapons.SIEGE)] = 2
 	var bigger: Dictionary = server.shipyard.flagship(1, d._pirate_spots())
-	_expect((bigger["weapons"] as PackedByteArray).size() == 6, "with two better guns mounted it carries two more guns (spares in the cargo do not count)")
+	_expect((bigger["weapons"] as PackedByteArray).size() == 6, "with two top guns mounted it carries two more guns (spares in the cargo do not count)")
 	server.ship.store.erase(Weapons.item_of(Weapons.SIEGE))
 	server.ship.mounts[0] = Weapons.LASER
 	server.ship.mounts[1] = Weapons.LASER

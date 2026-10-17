@@ -89,6 +89,7 @@ TILES.append(("gun", None, "wall"))
 TILES.append(("intercom", None, "wall"))
 TILES.append(("holo", None, "wall"))
 TILES.append(("shield", None, "wall"))
+TILES.append(("bench", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -346,6 +347,20 @@ def make_machine(wall, what):
         rect(9, 18, 13, 21, (200, 70, 50, 255)); rect(18, 18, 22, 21, (70, 170, 220, 255))
         for x in range(6, 26):
             o[x, 23] = HAZARD if (x // 2) % 2 == 0 else dark
+    elif what == "bench":
+        # the workbench: a heavy top with a vise, tools hung on the wall above it, a lamp
+        rect(3, 4, 28, 9, mid); rect(4, 5, 27, 8, dark)
+        for tx, col in ((6, (200, 200, 205, 255)), (10, (184, 120, 52, 255)), (14, (200, 200, 205, 255))):
+            rect(tx, 5, tx + 1, 8, col)                 # spanners and a hammer on the board
+        rect(19, 5, 25, 6, (184, 120, 52, 255)); rect(21, 6, 22, 8, (200, 200, 205, 255))
+        rect(2, 13, 29, 16, cap); rect(2, 16, 29, 17, body); rect(2, 17, 29, 17, mid)   # the top
+        rect(4, 18, 6, 26, mid); rect(25, 18, 27, 26, mid)                              # legs
+        rect(9, 10, 14, 13, body); rect(10, 11, 13, 12, dark); rect(15, 11, 17, 12, cap)  # the vise
+        rect(18, 11, 23, 13, (110, 116, 126, 255))                                      # a part in it
+        rect(8, 21, 23, 23, (70, 72, 84, 255))                                          # a shelf
+        rect(26, 10, 27, 11, (90, 220, 110, 255))                                       # a lamp
+        for x in range(4, 28):
+            o[x, 26] = HAZARD if (x // 2) % 2 == 0 else dark
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -387,6 +402,7 @@ def build_tiles():
         "intercom": lambda: make_machine(images["wall_h"], "intercom"),
         "holo": lambda: make_machine(images["wall_h"], "holo"),
         "shield": lambda: make_machine(images["wall_h"], "shield"),
+        "bench": lambda: make_machine(images["wall_h"], "bench"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -422,6 +438,7 @@ def build_tiles():
 #   'I'  wall with an intercom panel on it
 #   'M'  wall with a holomap monitor on it (the whole ship: air, holes, what is broken)
 #   'Z'  wall with the shield generator in it
+#   'B'  (v58) wall with the workbench at it: engineers take guns apart, mend and upgrade them there
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -442,7 +459,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZ")
+BAND_CHARS = set("#DW<>123456789TIMZB")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -531,7 +548,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

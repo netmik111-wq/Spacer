@@ -72,12 +72,16 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 	var hulls: Array = pick[1]
 	var layout: int = hulls[_rng.randi_range(0, hulls.size() - 1)]
 	var shielded := _rng.randf() < float(info["shield"])
-	# its guns: the first of its pool first, then any
+	# its guns: (v58) each one's tier by how far out we are; the first of its pool first if that is tier 1
 	var pool: Array = info["pool"]
 	var count: int = (info["guns"] as Array)[1] if far >= int(info["more_from"]) else (info["guns"] as Array)[0]
-	var weapons := PackedByteArray([pool[0]])
-	while weapons.size() < count:
-		weapons.append(pool[_rng.randi_range(0, pool.size() - 1)])
+	var tiers := Weapons.tiers_for(far, count, _rng)
+	var weapons := PackedByteArray()
+	var fx := PackedByteArray()
+	for k in count:
+		var w: int = pool[0] if k == 0 and tiers[k] == 1 else Weapons.pick_of_tier(tiers[k], pool, _rng)
+		weapons.append(w)
+		fx.append(Weapons.roll_fx(w, _rng))
 	var crew_range: Array = info["crew"]
 	var crew := _rng.randi_range(crew_range[0], crew_range[1]) if raid else party
 	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool: return not Hulls.temper(t).has("boss"))
@@ -88,6 +92,7 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": shielded, "regen": float(info["regen"]),
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": maxi(crew, 1),
 		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, shielded),
+		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": far >= 4 and _rng.randf() < float(info.get("guard", 0.0)),
 	}
 
 
@@ -107,6 +112,9 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 	var extra: Array = info["extra"]
 	for i in mini(upgrades(), extra.size()):
 		weapons.append(extra[i])
+	var fx := PackedByteArray()
+	for w in weapons:
+		fx.append(Weapons.roll_fx(w, _rng))
 	return {
 		"klass": klass, "layout": layout, "temper": Net.TEMPER_SIEGE if kind == 1 else Net.TEMPER_STORM,
 		"name": "%s «%s»" % [_cap(str(info["name"])), "Владыка пустоты" if kind == 1 else "Пожиратель"],
@@ -114,16 +122,21 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": crew,
 		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, true, teleport),
 		"boss": kind, "teleport": teleport,
+		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": float(info.get("guard", 0.0)) >= 1.0,
 	}
 
 
 func upgrades() -> int:
-	## (v57) How far our ship is armed past its start: guns on their mounts other
-	## than the plain laser it set out with (spares in the cargo do not count).
+	## (v57) How many guns the flagship adds for how far our ship is armed past its
+	## start. (v58, the author: it grows by half of our tier points) A mounted gun
+	## of tier 2 is one point, of tier 3 two; spares in the cargo do not count.
+	return tier_points() / 2
+
+
+func tier_points() -> int:
 	var n := 0
 	for w in server.ship.mounts:
-		if w != Weapons.NONE and w != Weapons.LASER:
-			n += 1
+		n += maxi(Weapons.tier(w) - 1, 0)
 	return n
 
 
