@@ -18,7 +18,11 @@ extends RefCounted
 ##   strength  damage that puts one of its systems out
 ##   guns      [guns near the start, guns from `more_from` jumps out]
 ##   more_from jumps from the start at which it carries its extra gun
-##   pool      the guns it may roll (Weapons.*); the first gun is always its first
+##   pool      the guns it may roll (Weapons.*); the first gun is always its first (when it is tier 1).
+##             (v58) Each gun's tier is rolled by distance (Weapons.tiers_for); a tier its pool lacks
+##             is taken from any pirate gun of that tier
+##   armour    (v58) the share of our kinetic shells its armour turns aside
+##   guard     (v58) the chance it carries point defence (from 4 jumps out)
 ##   shield    chance it has a shield generator
 ##   regen     how fast its shield refills against the plain rate (1.0)
 ##   slower    its guns charge this much slower than ours
@@ -35,29 +39,33 @@ const Weapons := preload("res://src/shared/weapons.gd")
 
 const CLASSES := {
 	Net.ECLASS_CUTTER: {"name": "пиратский катер", "layouts": [2, 6], "hull": 8, "strength": 2, "guns": [1, 2], "more_from": 4,
-		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ION, Weapons.BLASTER], "shield": 0.4, "regen": 1.0, "slower": 1.15,
-		"dodge": 0.12, "crew": [2, 3], "from": 0, "weight": 3, "reward": 25, "loot": [1, 3]},
+		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ION, Weapons.AUTOCANNON, Weapons.BLASTER, Weapons.PHOENIX], "shield": 0.4, "regen": 1.0, "slower": 1.15,
+		"dodge": 0.12, "crew": [2, 3], "from": 0, "weight": 3, "reward": 25, "loot": [1, 3], "armour": 0.0, "guard": 0.0},
 	Net.ECLASS_RAIDER: {"name": "пиратский рейдер", "layouts": [1, 3], "hull": 12, "strength": 3, "guns": [2, 3], "more_from": 5,
-		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.BLASTER, Weapons.ION, Weapons.ROCKET, Weapons.HEAVY], "shield": 0.7,
-		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4]},
+		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ION, Weapons.ROCKET, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
+		Weapons.RAILGUN, Weapons.PHOENIX, Weapons.HAMMER], "shield": 0.7,
+		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4], "armour": 0.1, "guard": 0.15},
 	Net.ECLASS_GUNSHIP: {"name": "пиратская канонерка", "layouts": [4, 7], "hull": 14, "strength": 3, "guns": [3, 4], "more_from": 8,
-		"pool": [Weapons.LASER, Weapons.HEAVY, Weapons.RAPID, Weapons.BLASTER, Weapons.ROCKET, Weapons.ION, Weapons.EMP],
-		"shield": 0.6, "regen": 1.0, "slower": 1.5, "dodge": 0.0, "crew": [3, 4], "from": 2, "weight": 3, "reward": 55, "loot": [3, 5]},
+		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ROCKET, Weapons.ION, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
+		Weapons.EMP, Weapons.RAILGUN, Weapons.DEVASTATOR, Weapons.HAMMER, Weapons.SIEGE],
+		"shield": 0.6, "regen": 1.0, "slower": 1.5, "dodge": 0.0, "crew": [3, 4], "from": 2, "weight": 3, "reward": 55, "loot": [3, 5], "armour": 0.2, "guard": 0.35},
 	Net.ECLASS_CRUISER: {"name": "пиратский крейсер", "layouts": [5], "hull": 20, "strength": 4, "guns": [3, 4], "more_from": 7,
-		"pool": [Weapons.HEAVY, Weapons.LASER, Weapons.ION_CANNON, Weapons.ROCKET, Weapons.EMP, Weapons.SIEGE],
-		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6]},
+		"pool": [Weapons.LASER, Weapons.ION, Weapons.ROCKET, Weapons.HEAVY, Weapons.ION_CANNON, Weapons.EMP, Weapons.RAILGUN,
+		Weapons.SIEGE, Weapons.STORM, Weapons.HAMMER],
+		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6], "armour": 0.3, "guard": 0.5},
 	# (v57) the flagship at the goal point, in the author's two kinds. Never rolled by chance
 	# ("boss"): it waits in its own sector (Sectors.FLAGSHIP); see Shipyard.flagship and Flagship.
-	# Its guns are its whole "pool"; "extra" are those it adds, one for each of our guns better than the
-	# plain laser we start with (the author's notebook: enemies grow with the ship's gear).
+	# Its guns are its whole "pool"; "extra" are those it adds as our gear grows (the author's notebook:
+	# enemies grow with the ship's gear): (v58) one for every two tier points of our mounted guns
+	# (a tier 2 gun is one point, a tier 3 two), the author's "half of ours". Its guns are tier 3.
 	Net.ECLASS_BATTLESHIP: {"name": "флагман пиратов", "layouts": [8], "hull": 30, "strength": 5, "guns": [4, 4], "more_from": 0,
-		"pool": [Weapons.HEAVY, Weapons.LASER, Weapons.LASER, Weapons.ROCKET], "extra": [Weapons.ION, Weapons.LASER, Weapons.HEAVY],
+		"pool": [Weapons.PHOENIX, Weapons.SIEGE, Weapons.HAMMER, Weapons.DEVASTATOR], "extra": [Weapons.STORM, Weapons.PHOENIX, Weapons.SIEGE],
 		"shield": 1.0, "regen": 1.5, "slower": 2.1, "dodge": -0.05, "crew": [7, 7], "from": 9999, "weight": 0, "reward": 200,
-		"loot": [5, 7], "boss": 1},
+		"loot": [5, 7], "boss": 1, "armour": 0.3, "guard": 1.0},
 	Net.ECLASS_CARRIER: {"name": "абордажный флагман", "layouts": [9], "hull": 26, "strength": 5, "guns": [3, 3], "more_from": 0,
-		"pool": [Weapons.LASER, Weapons.NEURAL, Weapons.NEURAL], "extra": [Weapons.LASER, Weapons.NEURAL, Weapons.HEAVY],
+		"pool": [Weapons.PHOENIX, Weapons.NEURAL, Weapons.NEURAL], "extra": [Weapons.HAMMER, Weapons.NEURAL, Weapons.SIEGE],
 		"shield": 1.0, "regen": 1.3, "slower": 1.3, "dodge": 0.0, "crew": [6, 6], "from": 9999, "weight": 0, "reward": 200,
-		"loot": [5, 7], "boss": 2},
+		"loot": [5, 7], "boss": 2, "armour": 0.2, "guard": 0.0},
 }
 
 # How it fights (the old pirate's ways are "расчётливый"):

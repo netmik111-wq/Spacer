@@ -50,6 +50,11 @@ var _shield_button: Button
 var _guns_box: VBoxContainer
 var _gun_rows: Array = []            # per gun: [Label, ColorRect fill, fire Button, power Button, OptionButton, its signature]
 var _volley: Button
+var _guard_box: VBoxContainer         # (v58) the point defence's mount
+var _guard_label: Label
+var _guard_bar: ColorRect
+var _guard_power: Button
+var _guard_mount: Button
 var _enemy_line: Label
 var _target: Label
 var _probe: Button
@@ -92,6 +97,29 @@ func setup(p_client: GameClient) -> void:
 	_guns_box = VBoxContainer.new()
 	_guns_box.add_theme_constant_override("separation", 8)
 	left.add_child(_guns_box)
+	_guard_box = VBoxContainer.new()
+	_guard_box.add_theme_constant_override("separation", 3)
+	_guard_box.visible = false
+	_guard_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	_guard_box.mouse_entered.connect(func() -> void: _hover_gun = Net.GUARD_MOUNT)
+	_guard_box.mouse_exited.connect(func() -> void: _hover_gun = -1)
+	left.add_child(_guard_box)
+	_guard_label = _label(_guard_box, 13)
+	_guard_bar = _bar(_guard_box, GOOD)
+	var guard_buttons := HBoxContainer.new()
+	guard_buttons.add_theme_constant_override("separation", 6)
+	_guard_box.add_child(guard_buttons)
+	_guard_power = Button.new()
+	_guard_power.focus_mode = Control.FOCUS_NONE
+	_guard_power.pressed.connect(func() -> void:
+		client.send_gunset(Net.GUNSET_ARM, Net.GUARD_MOUNT, 0 if client.guard_flags & Net.GUNF_ARMED else 1))
+	guard_buttons.add_child(_guard_power)
+	_guard_mount = Button.new()
+	_guard_mount.focus_mode = Control.FOCUS_NONE
+	_guard_mount.pressed.connect(func() -> void:
+		client.send_gunset(Net.GUNSET_MOUNT, Net.GUARD_MOUNT,
+			Net.ITEM_NONE if client.guard != Weapons.NONE else Weapons.item_of(Weapons.GUARD)))
+	guard_buttons.add_child(_guard_mount)
 	_volley = Button.new()
 	_volley.text = "Залп всеми готовыми"
 	_volley.focus_mode = Control.FOCUS_NONE
@@ -198,8 +226,11 @@ func refresh(delta: float) -> void:
 			what += " Захватный луч держит их: не уклоняются, не уходят и не подходят."
 		_status.text = "Корпус пиратского корабля: %d из %d. %s" % [client.enemy_hull, client.enemy_full, what]
 		var names := PackedStringArray()
-		for w in client.enemy_weapons:
-			names.append(Weapons.name_of(w).to_lower())
+		for k in client.enemy_weapons.size():
+			var ew: int = client.enemy_weapons[k]
+			names.append(Weapons.lower_name(ew, client.enemy_fx[k] if k < client.enemy_fx.size() else Weapons.FX_NONE))
+		if client.enemy_guard:
+			names.append("точечная оборона (сбивает ракеты)")
 		var has_shield: bool = client.enemy_sys_full[Net.ESYS_SHIELDS] > 0
 		var temper := "не известны (покажет зонд)"
 		if client.enemy_temper != Net.TEMPER_UNKNOWN:
@@ -244,9 +275,13 @@ func refresh(delta: float) -> void:
 			b.text = Net.ESYS_NAMES[which]
 	var lines := PackedStringArray()
 	var about := _hover if _hover >= 0 else (client.gun_aim if fighting and client.gun_aim < Net.ESYS_COUNT else -1)
-	if _hover_gun >= 0 and _hover_gun < client.gun_weapon.size() and client.gun_weapon[_hover_gun] != Weapons.NONE:
+	if _hover_gun == Net.GUARD_MOUNT:
+		lines.append("%s. %s Энергия: %d." % [Weapons.name_of(Weapons.GUARD), Weapons.info(Weapons.GUARD)["about"], Weapons.power(Weapons.GUARD)])
+	elif _hover_gun >= 0 and _hover_gun < client.gun_weapon.size() and client.gun_weapon[_hover_gun] != Weapons.NONE:
 		var w: int = client.gun_weapon[_hover_gun]
-		lines.append("%s. %s Энергия: %d." % [Weapons.name_of(w), Weapons.info(w)["about"], Weapons.power(w)])
+		var fx: int = client.gun_fx[_hover_gun] if _hover_gun < client.gun_fx.size() else Weapons.FX_NONE
+		lines.append("%s. %s%s Энергия: %d." % [Weapons.full_name(w, fx), Weapons.info(w)["about"],
+			(" " + Weapons.about_fx(fx)) if fx != Weapons.FX_NONE else "", Weapons.power(w)])
 	elif about >= 0:
 		lines.append(SYSTEM_ABOUT[about])
 	elif _hover_room >= 0 and _hover_room < client.enemy_rooms.size() and client.enemy_rooms[_hover_room] == Net.ROOM_UNKNOWN:
@@ -255,7 +290,7 @@ func refresh(delta: float) -> void:
 		lines.append("Пустой отсек: попадание сюда бьёт только по корпусу.")
 	else:
 		lines.append("Без наводки снаряд ложится в случайный отсек. Попадание отнимает урон у корпуса и у системы в отсеке и показывает, что в отсеке.")
-	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину. Выбитую систему пираты чинят, только когда кто-то из них стоит в её отсеке: единица за %d с. Попадание в отсек может ранить пиратов в нём: раненый уходит в кубрик и не чинит (их показывают зонд и дрон)." % [
+	lines.append("Щит держит всё, пока он не ниже 50; ниже пропускает выстрелы тем чаще, чем он слабее, и сам восстанавливается (%s в секунду). Ракеты щит не держит, бластер наполовину; снаряды (автопушка) щит ослабляет, а рельса пробивает насквозь. Выбитую систему пираты чинят, только когда кто-то из них стоит в её отсеке: единица за %d с. Попадание в отсек может ранить пиратов в нём: раненый уходит в кубрик и не чинит (их показывают зонд и дрон)." % [
 		str(Weapons.SHIELD_REGEN), int(Gunnery.ENEMY_REPAIR_SECONDS)])
 	_about.text = "\n".join(lines)
 	_plan.queue_redraw()
@@ -294,12 +329,15 @@ func _state(which: int) -> String:
 
 
 func _cargo_guns() -> Array:
-	## [weapon, how many] of every ship weapon in the cargo.
+	## [thing, how many] of every ship weapon in the cargo that can go on a mount
+	## (v58: with its effect, if it has one; not a damaged one, nor the point defence).
 	var out: Array = []
-	for w in range(1, Weapons.COUNT):
-		var n := client.stock(Weapons.item_of(w))
-		if n > 0:
-			out.append([w, n])
+	var items: Array = client.store.keys()
+	items.sort()
+	for item: int in items:
+		var w := Weapons.of_item(item)
+		if w != Weapons.NONE and w != Weapons.GUARD and not Weapons.damaged(item) and client.stock(item) > 0:
+			out.append([item, client.stock(item)])
 	return out
 
 
@@ -337,10 +375,10 @@ func _update_guns(fighting: bool) -> void:
 			change.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			change.fit_to_longest_item = false
 			change.item_selected.connect(func(index: int) -> void:
-				var w := change.get_item_id(index)
+				var item := change.get_item_id(index)
 				change.select(0)
-				if w >= 0:
-					client.send_gunset(Net.GUNSET_MOUNT, which, w))
+				if item >= 0:
+					client.send_gunset(Net.GUNSET_MOUNT, which, item))
 			buttons.add_child(change)
 			for c: Control in [title, bar.get_parent(), buttons]:
 				c.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -365,12 +403,13 @@ func _update_guns(fighting: bool) -> void:
 		elif flags & Net.GUNF_BEAM:
 			state = "луч горит"
 		elif flags & Net.GUNF_NO_AMMO:
-			state = "нет ракет"
+			state = "нет снарядов" if Weapons.ammo(w) == Net.ITEM_SHELL else "нет ракет"
 		else:
 			state = "готово" if c >= 100 else "заряжается, %d%%" % c
 		var ammo := Weapons.ammo(w)
-		(row[0] as Label).text = "%d. %s (%s): %s%s" % [i + 1, Weapons.name_of(w), place, state,
-			(", ракет: %d" % client.stock(ammo)) if ammo != 0 else ""]
+		var fx: int = client.gun_fx[i] if i < client.gun_fx.size() else Weapons.FX_NONE
+		(row[0] as Label).text = "%d. %s (%s): %s%s" % [i + 1, Weapons.full_name(w, fx), place, state,
+			(", %s: %d" % ["снарядов" if ammo == Net.ITEM_SHELL else "ракет", client.stock(ammo)]) if ammo != 0 else ""]
 		var fill: ColorRect = row[1]
 		var share := 0.0 if c >= Net.GUN_JAMMED else c / 100.0
 		_fill(fill, 1.0 if c >= Net.GUN_JAMMED else share)
@@ -382,19 +421,40 @@ func _update_guns(fighting: bool) -> void:
 		power.text = ("Питание: вкл" if flags & Net.GUNF_ARMED else "Питание: выкл (%d эн.)" % Weapons.power(w)) if w != Weapons.NONE else "Питание"
 		any = any or ready
 		# the list to change the weapon, rebuilt when the cargo or the gun changes
-		var sig := "%d:%s" % [w, str(cargo)]
+		var sig := "%d:%d:%s" % [w, fx, str(cargo)]
 		if row[5] != sig:
 			row[5] = sig
 			var change: OptionButton = row[4]
 			change.clear()
 			change.add_item("Сменить оружие…", -1)
 			for k: Array in cargo:
-				change.add_item("Поставить: %s (в трюме %d, %d эн.)" % [Weapons.name_of(k[0]), k[1], Weapons.power(k[0])], k[0])
+				var kw := Weapons.of_item(k[0])
+				change.add_item("Поставить: %s (в трюме %d, %d эн.)" % [Weapons.full_name(kw, Weapons.fx_of(k[0])), k[1], Weapons.power(kw)], k[0])
 			if w != Weapons.NONE:
-				change.add_item("Снять в трюм", Weapons.NONE)
+				change.add_item("Снять в трюм", Net.ITEM_NONE)
 			change.select(0)
 			change.disabled = change.item_count <= 1
 	_volley.disabled = not fighting or not any
+	_update_guard()
+
+
+func _update_guard() -> void:
+	## (v58) The point defence's own mount: it shoots down rockets by itself while it has power.
+	var have := client.guard != Weapons.NONE
+	var in_cargo := client.stock(Weapons.item_of(Weapons.GUARD))
+	_guard_box.visible = have or in_cargo > 0
+	if not _guard_box.visible:
+		return
+	var armed := client.guard_flags & Net.GUNF_ARMED != 0
+	var state := "пусто"
+	if have:
+		state = "без питания" if not armed else ("готов" if client.guard_charge >= 100 else "заряжается, %d%%" % client.guard_charge)
+	_guard_label.text = "Точечная оборона «Заслон»: %s" % state
+	_fill(_guard_bar, client.guard_charge / 100.0 if have else 0.0)
+	_guard_bar.color = GOOD if client.guard_charge >= 100 else WARN
+	_guard_power.disabled = not have
+	_guard_power.text = ("Питание: вкл" if armed else "Питание: выкл (%d эн.)" % Weapons.power(Weapons.GUARD)) if have else "Питание"
+	_guard_mount.text = "Снять в трюм" if have else "Поставить из трюма (%d)" % in_cargo
 
 
 # ---------------------------------------------------------------- the enemy's plan

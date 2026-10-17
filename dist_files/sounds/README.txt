@@ -24,5 +24,15 @@
   shield_hit    наш щит принял выстрел
   their_hit     наш выстрел разорвался на корабле пиратов
   their_shield  щит пиратов остановил наш выстрел
+  (с версии 0.51, новые орудия)
+  gun_autocannon  автопушка
+  gun_rail        рельсотрон
+  gun_hammer      «Молот»
+  gun_phoenix     «Феникс»
+  gun_storm       «Буря»
+  gun_devastator  «Опустошитель»
+  gun_reaper      «Жнец»
+  gun_flak        точечная оборона «Заслон»
+  gun_nova        «Сверхновая»
 
 Пример: sounds\hull_hit.ogg

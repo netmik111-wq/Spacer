@@ -73,7 +73,8 @@ func _initialize() -> void:
 	_expect(g.aim == Net.ESYS_HELM, "the gun console aims them at the enemy's bridge")
 	var pkt := g.packet()
 	var at := 4 + 3 * map.guns.size() + 4 + 4
-	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[pkt.size() - 4] == 1 and pkt[pkt.size() - 3] == Weapons.LASER and pkt[pkt.size() - 2] == 0,
+	var end := pkt.size() - (map.guns.size() + 4 + g.enemy_weapons.size())     # (v58: the mounts' effects, the point defence, theirs)
+	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[end - 4] == 1 and pkt[end - 3] == Weapons.LASER and pkt[end - 2] == 0,
 		"clients are told where the guns aim, how the enemy's systems are and what guns it has")
 	var credits := server.ship.credits
 	for i in 20:
@@ -254,12 +255,12 @@ func _v49(p) -> void:
 	# the cargo and the mounts
 	ship.store[Weapons.item_of(Weapons.HEAVY)] = 1
 	ship.store[Weapons.item_of(Weapons.SIEGE)] = 1
-	g.setup_asked(p, Net.GUNSET_MOUNT, 1, Weapons.HEAVY)
+	g.setup_asked(p, Net.GUNSET_MOUNT, 1, Weapons.item_of(Weapons.HEAVY))
 	_expect(ship.mounts[1] == Weapons.HEAVY and ship.armed[1] == 0 and int(ship.store[Weapons.item_of(Weapons.LASER)]) == 1
 		and int(ship.store[Weapons.item_of(Weapons.HEAVY)]) == 0, "a heavy laser from the cargo goes on gun 2; the laser it replaces goes into the cargo, unpowered")
 	g.setup_asked(p, Net.GUNSET_ARM, 1, 1)
 	_expect(ship.armed[1] == 1 and g.power_used() == 2 + 3 + Weapons.SHIELD_POWER, "powered, it draws 3 (7 of 8 now)")
-	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.SIEGE)
+	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
 	g.setup_asked(p, Net.GUNSET_ARM, 2, 1)
 	_expect(ship.armed[2] == 0, "the siege laser (4) does not fit in what the reactor has left")
 	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
@@ -269,7 +270,7 @@ func _v49(p) -> void:
 	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.NONE)
 	_expect(ship.mounts[2] == Weapons.NONE and int(ship.store[Weapons.item_of(Weapons.SIEGE)]) == 1, "a gun is taken down into the cargo")
 	var stranger := server.crew.new_player("Мимо2")
-	g.setup_asked(stranger, Net.GUNSET_MOUNT, 2, Weapons.SIEGE)
+	g.setup_asked(stranger, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
 	_expect(ship.mounts[2] == Weapons.NONE, "only from the gun console")
 	server.crew.remove(stranger)
 	var before: Dictionary = ship.store.duplicate()
@@ -499,31 +500,42 @@ func _v49(p) -> void:
 	for item in offers.keys():
 		if item is int and Weapons.of_item(item) != Weapons.NONE:
 			guns += 1
-	_expect(guns == Weapons.TRADER_WEAPONS and offers.has(Net.ITEM_ROCKET) and offers.has(Net.ITEM_PATCH), "a trader sells %d kinds of ship gun, rockets and the usual things" % guns)
+	var kind := server.supplies.deal()
+	var guns_ok := (guns >= 3 and guns <= 5) if kind == Sectors.DEAL_ARMS else ((guns >= 1 and guns <= 2) if kind == Sectors.DEAL_BLACK else guns == 0)
+	_expect(guns_ok and offers.has(Net.ITEM_ROCKET) == (kind != Sectors.DEAL_JUNK) and offers.has(Net.ITEM_PATCH),
+		"a trader (%s) sells %d kinds of ship gun, rockets unless it deals in junk, and the usual things" % [Sectors.DEAL_NAMES[kind], guns])
 	_expect(server.supplies.offers() == offers, "always the same at the same place")
 	ship.credits = 1000
 	var lp = _at_locker(p)
 	var some_gun: int = -1
 	var not_sold: int = -1
-	for w in range(1, Weapons.COUNT):
-		if offers.has(Weapons.item_of(w)):
-			some_gun = Weapons.item_of(w)
-		else:
+	for item in offers.keys():
+		if item is int and Weapons.of_item(item) != Weapons.NONE:
+			some_gun = item
+	for w in Weapons.OURS:
+		if not offers.has(Weapons.item_of(w)):
 			not_sold = Weapons.item_of(w)
+	if some_gun < 0:
+		some_gun = Net.ITEM_PATCH                 # (a junk dealer: buy and sell a patch instead)
 	var n0 := int(ship.store.get(some_gun, 0))
 	server.supplies.store_asked(lp, Net.STORE_BUY, some_gun)
 	_expect(int(ship.store[some_gun]) == n0 + 1 and ship.credits == 1000 - int(offers[some_gun]), "a ship's gun is bought into the cargo")
+	_expect(Weapons.of_item(some_gun) == Weapons.NONE or not server.supplies.offers().has(some_gun), "the trader had one of it: it is gone once bought")
 	var n1 := int(ship.store.get(not_sold, 0))
 	server.supplies.store_asked(lp, Net.STORE_BUY, not_sold)
 	_expect(int(ship.store.get(not_sold, 0)) == n1, "what this trader does not have cannot be bought")
 	var c0: int = ship.credits
 	server.supplies.store_asked(lp, Net.STORE_SELL, some_gun)
-	_expect(int(ship.store[some_gun]) == n0 and ship.credits == c0 + Weapons.sell_price(int(offers[some_gun])), "and sold back for half its price")
+	var paid := server.supplies.sell_price(some_gun)
+	_expect(int(ship.store[some_gun]) == n0 and ship.credits == c0 + paid, "and sold back for its share of the price (%d)" % paid)
+	server.supplies.store_asked(lp, Net.STORE_BUY_BACK, some_gun)
+	_expect(int(ship.store[some_gun]) == n0 + 1 and ship.credits == c0, "and bought back for what the trader paid")
 	ship.hardened = false
 	server.supplies.store_asked(lp, Net.STORE_HARDEN, 0)
 	_expect(ship.hardened == offers.has("harden"), "the shield hardening only where it is offered (%s)" % ("offered" if offers.has("harden") else "not offered"))
 	var tp: PackedByteArray = server.supplies.trade_packet()
-	_expect(tp[0] == Net.S_TRADE and tp[1] == offers.size() - (1 if offers.has("harden") else 0), "clients are told what the trader offers")
+	var now: Dictionary = server.supplies.offers()
+	_expect(tp[0] == Net.S_TRADE and tp[1] == now.size() - (1 if now.has("harden") else 0), "clients are told what the trader offers")
 
 
 func _rng_through(g: Gunnery, level: float) -> bool:

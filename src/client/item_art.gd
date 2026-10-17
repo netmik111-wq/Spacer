@@ -7,7 +7,11 @@ const Weapons := preload("res://src/shared/weapons.gd")
 
 # the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
 const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0),
-	Color(0.55, 1.0, 0.7), Color(0.3, 0.95, 1.0)]
+	Color(0.55, 1.0, 0.7), Color(0.3, 0.95, 1.0), Color(1.0, 0.4, 0.85), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.95)]
+# (v58) the frame of a tier's gun: plain, steel, gold (a tier is not told; the look is)
+const TIER_RIM: Array[Color] = [Color(0.12, 0.12, 0.15), Color(0.12, 0.12, 0.15), Color(0.3, 0.34, 0.42), Color(0.75, 0.6, 0.2)]
+# parts of a kind of gun (Weapons.KIND_*): the colour of their mark
+const KIND_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.35, 0.65, 1.0), Color(0.85, 0.85, 0.8), Color(0.85, 0.55, 1.0), Color(0.95, 0.85, 0.4)]
 
 
 static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
@@ -47,6 +51,30 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		return
 	if Weapons.of_item(item) != Weapons.NONE:
 		_ship_gun(canvas, at, u, Weapons.of_item(item))
+		if Weapons.fx_of(item) != Weapons.FX_NONE:
+			# (v58) a gun with an effect: a little star
+			canvas.draw_circle(at + Vector2(14.5, 14.5) * u, 1.6 * u, Color(1.0, 0.9, 0.4))
+		if Weapons.damaged(item):
+			# (v58) damaged: scorched and cracked
+			canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(14, 8) * u), Color(0.1, 0.06, 0.04, 0.45))
+			canvas.draw_line(at + Vector2(3, 8) * u, at + Vector2(7, 13) * u, Color(0.95, 0.35, 0.2), 0.8 * u)
+			canvas.draw_line(at + Vector2(7, 13) * u, at + Vector2(11, 9) * u, Color(0.95, 0.35, 0.2), 0.8 * u)
+		return
+	if item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS:
+		# (v58) gun parts: a coil, a plate and a bolt, marked with their kind's colour
+		var mark: Color = KIND_MARK[item - Net.ITEM_GUN_PARTS]
+		canvas.draw_rect(Rect2(at + Vector2(2, 9) * u, Vector2(7, 5) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(3, 10) * u, Vector2(5, 3) * u), Color(0.5, 0.53, 0.6))
+		for k in 3:
+			canvas.draw_rect(Rect2(at + Vector2(10 + k * 1.6, 4) * u, Vector2(1.0, 6) * u), mark)
+		canvas.draw_rect(Rect2(at + Vector2(9.5, 12) * u, Vector2(5, 2) * u), Color(0.38, 0.4, 0.46))
+		canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(3, 3) * u), mark)
+		return
+	if item == Net.ITEM_SHELL:
+		# (v58) a shell standing up: a brass case and a dark tip
+		canvas.draw_rect(Rect2(at + Vector2(6, 6) * u, Vector2(5, 9) * u), Color(0.12, 0.1, 0.06))
+		canvas.draw_rect(Rect2(at + Vector2(7, 7) * u, Vector2(3, 7) * u), Color(0.85, 0.65, 0.25))
+		canvas.draw_rect(Rect2(at + Vector2(7, 3) * u, Vector2(3, 4) * u), Color(0.35, 0.35, 0.4))
 		return
 	if item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET:
 		# a rocket lying across: a grey body, a coloured nose, fins at the tail
@@ -157,10 +185,13 @@ static func _ship_gun(canvas: CanvasItem, at: Vector2, u: float, w: int) -> void
 	## A ship's gun off its mount: a breech block with a barrel, marked with its class's colour;
 	## heavier guns have thicker barrels, the rapid laser and the blaster several.
 	var mark: Color = GUN_MARK[Weapons.klass(w)]
-	canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(8, 8) * u), Color(0.12, 0.12, 0.15))
+	canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(8, 8) * u), TIER_RIM[clampi(Weapons.tier(w), 0, 3)])
 	canvas.draw_rect(Rect2(at + Vector2(3, 8) * u, Vector2(6, 6) * u), Color(0.5, 0.53, 0.6))
-	var barrels := 3 if w == Weapons.RAPID or w == Weapons.BLASTER else 1
-	var thick := 2.0 + (1.0 if w == Weapons.HEAVY or w == Weapons.ION_CANNON else (2.0 if w == Weapons.SIEGE else 0.0))
+	var barrels := 3 if w == Weapons.RAPID or w == Weapons.BLASTER or w == Weapons.PHOENIX or w == Weapons.AUTOCANNON \
+		else (2 if w == Weapons.GUARD or w == Weapons.STORM else 1)
+	var thick := 2.0 + (1.0 if Weapons.tier(w) == 2 else (2.0 if Weapons.tier(w) >= 3 else 0.0))
+	if barrels > 1:
+		thick = minf(thick, 2.0)
 	for k in barrels:
 		var y := 11.0 - thick / 2.0 + (k - (barrels - 1) / 2.0) * 2.4
 		canvas.draw_rect(Rect2(at + Vector2(9, y) * u, Vector2(7, thick) * u), Color(0.12, 0.12, 0.15))

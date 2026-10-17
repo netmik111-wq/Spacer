@@ -105,6 +105,12 @@ var other_changes := 0               # goes up whenever the other ship comes, go
 var gun_weapon := PackedByteArray()  # per gun mount: the weapon on it (Weapons.*; see Net.S_GUNS)
 var gun_charge := PackedByteArray()  # per gun mount: 0..100, Net.GUN_BROKEN, Net.GUN_JAMMED
 var gun_flags := PackedByteArray()   # per gun mount: Net.GUNF_*
+var gun_fx := PackedByteArray()      # (v58) per gun mount: the effect of the (tier 3) gun on it, Weapons.FX_*
+var guard := 0                       # (v58) the point defence fitted (Weapons.GUARD, or NONE)
+var guard_charge := 0                # its charge, 0..100
+var guard_flags := 0                 # Net.GUNF_ARMED when it is on
+var enemy_guard := false             # (v58) the enemy has point defence
+var enemy_fx := PackedByteArray()    # (v58) per enemy gun: its effect
 var power_used := 0                  # power the armed guns and the shield draw
 var power_max := 0                   # and what the reactor gives
 var shield := 0                      # our shield, 0..100
@@ -137,6 +143,9 @@ var posts_manned := 0                # Net.STATION_* bits
 var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*)]
 var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
 var trade_flags := 0                 # Net.TRADE_*
+var trade_deal := 0                  # (v58) what the trader alongside deals in (Sectors.DEAL_*)
+var trade_shares := PackedByteArray([50, 50, 50])   # (v58) % it pays for plain things, guns, ammunition and parts
+var trade_back: Array = []           # (v58) [thing, price] it would sell back to us (what we sold it)
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var volleys: Array = []              # (v56) ship's shots for the gun console's plan: [whose, kind, how it ends, room,
@@ -502,6 +511,12 @@ func send_drone(action: int, a: int = 0) -> void:
 		_peer.send(0, PackedByteArray([Net.C_DRONE, action, a]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_bench(action: int, item: int) -> void:
+	## (v58) Starts (or puts down) work at the workbench on a gun in the locker.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_BENCH, action, item]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_holo(on: bool) -> void:
 	## Starts or stops watching the holomap our character stands at.
 	if _peer != null:
@@ -658,7 +673,7 @@ func use_target(facing: int = -1) -> int:
 	## 14 = something lying on the floor in front or underfoot, to pick up,
 	## 15 = an airlock pump, 16 = an airlock door held shut because the other one is open,
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
-	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54).
+	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54), 22 = the workbench (v58).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -691,6 +706,8 @@ func use_target(facing: int = -1) -> int:
 			return 20
 		if map.drone_console.has(cell):
 			return 21
+		if map.bench.has(cell):
+			return 22
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -722,7 +739,7 @@ func usable_at(cell: int) -> bool:
 	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell):
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo, map.drone_console]:
+			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench]:
 		if things.has(cell):
 			return true
 	for e: Ent in ents.values():
@@ -1214,6 +1231,15 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			at += 2 + pkt[at + 1]
 			ransom = pkt[at] if pkt.size() > at + 1 else 0
 			ransom_left = pkt[at + 1] if pkt.size() > at + 1 else 0
+			at += 2
+			gun_fx = pkt.slice(at, at + n)
+			at += n
+			if pkt.size() >= at + 4:
+				guard = pkt[at]
+				guard_charge = pkt[at + 1]
+				guard_flags = pkt[at + 2]
+				enemy_guard = pkt[at + 3] == 1
+				enemy_fx = pkt.slice(at + 4, at + 4 + enemy_weapons.size())
 		Net.S_DRONE:
 			drone_state = pkt[1]
 			drone_at = pkt.decode_u16(2)
@@ -1246,7 +1272,15 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			trade.clear()
 			for i in pkt[1]:
 				trade[pkt[2 + i * 3]] = pkt.decode_u16(3 + i * 3)
-			trade_flags = pkt[2 + pkt[1] * 3] if pkt.size() > 2 + pkt[1] * 3 else 0
+			var at := 2 + pkt[1] * 3
+			trade_flags = pkt[at] if pkt.size() > at else 0
+			trade_back = []
+			if pkt.size() > at + 5:
+				trade_deal = pkt[at + 1]
+				trade_shares = pkt.slice(at + 2, at + 5)
+				for i in pkt[at + 5]:
+					var o := at + 6 + i * 3
+					trade_back.append([pkt[o], pkt.decode_u16(o + 1)])
 		Net.S_HOLO:
 			if not _ours(pkt):
 				return

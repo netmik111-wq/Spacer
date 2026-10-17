@@ -26,6 +26,7 @@ const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 
 const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const RAID_BOARD_TICKS := 30 * Net.TICK_HZ    # (v54) a raider that sees us helpless closes in and boards after this
@@ -38,6 +39,8 @@ const WRECK_FIGHT := 0.5             # of the rest: the survivors fight (else th
 const PIRATE_LOOT := [
 	[Net.ITEM_MAG, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_PATCH, 2], [-Net.ITEM_PISTOL, 2], [Net.ITEM_BATON, 2], [Net.ITEM_FUEL, 3],
 ]
+const DERELICT_GUN := 0.25           # (v58) the share of derelicts with a ship gun aboard
+const DERELICT_GUN_DAMAGED := 0.6    # and of those guns, the share that are damaged
 # what may lie about on a derelict: [thing, weight]
 const LOOT := [
 	[Net.ITEM_PATCH, 6], [Net.ITEM_PART, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_MAG, 3],
@@ -389,6 +392,17 @@ func _pirates_board() -> void:
 	server.chat.say("Пиратский корабль пристыковался силой и вскрыл обе двери шлюза! Пираты идут на борт (их %d). Двери шлюза заклинило: чинить, как обычную дверь." % mini(_pirates_party, server.pirates.MAX_ABOARD))
 
 
+func drop_thing(item: int) -> bool:
+	## (v58) A thing left lying on the floor of the ship alongside (a gun in a wreck). False if there was no room.
+	var cells := _floor_cells()
+	for tries in 8:
+		if cells.is_empty():
+			return false
+		if server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], item):
+			return true
+	return false
+
+
 func _drop(cells: PackedInt32Array, table: Array) -> void:
 	server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], _loot(table))
 
@@ -417,6 +431,14 @@ func _arrive() -> void:
 	else:
 		for i in _rng.randi_range(5, 8):
 			_drop(cells, LOOT)
+		if _rng.randf() < DERELICT_GUN:
+			# (v58, the author: derelicts may hide gear) a ship gun left behind, often in poor shape
+			var far: int = server.sectors.far_from_start(server.ship.sector)
+			var t: int = Weapons.tiers_for(far, 1, _rng)[0]
+			var choice: Array = Weapons.OURS.filter(func(w: int) -> bool: return Weapons.tier(w) == t and not Weapons.unique(w) and w != Weapons.GUARD)
+			var w: int = choice[_rng.randi_range(0, choice.size() - 1)]
+			var item := Weapons.item_of(w, Weapons.roll_fx(w, _rng), _rng.randf() < DERELICT_GUN_DAMAGED)
+			server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], item)
 	server.air.wake()
 	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 

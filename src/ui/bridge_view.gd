@@ -306,7 +306,8 @@ func _draw_helm() -> void:
 			var colour := Color(0.3, 0.85, 0.8) if sectors.kind[here] == Sectors.STATION else Color(0.95, 0.85, 0.35)
 			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(colour, 0.6), 1.0)
 			chart.draw_rect(Rect2(spot - Vector2(4, 4), Vector2(8, 8)), colour)
-			chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else "торговец",
+			chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else
+				("торговец: " + Sectors.DEAL_NAMES[sectors.deal[here]] if sectors.deal.size() > here else "торговец"),
 				HORIZONTAL_ALIGNMENT_CENTER, 140, 12, colour)
 		Sectors.DERELICT:
 			var grey := Color(0.7, 0.7, 0.72)

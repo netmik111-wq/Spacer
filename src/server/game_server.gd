@@ -27,6 +27,7 @@ extends Node
 ##   drone        (v54) the scouting drone, steered from the drone monitor
 ##   stations     (v55) our crew at their posts in a fight, bots under orders, the battle position, our boarders
 ##   flagship     (v57) the goal: the pirates' flagship, its teleporter, winning and losing the ship
+##   workshop     (v58) the workbench: guns taken apart, mended and upgraded by engineers
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -67,6 +68,7 @@ const EnemyCrew := preload("res://src/server/enemy_crew.gd")
 const Drone := preload("res://src/server/drone.gd")
 const Stations := preload("res://src/server/stations.gd")
 const Flagship := preload("res://src/server/flagship.gd")
+const Workshop := preload("res://src/server/workshop.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -140,6 +142,7 @@ var enemy_crew := EnemyCrew.new()
 var drone := Drone.new()
 var stations := Stations.new()
 var flagship := Flagship.new()
+var workshop := Workshop.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -179,6 +182,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	systems.setup(self)
 	navigation.setup(self)
 	supplies.setup(self)
+	workshop.setup(self)
 	admin.setup(self)
 	holomap.setup(self)
 	enemy_crew.setup(self)
@@ -440,6 +444,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 				chat.say(why)
 			elif derelict.here:
 				chat.say("%s: %s." % [p.name, ("стыковка: " + derelict.ship.name.to_lower()) if derelict.docked else "расстыковка"])
+	elif kind == Net.C_BENCH:
+		if pkt.size() > 2:
+			workshop.asked(p, pkt[1], pkt[2])
 	elif kind == Net.C_STORE:
 		if pkt.size() > 2:
 			supplies.store_asked(p, pkt[1], pkt[2])
@@ -568,6 +575,7 @@ func _tick() -> void:
 		crew.update_vitals(p)
 		looting.update(p)
 		repairs.update(p)
+		workshop.update(p)
 		crew.tell_me(p)
 	_lap("players")
 	systems.power_changed()

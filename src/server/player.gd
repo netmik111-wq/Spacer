@@ -56,6 +56,7 @@ var want_tick := 0
 var using := false                   # holds the "use" key
 var work := 0                        # ticks spent on the thing in front of it (mending a hole)
 var work_cell := -1
+var bench := PackedByteArray()      # (v58) the job at the workbench: [BENCH_*, thing], empty = none
 var work_total := 1                  # ticks the job in hand takes (the progress shown is work / work_total)
 var vitals_sent := -1                # health, tank, supply and work as last told to the client, packed
 var died_tick := 0
