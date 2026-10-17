@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v57 (version 0.50).
+Last updated: build v58 (version 0.51).
 
 Contents:
 
@@ -290,9 +290,18 @@ Contents:
   The **trader's window** (v49) sorts its goods into categories on the left: all, repair and fuel, equipment,
   medicine, personal weapons, ship weapons, ammunition, scouting (v53: the probe), services and upgrades. Each row shows the item, how many
   the locker holds, a **buy** button (its price) and a **sell** button: the trader buys any priced item from the
-  locker for **half** its price (things you carry must be put in the locker first).
-  It sells all ordinary items, rockets (4) and EMP rockets (6), **4 of the 10** kinds of ship weapon (the same
-  ones at the same trader every time) and, at about 1 trader in 3, the **shield hardening** (80).
+  locker for its share of the price (see below; things you carry must be put in the locker first).
+  **Since v58 traders deal in different things** (the author's tiers plan), shown on the chart and in the
+  trader's window:
+  | Trader | Sells | Buys at (plain things / guns / ammunition and parts) |
+  |---|---|---|
+  | Оружейник (arms dealer) | ordinary items, rockets (4), EMP rockets (6), shells (3), **3–5 ship guns** (tiered by how far out it is, like the pirates'), the shield hardening at about 1 in 3 | 20% / 50% / 50% |
+  | Барахольщик (junk dealer) | ordinary items **20% cheaper**; no guns, no ammunition | 20% / 20% / 20% |
+  | Чёрный рынок (black market) | ordinary items, ammunition, **1–2 guns a tier above** what is usual there, at **1.5×** the price | 30% / 30% / 30% |
+  Every trader within **2 jumps** of the start is an arms dealer. A trader has **one** of each ship gun: once
+  bought it is gone from that trader. A gun of tier 3 is offered with its effect already rolled. Whatever you
+  sold a trader can be **bought back** at the price it paid (a guard against a mistaken click; the list shows
+  under "Выкуп"). What each trader sold and bought is saved with the campaign.
   Services: air for the plant (10 cells for 5 credits), **hire a person into the crew reserve** (**30** credits,
   no more than 9 in reserve), **patch the hull** (+**20** integrity for **10** credits).
 - **Supply station**: when docked, free of charge it restores air in the compartments and the plant's reserve,
@@ -508,9 +517,12 @@ they carry and how they fight, not only through more hull.
 | Канонерка (gunship) | 2 (9 rooms) | 2 jumps out | 3 | 14 | 3 | 3, 4 from 8 jumps | 60% | 1.5× slower | as usual | 3–4 | 55 | 3–5 |
 | Крейсер (cruiser) | 1 (10 rooms) | 4 jumps out | 2 | 20 | 4 | 3, 4 from 7 jumps | always, refills 1.4× faster | 1.7× slower | +10% (big target) | 4–6 | 80 | 4–6 |
 
-- **Guns** come from the class's own list: cutter: laser, rapid, ion, blaster; raider: laser, rapid, blaster,
-  ion, rockets, heavy; gunship: laser, heavy, rapid, blaster, rockets, ion, EMP; cruiser: heavy, laser, ion
-  cannon, rockets, EMP, siege laser. The first gun is always the first of its list.
+- **Guns** come from the class's own list (since v58 each gun's tier is rolled by distance first, then a gun of
+  that tier from the list; see "Gun tiers"): cutter: laser, rapid, ion, autocannon, blaster, Phoenix; raider:
+  laser, rapid, ion, rockets, autocannon, heavy, blaster, railgun, Phoenix, Hammer; gunship: laser, rapid,
+  rockets, ion, autocannon, heavy, blaster, EMP, railgun, Devastator, Hammer, siege; cruiser: laser, ion,
+  rockets, heavy, ion cannon, EMP, railgun, siege, Storm, Hammer. The first gun is the first of its list when it
+  is tier 1.
 - **Rooms.** Each of its systems (guns, bridge, engine, quarters, jump drive, shields if it has them) stands
   in a room of its own, picked by lot. The rooms left over are **empty**: a hit there only takes hull.
 - A boarding ship's crew is the boarding party (as before); a raid's crew is its class's range.
@@ -694,20 +706,36 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
   their room (the room flashes red), flaring the bubble where the shield stops them, or flying past with
   «ПРОМАХ»; their shots leaving their weapons room.
 
-| Weapon | Charge | Shots | Hit | Damage | Power | Price | What else |
-|---|---|---|---|---|---|---|---|
-| Лазер (laser) | 8 s | 1 | 75% | 1 | 1 | 30 | |
-| Тяжёлый лазер (heavy laser) | 14 s | 1 | 70% | 2 | 3 | 60 | takes 50 off a shield that stops it |
-| Осадный лазер (siege laser) | 20 s | 1 | 65% | 3 | 4 | 90 | takes 75 off a shield |
-| Скорострельный лазер (rapid laser) | 12 s | 6 | 35% each | 1 | 2 | 55 | |
-| Резак (cutting beam) | 16 s | 4 pulses, 1 a second | never misses | 1 a pulse | 2 | 70 | burns the room aimed at; the aim may move while it burns; a shield at 50+ stops it, losing only 10 a pulse |
-| Плазменный бластер (blaster) | 11 s | 4 pellets | 55% each | 1 | 2 | 55 | half the pellets ignore the shield |
-| Ракетная установка (rocket launcher) | 10 s | 1 | 85% | 2 | 1 | 50 | ignores the shield (not a hardened one); holes the hull 50% of the time; spends a rocket (4 cr.) |
-| ЭМИ-установка (EMP launcher) | 12 s | 1 | 85% | 0 | 1 | 60 | ignores the shield (not a hardened one); puts the system it hits out for **6 s**; spends an EMP rocket (6 cr.) |
-| Ионная пушка (ion gun) | 7 s | 1 | 80% | 0 | 1 | 40 | takes 35 off a shield; through it, puts the system it hits out for **3 s** |
-| Ионное орудие (ion cannon) | 13 s | 1 | 75% | 0 | 2 | 70 | takes 70 off a shield; through it, puts a system out for **3 s** |
-| Захватный луч (tractor beam, v50) | 15 s | 1 | never misses | 0 | 2 | 60 | holds the enemy **8 s**: our shots hit **+25%** (up to 95%), its escape jump and its countdown to docking stand still; a shield at 50+ stops it (losing 10) |
-| Сифон (siphon beam, v50) | 12 s | 4 pulses, 1 a second | never misses | 0 | 2 | 65 | each pulse takes **12** from the enemy's shield and adds it to ours (if our generator works, up to 100); no hull damage |
+Since v58 every gun has a hidden **tier** (1, 2 or 3; never shown, a gun is known by its name, look and sound)
+and a **kind** of parts (laser, ion, missile, beam, kinetic). Tier 3 guns carry an **effect** (see "Gun tiers").
+
+| Weapon | Tier | Charge | Shots | Hit | Damage | Power | Price | What else |
+|---|---|---|---|---|---|---|---|---|
+| Лазер (laser) | 1 | 8 s | 1 | 75% | 1 | 1 | 30 | upgrades into the heavy laser |
+| Скорострельный лазер (rapid laser) | 1 | 12 s | 6 | 35% each | 1 | 2 | 40 | upgrades into the blaster |
+| Тяжёлый лазер (heavy laser) | 2 | 14 s | 1 | 70% | 2 | 3 | 75 | takes 50 off a shield that stops it; upgrades into the siege laser |
+| Плазменный бластер (blaster) | 2 | 11 s | 4 pellets | 55% each | 1 | 2 | 80 | half the pellets ignore the shield; upgrades into the Phoenix |
+| Осадный лазер (siege laser) | 3 | 20 s | 1 | 65% | 3 | 4 | 150 | takes 75 off a shield |
+| Феникс (Phoenix, v58) | 3 | 17 s | 2 | 70% each | 2 | 4 | 170 | two heavy fiery bolts; an orange-gold bolt with a fiery tail |
+| Ионная пушка (ion gun) | 1 | 7 s | 1 | 80% | 0 | 1 | 35 | takes 35 off a shield; through it, puts the system it hits out for **3 s** |
+| Ионное орудие (ion cannon) | 2 | 13 s | 1 | 75% | 0 | 2 | 90 | takes 70 off a shield; through it, a system out for **3 s** |
+| Буря (Storm, v58) | 3 | 14 s | 2 | 75% each | 0 | 3 | 160 | each takes 50 off a shield; through it, a system out for **6 s**; a crackling deep blue ball |
+| Ракетная установка (rocket launcher) | 1 | 10 s | 1 | 85% | 2 | 1 | 40 | ignores the shield (not a hardened one); holes the hull 50% of the time; spends a rocket (4 cr.) |
+| ЭМИ-установка (EMP launcher) | 2 | 12 s | 1 | 85% | 0 | 1 | 85 | ignores the shield (not a hardened one); puts the system it hits out for **6 s**; spends an EMP rocket (6 cr.) |
+| Опустошитель (Devastator, v58) | 3 | 16 s | 1 | 85% | 4 | 2 | 170 | a heavy rocket: ignores the shield (not a hardened one), always holes; spends a rocket |
+| Захватный луч (tractor beam, v50) | 1 | 15 s | 1 | never misses | 0 | 2 | 45 | holds the enemy **8 s**: our shots hit **+25%** (up to 95%), its escape jump and its countdown to docking stand still; a shield at 50+ stops it (losing 10) |
+| Сифон (siphon beam, v50) | 1 | 12 s | 4 pulses, 1 a second | never misses | 0 | 2 | 45 | each pulse takes **12** from the enemy's shield and adds it to ours (if our generator works, up to 100); no hull damage |
+| Резак (cutting beam) | 2 | 16 s | 4 pulses, 1 a second | never misses | 1 a pulse | 2 | 95 | burns the room aimed at; the aim may move while it burns; a shield at 50+ stops it, losing only 10 a pulse |
+| Жнец (Reaper, v58) | 3 | 18 s | 6 pulses | never misses | 1 a pulse | 3 | 180 | a crimson beam; a shield at 50+ stops it but loses 25 a pulse |
+| Автопушка (autocannon, v58) | 1 | 9 s | 3 shells | 60% each | 1 | 1 | 35 | kinetic: every hit holes; spends a shell (3 cr.) each |
+| Рельсотрон (railgun, v58) | 2 | 18 s | 1 | 70% | 3 | 3 | 110 | passes any shield and goes on into a second room; no ammunition |
+| Молот (Hammer, v58) | 3 | 16 s | 1 | 70% | 4 | 4 | 175 | kinetic, holes; spends a shell |
+| Заслон (point defence, v58) | 1 | 5 s | – | 60% | – | 1 | 50 | its own mount: shoots down rockets coming at us |
+| Сверхновая (Nova, v58) | 3 | 25 s | 1 | 90% | 6 | 4 | – | the flagship's own, unique: passes any shield, burns into a second room; never sold |
+
+The pirates' flagship also carries the **neural emitter** (v57), never ours. The upgrade lines: laser → heavy →
+siege; rapid → blaster → Phoenix; ion gun → ion cannon → Storm; rockets → EMP → Devastator; tractor or siphon →
+cutting beam → Reaper; autocannon → railgun → Hammer.
 
 - **Shields** (the author's rule, not FTL's). A shield is a pool of **0–100** that refills **2.5 a second**.
   A shot that meets it at **50 or more** is stopped and takes **25 per point of its damage** away (ion: its own
@@ -758,6 +786,61 @@ Since v49 (the author's request) guns can be changed, the ship has a shield, and
 - The console shows the reactor's power, our shield, each gun with its weapon, charge, power and change list,
   the enemy's hull, shield and guns, the time until it docks (or that it fights at a distance), how long until it
   jumps away while it runs, its systems and what knocking each out does.
+
+### Gun tiers, kinetic guns, point defence, loot (v58)
+
+The author's tiers plan, part 1 (part 2, ship gear and its tiers, comes in v59).
+
+- **Tiers come by distance.** Up to 3 jumps from the start every pirate gun is tier 1; 4–7 jumps out half the
+  pirate ships carry one tier 2 gun; from 8 jumps on up to half their guns are tier 2 (75% each), and 15% of those
+  tier 3. The flagship's guns are all tier 3. Pirates use the new guns too (not the beams or the point defence).
+  As a result the first pirate ships are weaker than before v58 (the rapid laser and the ion cannon are no longer
+  tier 1 guns).
+- **The flagship grows** by half our tier points: each mounted gun of tier 2 counts 1, of tier 3 counts 2;
+  every 2 points add one more gun to it (spares in the cargo do not count).
+- **Effects of tier 3 guns**, rolled for each gun found, bought or made, shown in its name and on its card:
+  | Effect | What it does |
+  |---|---|
+  | пробивной (piercing) | the shield it meets counts as 30 weaker for it |
+  | оглушающий (stunning) | a hit wounds the pirates in the room hit (on us: stuns everybody in the room, 30 health) |
+  | сдвоенный (twice) | one volley in three fires again right after |
+  | сбивающий (knocking) | the system in the room hit goes out for 2 s |
+  | рвущий (tearing) | every hit holes the hull, and once more beside it |
+- **Kinetic guns** (the author's notebook): a shield takes **1** off each shell's damage and wears by **15**
+  (the autocannon's 1-damage shells only wear a shield; the Hammer's slug goes through with 3). A railgun passes
+  any shield. **Armour** turns kinetic shots aside: «РИКОШЕТ», the shot does nothing. Pirate ships have armour
+  by class: cutter none, raider 10%, gunship 20%, cruiser and battleship 30%, carrier 20%. Our ship has no
+  armour yet (ship armour comes with the gear in v59).
+- **Point defence «Заслон».** It goes on its own mount from the gun console ("Точечная оборона": put on from the
+  cargo, take down, power), not on a gun's mount, and draws 1 power. Charged (5 s), it shoots at the next rocket
+  coming at us and brings it down **60%** of the time («СБИТА»), then charges again. Pirate ships 4+ jumps out
+  have one now and then (raider 15%, gunship 35%, cruiser 50%, the battleship always): it shoots down our rockets
+  the same way, and our scouting drone on its way in (60%). The console tells whether the enemy has one.
+- **Shells** (снаряды) are cargo like rockets: the autocannon and the Hammer spend one a shot; arms dealers and the
+  black market sell them at 3.
+- **Rare gun drops** (the author: a reward, not routine). A wrecked pirate ship leaves one of its guns in its wreck
+  **30%** of the time; one taken by boarding always leaves one. Such a gun is one tier higher 10% of the time and
+  **damaged** 40% of the time. A derelict hides a ship gun 25% of the time (damaged 60%). The flagship's wreck
+  holds its own unique gun, the **«Сверхновая»**. A gun found lies on the floor: pick it up and carry it home
+  through the airlock to the supply locker (it goes back like anything else). A damaged gun can't be mounted and
+  is worth a third; mend it at the workbench.
+- **The workbench** (верстак, 'B' on the map: in engine room 2 on the lower deck of ship02, by the lower deck on
+  ship01). Only an **engineer** may work at it (the author's choice); it needs no power and doesn't break. E
+  opens its screen: every ship gun in the locker with what can be done to it, and the gun parts the locker holds.
+  The work goes on by itself while the engineer stays at the bench (stepping away puts it down); the repair
+  skill makes it up to twice as quick.
+  | Work | Time | Needs | Gives |
+  |---|---|---|---|
+  | Разобрать (take apart) | 6 s | – | parts of its kind: 1 per tier (one less if damaged, at least 1); the Nova can't be |
+  | Починить (mend) | 10 s | a spare part (запчасть) from the locker | the gun whole (a tier 3 one gets an effect rolled) |
+  | Улучшить (upgrade) | 15 s | 2 parts of its kind (tier 1 → 2) or 4 (tier 2 → 3) | the next gun of its line (tier 3: with an effect rolled) |
+- **New looks and sounds.** Each new gun has its own shot (a short yellow tracer for shells, a long white-blue
+  streak for the railgun, a heavy glowing slug for the Hammer, a fiery bolt for the Phoenix, a crackling blue ball
+  for the Storm, a fat rocket with red flame for the Devastator, a crimson beam for the Reaper, a blinding ball for
+  the Nova, bursts of flak for point defence) and its own sound (`gun_autocannon`, `gun_rail`, `gun_hammer`,
+  `gun_phoenix`, `gun_storm`, `gun_devastator`, `gun_reaper`, `gun_flak`, `gun_nova`; replaceable like the others,
+  see `sounds\README.txt`). In the cargo a gun's frame is plain, steel or gold by its tier, a gun with an effect
+  has a little star, a damaged one is scorched.
 
 ## 18. Bridge and flight within a sector
 

@@ -134,6 +134,21 @@ Open problems:
 
 ## Build notes
 
+### v58 (gun tiers, part 1; the author's tiers plan)
+- The author answered 65 questions on gear tiers ("Spacer Tier Questions"); the plan was split in two builds.
+  Part 1: every gun has a hidden tier (1–3) and a kind of parts, five new named guns fill the tiers (Phoenix,
+  Storm, Devastator, Reaper, Hammer), tier 3 guns carry a rolled effect, pirate guns get better with distance and
+  the flagship grows by half our tier points.
+- Kinetic guns from his notebook (autocannon, railgun, Hammer: the shield only takes 1 off, armour ricochets),
+  shells, point defence «Заслон» on its own mount (ours and the pirates'; theirs shoots at our drone too).
+- Rare gun drops (wrecks 30%, captured ships always, derelicts 25%; some a tier higher, some damaged), the
+  flagship's unique «Сверхновая», three kinds of trader (arms dealer, junk dealer, black market) with one of each
+  gun and buy-back of what was sold.
+- The workbench ('B' in the engine room, `src/server/workshop.gd`, `src/ui/bench_view.gd`): engineers only (his
+  pick on the decision card) take guns apart into parts, mend damaged ones and upgrade them along their line.
+- Each new gun has its own shot look and sound (`gun_*` in `sounds\README.txt`); cargo pictures show tier by the
+  frame. New test `tools/tiertest.gd` (20 tests now). Protocol 36.
+
 ### v57 (the pirates' flagship, the goal of the game; the author's request)
 - The author asked for a linear goal: a boss fight with a big flagship in two variants, a battleship whose
   guns aim at our shield and engine, and a carrier that stuns the crew and teleports boarders to take the

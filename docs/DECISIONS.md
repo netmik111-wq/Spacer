@@ -570,3 +570,44 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
 - **After the win the voyage goes on** (the author: "you can roam around after we kill the flagship").
   `GameServer.won` is saved with the campaign and sent in `S_CAMPAIGN`; the flagship does not come again;
   the victory panel shows only to those who were there (not to someone joining later).
+
+- **Gun tiers are hidden; a tier is a different named gun** (v58, the author's tiers plan: answers on the
+  "Spacer Tier Questions" page, summary in the project's `plans/tiers-plan.md`). `Weapons.INFO` gives every
+  gun a `tier`, a `kind` of parts and the `next` gun of its line; the tier is never shown, so players learn
+  guns by name, look (`FightFx`, `EnemyPlan`) and sound (`Sounds.GUN_*`). Every kind has a gun in each tier;
+  the gaps were filled with new named guns (Phoenix, Storm, Devastator, Reaper, Hammer). Prices follow his
+  ×1 / ×2.5 / ×5 by tier, and tier 3 costs one more power than tier 2 of its line. The rapid laser and the
+  ion cannon moved: the rapid laser is tier 1, the ion cannon tier 2, so the first pirate ships are a bit
+  weaker than in v57 (told to the author). Enemy beams stay out of pirate pools (their AI has no beam aim).
+- **A gun's state lives in its item id** (u8): plain guns `ITEM_GUN + w` (and `ITEM_GUN_MORE` past 10),
+  a tier 3 gun with its effect `ITEM_GUN_FX + FX_GUNS.find(w) * 5 + fx - 1`, a damaged one
+  `ITEM_GUN_DAMAGED + w` (`Weapons.item_of`, `of_item`). So the store, the floor, trading and saves needed no
+  new fields; `Items.INFO` is built from `BASE` plus generated gun entries. Only the effect of a mounted gun
+  needs its own field (`Ship.mount_fx`).
+- **Tier 3 effects** (the author: rolled per gun, shown on its card, no fire): pierce (the shield counts 30
+  lower), stun, twice (a third of volleys), knock (2 s out), tear (an extra hole). Rolled whenever a tier 3
+  gun comes into being: on a pirate ship, at a trader, from loot, from mending or upgrading at the workbench.
+- **Tiers come by distance, little by little** (the author's T5): `Weapons.tiers_for`. 0–3 jumps all tier 1;
+  4–7 at most one tier 2 (50% of ships); 8+ up to half tier 2, 15% of those tier 3. The flagship's guns are
+  tier 3 and it grows by half of our tier points (`Shipyard.upgrades`, replacing v57's one gun per non-laser).
+- **Kinetic guns** (the author's notebook page1016-03 and W1–W7): a shield takes 1 off each shell and wears by
+  15, so the 1-damage autocannon only wears a shield and the Hammer goes through with 3; the railgun passes any
+  shield and pierces a second room; armour ricochets them. Only pirate ships have armour in v58 (by class);
+  ours comes with the armour plating gear in v59. Shells are cargo ammo like rockets.
+- **Point defence has its own mount** (the author's R12: not a gun mount). `Net.GUARD_MOUNT` in the gun
+  console's packets; no map cell, so it cannot break (my call; the plan's "weak to hull" is left for v59 with
+  armour). 60% to shoot down a rocket, 5 s recharge; on pirate ships from 4 jumps by class chance; theirs
+  also shoots at our drone flying in.
+- **Gun drops are rare** (the author's D1–D8): a wreck 30%, a captured ship always, 10% a tier higher, 40%
+  damaged; derelicts 25% (60% damaged). The gun lies on the floor and is carried home by hand through the
+  airlock (no two-person carry yet). The flagship drops the unique Nova (the author's "BFG"): never sold, can't
+  be taken apart.
+- **Traders deal in different things** (the author's S1–S4, R9): arms dealer, junk dealer, black market, by
+  lot per sector (`Sectors.deal_at`); every trader within 2 jumps of the start is an arms dealer (my addition,
+  so an early game is never gunless). One of each gun per trader (`Supplies.bought`), and anything sold can be
+  bought back at the price paid (`Supplies.sold`, the author's misclick guard). Both are saved.
+- **The workbench is engineers only** (the author picked it on the decision card in the v58 thread). It works
+  on guns in the supply locker, not in the hands, because ship guns are cargo that can't be taken from the
+  locker; parts and spare parts come from the locker too. Times 6 / 10 / 15 s, quicker with the repair skill;
+  the work goes on by itself while the engineer stays (`Workshop.update`, progress through `Player.work`).
+  No power and no breakdowns: it is a bench of tools.
