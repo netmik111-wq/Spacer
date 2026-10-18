@@ -14,6 +14,7 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const PowerView := preload("res://src/ui/power_view.gd")
 
 const MAX_WIDTH := 820.0
 const MAX_CELL := 20.0
@@ -41,6 +42,7 @@ var _index := {}                     # cell -> its place in client.holo_cells
 var _hover := -1                     # the cell under the mouse
 var _time := 0.0
 var _seen := -1                      # client.holo_changes when the summary was last written
+var _power: Label                    # (v61, the author's P6) the power monitor, as on the main SMES's terminal
 
 
 func setup(p_client: GameClient) -> void:
@@ -75,6 +77,10 @@ func setup(p_client: GameClient) -> void:
 	tip.add_theme_font_size_override("font_size", 12)
 	tip.add_theme_color_override("font_color", DIM)
 	row.add_child(tip)
+	_power = Label.new()
+	_power.add_theme_font_size_override("font_size", 13)
+	_power.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	add_child(_power)
 	_layout()
 
 
@@ -127,6 +133,7 @@ func refresh(delta: float) -> void:
 		_seen = key
 		_summary.text = _sum_up()
 	_under.text = _describe(_hover)
+	_power.text = PowerView.monitor_text(client).replace("\n", ";  ").replace("МОНИТОР ПИТАНИЯ;  ", "Питание: ")
 
 
 static func pressure_colour(share: float) -> Color:

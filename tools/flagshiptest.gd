@@ -117,13 +117,25 @@ func _initialize() -> void:
 	for i in 200:
 		if map.guns.has(g._enemy_target()):
 			guns += 1
-	_expect(guns > 130, "the engine down, it goes for our guns (%d)" % guns)
+	var smes := 0
+	for i in 200:
+		if map.smes.has(g._enemy_target()):
+			smes += 1
+	_expect(smes > 130 or map.smes.is_empty(), "the engine down, it goes for the SMES that carries the ship (v61) (%d)" % smes)
+	for c: int in map.smes.keys():
+		server.ship.broken[c] = true
+	guns = 0
+	for i in 200:
+		if map.guns.has(g._enemy_target()):
+			guns += 1
+	_expect(guns > 130, "the engine and the SMES down, it goes for our guns (%d)" % guns)
 	server.ship.broken.erase(map.engine.keys()[0])
 	server.ship.broken.erase(console)
 	server.ship.broken.erase(gen)
 	# its hit on the engine darkens the ship
 	g.enemy_hit_chance = 1.0
 	server.ship.shield_on = false
+	server.power.set_charge(0.0)             # (v61) with the SMES empty
 	var hit_engine := false
 	for i in 30:
 		g._enemy_fires(Weapons.LASER)

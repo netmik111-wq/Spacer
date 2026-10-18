@@ -58,7 +58,9 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   The "not both at once" rule is in `Systems.can_break`: bridge consoles and the engine break one at a time.
   For the consoles, this guarantees an escape route from the author's vision.
 - **The engine powers the whole ship** (tile `engine`, digit 6 in the map). The author's word: when
-  the engine shuts down, absolutely all systems stop working, but don't break.
+  the engine shuts down, absolutely all systems stop working, but don't break. **Changed in v61** (the
+  author's road plan answers): no engine *and an empty SMES* means no power, nothing breaks from it; see
+  "Power and the SMES (v61)" below. `GameServer.powered()` asks `Power.on()`.
   So everything added to the ship must ask `GameServer.powered()`
   (on the client `GameClient.powered()`). Currently dependent on power: movement and jump, consoles,
   the air plant, oxygen racks, emergency shutters, doors (`Doors.manual`: without
@@ -678,3 +680,30 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   quick (`Weapons.guard_chance`).
 - **Piloting is the only new skill** (v60, A9): the pilot's own, worth up to +10% dodge (a pilot by job starts at
   50, so the old 20% stays). It grows with each enemy volley dodged at the controls.
+
+### Power and the SMES (v61)
+- **The rule** (the author, road plan): no engine and an empty SMES = no power, nothing breaks. Things with power
+  ask `Power.at(cell)` when they sit on the bridge (the backup may keep them going), else `GameServer.powered()`.
+- **The SMES loses its whole charge when hit** (the author's P7 correction). It is a machine in `Ship.broken`.
+- **Numbers** (my picks V1-V4, the author's P2/P4): the ship's own draw 4, charging from the reactor's spare power
+  only (never taking from a gun), 6 a second, 2160 units (3 minutes of the whole armed ship, 12 a second), starts
+  full with charging and output on and output 12, a boost of up to +3 for guns and shield while the engine runs.
+- **Out of a fight the guns and the shield draw nothing** (my call while building): `Gunnery.power_used` counts armed
+  guns all the time, and with the reactor full of guns the SMES would never charge. So `Power._load` counts them only
+  in a fight; with the engine out an idle ship lasts 9 minutes, a fighting one 3 (P4).
+- **A dark ship keeps its guns armed** (`Power.budget` returns the reactor when dark): nothing charges then anyway,
+  and disarming everything would be one more chore after the engine is mended.
+- **A power glitch is an engine stall** (V7): `Ship.power_out_until`; the SMES carries the ship through it.
+- **Bridge backup SMES** (P3, V6): 360 units, keeps the bridge room's light and consoles (`ShipMap.on_backup`, the
+  room `Q` faces) about 6 minutes. No jump without the engine (my correction of my own P3 note).
+- **Pirates aim at the SMES** like the shield generator (V8); the battleship goes for it right after the engine.
+- **Coils as gear** (P8, V9): `Gear.SYS_COILS`, ×1.5/+2 and ×2/+4, at the arms dealer and black market, in wrecks.
+- **No cables** (P9). The terminal (P5) is the SMES's own and works dark; the power monitor (P6) is its lower half
+  and on the holomap (V10).
+- **Ion storm** (K16, V11-V13): a sector kind taken from a third of the quiet ones; half reactor; a surge every
+  40-70 s puts out a gun, the shield, or an SMES for 10 s, never the engine or a console (the escape rule). In a
+  storm a pirate's guns charge 1.5x slower, its shield refills at half pace and surges hit it too (`Hazards`).
+- **Every hazard hits the enemy** (the author): meteors strike the pirate ship as they strike us (1 hull, 1 wear).
+- **Pirates come in hazards as often as in quiet space** (V14).
+- **Hull mending from outside** (moved from v60, V15/V16): +10 a patch, 10 s, up to full; bots on «Работы» go
+  below 80% when there is nothing to mend aboard and no fight, one at a time, never in a fight (`Outside`).

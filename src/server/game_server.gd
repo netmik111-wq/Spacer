@@ -32,6 +32,9 @@ extends Node
 ##   mounts       (v60) the gun mounts: gunners at them, guns carried up and down by hand, the console's orders
 ##   medbay       (v60) the autodocs and the body scanner
 ##   blast        (v60) blast doors locked from a holomap, and pirates cutting through them
+##   power        (v61) the engine's power, the SMES and the bridge's backup, what everything draws
+##   hazards      (v61) the ion storm, and meteors and storms hitting the pirate ship too
+##   outside      (v61) bots going out through an airlock in suits to mend the hull
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -77,6 +80,9 @@ const Outfit := preload("res://src/server/outfit.gd")
 const Mounts := preload("res://src/server/mounts.gd")
 const Medbay := preload("res://src/server/medbay.gd")
 const Blast := preload("res://src/server/blast.gd")
+const Power := preload("res://src/server/power.gd")
+const Hazards := preload("res://src/server/hazards.gd")
+const Outside := preload("res://src/server/outside.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -156,6 +162,9 @@ var outfit := Outfit.new()
 var mounts := Mounts.new()
 var medbay := Medbay.new()
 var blast := Blast.new()
+var power := Power.new()
+var hazards := Hazards.new()
+var outside := Outside.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -250,6 +259,9 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	director.setup(self)
 	stations.setup(self)
 	flagship.setup(self)
+	hazards.setup(self)
+	power.setup(self)
+	outside.setup(self)
 	outfit.setup(self)
 	rng.randomize()
 	tick = 0
@@ -465,6 +477,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_BLAST:
 		if pkt.size() > 1:
 			blast.asked(p, pkt[1])
+	elif kind == Net.C_SMES:
+		if pkt.size() > 3:
+			power.asked(p, pkt[1], pkt[2], pkt[3])
 	elif kind == Net.C_BENCH:
 		if pkt.size() > 2:
 			workshop.asked(p, pkt[1], pkt[2])
@@ -556,7 +571,7 @@ func to_all(msg: PackedByteArray) -> void:
 
 func powered() -> bool:
 	## Does the crew's ship have power (see Ship.powered)?
-	return ship.powered(tick)
+	return power.on()
 
 
 func engine_down() -> bool:
@@ -599,6 +614,7 @@ func _tick() -> void:
 		workshop.update(p)
 		crew.tell_me(p)
 	_lap("players")
+	power.tick()
 	systems.power_changed()
 	supplies.tell_store()
 	if over == Net.OVER_NONE:
@@ -611,6 +627,8 @@ func _tick() -> void:
 	systems.update_doors()
 	navigation.update_jump()
 	navigation.update()
+	hazards.tick()
+	outside.tick()
 	derelict.update()
 	flagship.tick()
 	stations.tick()

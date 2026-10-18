@@ -306,6 +306,11 @@ func refresh(delta: float) -> void:
 
 func _update_power() -> void:
 	_power.text = "Реактор: занято %d из %d энергии" % [client.power_used, client.power_max]
+	var mon: Dictionary = client.power_mon
+	if not mon.is_empty() and int(mon["budget"]) > int(mon["reactor"]) and int(mon["flags"]) & Net.POWF_ENGINE:
+		_power.text += " (СМЭС добавляет +%d)" % (int(mon["budget"]) - int(mon["reactor"]))   # (v61, the author's P2)
+	elif not mon.is_empty() and int(mon["flags"]) & Net.POWF_CARRYING:
+		_power.text += " (от СМЭС)"
 	_fill(_power_bar, float(client.power_used) / maxf(client.power_max, 1.0))
 	_power_bar.color = WARN if client.power_used >= client.power_max else GOOD
 	var f := client.shield_flags

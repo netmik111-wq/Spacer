@@ -269,6 +269,14 @@ func _dark_cell(cell: int) -> bool:
 	return server.map.is_other(cell) and server.derelict.dark()
 
 
+func _unlit(cell: int) -> bool:
+	## (v61) No light of its own there now: a derelict or a wreck, or our ship with no
+	## power (except the bridge while its backup SMES holds it).
+	if server.map.is_other(cell):
+		return _dark_cell(cell) or not server.powered()
+	return not server.power.at(cell)
+
+
 func _lit_cells() -> Dictionary:
 	## Every cell a lit flashlight shines on, this tick (the same as GameClient.lit_cells).
 	if _lit_tick == server.tick:
@@ -317,8 +325,8 @@ func sees(p: Player, q: Player) -> bool:
 	if dist > Sight.SIGHT_REACH + 1.5:
 		return false
 	var cell := q.st.y * map.width + q.st.x
-	var dark := not server.powered() or _dark_cell(p.st.y * map.width + p.st.x)
-	if not dark and not _dark_cell(cell):
+	var dark := _unlit(p.st.y * map.width + p.st.x)
+	if not dark and not _unlit(cell):
 		return Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_light, Sight.SIGHT_REACH + 1, lines)
 	if dist <= Sight.DARK_REACH + 1.5 and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.DARK_REACH + 1, lines):
 		return true

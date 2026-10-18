@@ -51,6 +51,9 @@ var bench := {}                      # (v58) wall cells with the workbench: guns
 var bay := {}                        # (v59) wall cells with the module bay: ship modules go in its free slots
 var autodoc := {}                    # (v60) wall cells with an autodoc: wall cell -> the bed (the floor cell in front)
 var scanner := {}                    # (v60) wall cells with a body scanner
+var smes := {}                       # (v61) wall cells with the ship's SMES: it stores power and carries the ship
+var smes_small := {}                 # (v61) wall cells with the bridge's small backup SMES
+var backup_rooms := {}               # (v61) the rooms (numbers in `rooms`) the backup SMES faces: it keeps them lit
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
                                      # PackedInt32Array of cells each, top-left room first (see _find_rooms)
 var room_of := PackedInt32Array()    # per cell: its number in `rooms`, -1 = in none
@@ -92,7 +95,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
-	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner"]
+	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -193,6 +196,9 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	bay = {}
 	autodoc = {}
 	scanner = {}
+	smes = {}
+	smes_small = {}
+	backup_rooms = {}
 	guns = PackedInt32Array()
 	gun_console = {}
 	drone_console = {}
@@ -226,6 +232,13 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			bay[i] = true
 		if cells[i] == tile_ids.get("scanner", -1):
 			scanner[i] = true
+		if cells[i] == tile_ids.get("smes", -1):
+			smes[i] = true
+		if cells[i] == tile_ids.get("smes_small", -1):
+			smes_small[i] = true
+			var front := fitting_front(i)
+			if front >= 0 and room_of[front] >= 0:
+				backup_rooms[room_of[front]] = true
 		if cells[i] == tile_ids.get("autodoc", -1):
 			autodoc[i] = fitting_front(i)
 		if cells[i] == tile_ids.get("engine", -1):
@@ -610,7 +623,20 @@ func device_name(cell: int) -> String:
 		return "автодок"
 	if scanner.has(cell):
 		return "медицинский сканер"
+	if smes.has(cell):
+		return "СМЭС"
+	if smes_small.has(cell):
+		return "резервный СМЭС мостика"
 	return ""
+
+
+func on_backup(cell: int) -> bool:
+	## (v61) Does the bridge's backup SMES feed this cell: a floor cell of the
+	## room it faces, or a thing on a wall that is used from there?
+	if backup_rooms.is_empty() or cell < 0 or cell >= cells.size():
+		return false
+	var at := cell if walk[cell] == 1 else fitting_front(cell)
+	return at >= 0 and backup_rooms.has(room_of[at])
 
 
 func deck_of(y: int) -> int:

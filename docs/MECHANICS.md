@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v60.1 (version 0.53.1).
+Last updated: build v61 (version 0.54).
 
 Contents:
 
@@ -198,14 +198,39 @@ Contents:
 
 ## 7. Engine and power
 
-- **The engine powers the whole ship** (the author's word). When it shuts down, all systems
-  stop working, but **don't break**:
+- **The rule since v61** (the author's word): **no engine and an empty SMES means no power**, and
+  nothing breaks from it. Without power:
   - the ship doesn't move or jump, a jump in progress is aborted;
   - consoles, air plant, oxygen racks, emergency shutters don't work;
   - doors open only by hand;
   - the lights go out (see "Light and darkness").
 - The spacesuit, the player's instruments, ladders and repair don't depend on power.
-- **Power failure** (event): power is lost for 8–15 s with the engine intact.
+- **Power numbers.** The ship's own draw (lights, air, doors, consoles, pumps) is **4** a second. The reactor
+  gives the guns and the shield **8** (10 and 12 with better reactors, section 17 "Ship gear"); the engine
+  makes both.
+- **SMES** (v61, `S` on the engine room's top wall, ship02): a store of power. Full it holds **2160** units
+  (3 minutes of 12, the whole ship in a fight). It:
+  - **charges** only from what the reactor has spare after the guns and the shield, up to **6** a second
+    (out of a fight the guns stand idle, so it charges from the whole reactor);
+  - **adds up to +3** to the reactor's power for the guns and the shield in a fight while the engine runs
+    (the gun console shows it); it pays only for what is used above the reactor;
+  - **carries the whole ship** when the engine is broken or stalls: the ship's own 4 a second, plus the guns
+    and the shield in a fight, up to its output (12, at most 15). Out of a fight a full one lasts about
+    9 minutes, in a fight about 3. The crew hears it at 50%, 20% and 5%;
+  - **a hit takes its whole charge** (it breaks like a machine; a spare part mends it). Pirate ships aim at
+    it like at the shield generator; the flagship battleship goes for it right after the engine.
+- **SMES terminal** (E on the SMES, works with the ship dark): charge and state, charging on/off, output
+  on/off, input target (0..6), output target (0..15). Its lower half is the **power monitor**: what the engine
+  makes, what the ship draws, the power for the guns, how long the charge lasts. The holomap shows the
+  same monitor.
+- **SMES coils** (gear, installed at the SMES by an engineer): «Ёмкость» ×1.5 charge, +2 a second
+  (80 cr); «Сверхпровод» ×2 charge, +4 a second (160 cr). Sold by arms dealers and the black market, found in wrecks.
+- **Bridge backup SMES** (`Q`, bridge wall): **360** units, charges itself 2 a second while the ship has power.
+  When the ship is dark it keeps the **bridge room lit and its consoles working** for about 6 minutes.
+  It cannot make a jump: a jump needs the engine.
+- **Power failure** (event): the engine stalls for 8–15 s with nothing broken; the SMES carries the ship
+  through it, so only an empty SMES makes it dark.
+- **Ion storm** (v61, a kind of sector): see section 19.
 
 ## 8. Machines, breakdowns and repair
 
@@ -227,6 +252,11 @@ Contents:
   how many compartments have lowered pressure or almost no air, shutters down, jammed doors. The mouse
   over a cell shows its pressure in kPa and what is there. Updated twice a second; needs power.
   This is the only place the game shows air in rooms you are not in (the author asked for it).
+- **Mending the hull from outside** (v61): in a suit, out in space, face a whole cell of our hull with a
+  **patch** and hold E: **+10** hull per patch, **10 s** (the repair skill cuts it to half), up to 200.
+  A bot on «Работы» does it by itself when the hull is below **80%** with nothing to mend aboard and no
+  fight: it takes up to 3 patches and a suit from the locker, fills its tank, pumps an airlock out, floats
+  out, mends, comes back and pumps the chamber full. A pirate showing up calls it back.
 - **Repair**: face the broken thing and hold E. With a **spare part** 6 s (the part is used up),
   without one 18 s. That is for a person without skill; the repair skill cuts the time by up to half
   (with skill 50 — 4.5 s, with skill 100 — 3 s; see section 21).
@@ -988,8 +1018,16 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
 - Every sector has a route north or east (no dead ends) and, with probability
   0.3, one more in each direction; no more than 4.
 - Sector kinds: calm space, meteor shower, trader, supply station,
-  derelict ship, and (v57) the pirates' flagship, one per game (section 17, "Pirate flagship").
-  The share of meteor showers grows with distance from the start: from 20% to 45%.
+  derelict ship, (v61) ion storm, and (v57) the pirates' flagship, one per game (section 17, "Pirate flagship").
+  The share of meteor showers grows with distance from the start: from 20% to 45%. About a third of the
+  calm sectors hold an ion storm (roughly one sector in ten).
+- **Ion storm** (v61): a wide area (55–75 across) around the sector's middle; a jump lands inside it. Inside:
+  the reactor gives **half** its power (guns that no longer fit switch off); every **40–70 s** a surge puts one
+  of our guns, the shield generator or an SMES out for **10 s** (never the engine or a console). A pirate
+  fighting us there suffers too: its guns charge **1.5×** slower, its shield refills at half pace, and the same
+  surges put one of its systems out. Leave by flying out or jumping. The chart draws it in blue.
+- **Hazards and pirates** (v61): pirate ships come in meteor showers and ion storms as often as in calm space.
+  A meteor that strikes our hull in a fight strikes the pirate ship too: **1** off its hull and wear on a room.
 - **Jump**: 8 s of preparation, then 15 s for the engine to recharge.
 - **Fuel**: a jump burns **1** canister from the supply locker at the moment of the jump. Without fuel
   in the locker a jump can't be set; if the last canister is taken out while the jump is charging, it is aborted.
@@ -1015,13 +1053,13 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
 | Emergency shutter failure | small | everywhere except a station |
 | Power failure | medium | everywhere except a station |
 | Boarding | large | everywhere except a station |
-| Pirate ship: boarding | large | calm space, trader, derelict ship |
-| Pirate ship: fight | large | calm space, trader, derelict ship |
+| Pirate ship: boarding | large | calm space, trader, derelict ship, (v61) meteor shower, ion storm |
+| Pirate ship: fight | large | calm space, trader, derelict ship, (v61) meteor shower, ion storm |
 | Drifting fuel (2 canisters) | small | by itself, only when there is no fuel on board |
 | Flagship: battleship, Flagship: carrier (v57) | catastrophe | only on an admin's command |
 
-- Pace: once every 3–6 minutes in a calm sector and at a trader, once every 25–45 s in a meteor
-  shower; no events at a station. More often with a large crew (up to 2.5 times).
+- Pace: once every 3–6 minutes in a calm sector, at a trader and (v61) in an ion storm (its surges come on
+  their own), once every 25–45 s in a meteor shower; no events at a station. More often with a large crew (up to 2.5 times).
 - Breathers: 15 s after arriving in a sector, 8 s after entering or leaving a shower.
 - The eventer watches the ship: it gives no new troubles while the whole crew is down or there are more breaches
   than people; with no patches on board breaches are three times rarer; unarmed crews are
@@ -1038,7 +1076,7 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
   1, 2, 5 or 10 at a time, and **where**: into the hands (else a free slot, else the floor underfoot) or
   into the **supply locker**. Ship guns come in every kind; a picker gives tier 3 guns one of the five
   effects, and a box gives guns damaged. Ammunition, probes, drones and gun parts are cargo and always go
-  into the locker. All 13 gear crates (4 systems x 2 upgrades, 3 armours, focusing array, phase drive) are there.
+  into the locker. All 15 gear crates (5 systems x 2 upgrades, 3 armours, focusing array, phase drive) are there.
 - **People** tab: for everyone aboard (bots and pirates too): heal (health 100, wounds closed, tank
   refilled; also raises the dead where they lie, but not bodies left after a return from the reserve),
   kill, go to them, bring them to me, change job (and access), (v60.1) every skill at its best. «Heal
@@ -1047,11 +1085,12 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
 - **Ship** tab: mend everything (breaches, machines, doors, shutters, power), seal breaches, breach
   the hull near me, normal air in every cell and a full air plant store, fill the supply locker up to
   its starting stock, +100 credits, hull to 100, +1 in the reserve, save the campaign, (v60.1) charge
-  everything (shield full, armed guns charged, jump drive and phase drive ready). (v60.1) **Ship gear at
+  everything (shield full, armed guns charged, jump drive and phase drive ready), (v61) SMES full or empty,
+  an ion surge now. (v60.1) **Ship gear at
   once**, without an engineer's work: each system's tier (1 = built in, 2, 3) from a list that shows the
   tier now fitted, any module into the bay (a module of the same sort is swapped, else it takes a free
   slot, else the first), and emptying the bay. What comes out this way is gone.
-- **Space and events** tab: a station, a derelict or (v60.1) a trader of a chosen kind (arms dealer, junk
+- **Space and events** tab: a station, a derelict, (v61) a meteor shower or an ion storm, or (v60.1) a trader of a chosen kind (arms dealer, junk
   dealer, black market) in this sector with the ship put at it (until the next jump), a pirate with a
   pistol or a baton in front of me, (v60.1) a **pirate ship** of a chosen class (cutter, raider, gunship,
   cruiser) and temper (any, calculating, cautious, reckless, hunter) that either fights at a distance or

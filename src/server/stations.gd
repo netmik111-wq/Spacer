@@ -392,6 +392,8 @@ func bot_think(p: Player) -> bool:
 		p.bot_healing = false
 		return true
 	_wants_healing(p)
+	if server.outside.drive(p):
+		return true                          # (v61) out mending the hull (see Outside)
 	if p.order == Net.POST_FREE and not p.bot_healing:
 		p.doing = Net.DOING_IDLE
 		return false

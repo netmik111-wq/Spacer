@@ -447,9 +447,9 @@ func setup_asked(p, action: int, a: int, b: int) -> void:
 				ship.armed[a] = 0
 				charge[a] = 0.0              # a gun without power loses its charge
 			elif ship.armed[a] == 0:
-				if power_used() + Weapons.power(ship.mounts[a]) > server.outfit.reactor():
+				if power_used() + Weapons.power(ship.mounts[a]) > server.power.budget():
 					server.chat.tell(p, "Не хватает энергии реактора: %s берёт %d, свободно %d. Отключите другое орудие или щит." % [
-						Weapons.name_of(ship.mounts[a]), Weapons.power(ship.mounts[a]), server.outfit.reactor() - power_used()])
+						Weapons.name_of(ship.mounts[a]), Weapons.power(ship.mounts[a]), server.power.budget() - power_used()])
 					return
 				ship.armed[a] = 1
 		Net.GUNSET_SHIELD:
@@ -459,8 +459,8 @@ func setup_asked(p, action: int, a: int, b: int) -> void:
 				ship.shield_on = false
 				ship.shield = 0.0
 			elif not ship.shield_on:
-				if power_used() + Weapons.SHIELD_POWER > server.outfit.reactor():
-					server.chat.tell(p, "Не хватает энергии реактора на щит: нужно %d, свободно %d." % [Weapons.SHIELD_POWER, server.outfit.reactor() - power_used()])
+				if power_used() + Weapons.SHIELD_POWER > server.power.budget():
+					server.chat.tell(p, "Не хватает энергии реактора на щит: нужно %d, свободно %d." % [Weapons.SHIELD_POWER, server.power.budget() - power_used()])
 					return
 				ship.shield_on = true
 		Net.GUNSET_MOUNT:
@@ -527,8 +527,8 @@ func _arm_guard(p, on: bool) -> void:
 	var ship = server.ship
 	if ship.guard == Weapons.NONE or on == ship.guard_armed:
 		return
-	if on and power_used() + Weapons.power(ship.guard) > server.outfit.reactor():
-		server.chat.tell(p, "Не хватает энергии реактора: «Заслон» берёт %d, свободно %d." % [Weapons.power(ship.guard), server.outfit.reactor() - power_used()])
+	if on and power_used() + Weapons.power(ship.guard) > server.power.budget():
+		server.chat.tell(p, "Не хватает энергии реактора: «Заслон» берёт %d, свободно %d." % [Weapons.power(ship.guard), server.power.budget() - power_used()])
 		return
 	ship.guard_armed = on
 	if not on:
@@ -584,8 +584,8 @@ func tick() -> void:
 				_escaped()
 		_enemy_shield_tick()
 		if fighting() and not down(Net.ESYS_WEAPONS) and ransom == 0:
-			var pace := 1.0 / _weapons_slowness() / _slower * float(Hulls.temper(temper)["pace"]) \
-				* (1.0 if server.enemy_crew.manned(Net.ESYS_WEAPONS) else UNMANNED_PACE)
+			var pace: float = 1.0 / _weapons_slowness() / _slower * float(Hulls.temper(temper)["pace"]) \
+				* (1.0 if server.enemy_crew.manned(Net.ESYS_WEAPONS) else UNMANNED_PACE) * server.hazards.enemy_pace()
 			for k in enemy_weapons.size():
 				enemy_charge[k] = minf(enemy_charge[k] + pace / Weapons.charge_ticks(enemy_weapons[k]), 1.0)
 				if enemy_charge[k] >= 1.0 and fighting():
@@ -607,7 +607,7 @@ func _enemy_shield_tick() -> void:
 	if systems.size() <= Net.ESYS_SHIELDS or systems_full[Net.ESYS_SHIELDS] == 0 or systems[Net.ESYS_SHIELDS] == 0:
 		enemy_shield = 0.0
 	elif server.tick >= systems_out[Net.ESYS_SHIELDS]:
-		enemy_shield = minf(enemy_shield + Weapons.SHIELD_REGEN * _regen / Net.TICK_HZ * systems[Net.ESYS_SHIELDS] / systems_full[Net.ESYS_SHIELDS],
+		enemy_shield = minf(enemy_shield + Weapons.SHIELD_REGEN * _regen * server.hazards.enemy_regen() / Net.TICK_HZ * systems[Net.ESYS_SHIELDS] / systems_full[Net.ESYS_SHIELDS],
 			Weapons.SHIELD_FULL)
 
 
@@ -636,7 +636,7 @@ func packet() -> PackedByteArray:
 		out.append((Net.GUNF_ARMED if ship.armed[i] == 1 else 0) | (Net.GUNF_BEAM if beam_left[i] > 0 else 0)
 			| (Net.GUNF_NO_AMMO if ammo != 0 and int(ship.store.get(ammo, 0)) <= 0 else 0))
 	out.append(power_used())
-	out.append(server.outfit.reactor())
+	out.append(server.power.budget())                  # (v61) the reactor's power now, with the SMES's boost
 	var gen := shield_cell()
 	out.append(roundi(ship.shield))
 	out.append(0 if gen < 0 else (Net.SHF_HAS | (Net.SHF_ON if ship.shield_on else 0) | (Net.SHF_BROKEN if ship.broken.has(gen) else 0)
@@ -1755,6 +1755,9 @@ func _enemy_target() -> int:
 	if gen >= 0 and not server.ship.broken.has(gen):
 		devices.append(gen)
 		devices.append(gen)              # it knows what keeps its shots off
+	for c: int in map.smes:              # (v61, the author's V8) and what keeps our power up
+		if not server.ship.broken.has(c):
+			devices.append(c)
 	var roll := _rng.randf()
 	if roll < at_guns:
 		return guns[_rng.randi_range(0, guns.size() - 1)]
@@ -1776,6 +1779,9 @@ func _boss_target(guns: PackedInt32Array) -> int:
 	var engine: Array = server.map.engine.keys().filter(func(c: int) -> bool: return not server.ship.broken.has(c))
 	if not engine.is_empty():
 		return engine[_rng.randi_range(0, engine.size() - 1)]
+	for c: int in server.map.smes:       # (v61) then the SMES that carries the ship without its engine
+		if not server.ship.broken.has(c):
+			return c
 	if not guns.is_empty():
 		return guns[_rng.randi_range(0, guns.size() - 1)]
 	return -1

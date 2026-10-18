@@ -25,7 +25,10 @@ const TRADER := 2                    # a trader: sells supplies
 const STATION := 3                   # a supply station: the ship's air is topped up
 const DERELICT := 4                  # a derelict: an abandoned ship to search
 const FLAGSHIP := 5                  # (v57) the goal: the pirates' flagship waits here
-const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль", "флагман пиратов"]
+const ION_STORM := 6                 # (v61, the author's K16) an ion storm: inside it the reactor gives half, and surges put things out
+const KIND_NAMES: Array[String] = ["спокойный космос", "метеорный поток", "торговец", "станция снабжения", "брошенный корабль", "флагман пиратов",
+	"ионный шторм"]
+const ION_SHARE := 0.3               # (v61) of the quiet sectors, those that hold an ion storm (about one sector in ten)
 const GOAL_JUMPS := 12               # (v57) how far out the flagship waits, in jumps from the start
 
 # (v58, the author: traders have their speciality) What a trader deals in:
@@ -151,7 +154,8 @@ static func kind_at(seed_value: int, at: Vector2i) -> int:
 		return METEORS
 	roll = (roll - meteors) / (1.0 - meteors)        # what is left is shared out as before
 	if roll < 0.32:
-		return EMPTY
+		# (v61) part of the quiet ones hold an ion storm; the rest of space stays where it was in older saves
+		return ION_STORM if roll < 0.32 * ION_SHARE else EMPTY
 	if roll < 0.47:
 		return DERELICT
 	return TRADER if roll < 0.72 else STATION
@@ -209,6 +213,10 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary) -> void:
 					# a jump lands the ship inside the stream, some way from its edge
 					reach[i] = rng.randi_range(45, 60)
 					entry[i] = spot[i] + away * reach[i] * rng.randf_range(0.35, 0.6)
+				ION_STORM:
+					# (v61) a storm is wider than a stream; a jump lands inside it too
+					reach[i] = rng.randi_range(55, 75)
+					entry[i] = spot[i] + away * reach[i] * rng.randf_range(0.35, 0.6)
 				TRADER, STATION, DERELICT:
 					reach[i] = DOCK_RANGE
 					entry[i] = spot[i] + away * rng.randf_range(45.0, 65.0)
@@ -244,7 +252,7 @@ func neighbours(of: int) -> PackedInt32Array:
 
 
 func within_reach(id: int, at: Vector2) -> bool:
-	## Is a ship at this place inside the sector's meteor stream, or close enough to dock?
+	## Is a ship at this place inside the sector's meteor stream or ion storm, or close enough to dock?
 	return reach[id] > 0 and at.distance_to(spot[id]) <= reach[id]
 
 

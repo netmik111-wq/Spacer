@@ -66,6 +66,7 @@ func _initialize() -> void:
 	_run(a, 40)
 	var engine: int = map.engine.keys()[0]
 	a.ship.broken[engine] = true
+	a.power.set_charge(0.0)              # (v61) and the SMES empty: the ship dark
 	a.doors.jammed[2] = 1
 	a.doors.ready[2] = 0
 	a.floor_things[15 * map.width + 22] = PackedByteArray([Net.ITEM_MAG, Net.ITEM_PART, 0, 0])

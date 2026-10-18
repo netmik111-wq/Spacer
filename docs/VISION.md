@@ -200,6 +200,9 @@ everything else is black with only faint outlines).
 - The engine powers the whole ship. Without it the consoles, air plant, oxygen
   racks and emergency shutters stop, doors open only by hand, the lights go out. Nothing
   breaks in the process: fix the engine, and everything works again.
+  (v61, the author's road plan) Now: **no engine and an empty SMES means no power**, and
+  nothing breaks. The SMES stores power, carries the ship while the engine is out, and loses
+  its whole charge when hit; a small backup keeps the bridge going.
 - Emergency shutters at every door: they drop by themselves on a pressure difference, show it,
   and are raised by hand.
 

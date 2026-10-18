@@ -39,36 +39,37 @@ const FLAGSHIP_CARRIER := 14
 ## id, name, size, sectors it can happen in, how often it is picked there
 const EVENTS: Array[Dictionary] = [
 	{"id": MICROMETEORITE, "name": "Микрометеорит", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 10},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 10},
 	{"id": METEOR_VOLLEY, "name": "Метеорный залп", "size": MEDIUM,
 		"where": [Sectors.METEORS], "weight": 4},
 	{"id": CONSOLE_FAULT, "name": "Замыкание пульта", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 3},
 	{"id": ENGINE_FAULT, "name": "Отказ двигателя", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
 	{"id": AIR_PLANT_FAULT, "name": "Отказ воздушной установки", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
 	{"id": DOOR_JAM, "name": "Заклинившая дверь", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 4},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 4},
 	{"id": SHUTTER_FAULT, "name": "Отказ аварийного шлюза", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 3},
 	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
 	# never picked by chance (weight 0): it comes by itself to a ship left with no fuel at all
 	{"id": FUEL_DRIFT, "name": "Дрейфующее топливо", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.STATION], "weight": 0},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.STATION, Sectors.ION_STORM], "weight": 0},
 	{"id": BOARDING, "name": "Абордаж", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
+	# (v61, the author's E2) pirates may come for us inside a meteor stream or an ion storm too
 	{"id": PIRATE_SHIP, "name": "Пиратский корабль: абордаж", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT, Sectors.METEORS, Sectors.ION_STORM], "weight": 2},
 	# (v44, the author's request) a pirate ship that fights at a distance and does not board; wrecked, it can be searched
 	{"id": PIRATE_RAID, "name": "Пиратский корабль: бой", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.TRADER, Sectors.DERELICT, Sectors.METEORS, Sectors.ION_STORM], "weight": 2},
 	# (v57) never by chance: the flagship waits at the goal point; these call it here for the host's tests
 	{"id": FLAGSHIP_BATTLESHIP, "name": "Флагман: линкор", "size": CATASTROPHE,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP], "weight": 0},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP, Sectors.ION_STORM], "weight": 0},
 	{"id": FLAGSHIP_CARRIER, "name": "Флагман: абордажник", "size": CATASTROPHE,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP], "weight": 0},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.STATION, Sectors.DERELICT, Sectors.FLAGSHIP, Sectors.ION_STORM], "weight": 0},
 ]
 
 ## seconds between events, by sector kind: [from, to]; none at a supply station
@@ -77,6 +78,7 @@ const PACE := {
 	Sectors.METEORS: [25.0, 45.0],
 	Sectors.TRADER: [180.0, 360.0],
 	Sectors.DERELICT: [180.0, 360.0],
+	Sectors.ION_STORM: [180.0, 360.0],   # (v61) its surges come on their own pace (Hazards)
 }
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
 const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector
@@ -215,6 +217,7 @@ func _run(event_id: int) -> void:
 func _do(what: String) -> void:
 	if what == "hole":
 		server.systems.breach_random()
+		server.hazards.meteor_on_enemy()     # (v61, the author's K16) a meteor strike hits the pirate ship alongside too
 
 
 func _can_happen(e: Dictionary, here: int) -> bool:

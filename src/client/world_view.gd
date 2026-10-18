@@ -531,7 +531,7 @@ func _update_ship(delta: float) -> void:
 		for deck in _decks:
 			deck.things.queue_redraw()
 	# light and dark change with every step anybody holding a flashlight takes
-	_dark = move_toward(_dark, 0.0 if client.powered() else 1.0, delta * 2.5)
+	_dark = move_toward(_dark, 0.0 if client.power_at(client.pred.y * map.width + client.pred.x) else 1.0, delta * 2.5)   # (v61) the bridge backup lights its room
 	_lit = client.lit_cells()
 	_dim = _find_dim()
 	_near = _find_near()

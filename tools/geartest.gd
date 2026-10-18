@@ -110,7 +110,7 @@ func _systems() -> void:
 	var map := server.map
 	var ship := server.ship
 	var o = server.outfit
-	_expect(ship.gear == PackedByteArray([1, 1, 1, 1]) and o.reactor() == Weapons.REACTOR, "the ship sets out with built-in systems (reactor %d)" % o.reactor())
+	_expect(ship.gear == PackedByteArray([1, 1, 1, 1, 1]) and o.reactor() == Weapons.REACTOR, "the ship sets out with built-in systems (reactor %d)" % o.reactor())
 	var gen: int = map.shield.keys()[0]
 	var engine: int = map.engine.keys()[0]
 	var holo: int = map.holo.keys()[0]
@@ -133,7 +133,7 @@ func _systems() -> void:
 		"the top one goes in, the one it replaces comes out into the hand, and it stops rockets")
 	eng.slots[0] = Net.ITEM_NONE
 	_install(eng, Gear.item_of(Gear.REACTOR_3), engine)
-	_expect(o.reactor() == 12 and server.gunnery.packet()[4 + 3 * map.guns.size() + 1] == 12, "a reactor at the engine: 12 power, and the gun console is told")
+	_expect(o.reactor() == 12 and server.gunnery.packet()[4 + 3 * map.guns.size() + 1] == server.power.budget(), "a reactor at the engine: 12 power, and the gun console is told (with the SMES's boost, v61)")
 	eng.slots[0] = Net.ITEM_NONE
 	_install(eng, Gear.item_of(Gear.REACTOR_2), engine)
 	_expect(o.reactor() == 10 and eng.slots[0] == Gear.item_of(Gear.REACTOR_3), "a weaker one may go back in: 10")
@@ -308,7 +308,7 @@ func _traders_and_loot() -> void:
 	g.wreck_gear_chance = Gunnery.WRECK_GEAR
 	server.derelict._leave(true)
 	_run(1)
-	ship.gear = PackedByteArray([1, 1, 1, 1])
+	ship.gear = PackedByteArray([1, 1, 1, 1, 1])
 	ship.modules = PackedByteArray([0, 0])
 	var plain: int = server.shipyard.gear_upgrades()
 	ship.gear = PackedByteArray([3, 3, 3, 3])
@@ -319,13 +319,13 @@ func _traders_and_loot() -> void:
 
 func _save() -> void:
 	var ship := server.ship
-	ship.gear = PackedByteArray([2, 3, 1, 2])
+	ship.gear = PackedByteArray([2, 3, 1, 2, 1])
 	ship.modules = PackedByteArray([Gear.FOCUS, Gear.ARMOUR_2])
 	var data: Dictionary = JSON.parse_string(JSON.stringify(Campaign.snapshot(server)))
-	ship.gear = PackedByteArray([1, 1, 1, 1])
+	ship.gear = PackedByteArray([1, 1, 1, 1, 1])
 	ship.modules = PackedByteArray([0, 0])
 	var problem := Campaign.restore(server, data)
-	_expect(problem == "" and ship.gear == PackedByteArray([2, 3, 1, 2]) and ship.modules == PackedByteArray([Gear.FOCUS, Gear.ARMOUR_2])
+	_expect(problem == "" and ship.gear == PackedByteArray([2, 3, 1, 2, 1]) and ship.modules == PackedByteArray([Gear.FOCUS, Gear.ARMOUR_2])
 		and is_equal_approx(ship.armour, 0.2), "the gear is saved with the campaign %s" % problem)
 
 

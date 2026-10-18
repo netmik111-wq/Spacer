@@ -115,7 +115,7 @@ var enemy_guard := false             # (v58) the enemy has point defence
 var enemy_fx := PackedByteArray()    # (v58) per enemy gun: its effect
 var enemy_charge := PackedByteArray() # (v59) per enemy gun: its charge 0..100 as our top sensors see it (255 = not seen)
 # (v59) our ship's gear (Net.S_GEAR)
-var gear_tiers := PackedByteArray([1, 1, 1, 1])   # per Gear.SYS_*: its tier
+var gear_tiers := PackedByteArray([1, 1, 1, 1, 1])   # per Gear.SYS_*: its tier
 var mount_gunner := PackedByteArray()  # (v60) per gun mount: 1 = somebody stands at it as its gunner (Net.S_MOUNTS)
 var mount_wanted := PackedByteArray()  # (v60) per gun mount: the gun the console ordered onto it, 0 = none, 255 = take it down
 var gear_modules := PackedByteArray([0, 0])       # per slot of the module bay: the crate in it (Gear.*)
@@ -188,6 +188,10 @@ var won := false                     # (v57) the flagship is beaten: the game is
 var job := Net.JOB_CREWMAN
 var skills := PackedByteArray([0, 0, 0, 0])
 var _power := true                   # the ship has power (see powered)
+var _backup := false                 # (v61) the ship is dark but the bridge's backup SMES keeps its room lit (see power_at)
+var smes: Array = []                 # (v61) per SMES, as Net.S_SMES tells: {small, cell, charge, capacity, charging, output,
+                                     # input, level, input_max, output_max, in_now, out_now, status}
+var power_mon := {}                  # (v61) the power monitor: {made, base, used, budget, flags, seconds, reactor}
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -527,6 +531,20 @@ func send_bench(action: int, item: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_BENCH, action, item]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_smes(which: int, action: int, value: int) -> void:
+	## (v61) A change at an SMES's terminal (see Power.asked).
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_SMES, which, action, clampi(value, 0, 255)]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func smes_at(cell: int) -> int:
+	## (v61) The number of the SMES in that wall cell (in `smes`), or -1.
+	for i in smes.size():
+		if int(smes[i]["cell"]) == cell:
+			return i
+	return -1
+
+
 func send_holo(on: bool) -> void:
 	## Starts or stops watching the holomap our character stands at.
 	if _peer != null:
@@ -693,7 +711,8 @@ func use_target(facing: int = -1) -> int:
 	## 23 = (v59) where the crate of gear in hand goes (or the module bay, with empty hands): hold to install,
 	## 24 = the module bay with something else in hand,
 	## 25 = (v60) a gun mount where the gun in hand goes up (or, with empty hands, its gun comes down),
-	## 26 = an autodoc, 27 = the body scanner.
+	## 26 = an autodoc, 27 = the body scanner, 28 = (v61) an SMES's terminal,
+	## 29 = (v61) our hull from outside, out in space: its strength is mended with patches.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -706,6 +725,8 @@ func use_target(facing: int = -1) -> int:
 			return 2
 		if broken.has(cell):
 			return 5
+		if map.floats(pred.x, pred.y) and map.hull.has(cell) and not map.is_other(cell):
+			return 29
 		if gear_here(cell) != "-":
 			return 23
 		if map.bay.has(cell):
@@ -714,6 +735,8 @@ func use_target(facing: int = -1) -> int:
 			return 3
 		if map.helm.has(cell):
 			return 4
+		if map.smes.has(cell) or map.smes_small.has(cell):
+			return 28
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
 		if map.locker.has(cell):
@@ -771,7 +794,8 @@ func gear_here(cell: int) -> String:
 	if g != Gear.NONE:
 		var sys := Gear.system_of(g)
 		if sys >= 0:
-			var machines: Dictionary = map.shield if sys == Gear.SYS_SHIELD else (map.holo if sys == Gear.SYS_SENSORS else map.engine)
+			var machines: Dictionary = map.shield if sys == Gear.SYS_SHIELD else (map.holo if sys == Gear.SYS_SENSORS else
+				(map.smes if sys == Gear.SYS_COILS else map.engine))
 			if not machines.has(cell):
 				return "-"
 			if gear_tiers.size() > sys and gear_tiers[sys] == Gear.tier(g):
@@ -955,8 +979,18 @@ func can_trade() -> bool:
 
 
 func powered() -> bool:
-	## The ship has power: the server says so (the engine may be out, or the power may have failed for a moment).
+	## The ship has power: the server says so (from the engine, or v61 the SMES carrying it).
 	return _power
+
+
+func power_at(cell: int) -> bool:
+	## (v61) Does this cell have power: the whole ship's, or the bridge's backup in the room it keeps lit?
+	return _power or _backup and map.on_backup(cell)
+
+
+func bridge_lit() -> bool:
+	## (v61) The ship is dark, but the bridge's backup SMES keeps its room going.
+	return not _power and _backup
 
 
 func shutter_gap(door: int) -> Array:
@@ -1440,10 +1474,29 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if not _ours(pkt):
 				return
 			_power = pkt[3] != 0
+			_backup = pkt.size() > 4 and pkt[4] != 0
 			ship_changes += 1
 			# without power doors open by hand: that is part of the walking rule we predict
 			doors.manual = not _power
 			_rebuild_prediction()
+		Net.S_SMES:
+			if not _ours(pkt) or pkt.size() < 4:
+				return
+			var n := pkt[3]
+			var o := 4
+			var got: Array = []
+			for i in n:
+				if o + 15 > pkt.size():
+					return
+				got.append({"small": pkt[o] == 1, "cell": pkt.decode_u16(o + 1), "charge": pkt.decode_u16(o + 3),
+					"capacity": pkt.decode_u16(o + 5), "charging": pkt[o + 7] & 1 != 0, "output": pkt[o + 7] & 2 != 0,
+					"input": pkt[o + 8], "level": pkt[o + 9], "input_max": pkt[o + 10], "output_max": pkt[o + 11],
+					"in_now": pkt[o + 12] / 10.0, "out_now": pkt[o + 13] / 10.0, "status": pkt[o + 14]})
+				o += 15
+			smes = got
+			if o + 9 <= pkt.size():
+				power_mon = {"made": pkt[o], "base": pkt[o + 1], "used": pkt[o + 2], "budget": pkt[o + 3], "flags": pkt[o + 4],
+					"seconds": pkt.decode_u16(o + 5), "reactor": pkt.decode_u16(o + 7)}
 		Net.S_SHOT:
 			if pkt.size() >= 13:
 				shot.emit(pkt[1], pkt[2], Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,
