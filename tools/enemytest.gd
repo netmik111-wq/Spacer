@@ -243,6 +243,12 @@ func _bombs() -> void:
 	g.enemy_hit_chance = 1.0
 	var our_hull: int = server.ship.hull
 	var hurt := false
+	# (aimed at a device, a bomb hurts only who stands in that room: with every
+	# device it could aim at already out, it goes for the crewman himself)
+	var was_broken: Dictionary = server.ship.broken.duplicate()
+	for c: int in Array(server.map.guns) + server.map.chart.keys() + server.map.helm.keys() + server.map.smes.keys() + [g.shield_cell()]:
+		if c >= 0:
+			server.ship.broken[c] = true
 	for i in 10:
 		var h: float = crewman.health
 		g._enemy_bomb(Weapons.THERMITE, Weapons.FX_NONE)
@@ -251,6 +257,8 @@ func _bombs() -> void:
 		crewman.wounds = 0.0
 	_expect(server.ship.hull < our_hull, "their «Термит» burns our hull from inside (%d -> %d)" % [our_hull, server.ship.hull])
 	_expect(hurt, "and hurts whoever is in the room it bursts in")
+	server.ship.broken = was_broken
+	server.systems.power_changed()
 	server.ship.hull = Net.HULL_MAX
 	server.crew.remove(crewman)
 	g.enemy_hit_chance = -1.0
