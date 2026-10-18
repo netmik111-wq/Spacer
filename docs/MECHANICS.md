@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v61 (version 0.54).
+Last updated: build v62 (version 0.55).
 
 Contents:
 
@@ -546,6 +546,7 @@ they carry and how they fight, not only through more hull.
 | Рейдер (raider) | 2 (6–7 rooms) | the start | 4 | 12 | 3 | 2, 3 from 5 jumps | 70% | 1.3× slower | as usual | 2–4 | 40 | 2–4 |
 | Канонерка (gunship) | 2 (9 rooms) | 2 jumps out | 3 | 14 | 3 | 3, 4 from 8 jumps | 60% | 1.5× slower | as usual | 3–4 | 55 | 3–5 |
 | Крейсер (cruiser) | 1 (10 rooms) | 4 jumps out | 2 | 20 | 4 | 3, 4 from 7 jumps | always, refills 1.4× faster | 1.7× slower | +10% (big target) | 4–6 | 80 | 4–6 |
+| Дрон-корабль (drone ship, v62) | 4 (of the others) | 3 jumps out | 3 | 10 | 3 | 2, 3 from 7 jumps | 50% | 1.25× slower | −10% | 2 guard robots | 45 | 1–2 |
 
 - **Guns** come from the class's own list (since v58 each gun's tier is rolled by distance first, then a gun of
   that tier from the list; see "Gun tiers"): cutter: laser, rapid, ion, autocannon, blaster, Phoenix; raider:
@@ -894,7 +895,7 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
   The jump drive's rest after a jump shortens like its charge. A weaker reactor going in cuts guns (then the point
   defence, then the shield) until the power fits.
 - **Modules** go in the **module bay** (модульная стойка, 'U' on the map: in engine room 1 on the lower deck of
-  ship02, in the lower wall of the middle hall on ship01). It has **2 slots**, one module of each sort. A module of a sort already in the
+  ship02, in the lower wall of the middle hall on ship01). It has **2 slots** (3 with the extender, v62), one module of each sort. A module of a sort already in the
   bay swaps with it; with both slots taken by other sorts, take one out first. With empty hands at the bay an
   engineer takes out the last module put in (5 s).
   | Module | Price | What it does |
@@ -971,6 +972,74 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
   that walks into it stands there **cutting through**: **12 s** of work for one (two cut twice as fast), with a
   blow sound every second. Then the door is wrecked open (jammed) until somebody mends it.
 - Without power the locks don't hold, as every lock aboard.
+
+### Enemies (v62)
+
+The author's road plan, part 3. New kinds of enemy and new ways for them to get at us.
+
+- **Drone ship** (дрон-корабль, a fifth class; its name is «Дрон-корабль «Страж»» and the like). Comes from
+  **3 jumps** out, weight 3. Hull **10**, system strength 3, guns **2** (3 from 7 jumps) from laser, ion, autocannon,
+  rockets, rapid, heavy, ion cannon, Shrapnel, railgun, Hammer; shield 50%; guns charge 1.25× slower; our hit −10%;
+  armour 20%, point defence 30% (from 4 jumps); reward **45**, 1–2 things aboard.
+  - It has **no crew**: nobody flies it or mans its guns, so it works as if every post were manned. It has no
+    cockpit, quarters or jump drive room, but a **control core** (Ядро дронов) in a room of its own.
+  - Its temper is **машина** (machine): it **never runs** and **never offers a ransom**, and it **never docks**: it
+    always fights at a distance (it does not close in when we are helpless either).
+  - While its core works, **repair drones** mend its worn systems at ¾ of one pirate's pace, and it sends an
+    **assault drone** across: the first **20 s** into the fight, then every **35 s**. A drone flies **3 s**; our
+    point defence, if charged, shoots it down **60%** of the time. One that gets there cuts a hole in our hull
+    (like a boarding party) and comes in: a **robot** with a gun and 3 magazines that fights like a pirate, needs no
+    air and wears nothing. At most **2** are aboard at once. Knocking out the core stops the drones and the mending.
+  - There is **no air** inside it: board it in a suit. Its "crew" are **2 guard robots** standing by its core and
+    its guns; they wake when one of ours sets foot aboard. Killing them does not take it: **wreck its core by hand**
+    (stand in the core's room, as with any system when boarding) and it is captured: **1.5×** its reward,
+    2 spare parts and a fuel can, like any capture. Wrecked from outside, it leaves only dead robots aboard.
+- **Teleporters.** From **8 jumps** out an ordinary pirate may carry a **teleporter** in a room of its own
+  (raider 25%, gunship 40%, cruiser 60%; only when its hull has a room to spare). **25 s** into the fight and every
+  **45 s** after, while it works and somebody of its crew is at it, it puts **2** of its crew into a **random room
+  of our ship** (never leaving itself fewer than 2, never more than 4 pirates aboard). The gun console then shows
+  a «Телепорт» button to aim at.
+- **Boarders without suits** (the author's K12). Boarders who come by docking or teleport may be: **without a
+  sealed suit** (35%, from 3 jumps out): they breathe our air and choke when we vent the room; or a **heavy
+  stormtrooper** («Штурмовик», 15%, from 6 jumps out): steel plates instead of a suit, takes **half** of every
+  wound, but also needs air. Boarders who cut through the hull wear suits as before.
+- **Bombs** (a new class of ship gun, ammunition: one rocket each). A bomb is **teleported straight into the room
+  aimed at**: no shield, point defence or dodge stops it, but **10%** of the time the teleport loses it. It takes
+  nothing from the hull unless said.
+  | Bomb | Tier | Charge | Power | Price | What it does |
+  |---|---|---|---|---|---|
+  | «Шершень» (Hornet) | 2 | 13 s | 1 | 85 | wears the room's system by **2**, wounds everyone in it |
+  | «Глушилка» (Damper) | 2 | 12 s | 1 | 80 | puts the system out for **8 s**, stuns everyone in the room |
+  | «Термит» (Thermite) | 3 | 16 s | 2 | 175 | wears the system by **3**, **1** hull and a hole, wounds everyone and **kills one** |
+  On our ship a pirate bomb bursts at what it aims at (a gun, a console, the shield generator, the SMES, or where
+  our people are): it breaks or jams that device, wounds everyone in the room by **25** (the Damper takes 30 health,
+  as a stun, instead), and Thermite burns one of them (**60**), holes the hull and takes **5** of its strength.
+- **«Шрапнель» (Shrapnel)**, tier 2 kinetic gun: 4 fragments at 70%, 1 damage each, power 2, 90 cr, one shell a
+  volley. Half the fragments land in a **room next to** the one aimed at; each wounds everyone where it lands.
+- Pirates use them too: gunships may carry Hornet, Shrapnel, Thermite; cruisers Damper, Hornet, Thermite (they
+  come with the gun tiers, so from about 4 jumps out).
+- **The flagship's second phase** (the author's K21). At **a third of its hull** the flagship mends **every system
+  at once** and its shield comes back full. The battleship's guns then charge **1.3×** faster and it sends **assault
+  drones** like a drone ship; the carrier teleports every **25 s**, **3** at a time, and calls up **4** more troops.
+  The gun console says «Вторая фаза!».
+- **Passive modules** (the author's K2: no respirators). Four more modules for the bay, tier 2, sold and found like
+  the others:
+  | Module | Price | What it does |
+  |---|---|---|
+  | Глушитель прыжка (jump jammer) | 110 | a pirate's escape jump charges at **half** the pace |
+  | Сварочный дрон (welding drone) | 120 | after every jump the hull gets **+5** |
+  | Сборщик (salvage arm) | 100 | a wreck or a capture pays **30%** more and **1** more spare part |
+  | Автозарядчик (auto-loader) | 100 | a gun with nobody at it charges **10%** faster |
+- **Расширитель стойки** (the bay's extender, the author's K3): sold only at **supply stations** (150 cr). Fitted at
+  the bay by an engineer like a module, it is used up and gives the bay a **third slot** for good (saved).
+- **Our security robots** (the author's K11). «Охранный робот», 120 cr, sold by every trader and at supply stations,
+  kept in the locker. With one in hand, click a free floor cell next to you (or press E facing it): it switches on
+  and **guards that place**. It fights any pirate it sees (pistol, 2 magazines, a new one every 20 s while it has
+  none) and goes back to its place when none is left. It takes **1.4×** a wound (about 70 health against a person's
+  100), needs no air, wears nothing, does no work, cannot be ordered and is **not crew** (it fills no crew place). At
+  most **2** stand aboard. Broken, it leaves a spare part half the time. A save puts those still standing back into the
+  locker in their crates.
+- Supply stations now have a small shop at the supply locker: the extender (while the bay has 2 slots) and robots.
 
 ### Ammunition at the workbench (v60)
 

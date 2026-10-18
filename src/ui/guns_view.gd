@@ -39,7 +39,8 @@ const SYSTEM_ABOUT: Array[String] = [
 	"Бить по кубрику: каждые два урона убивают одного пирата; перебьём всех абордажников, и пираты уйдут ни с чем, перебьём весь экипаж, и корабль станет мёртвыми обломками.",
 	"Бить по гипердвигателю: повреждённый, он дольше заряжает прыжок; выбитый, не даёт пиратам уйти.",
 	"Бить по генератору щита: повреждённый, щит восстанавливается медленнее; выбитый, щит гаснет совсем. Ион и ЭМИ сюда гасят щит на время.",
-	"Выбить телепорт флагмана: он перестанет высаживать абордажников на наш мостик, пока его не починят.",
+	"Выбить телепорт: пираты перестанут высаживать к нам абордажников, пока его не починят.",
+	"Ядро дронов: выбитое, дрон-корабль не шлёт штурмовых дронов и не чинится. Взять корабль можно, только разбив ядро руками на его борту.",
 ]
 
 var client: GameClient
@@ -218,7 +219,9 @@ func refresh(delta: float) -> void:
 			what = "Пираты заряжают прыжок, чтобы уйти: %s." % ("прыжок сорван, пока не починят" if client.enemy_jumps_in == 65535
 				else "уйдут через %d с" % client.enemy_jumps_in)
 		elif Hulls.is_boss(client.enemy_class):
-			what = "Флагман: бой до конца, он не бежит и не сдаётся."
+			what = "Флагман: бой до конца, он не бежит и не сдаётся.%s" % (" Вторая фаза!" if client.enemy_flags & Net.ENEMY_PHASE2 else "")
+		elif client.enemy_flags & Net.ENEMY_CREWLESS:
+			what = "Дрон-корабль: экипажа нет, он не бежит и не торгуется."
 		elif client.enemy_flags & Net.ENEMY_RAID:
 			what = "Пираты ведут бой на расстоянии."
 		else:
@@ -263,8 +266,10 @@ func refresh(delta: float) -> void:
 	var aimed := _aimed_room()
 	for which: int in _aim_buttons.keys():
 		var b: Button = _aim_buttons[which]
-		if which == Net.ESYS_TELEPORT:
-			b.visible = fighting and client.enemy_sys_full[which] > 0      # (v57) only the carrier has one
+		if which == Net.ESYS_TELEPORT or which == Net.ESYS_DRONES:
+			b.visible = fighting and client.enemy_sys_full[which] > 0      # (v57) only some have one
+		elif which == Net.ESYS_HELM or which == Net.ESYS_CREW or which == Net.ESYS_JUMP:
+			b.visible = not (fighting and client.enemy_flags & Net.ENEMY_CREWLESS)   # (v62) a drone ship has none
 		var known := which == Net.AIM_ANY or client.enemy_rooms.find(which) >= 0
 		b.disabled = not fighting or not known
 		b.set_pressed_no_signal(fighting and (client.gun_aim == which or (which != Net.AIM_ANY and aimed >= 0 and aimed == client.enemy_rooms.find(which))))

@@ -6,6 +6,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 var server: GameServer
 
@@ -69,6 +70,8 @@ func update() -> void:
 				server.chat.say("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %
 					[", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else "",
 					", обшивка залатана" if patched else ""])
+				server.chat.say("Станция продаёт охранных роботов%s: покупки у шкафа снабжения." % (
+					" и расширитель модульной стойки" if server.ship.modules.size() < Gear.MODULE_SLOTS_MAX else ""))
 		Sectors.TRADER:
 			if now_in:
 				server.chat.say("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
@@ -165,6 +168,7 @@ func update_jump() -> void:
 	server.ship.jump_to = Net.NO_SECTOR
 	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1
+	server.outfit.jumped()                   # (v62) the welding drone
 	if not server.been.has(Sectors.key(arrived)):
 		server.ship.credits += Net.EXPLORE_REWARD
 		server.chat.say("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)

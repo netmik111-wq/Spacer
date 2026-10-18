@@ -803,13 +803,17 @@ func gear_here(cell: int) -> String:
 		else:
 			if not map.bay.has(cell):
 				return "-"
-			if gear_modules.has(g):
-				return "Этот модуль уже стоит в стойке."
-			var room := gear_modules.has(Gear.NONE)
-			for m in gear_modules:
-				room = room or (m != Gear.NONE and Gear.module_of(m) == Gear.module_of(g))
-			if not room:
-				return "Обе ячейки стойки заняты: сначала выньте модуль (держите E с пустыми руками)."
+			if Gear.extender(g):
+				if gear_modules.size() >= Gear.MODULE_SLOTS_MAX:
+					return "Стойка уже расширена: третья ячейка на месте."
+			else:
+				if gear_modules.has(g):
+					return "Этот модуль уже стоит в стойке."
+				var room := gear_modules.has(Gear.NONE)
+				for m in gear_modules:
+					room = room or (m != Gear.NONE and Gear.module_of(m) == Gear.module_of(g))
+				if not room:
+					return "Все ячейки стойки заняты: сначала выньте модуль (держите E с пустыми руками)."
 	elif item == Net.ITEM_NONE and map.bay.has(cell):
 		if gear_modules.count(Gear.NONE) == gear_modules.size():
 			return "Модульная стойка пуста: модули в ящиках носят из шкафа снабжения."

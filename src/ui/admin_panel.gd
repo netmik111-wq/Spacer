@@ -377,7 +377,7 @@ func _space_tab() -> Control:
 	var tempers: Array = [Net.ADMIN_ANY_TEMPER]
 	var temper_names: Array = ["нрав: любой"]
 	for t: int in Hulls.TEMPERS.keys():
-		if not Hulls.TEMPERS[t].has("boss"):
+		if not Hulls.TEMPERS[t].has("boss") and not Hulls.TEMPERS[t].has("machine"):
 			tempers.append(t)
 			temper_names.append("нрав: " + str(Hulls.TEMPERS[t]["name"]))
 	var pick := HFlowContainer.new()

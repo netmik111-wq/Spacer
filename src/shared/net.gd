@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 40
+const PROTOCOL := 41
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -137,7 +137,9 @@ const ITEM_SHELL := 83              # (v58) a shell for the autocannon and the �
 const ITEM_GUN_PARTS := 84          # (v58) parts of a gun's kind: ITEM_GUN_PARTS + Weapons.KIND_* (84..88; cargo)
 const ITEM_GUN_FX := 100            # (v58) a tier 3 gun with its effect: see Weapons.item_of (100..134; cargo)
 const ITEM_GUN_DAMAGED := 140       # (v58) a damaged gun, mended at the workbench: ITEM_GUN_DAMAGED + Weapons.* (cargo)
-const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gear.* (171..183; carried, kept in the locker)
+const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gear.* (171..190; carried, kept in the locker)
+const ITEM_ROBOT := 195             # (v62) a security robot in its crate: set down on the floor, it switches on and guards
+const ITEM_GUN_LATE := 200          # (v62) weapons from Weapons.HORNET on: ITEM_GUN_LATE + (w - Weapons.HORNET) (200..203; cargo)
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -311,13 +313,17 @@ const ESYS_ENGINE := 2              # its engine: down, it cannot close in to do
 const ESYS_CREW := 3                # its quarters: every few hits there kill one of its crew
 const ESYS_JUMP := 4                # its jump drive: worn, it charges a jump slower; down, it cannot jump away
 const ESYS_SHIELDS := 5             # its shield generator: worn, the shield refills slower; down, it has none
-const ESYS_TELEPORT := 6           # (v57) the boarding flagship's teleporter: down, it sends nobody across
-const ESYS_COUNT := 7
-const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты", "Телепорт"]
+const ESYS_TELEPORT := 6           # (v57) the boarding flagship's teleporter (v62: and some pirates'): down, it sends nobody across
+const ESYS_DRONES := 7              # (v62) a drone ship's control core: down, it sends no assault drones and mends nothing;
+                                    # wrecked by our boarders, the ship is taken
+const ESYS_COUNT := 8
+const ESYS_NAMES: Array[String] = ["Орудия", "Рубка", "Двигатель", "Кубрик", "Гипердвигатель", "Щиты", "Телепорт", "Ядро дронов"]
 const ENEMY_RAID := 1               # (S_GUNS flags) it fights at a distance and does not mean to dock
 const ENEMY_FLEEING := 2            # it is charging its jump drive to get away
 const ENEMY_HELD := 4               # (v50) our tractor beam holds it
 const ENEMY_RANSOM := 8             # (v54) it offers a ransom to be let go (see the ransom byte at the end of S_GUNS)
+const ENEMY_PHASE2 := 16            # (v62) the flagship has gone into its second phase
+const ENEMY_CREWLESS := 32          # (v62) a drone ship: nobody aboard, a machine fights
 const AIM_ANY := 255                # the guns hit wherever they hit
 const AIM_ROOM := 64                # (v53) AIM_ROOM + n: the guns aim at room n of its drawing, whatever is in it
 # (v53) the classes of pirate ship (see Hulls), and how they behave in a fight
@@ -327,12 +333,14 @@ const ECLASS_GUNSHIP := 2
 const ECLASS_CRUISER := 3
 const ECLASS_BATTLESHIP := 4        # (v57) the flagship at the goal point, first kind: guns that aim well
 const ECLASS_CARRIER := 5           # (v57) the flagship, second kind: crew-hurting guns and a teleporter
+const ECLASS_DRONE := 6             # (v62) a crewless drone ship: a machine, sends assault drones, airless inside
 const TEMPER_CALCULATING := 0
 const TEMPER_CAUTIOUS := 1
 const TEMPER_RECKLESS := 2
 const TEMPER_HUNTER := 3
 const TEMPER_SIEGE := 4             # (v57) the battleship's: shield first, then the engine
 const TEMPER_STORM := 5             # (v57) the carrier's: knocks the crew down, boards the bridge
+const TEMPER_MACHINE := 6           # (v62) a drone ship's: never runs, never bargains
 const TEMPER_UNKNOWN := 255
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
@@ -358,6 +366,8 @@ const SHOT_HEAVY_ROCKET := 16       # the «Опустошитель»: a fat ro
 const SHOT_REAPER := 17             # the «Жнец»: a crimson beam
 const SHOT_NOVA := 18               # the «Сверхновая»: a blinding white-violet ball
 const SHOT_HAMMER := 19             # the «Молот»: a heavy glowing slug
+const SHOT_BOMB := 20               # (v62) a bomb: no flight across, a shimmer where it is teleported in, then its burst
+const SHOT_SHRAPNEL := 21           # (v62) «Шрапнель»: a cloud of small glowing fragments
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2
@@ -591,7 +601,11 @@ const KIND_PLAYER := 0
 const KIND_BOT := 1
 const KIND_CORPSE := 2              # a body left behind; nobody controls it
 const KIND_PIRATE := 3              # an enemy the server moves
+const KIND_ROBOT := 4                # (v62) our security robot: a machine the server moves; not crew
 const PIRATE_COLOURS := 3           # rows of assets/chars.png after the crew's SUIT_COLOURS: pirates' suits
+const ROBOT_COLOUR := SUIT_COLOURS + PIRATE_COLOURS        # (v62) the row of an enemy robot (assault drone, guard)
+const OUR_ROBOT_COLOUR := ROBOT_COLOUR + 1                 # (v62) the row of our security robot
+const ARMOUR_COLOUR := ROBOT_COLOUR + 2                    # (v62) the row of a heavy-armoured boarder (steel plates, no suit)
 
 const TANK_FULL := 200              # a full oxygen tank as sent over the network
 const REPAIR_TICKS := 120           # holding "use" on a hole for 6 s mends it

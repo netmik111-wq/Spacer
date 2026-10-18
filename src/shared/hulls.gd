@@ -33,9 +33,13 @@ extends RefCounted
 ##   reward    credits for wrecking it
 ##   loot      [fewest, most] things lying about aboard it
 ##   boss      (v57) the flagship's kind (1 battleship, 2 carrier): never rolled by chance
+##   teleport  (v62) the chance it carries a teleporter, from TELEPORT_FROM jumps out (the author's E5)
+##   drone     (v62) a crewless drone ship: its "crew" are guard robots, it fights by itself (see Gunnery.crewless)
 
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+
+const TELEPORT_FROM := 8           # (v62) jumps from the start before ordinary pirates carry a teleporter
 
 const CLASSES := {
 	Net.ECLASS_CUTTER: {"name": "пиратский катер", "layouts": [2, 6], "hull": 8, "strength": 2, "guns": [1, 2], "more_from": 4,
@@ -44,15 +48,24 @@ const CLASSES := {
 	Net.ECLASS_RAIDER: {"name": "пиратский рейдер", "layouts": [1, 3], "hull": 12, "strength": 3, "guns": [2, 3], "more_from": 5,
 		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ION, Weapons.ROCKET, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
 		Weapons.RAILGUN, Weapons.PHOENIX, Weapons.HAMMER], "shield": 0.7,
-		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4], "armour": 0.1, "guard": 0.15},
+		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4], "armour": 0.1, "guard": 0.15, "teleport": 0.25},
 	Net.ECLASS_GUNSHIP: {"name": "пиратская канонерка", "layouts": [4, 7], "hull": 14, "strength": 3, "guns": [3, 4], "more_from": 8,
 		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ROCKET, Weapons.ION, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
-		Weapons.EMP, Weapons.RAILGUN, Weapons.DEVASTATOR, Weapons.HAMMER, Weapons.SIEGE],
-		"shield": 0.6, "regen": 1.0, "slower": 1.5, "dodge": 0.0, "crew": [3, 4], "from": 2, "weight": 3, "reward": 55, "loot": [3, 5], "armour": 0.2, "guard": 0.35},
+		Weapons.EMP, Weapons.RAILGUN, Weapons.DEVASTATOR, Weapons.HAMMER, Weapons.SIEGE, Weapons.HORNET, Weapons.SHRAPNEL, Weapons.THERMITE],
+		"shield": 0.6, "regen": 1.0, "slower": 1.5, "dodge": 0.0, "crew": [3, 4], "from": 2, "weight": 3, "reward": 55, "loot": [3, 5], "armour": 0.2, "guard": 0.35,
+		"teleport": 0.4},
 	Net.ECLASS_CRUISER: {"name": "пиратский крейсер", "layouts": [5], "hull": 20, "strength": 4, "guns": [3, 4], "more_from": 7,
 		"pool": [Weapons.LASER, Weapons.ION, Weapons.ROCKET, Weapons.HEAVY, Weapons.ION_CANNON, Weapons.EMP, Weapons.RAILGUN,
-		Weapons.SIEGE, Weapons.STORM, Weapons.HAMMER],
-		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6], "armour": 0.3, "guard": 0.5},
+		Weapons.SIEGE, Weapons.STORM, Weapons.HAMMER, Weapons.DAMPER, Weapons.HORNET, Weapons.THERMITE],
+		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6], "armour": 0.3, "guard": 0.5,
+		"teleport": 0.6},
+	# (v62, the author's E1) a crewless drone ship: no air inside, nobody to fly it or mend it but its own
+	# drones, and two guard robots to wake when somebody boards. It never runs and never bargains; it
+	# sends assault drones across (Assault). It takes the cutters' and raiders' hulls.
+	Net.ECLASS_DRONE: {"name": "дрон-корабль", "layouts": [2, 6, 1, 3], "hull": 10, "strength": 3, "guns": [2, 3], "more_from": 7,
+		"pool": [Weapons.LASER, Weapons.ION, Weapons.AUTOCANNON, Weapons.ROCKET, Weapons.RAPID, Weapons.HEAVY, Weapons.ION_CANNON,
+		Weapons.SHRAPNEL, Weapons.RAILGUN, Weapons.HAMMER], "shield": 0.5, "regen": 1.0, "slower": 1.25,
+		"dodge": 0.1, "crew": [2, 2], "from": 3, "weight": 3, "reward": 45, "loot": [1, 2], "armour": 0.2, "guard": 0.3, "drone": true},
 	# (v57) the flagship at the goal point, in the author's two kinds. Never rolled by chance
 	# ("boss"): it waits in its own sector (Sectors.FLAGSHIP); see Shipyard.flagship and Flagship.
 	# Its guns are its whole "pool"; "extra" are those it adds as our gear grows (the author's notebook:
@@ -89,12 +102,20 @@ const TEMPERS := {
 		"flee": 0.0, "at_guns": 0.0, "devices": 0.0, "pace": 1.0, "boss": true},
 	Net.TEMPER_STORM: {"name": "абордажник", "about": "оглушает экипаж нейроизлучателями и высаживает людей телепортом прямо на мостик, чтобы захватить корабль; не бежит и не сдаётся",
 		"flee": 0.0, "at_guns": 0.3, "devices": 0.0, "pace": 1.0, "boss": true},
+	# (v62) a drone ship's: never rolled for a crewed ship ("machine")
+	Net.TEMPER_MACHINE: {"name": "машина", "about": "не бежит, не сдаётся и не торгуется: бьёт по орудиям и щиту и высылает штурмовые дроны",
+		"flee": 0.0, "at_guns": 0.45, "devices": 0.35, "pace": 1.0, "machine": true},
 }
 
 const NAMES: Array[String] = ["Чёрная вдова", "Ржавый клинок", "Кровавая Мэри", "Последний вздох", "Гиена", "Шакал",
 	"Костолом", "Беззвёздная ночь", "Пустота", "Мародёр", "Стервятник", "Ворон", "Сломанный зуб", "Красный прилив",
 	"Барракуда", "Тёмная звезда", "Могильщик", "Злая удача", "Хромой пёс", "Ночная гостья", "Рваная рана", "Буря",
 	"Крюк", "Пиранья", "Чума", "Медный лоб", "Острога", "Голодный", "Вдовий плач", "Безымянный", "Падальщик", "Ржавчина"]
+
+
+# (v62) what drone ships are called: a hull number and a name
+const DRONE_NAMES: Array[String] = ["Страж", "Часовой", "Жнец", "Молчун", "Рой", "Улей", "Око", "Сторож", "Пустой",
+	"Гончая", "Шершень", "Механик", "Тень", "Ржавый страж", "Немой", "Счётчик"]
 
 
 static func info(klass: int) -> Dictionary:
@@ -107,6 +128,11 @@ static func temper(t: int) -> Dictionary:
 
 static func is_boss(klass: int) -> bool:
 	return info(klass).has("boss")
+
+
+static func is_drone(klass: int) -> bool:
+	## (v62) A crewless drone ship?
+	return info(klass).has("drone")
 
 
 static func class_of_layout(layout: int) -> int:

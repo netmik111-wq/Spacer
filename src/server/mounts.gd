@@ -55,7 +55,7 @@ func _scan() -> void:
 		return
 	var map := server.map
 	for p: Player in server.players:
-		if p == null or p.pirate or p.corpse or p.cond != Net.COND_OK or p.st.cd > 0:
+		if p == null or p.pirate or p.ally or p.corpse or p.cond != Net.COND_OK or p.st.cd > 0:
 			continue
 		var i := map.guns.find(map.use_ahead(p.st.x, p.st.y, p.st.facing))
 		if i >= 0 and gunners[i] == null:
@@ -70,7 +70,7 @@ func pace(i: int) -> float:
 	## How much faster that gun charges for its gunner (1 = nobody at it).
 	var p := gunner(i)
 	if p == null:
-		return 1.0
+		return server.outfit.loader()        # (v62) the auto-loader stands in for nobody
 	return 1.0 + MOUNT_PACE + MOUNT_SKILL_PACE * p.skill(Net.SKILL_GUNS)
 
 

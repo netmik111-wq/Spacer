@@ -172,5 +172,7 @@ func press(p: Player) -> void:
 		server.medbay.scan(p, ahead)         # (v60) the body scanner's report
 	elif usable_ahead(p) or _lying_near(p):
 		return
+	elif p.in_hand() == Net.ITEM_ROBOT and server.robots.can_set(p, Vector2i(p.st.x + Net.DX[p.st.facing], p.st.y + Net.DY[p.st.facing])) != "-":
+		server.robots.deploy(p, Vector2i(p.st.x + Net.DX[p.st.facing], p.st.y + Net.DY[p.st.facing]))   # (v62)
 	elif not server.inventory.pick_up(p):
 		server.movement.climb(p)

@@ -21,6 +21,13 @@ const AIM_SPREAD := 0.7              # cells: how far off the mark a shot may go
 const FIRE_GAP := [14, 26]           # ticks between its shots
 const FLEE_BELOW := 30.0             # health under which it falls back
 const MAX_ABOARD := 4
+# (v62, the author's K12) boarders who come over by docking or by teleport are not all in sealed suits:
+const BARE_FROM := 3                 # from this many jumps out...
+const BARE_SHARE := 0.35             # ... this share come without a suit: they breathe the air (venting kills them)
+const HEAVY_FROM := 6                # from this many jumps out...
+const HEAVY_SHARE := 0.15            # ... this share are heavy stormtroopers: no suit, armour that takes half of every wound
+const HEAVY_TOUGHNESS := 0.5
+const ROBOT_MAGS := 3                # (v62) an assault drone's built-in gun reloads this many times
 
 var server: Node
 var count := 0                       # pirates sent aboard so far (for their names)
@@ -44,22 +51,13 @@ func aboard() -> int:
 
 func board(how_many: int) -> bool:
 	## A boarding party cuts its way in through the hull and comes aboard.
+	## (v62) Those who cut in always wear sealed suits: the hole lets the air out.
 	var map = server.map
-	var ways: Array = []
-	for cell: int in map.hull:
-		if server.air.holes.has(cell):
-			continue
-		var x: int = cell % map.width
-		var y: int = cell / map.width
-		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0:
-				ways.append([cell, Vector2i(x + d.x, y + d.y)])
-				break
-	if ways.is_empty() or how_many <= 0:
+	if how_many <= 0:
 		return false
-	var way: Array = ways[_rng.randi_range(0, ways.size() - 1)]
-	server.systems.breach(way[0])
-	var inside: Vector2i = way[1]
+	var inside := cut_in()
+	if inside.x < 0:
+		return false
 	for i in mini(how_many, MAX_ABOARD):
 		spawn(inside.x, inside.y, _rng.randf() < 0.6)
 	server.chat.say("Тревога! Абордаж: пираты прорезали обшивку и идут на борт (%s, их %d)." % [
@@ -87,6 +85,71 @@ func spawn(x: int, y: int, gunner: bool):
 	return p
 
 
+func spawn_boarder(x: int, y: int, gunner: bool, far: int = -1):
+	## (v62) A boarder who comes over by docking or by teleport: by how far out we are,
+	## now and then one without a sealed suit, or a heavy stormtrooper (the author's K12).
+	var p = spawn(x, y, gunner)
+	if far < 0:
+		far = server.sectors.far_from_start(server.ship.sector) if server.sectors.count > 0 else 0
+	var roll := _rng.randf()
+	if far >= HEAVY_FROM and roll < HEAVY_SHARE:
+		p.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
+		p.toughness = HEAVY_TOUGHNESS
+		p.colour = Net.ARMOUR_COLOUR
+		p.name = "Штурмовик %d" % count
+		server.crew.announce_join(p, null)
+	elif far >= BARE_FROM and roll < HEAVY_SHARE + BARE_SHARE:
+		p.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
+	return p
+
+
+func spawn_robot(x: int, y: int, what: String = "Штурмовой дрон"):
+	## (v62) An enemy robot in that cell: a drone ship's assault drone or guard.
+	## A machine: it needs no air, wears nothing and fights with a built-in gun.
+	count += 1
+	var p = server.crew.alloc("%s %d" % [what, count])
+	p.pirate = true
+	p.robot = true
+	p.colour = Net.ROBOT_COLOUR
+	p.worn.fill(Net.ITEM_NONE)
+	p.st.place(x, y)
+	p.add(Net.ITEM_PISTOL + Net.PISTOL_ROUNDS, true)
+	for i in ROBOT_MAGS:
+		p.add(Net.ITEM_MAG)
+	p.ai_fire_tick = server.tick + _rng.randi_range(10, 30)
+	server.crew.announce_join(p, null)
+	return p
+
+
+func cut_in() -> Vector2i:
+	## (v62) A hole cut through our hull where a boarder can step in: the cell
+	## inside it (-1, -1 if there is no whole hull to cut).
+	var map = server.map
+	var ways: Array = []
+	for cell: int in map.hull:
+		if server.air.holes.has(cell):
+			continue
+		var x: int = cell % map.width
+		var y: int = cell / map.width
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0:
+				ways.append([cell, Vector2i(x + d.x, y + d.y)])
+				break
+	if ways.is_empty():
+		return Vector2i(-1, -1)
+	var way: Array = ways[_rng.randi_range(0, ways.size() - 1)]
+	server.systems.breach(way[0])
+	return way[1]
+
+
+func foe(p, q) -> bool:
+	## (v62) Is `q` one that `p` fights? Pirates (and their robots) fight our
+	## people and our security robots; our robots fight pirates.
+	if q == null or q == p or q.corpse:
+		return false
+	return q.pirate if p.ally else not q.pirate
+
+
 func heard(p, x: int, y: int) -> void:
 	## A pirate heard the crew: if it has nobody in sight, it goes to look.
 	if p.ai_target < 0:
@@ -94,8 +157,9 @@ func heard(p, x: int, y: int) -> void:
 
 
 func attacked(p, by) -> void:
-	## Whoever hurts a pirate becomes the one it is after.
-	if by.pirate or by.corpse:
+	## Whoever hurts a pirate becomes the one it is after (v62: and a pirate who
+	## hurts our security robot, the one it is after).
+	if by.corpse or by.pirate == p.pirate:
 		return
 	p.ai_target = by.slot
 	p.ai_goal = Vector2i(by.st.x, by.st.y)
@@ -132,7 +196,7 @@ func think(p) -> void:
 			p.ai_target = -1
 			var best := 1e9
 			for q in server.players:
-				if q == null or q.pirate or q.corpse or q.cond != Net.COND_OK or not _sees(p, q):
+				if not foe(p, q) or q.cond != Net.COND_OK or not _sees(p, q):
 					continue
 				var d: float = Vector2(q.st.x, q.st.y).distance_to(Vector2(p.st.x, p.st.y))
 				if d < best:
@@ -147,8 +211,8 @@ func think(p) -> void:
 		p.ai_target = -1
 	var here: Vector2 = Vector2(p.st.x, p.st.y)
 	var item: int = p.in_hand()
-	# badly hurt: patch itself up if it can, else fall back from whoever it fights
-	if p.health < FLEE_BELOW:
+	# badly hurt: patch itself up if it can, else fall back from whoever it fights (a machine does not)
+	if p.health < FLEE_BELOW and not p.robot:
 		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
 		if patch >= 0 and p.wounds > 0.0 and now >= p.ready_tick:
 			p.hand = patch

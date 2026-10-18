@@ -60,7 +60,7 @@ func _data() -> void:
 		var item := Gear.item_of(g)
 		if item > 255 or Items.gear_of(item) != g or Items.name_of(item) == "" or Items.cargo(item) or Items.about(item) == "":
 			ok = false
-		if Items.price(item) <= 0 or Gear.tier(g) < 1 or Gear.tier(g) > 3:
+		if Items.price(item) <= 0 or (Gear.tier(g) < 1 and not Gear.extender(g)) or Gear.tier(g) > 3:   # (v62: the bay's extender has none)
 			priced = false
 	_expect(ok, "every crate of gear is a thing with a name, carried, not cargo (%d)" % Gear.all().size())
 	_expect(priced, "each has a tier and a price")

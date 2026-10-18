@@ -35,6 +35,8 @@ extends Node
 ##   power        (v61) the engine's power, the SMES and the bridge's backup, what everything draws
 ##   hazards      (v61) the ion storm, and meteors and storms hitting the pirate ship too
 ##   outside      (v61) bots going out through an airlock in suits to mend the hull
+##   robots       (v62) our security robots: set down from their crates, they guard where they stand
+##   assault      (v62) boarders teleported across by ordinary pirates, and drone ships' assault drones
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -83,6 +85,8 @@ const Blast := preload("res://src/server/blast.gd")
 const Power := preload("res://src/server/power.gd")
 const Hazards := preload("res://src/server/hazards.gd")
 const Outside := preload("res://src/server/outside.gd")
+const Robots := preload("res://src/server/robots.gd")
+const Assault := preload("res://src/server/assault.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -165,6 +169,8 @@ var blast := Blast.new()
 var power := Power.new()
 var hazards := Hazards.new()
 var outside := Outside.new()
+var robots := Robots.new()             # (v62) our security robots
+var assault := Assault.new()           # (v62) teleported boarders and assault drones
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -262,6 +268,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	hazards.setup(self)
 	power.setup(self)
 	outside.setup(self)
+	robots.setup(self)
+	assault.setup(self)
 	outfit.setup(self)
 	rng.randomize()
 	tick = 0
@@ -631,6 +639,8 @@ func _tick() -> void:
 	outside.tick()
 	derelict.update()
 	flagship.tick()
+	assault.tick()
+	robots.tick()
 	stations.tick()
 	mounts.tick()
 	gunnery.tick()

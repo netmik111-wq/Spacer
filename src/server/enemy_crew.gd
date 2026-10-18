@@ -25,6 +25,10 @@ extends RefCounted
 ## every tick, so everything that asks about them above goes on working. They
 ## leave their posts to fight the boarders and go back to them when none are
 ## left in sight (Player.home).
+##
+## (v62) A drone ship's "crew" are its guard robots: they stand by its control
+## core and its guns and never walk the ship (a machine needs nobody at its
+## posts: `manned` is always true there), and come to life as robots.
 
 const Net := preload("res://src/shared/net.gd")
 
@@ -82,7 +86,9 @@ func board(count: int, layout: int) -> void:
 	_passable.resize(o.cells.size())
 	for c in o.cells.size():
 		_passable[c] = 1 if o.cells[c] >= 0 and (o.walk[c] == 1 or o.door_of[c] >= 0) else 0
-	var posts := [Net.ESYS_HELM, Net.ESYS_WEAPONS, Net.ESYS_SHIELDS, Net.ESYS_TELEPORT]
+	var posts := [Net.ESYS_HELM, Net.ESYS_WEAPONS, Net.ESYS_TELEPORT, Net.ESYS_SHIELDS]
+	if server.gunnery.crewless:
+		posts = [Net.ESYS_DRONES, Net.ESYS_WEAPONS]
 	for i in count:
 		var system: int = posts[i] if i < posts.size() else Net.ESYS_CREW
 		var room: int = server.gunnery.room_of_system(system)
@@ -123,7 +129,7 @@ func in_room(room: int) -> int:
 
 func manned(system: int) -> bool:
 	## Is anybody fit at that system's post (in its room)? Always, if we cannot tell.
-	if o == null:
+	if o == null or server.gunnery.crewless:
 		return true
 	return in_room(server.gunnery.room_of_system(system)) > 0
 
@@ -150,7 +156,7 @@ func tick() -> void:
 	if o != null and in_world:
 		_read_world()
 	elif o != null:
-		if server.tick % PLAN_TICKS == 0:
+		if server.tick % PLAN_TICKS == 0 and not g.crewless:
 			_plan()
 		for i in at.size():
 			if at[i] != dest[i] and server.tick >= _next_step[i]:
@@ -162,21 +168,23 @@ func tick() -> void:
 		server.to_all(now)
 
 
-func hit_room(room: int) -> Array:
+func hit_room(room: int, wound: float = -1.0, kill_one: bool = false) -> Array:
 	## A shot of ours got through into that room: [killed, wounded] of those in it.
+	## (v62) `wound`: the chance each is wounded (-1: WOUND_CHANCE); `kill_one`: a bomb kills one of them.
+	var chance := WOUND_CHANCE if wound < 0.0 else wound
 	if in_world:
-		return [0, _hurt_in_world(room)]
+		return [0, _hurt_in_world(room, chance, kill_one)]
 	var killed := 0
 	var wounded := 0
 	var i := 0
 	while i < at.size():
 		if room >= 0 and room_of(i) == room:
 			var roll := _rng.randf()
-			if roll < KILL_CHANCE:
+			if roll < KILL_CHANCE or (kill_one and killed == 0):
 				_remove(i)
 				killed += 1
 				continue
-			if roll < KILL_CHANCE + WOUND_CHANCE:
+			if roll < KILL_CHANCE + chance:
 				hurt_until[i] = server.tick + roundi(HURT_SECONDS * Net.TICK_HZ)
 				wounded += 1
 		i += 1
@@ -352,7 +360,8 @@ func come_to_life() -> void:
 	var at_grid: Vector2i = server.map.other_at
 	for i in at.size():
 		var c: int = server.derelict._cell(at_grid, at[i])
-		var p = server.pirates.spawn(c % server.map.width, c / server.map.width, _rng.randf() < 0.6)
+		var p = server.pirates.spawn_robot(c % server.map.width, c / server.map.width, "Робот-охранник") if server.gunnery.crewless \
+			else server.pirates.spawn(c % server.map.width, c / server.map.width, _rng.randf() < 0.6)
 		p.home = dest[i]
 		if hurt(i):
 			p.health = 45.0
@@ -407,11 +416,17 @@ func _in_room_now(room: int) -> Array:
 	return out
 
 
-func _hurt_in_world(room: int) -> int:
+func _hurt_in_world(room: int, chance: float = WOUND_CHANCE, kill_one: bool = false) -> int:
 	## Our hit wounds whoever stands in the room, our own boarders too.
 	var wounded := 0
+	var killed := false
 	for p in _in_room_now(room):
-		if _rng.randf() < WOUND_CHANCE:
+		if kill_one and not killed and p.pirate:
+			killed = true
+			server.combat.hurt(p, 200, null)
+			wounded += 1
+			continue
+		if _rng.randf() < chance:
 			server.combat.hurt(p, BOARDED_WOUND, null)
 			if p.pirate:
 				wounded += 1

@@ -158,7 +158,7 @@ func assess() -> Dictionary:
 	var crew := 0
 	var crew_up := 0
 	for p in server.players:
-		if p != null and not p.corpse and not p.bot and not p.pirate:     # boarders are not the crew
+		if p != null and not p.corpse and not p.bot and not p.pirate and not p.ally:     # boarders are not the crew
 			crew += 1
 			if p.cond == Net.COND_OK:
 				crew_up += 1

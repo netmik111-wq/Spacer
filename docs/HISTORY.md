@@ -134,6 +134,22 @@ Open problems:
 
 ## Build notes
 
+### v62 (enemies, part 3 of the road plan)
+- The drone ship, a fifth pirate class with no crew (`Gunnery.crewless`): a control core (`Net.ESYS_DRONES`),
+  repair drones, assault drones that cut in as robots (new server part `src/server/assault.gd`), no air inside,
+  two guard robots, taken only by wrecking its core by hand. It never runs, bargains or docks.
+- Teleporters on ordinary pirates from 8 jumps (`Assault.teleport`, `Gunnery.crew_sent`); boarders without
+  suits and heavy stormtroopers (`Pirates.spawn_boarder`, `Player.toughness`).
+- Bombs (`Weapons.CLASS_BOMB`: «Шершень», «Глушилка», «Термит», items from `Net.ITEM_GUN_LATE`) and «Шрапнель»
+  (area fragments), for us and for pirates; the flagship's second phase at a third of its hull.
+- Four passive modules, the bay's extender (a third slot, sold at stations, which got a small shop), our security
+  robots (`src/server/robots.gd`, `Player.ally`). New character rows (enemy robot, our robot, armour), sounds
+  `gun_bomb` and `gun_shrapnel`. New test `tools/enemytest.gd` (24 tests). Protocol 41. Question page:
+  https://claude.ai/artifact/VCN8eFSoSqhm1E52mYTwrN (built on my picks, all "A"; no answers yet).
+- The author answered all 19 cluster map questions "A" (page https://claude.ai/artifact/Q3XhoTfZTiM6CqztJkmmkE),
+  adding on C6: places in a system may hide small secrets (debris, a dropped container, dead bodies, an abandoned
+  ship). The cluster map is its own build after v63.
+
 ### v61 (power, part 2 of the road plan)
 - The SMES (`S` in the engine room) and the bridge backup (`Q`), new server part `src/server/power.gd`: the new
   rule "no engine and an empty SMES = no power", a +3 boost in fights, a hit takes the whole charge, an SS13

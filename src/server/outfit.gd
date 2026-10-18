@@ -12,6 +12,11 @@ extends RefCounted
 ## an engineer takes the last module out the same way. Only an engineer may do
 ## it (the author's word for the workbench, kept for gear). A broken machine is
 ## mended first: holding "use" on it mends it, as before.
+##
+## (v62, the author's K2 and K3) Four passive modules more (the jump jammer,
+## the welding drone, the salvage arm, the auto-loader), and the bay's
+## extender: installed at the bay like a module, it is used up and gives the
+## bay a third slot for good.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
@@ -97,6 +102,39 @@ func phase() -> bool:
 
 func phase_ready() -> bool:
 	return phase() and server.tick >= server.ship.phase_ready
+
+
+func jump_jam() -> float:
+	## (v62) Of the pace the enemy's escape jump charges at (the jump jammer slows it).
+	return Gear.JAMMER_SHARE if Gear.has_module(server.ship.modules, Gear.MOD_JAMMER) else 1.0
+
+
+func welder() -> int:
+	## (v62) Hull strength the welding drone mends after a jump (0: none in the bay).
+	return Gear.WELDER_HULL if Gear.has_module(server.ship.modules, Gear.MOD_WELDER) else 0
+
+
+func salvage_share() -> float:
+	return Gear.SALVAGE_SHARE if Gear.has_module(server.ship.modules, Gear.MOD_SALVAGE) else 1.0
+
+
+func salvage_parts() -> int:
+	return Gear.SALVAGE_PARTS if Gear.has_module(server.ship.modules, Gear.MOD_SALVAGE) else 0
+
+
+func loader() -> float:
+	## (v62) How much faster a gun with nobody at it charges (the auto-loader).
+	return Gear.LOADER_PACE if Gear.has_module(server.ship.modules, Gear.MOD_LOADER) else 1.0
+
+
+func jumped() -> void:
+	## (v62) After every jump: the welding drone mends the hull.
+	var n := welder()
+	if n <= 0 or server.ship.hull >= Net.HULL_MAX:
+		return
+	var was: int = server.ship.hull
+	server.ship.hull = mini(server.ship.hull + n, Net.HULL_MAX)
+	server.chat.say("Сварочный дрон прошёл по обшивке после прыжка: прочность %d из %d (+%d)." % [server.ship.hull, Net.HULL_MAX, server.ship.hull - was])
 
 
 func phase_used() -> void:
@@ -190,10 +228,13 @@ func can(p: Player, cell: int) -> String:
 		else:
 			if not server.map.bay.has(cell):
 				return NOT_HERE
-			if ship.modules.has(g):
+			if Gear.extender(g):
+				if ship.modules.size() >= Gear.MODULE_SLOTS_MAX:
+					return "Стойка уже расширена: третья ячейка на месте."
+			elif ship.modules.has(g):
 				return "Этот модуль уже стоит в стойке."
-			if _slot_for(g) < 0:
-				return "Обе ячейки стойки заняты: сначала выньте модуль (держите E с пустыми руками)."
+			elif _slot_for(g) < 0:
+				return "Все ячейки стойки заняты: сначала выньте модуль (держите E с пустыми руками)."
 	elif p.in_hand() == Net.ITEM_NONE and server.map.bay.has(cell):
 		if _last_module() < 0:
 			return "Модульная стойка пуста: модули в ящиках носят из шкафа снабжения."
@@ -230,6 +271,10 @@ func finish(p: Player, cell: int) -> void:
 		p.slots[p.hand] = Gear.item_of(out) if out != Gear.NONE else Net.ITEM_NONE
 		server.chat.say("%s устанавливает: %s.%s" % [p.name, Gear.name_of(g).to_lower(),
 			(" Снятое (%s) — в руках." % Gear.name_of(out).to_lower()) if out != Gear.NONE else ""])
+	elif Gear.extender(g):
+		ship.modules.append(Gear.NONE)       # (v62) a third slot, for good: the extender is used up
+		p.slots[p.hand] = Net.ITEM_NONE
+		server.chat.say("%s расширяет модульную стойку: теперь в ней %d ячейки." % [p.name, ship.modules.size()])
 	else:
 		var at := _slot_for(g)
 		var out: int = ship.modules[at]

@@ -80,6 +80,9 @@ const BASE := {
 		"price": 12, "stock": 1, "cargo": true},
 	Net.ITEM_DRONE: {"name": "Дрон-разведчик", "about": "Запускается с монитора дрона на мостике: залетает внутрь пиратского корабля, им управляют клавишами движения. Показывает отсеки, где побывал, и пиратов рядом; может взорваться в отсеке и повредить систему сквозь щит. Хранится в трюме.",
 		"price": 20, "stock": 1, "cargo": true},
+	# (v62, the author's K11) a security robot in its crate: kept in the locker, carried, set down to switch on
+	Net.ITEM_ROBOT: {"name": "Охранный робот", "about": "Робот в ящике. Поставьте его на пол (щёлкните по соседней клетке или нажмите E перед свободным местом): он включится и будет охранять этот отсек, стреляя по абордажникам. Воздух ему не нужен. На борту не больше двух.",
+		"price": 120, "robot": true},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -226,7 +229,8 @@ static func kept_in_locker() -> PackedInt32Array:
 	## The things the supply locker holds, in the order they are shown.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) == item and (stock(item) > 0 or cargo(item) or INFO[item].has("gear")) and not INFO[item].has("fx") and not INFO[item].has("damaged"):
+		if kind_of(item) == item and (stock(item) > 0 or cargo(item) or INFO[item].has("gear") or INFO[item].has("robot")) \
+				and not INFO[item].has("fx") and not INFO[item].has("damaged"):
 			out.append(item)                 # ((v58) a gun's other states get a place in the locker when one comes)
 	return out
 
@@ -242,6 +246,7 @@ static var CATEGORIES: Array = [
 	["Детали орудий", range(Net.ITEM_GUN_PARTS, Net.ITEM_GUN_PARTS + Weapons.KINDS)],
 	["Модули корабля", Gear.all().map(func(g: int) -> int: return Gear.item_of(g))],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
+	["Охрана", [Net.ITEM_ROBOT]],
 ]
 
 

@@ -14,6 +14,9 @@ var corpse := false                  # a body left behind: it only lies there
 var admin := false                   # may use the admin panel (see Admin)
 var host := false                    # is the hosting player (proved with the server's secret text)
 var pirate := false                  # an enemy the server moves (see Pirates)
+var robot := false                   # (v62) a machine (an assault drone, a guard, our security robot): it needs no air
+var ally := false                    # (v62) our security robot: the server moves it against pirates; it is not crew
+var toughness := 1.0                 # (v62) the share of a wound's damage it takes (heavy armour: half)
 var ready_tick := 0                  # its hands are free again from this tick (after a shot, a blow, a reload)
 var history := PackedVector2Array()  # where it was drawn on each of the last HISTORY ticks (see Combat.place_at)
 # what a pirate has in mind (see Pirates)

@@ -8,7 +8,8 @@ const Gear := preload("res://src/shared/gear.gd")
 
 # the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
 const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0),
-	Color(0.55, 1.0, 0.7), Color(0.3, 0.95, 1.0), Color(1.0, 0.4, 0.85), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.95)]
+	Color(0.55, 1.0, 0.7), Color(0.3, 0.95, 1.0), Color(1.0, 0.4, 0.85), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.95),
+	Color(0.7, 1.0, 0.55)]
 # (v58) the frame of a tier's gun: plain, steel, gold (a tier is not told; the look is)
 const TIER_RIM: Array[Color] = [Color(0.12, 0.12, 0.15), Color(0.12, 0.12, 0.15), Color(0.3, 0.34, 0.42), Color(0.75, 0.6, 0.2)]
 # parts of a kind of gun (Weapons.KIND_*): the colour of their mark
@@ -49,6 +50,16 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		var left := float(item - Net.ITEM_SUIT) / Net.SUIT_TANK_STEPS
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
+		return
+	if item == Net.ITEM_ROBOT:
+		# (v62) a security robot folded in its crate: a squat steel body, a green eye, a gun arm
+		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(4, 5) * u, Vector2(9, 8) * u), Color(0.55, 0.58, 0.64))
+		canvas.draw_rect(Rect2(at + Vector2(5, 6.5) * u, Vector2(7, 2.4) * u), Color(0.1, 0.12, 0.14))
+		canvas.draw_circle(at + Vector2(8.5, 7.7) * u, 1.0 * u, Color(0.4, 1.0, 0.55))
+		canvas.draw_rect(Rect2(at + Vector2(12.5, 9.5) * u, Vector2(3.5, 1.6) * u), Color(0.2, 0.2, 0.24))
+		canvas.draw_rect(Rect2(at + Vector2(5, 13.5) * u, Vector2(2, 1.5) * u), Color(0.2, 0.2, 0.24))
+		canvas.draw_rect(Rect2(at + Vector2(10, 13.5) * u, Vector2(2, 1.5) * u), Color(0.2, 0.2, 0.24))
 		return
 	if Gear.of_item(item) != Gear.NONE:
 		_crate(canvas, at, u, Gear.of_item(item))
@@ -220,6 +231,21 @@ static func _crate(canvas: CanvasItem, at: Vector2, u: float, g: int) -> void:
 		Gear.MOD_PHASE:
 			canvas.draw_arc(mid, 2.0 * u, 0.0, PI * 1.5, 10, Color(0.75, 0.45, 1.0), 0.8 * u)
 			canvas.draw_circle(mid, 0.8 * u, Color(0.9, 0.7, 1.0))
+		Gear.MOD_JAMMER:                             # (v62) a crossed-out jump arrow
+			canvas.draw_line(mid + Vector2(-2.0, 1.2) * u, mid + Vector2(2.0, -1.2) * u, Color(0.4, 0.8, 1.0), 0.7 * u)
+			canvas.draw_line(mid + Vector2(-1.8, -1.6) * u, mid + Vector2(1.8, 1.6) * u, Color(1.0, 0.35, 0.3), 0.7 * u)
+		Gear.MOD_WELDER:                             # a welding spark
+			canvas.draw_line(mid + Vector2(-2.0, 1.6) * u, mid, Color(0.6, 0.62, 0.68), 0.8 * u)
+			canvas.draw_circle(mid, 1.0 * u, Color(1.0, 0.85, 0.4))
+		Gear.MOD_SALVAGE:                            # a claw
+			canvas.draw_arc(mid, 1.8 * u, PI * 0.2, PI * 0.8, 6, Color(0.85, 0.75, 0.4), 0.7 * u)
+			canvas.draw_arc(mid, 1.8 * u, PI * 1.2, PI * 1.8, 6, Color(0.85, 0.75, 0.4), 0.7 * u)
+		Gear.MOD_LOADER:                             # shells in a row
+			for k in 3:
+				canvas.draw_rect(Rect2(mid + Vector2(-2.0 + k * 1.4, -1.5) * u, Vector2(0.9, 3.0) * u), Color(0.95, 0.8, 0.35))
+		Gear.MOD_EXTENDER:                           # a plus: one more slot
+			canvas.draw_rect(Rect2(mid - Vector2(0.4, 2.0) * u, Vector2(0.8, 4.0) * u), Color(0.5, 1.0, 0.6))
+			canvas.draw_rect(Rect2(mid - Vector2(2.0, 0.4) * u, Vector2(4.0, 0.8) * u), Color(0.5, 1.0, 0.6))
 
 
 static func _ship_gun(canvas: CanvasItem, at: Vector2, u: float, w: int) -> void:

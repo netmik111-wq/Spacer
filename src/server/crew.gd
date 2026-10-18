@@ -238,7 +238,7 @@ func _crew_aboard() -> int:
 	## Our people alive, players and bots alike.
 	var n := 0
 	for q: Player in server.players:
-		if q != null and not q.pirate and not q.corpse and q.cond != Net.COND_DEAD:
+		if q != null and not q.pirate and not q.ally and not q.corpse and q.cond != Net.COND_DEAD:
 			n += 1
 	return n
 
@@ -290,7 +290,8 @@ func roster_entry(p: Player) -> PackedByteArray:
 	e.resize(6)
 	e.encode_u16(0, p.slot)
 	e.encode_u8(2, p.colour)
-	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PIRATE if p.pirate else (Net.KIND_BOT if p.bot else Net.KIND_PLAYER)))
+	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PIRATE if p.pirate else (Net.KIND_ROBOT if p.ally else
+		(Net.KIND_BOT if p.bot else Net.KIND_PLAYER))))
 	e.encode_u8(4, p.job)
 	e.encode_u8(5, name_bytes.size())
 	e.append_array(name_bytes)
@@ -434,8 +435,8 @@ func update_vitals(p: Player) -> void:
 			respawn(p)
 		return
 	var breathes := server.air.air[p.st.y * server.map.width + p.st.x]
-	if p.pirate:
-		breathes = 1.0                       # pirates come in sealed suits
+	if p.robot or (p.pirate and p.has_suit()):
+		breathes = 1.0                       # pirates come in sealed suits (v62: not all of them); a machine needs no air
 	elif p.supply:
 		# on the tank: the air around does not matter while there is oxygen left
 		p.tank = maxf(p.tank - Net.TICK_SEC / Vitals.TANK_SECONDS, 0.0)
@@ -454,7 +455,9 @@ func update_vitals(p: Player) -> void:
 	elif cond == Net.COND_DEAD:
 		p.died_tick = server.tick
 		server.chat.say("%s погибает." % p.name)
-		if p.pirate:
+		if p.robot:
+			_robot_breaks(p)
+		if p.pirate or p.ally:
 			# a dead pirate is a body like any other, with what it carried
 			p.cond = cond
 			p.st.down = true
@@ -468,6 +471,18 @@ func update_vitals(p: Player) -> void:
 	p.st.dir = Net.DIR_NONE
 	p.inputs.clear()
 	p.self_dirty = true
+
+
+func _robot_breaks(p: Player) -> void:
+	## (v62) A robot shot to pieces: its built-in gun is no thing to take, but
+	## its wreck may still hold a spare part (the author's D4).
+	p.slots.fill(Net.ITEM_NONE)
+	if server.rng.randf() < ROBOT_PART:
+		p.add(Net.ITEM_PART)
+	server.chat.sound(Net.SOUND_THUD, p.st.x, p.st.y, p.slot)
+
+
+const ROBOT_PART := 0.5              # (v62) a broken robot leaves a spare part this often
 
 
 func respawn(p: Player) -> void:
@@ -516,7 +531,7 @@ func living_crew() -> int:
 	## Players' characters still alive (unconscious counts: they may yet come round).
 	var n := 0
 	for q: Player in server.players:
-		if q != null and not q.bot and not q.pirate and not q.corpse and q.cond != Net.COND_DEAD:
+		if q != null and not q.bot and not q.pirate and not q.ally and not q.corpse and q.cond != Net.COND_DEAD:
 			n += 1
 	return n
 
@@ -528,7 +543,7 @@ func check_crew() -> void:
 		return
 	var players_here := 0
 	for q: Player in server.players:
-		if q != null and not q.bot and not q.pirate and not q.corpse:
+		if q != null and not q.bot and not q.pirate and not q.ally and not q.corpse:
 			players_here += 1
 	if players_here > 0 and living_crew() == 0:
 		end_campaign(Net.OVER_CREW_LOST)

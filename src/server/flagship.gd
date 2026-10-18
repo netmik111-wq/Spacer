@@ -31,6 +31,9 @@ const TELEPORT_SECONDS := 40.0       # ... and then this often
 const TELEPORT_PARTY := 2            # boarders it sends at a time
 const TROOPS := 8                    # boarders it carries besides its crew
 const MAX_ABOARD := 4                # it sends nobody while this many pirates are aboard already
+const PHASE2_SECONDS := 25.0         # (v62) in its second phase the carrier teleports this often...
+const PHASE2_PARTY := 3              # ... this many at a time...
+const PHASE2_TROOPS := 4             # ... and calls up this many more troops
 const CAPTURE_SECONDS := 10          # the whole crew down this long with its boarders aboard: the ship is theirs
 
 var server: GameServer
@@ -40,6 +43,8 @@ var capture := 0                     # seconds its boarders have held our bridge
 var _come_at := -1                   # the tick it comes out (-1: not due)
 var _sector_key := 0
 var _teleport_at := 0
+var _every := TELEPORT_SECONDS
+var _party := TELEPORT_PARTY
 var _rng := RandomNumberGenerator.new()
 
 
@@ -82,6 +87,8 @@ func call_in(which: int = 0) -> bool:
 		server.navigation.tell_nav()
 		server.chat.say("Прыжок сорван: флагман глушит гипердвигатель.")
 	_teleport_at = server.tick + roundi(TELEPORT_FIRST * Net.TICK_HZ)
+	_every = TELEPORT_SECONDS
+	_party = TELEPORT_PARTY
 	capture = 0
 	return true
 
@@ -129,11 +136,11 @@ func _teleport_tick() -> void:
 	var g = server.gunnery
 	if server.tick < _teleport_at:
 		return
-	_teleport_at = server.tick + roundi(TELEPORT_SECONDS * Net.TICK_HZ)
+	_teleport_at = server.tick + roundi(_every * Net.TICK_HZ)
 	if troops <= 0 or g.down(Net.ESYS_TELEPORT) or not server.enemy_crew.manned(Net.ESYS_TELEPORT):
 		return
 	var room := g.room_of_system(Net.ESYS_TELEPORT)
-	var n := mini(mini(TELEPORT_PARTY, troops), MAX_ABOARD - server.pirates.aboard())
+	var n := mini(mini(_party, troops), MAX_ABOARD + (_party - TELEPORT_PARTY) - server.pirates.aboard())
 	if n <= 0:
 		return
 	var floor := bridge_cells()
@@ -146,7 +153,7 @@ func _teleport_tick() -> void:
 	for i in n:
 		var c: int = free[_rng.randi_range(0, free.size() - 1)]
 		free.erase(c)
-		var p = server.pirates.spawn(c % server.map.width, c / server.map.width, _rng.randf() < 0.6)
+		var p = server.pirates.spawn_boarder(c % server.map.width, c / server.map.width, _rng.randf() < 0.6)
 		p.hold = c                           # they hold the bridge, and fight whoever comes
 		troops -= 1
 		if free.is_empty():
@@ -154,6 +161,14 @@ func _teleport_tick() -> void:
 	g.reveal(room, "Вспышка выдала отсек пиратов")
 	server.chat.say("Вспышка телепорта на мостике! Флагман высадил абордажников (%d) прямо к пультам. Если они удержат мостик %d с, корабль будет захвачен. Телепорт можно выбить из орудий (в запасе у флагмана ещё %d)." % [
 		n, CAPTURE_SECONDS, troops])
+
+
+func phase_two() -> void:
+	## (v62, the author's K21) The carrier's second phase: more troops, sent more often, more at a time.
+	_every = PHASE2_SECONDS
+	_party = PHASE2_PARTY
+	troops += PHASE2_TROOPS
+	_teleport_at = mini(_teleport_at, server.tick + roundi(5.0 * Net.TICK_HZ))
 
 
 func _someone_at(cell: int) -> bool:
@@ -173,7 +188,7 @@ func _watch_crew() -> void:
 	if server.gunnery.boss > 0 and server.pirates.aboard() > 0:
 		taken = true
 		for p: Player in server.players:
-			if p != null and not p.pirate and not p.corpse and p.cond == Net.COND_OK:
+			if p != null and not p.pirate and not p.ally and not p.corpse and p.cond == Net.COND_OK:
 				taken = false
 				break
 	if not taken:
