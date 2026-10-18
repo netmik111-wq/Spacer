@@ -203,8 +203,11 @@ func store_asked(p: Player, action: int, item: int) -> void:
 		return
 	match action:
 		Net.STORE_TAKE:
-			if int(server.ship.store.get(item, 0)) > 0 and not Items.cargo(item) and p.add(item, true):
+			if int(server.ship.store.get(item, 0)) > 0 and (not Items.cargo(item) or Items.carried_gun(item)) and p.add(item, true):
 				server.ship.store[item] -= 1
+				if Items.carried_gun(item):
+					# (v60) a ship gun is carried by hand to its mount (see Mounts)
+					server.chat.tell(p, "%s взято. С ним в руке подойдите к орудийной установке в орудийном отсеке и держите E, глядя на неё." % Items.name_of(item))
 		Net.STORE_PUT_BACK:
 			for at in Net.SLOTS:
 				_put_back(p, at)

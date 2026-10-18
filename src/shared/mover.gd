@@ -65,6 +65,8 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if door >= 0:
 		if doors.barred(door, map.door_access[door], st.access):
 			return false                 # a restricted room, and its job gives no access there
+		if doors.blocks(door, st.access):
+			return false                 # (v60) a blast door locked against boarders
 		doors.bump(door, tick)
 		if not doors.passable(door, tick):
 			return false

@@ -49,7 +49,7 @@ func _initialize() -> void:
 	_expect(q.cond == Net.COND_DEAD, "(the sailor is dead)")
 	server.crew.respawn_from_reserve(q)
 	_expect(q.cond == Net.COND_OK and server.reserve == Net.START_RESERVE - 1, "coming back takes one from the reserve")
-	_expect(q.job == Net.JOB_CREWMAN and q.st.access == Net.JOB_ACCESS[Net.JOB_CREWMAN], "in the same job")
+	_expect(q.job == Net.JOB_CREWMAN and q.st.access == Net.access_of(Net.JOB_CREWMAN), "in the same job")
 	var empty := true
 	for item in q.slots:
 		empty = empty and item == Net.ITEM_NONE

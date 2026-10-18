@@ -90,7 +90,7 @@ func _initialize() -> void:
 	_expect(absi(guest.st.x - host.st.x) + absi(guest.st.y - host.st.y) <= 1, "«to them» puts the admin beside them")
 	_expect(server.map.walkable(host.st.x, host.st.y), "(on a floor)")
 	_admin(host, Net.ADMIN_JOB, Net.JOB_ENGINEER, guest.slot)
-	_expect(guest.job == Net.JOB_ENGINEER and guest.st.access == Net.JOB_ACCESS[Net.JOB_ENGINEER], "a new job gives its access")
+	_expect(guest.job == Net.JOB_ENGINEER and guest.st.access == Net.access_of(Net.JOB_ENGINEER), "a new job gives its access")
 
 	print("the ship")
 	server.systems.breach_near(host.st.x, host.st.y)

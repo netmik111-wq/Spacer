@@ -8,6 +8,9 @@ extends RefCounted
 ## while the engineer stays at the bench, and its progress is shown like any
 ## other work (Player.work); stepping away, or the gun leaving the locker,
 ## puts it down. The bench needs no power and does not break.
+## (v60, the author's W4) It also makes ammunition of a spare part from the
+## locker: AMMO_MADE shells, rockets or EMP rockets (never cheaper than a
+## trader's, so traders stay worth a visit; it is for when none is near).
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
@@ -18,6 +21,9 @@ const Weapons := preload("res://src/shared/weapons.gd")
 const APART_TICKS := 6 * Net.TICK_HZ
 const MEND_TICKS := 10 * Net.TICK_HZ
 const UPGRADE_TICKS := 15 * Net.TICK_HZ
+const AMMO_TICKS := 6 * Net.TICK_HZ
+# (v60) what one spare part makes: shells 3 x 3 cr, rockets 2 x 4 cr, an EMP rocket 6 cr (a part costs 10)
+const AMMO_MADE := {Net.BENCH_SHELLS: [Net.ITEM_SHELL, 3], Net.BENCH_ROCKETS: [Net.ITEM_ROCKET, 2], Net.BENCH_EMP: [Net.ITEM_EMP_ROCKET, 1]}
 
 var server: GameServer
 var _rng := RandomNumberGenerator.new()   # only for the effect a tier 3 gun gets: the game's own lots stay as they were
@@ -29,11 +35,14 @@ func setup(p_server: GameServer) -> void:
 
 
 static func ticks_for(action: int) -> int:
-	return {Net.BENCH_APART: APART_TICKS, Net.BENCH_MEND: MEND_TICKS, Net.BENCH_UPGRADE: UPGRADE_TICKS}.get(action, 0)
+	return {Net.BENCH_APART: APART_TICKS, Net.BENCH_MEND: MEND_TICKS, Net.BENCH_UPGRADE: UPGRADE_TICKS,
+		Net.BENCH_SHELLS: AMMO_TICKS, Net.BENCH_ROCKETS: AMMO_TICKS, Net.BENCH_EMP: AMMO_TICKS}.get(action, 0)
 
 
 func can(action: int, item: int) -> String:
 	## "" if that work may start on that gun from the locker now, or why not (in the player's words).
+	if AMMO_MADE.has(action):
+		return "" if int(server.ship.store.get(Net.ITEM_PART, 0)) > 0 else "Нужна запчасть в шкафу снабжения."
 	var w := Weapons.of_item(item)
 	if w == Weapons.NONE or int(server.ship.store.get(item, 0)) <= 0:
 		return "Этого орудия нет в шкафу снабжения."
@@ -111,6 +120,12 @@ func update(p: Player) -> void:
 
 func _finish(p: Player, action: int, item: int) -> void:
 	var store := server.ship.store
+	if AMMO_MADE.has(action):
+		var made: Array = AMMO_MADE[action]
+		store[Net.ITEM_PART] = int(store[Net.ITEM_PART]) - 1
+		store[made[0]] = int(store.get(made[0], 0)) + int(made[1])
+		server.chat.say("%s делает на верстаке из запчасти: %s ×%d." % [p.name, Items.name_of(made[0]).to_lower(), int(made[1])])
+		return
 	var w := Weapons.of_item(item)
 	store[item] = int(store[item]) - 1
 	var parts := Items.gun_parts(Weapons.kind(w))

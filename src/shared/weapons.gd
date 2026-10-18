@@ -109,6 +109,7 @@ const KINETIC_WEAR := 15.0
 # drone flying in) with this chance, then charges again
 const GUARD_CHARGE := 5.0
 const GUARD_HIT := 0.6
+const GUARD_SHELL_HIT := 0.3         # (v60, the author's W3) and a slow shell (autocannon, «Молот») with this chance
 
 const REACTOR := 8                   # power the reactor gives the guns and the shield
 const SHIELD_POWER := 2
@@ -293,6 +294,19 @@ const BURST_GAP_TICKS := 3           # (v56) between the shots of one burst
 
 static func ammo(w: int) -> int:
 	return int(INFO[w].get("ammo", 0)) if INFO.has(w) else 0
+
+
+static func slow_shell(w: int) -> bool:
+	## (v60) A gun whose shells fly slowly enough for point defence to shoot at them
+	## (the autocannon and the «Молот»; the railgun's slug is too quick).
+	return klass(w) == CLASS_KINETIC and ammo(w) == Net.ITEM_SHELL
+
+
+static func guard_chance(w: int) -> float:
+	## (v60) The chance point defence shoots down one shot of that gun (0 = it does not try).
+	if klass(w) == CLASS_ROCKET:
+		return GUARD_HIT
+	return GUARD_SHELL_HIT if slow_shell(w) else 0.0
 
 
 static func klass(w: int) -> int:

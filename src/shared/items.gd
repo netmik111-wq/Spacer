@@ -119,6 +119,13 @@ const PISTOL_DAMAGE := 30
 const PISTOL_RANGE := 14
 
 
+static func carried_gun(item: int) -> bool:
+	## (v60) A ship gun that may be taken out of the locker to carry to its mount (not
+	## the point defence: it is set from the gun console, it has no mount in the hull).
+	var w := Weapons.of_item(item) if INFO.has(item) else Weapons.NONE
+	return w != Weapons.NONE and w != Weapons.GUARD
+
+
 static func rounds(item: int) -> int:
 	## Rounds in a pistol; -1 if it is not one.
 	return int(INFO[item].get("rounds", -1)) if INFO.has(item) else -1

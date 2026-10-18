@@ -67,6 +67,7 @@ func climb(p: Player) -> bool:
 
 
 func bot_think(p: Player) -> void:
+	server.stations.bot_breathe(p)  # (v60) its suit's supply in thin air
 	if server.stations.bot_think(p):
 		return                       # (v55) it has an order from the captain
 	var st := p.st

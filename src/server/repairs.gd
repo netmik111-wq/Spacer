@@ -55,6 +55,12 @@ func update(p: Player) -> void:
 		# (v59) an engineer installs the crate of gear in hand (or takes a module out of the bay)
 		if _work_done(p, cell, server.outfit.ticks(p)):
 			server.outfit.finish(p, cell)
+	elif cell >= 0 and server.mounts.can(p, cell) == "":
+		# (v60) a gun carried up onto its mount, or taken down into the hands
+		if _work_done(p, cell, server.mounts.ticks(p)):
+			server.mounts.finish(p, cell)
+	elif cell >= 0 and server.map.autodoc.has(cell) and server.medbay.tending(p, cell):
+		p.work = 0                           # (v60) tending whoever lies in the autodoc (see Medbay)
 	elif door >= 0 and server.doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
@@ -120,7 +126,7 @@ func usable_ahead(p: Player) -> bool:
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
-			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell):
+			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell) or map.autodoc.has(cell) or map.scanner.has(cell):
 		return true
 	var door := map.door_of[cell]
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
@@ -149,10 +155,15 @@ func press(p: Player) -> void:
 		return
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	var gear_why := server.outfit.can(p, server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes))
+	var gun_why := server.mounts.can(p, ahead)
 	if ahead >= 0 and server.map.lock_pump.has(ahead):
 		server.systems.toggle_pump(p, ahead)
 	elif gear_why != "" and gear_why != server.outfit.NOT_HERE and not server.ship.broken.has(ahead):
 		server.chat.tell(p, gear_why)        # (v59) why that crate cannot go in here
+	elif gun_why != "" and gun_why != server.mounts.NOT_HERE:
+		server.chat.tell(p, gun_why)         # (v60) why that gun cannot go up here
+	elif ahead >= 0 and server.map.scanner.has(ahead):
+		server.medbay.scan(p, ahead)         # (v60) the body scanner's report
 	elif usable_ahead(p) or _lying_near(p):
 		return
 	elif not server.inventory.pick_up(p):

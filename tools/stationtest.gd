@@ -63,10 +63,10 @@ func _initialize() -> void:
 	_stand(cap, -1)
 	_stand(pilot, Net.POST_HELM)
 	_run(2)
-	_expect(is_equal_approx(st.our_dodge(), Stations.HELM_DODGE + Stations.PILOT_DODGE), "a pilot by job dodges better (%d%%)" % roundi(st.our_dodge() * 100))
+	_expect(is_equal_approx(st.our_dodge(), Stations.HELM_DODGE + Stations.PILOT_DODGE * pilot.skill(Net.SKILL_PILOT)), "a pilot by job dodges better (%d%%)" % roundi(st.our_dodge() * 100))
 	_stand(cap, Net.POST_ENGINE)
 	_run(2)
-	_expect(is_equal_approx(st.our_dodge(), Stations.HELM_DODGE + Stations.PILOT_DODGE + Stations.ENGINE_DODGE), "with the engine minded, better still")
+	_expect(is_equal_approx(st.our_dodge(), Stations.HELM_DODGE + Stations.PILOT_DODGE * pilot.skill(Net.SKILL_PILOT) + Stations.ENGINE_DODGE), "with the engine minded, better still")
 	_expect(st.shield_pace() == 1.0, "nobody at the shield: it refills as before")
 
 	# orders: only the captain while one is aboard

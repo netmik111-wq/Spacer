@@ -266,7 +266,7 @@ func connect_to(address: String, port: int, player_name: String, wanted_job: int
 		return "Не удалось начать подключение к %s:%d. Проверьте адрес." % [address, port]
 	_name = player_name
 	job = clampi(wanted_job, 0, Net.JOBS - 1)
-	_auth.access = Net.JOB_ACCESS[job]     # until the server says otherwise (see Net.S_ME)
+	_auth.access = Net.access_of(job)     # until the server says otherwise (see Net.S_ME)
 	pred.access = _auth.access
 	_t_connect = Time.get_ticks_msec()
 	phase = CONNECTING
@@ -1387,8 +1387,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				var flags: int = pkt[2 + Net.SKILLS] if pkt.size() > 2 + Net.SKILLS else 0
 				is_admin = flags & Net.ME_ADMIN != 0
 				is_host = flags & Net.ME_HOST != 0
-				if _auth.access != Net.JOB_ACCESS[job]:
-					_auth.access = Net.JOB_ACCESS[job]
+				if _auth.access != Net.access_of(job):
+					_auth.access = Net.access_of(job)
 					pred.access = _auth.access
 					_rebuild_prediction()
 		Net.S_POWER:
