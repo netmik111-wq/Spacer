@@ -253,7 +253,9 @@ func _v49(p) -> void:
 	ship.hull = Net.HULL_MAX
 	_expect(Net.HULL_MAX == 200 and Gunnery.ENEMY_HULL == 12, "our hull is 200, a pirate ship's 12")
 
-	# the cargo and the mounts
+	# the cargo and the mounts (v61: with the SMES's output off, so the reactor alone gives the power)
+	for u: Dictionary in server.power.units:
+		u["output"] = false
 	ship.store[Weapons.item_of(Weapons.HEAVY)] = 1
 	ship.store[Weapons.item_of(Weapons.SIEGE)] = 1
 	g._mount(p, 1, Weapons.item_of(Weapons.HEAVY))      # (v60: carried up by hand, see worktest; the old swap stays for tests)
@@ -293,6 +295,13 @@ func _v49(p) -> void:
 	ship.armed[0] = 1
 	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)
 	_expect(not ship.shield_on, "the shield needs 2 power: with the reactor full (%d of 8) it does not come on" % g.power_used())
+	for u: Dictionary in server.power.units:
+		u["output"] = true
+	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)
+	_expect(ship.shield_on, "(v61) with the SMES's boost (+%d) it does" % server.power.boost())
+	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
+	for u: Dictionary in server.power.units:
+		u["output"] = false
 	g.setup_asked(p, Net.GUNSET_ARM, 2, 0)
 	ship.mounts[2] = Weapons.LASER
 	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)

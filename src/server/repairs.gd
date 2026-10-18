@@ -43,6 +43,10 @@ func update(p: Player) -> void:
 			server.air.set_hole(cell, false)
 			server.replication.hull_record(cell, 0)
 			server.chat.say("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
+	elif server.outside.can_mend(p, cell):
+		# (v61) the hull's strength mended from outside, a patch at a time
+		if _work_done(p, cell, server.outside.mend_ticks(p)):
+			server.outside.mended(p)
 	elif cell >= 0 and server.ship.broken.has(cell):
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
@@ -123,6 +127,8 @@ func usable_ahead(p: Player) -> bool:
 		return false
 	if server.outfit.can(p, cell) != server.outfit.NOT_HERE:
 		return true                          # (v59) a crate of gear where it goes, or the module bay
+	if server.outside.can_mend(p, cell) or map.smes.has(cell) or map.smes_small.has(cell):
+		return true                          # (v61) the hull from outside; an SMES's terminal
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \

@@ -26,9 +26,11 @@ const SYS_SHIELD := 0
 const SYS_REACTOR := 1
 const SYS_ENGINE := 2
 const SYS_SENSORS := 3
-const SYSTEMS := 4
-const SYS_NAMES: Array[String] = ["Генератор щита", "Реактор", "Двигатель", "Сканеры"]
-const SYS_BUILT_IN: Array[String] = ["штатный генератор щита", "штатный реактор", "штатный двигатель", "штатные сканеры"]
+const SYS_COILS := 4                 # (v61, the author's P8) the SMES's storage coils
+const SYSTEMS := 5
+const SYS_NAMES: Array[String] = ["Генератор щита", "Реактор", "Двигатель", "Сканеры", "Катушки СМЭС"]
+const SYS_BUILT_IN: Array[String] = ["штатный генератор щита", "штатный реактор", "штатный двигатель", "штатные сканеры",
+	"штатные катушки СМЭС"]
 const MODULE_SLOTS := 2              # free slots in the module bay
 
 const NONE := 0
@@ -45,7 +47,9 @@ const ARMOUR_2 := 10
 const ARMOUR_3 := 11
 const FOCUS := 12
 const PHASE := 13
-const COUNT := 14                    # every crate's number is below this
+const COILS_2 := 14                  # (v61)
+const COILS_3 := 15
+const COUNT := 16                    # every crate's number is below this
 
 const MOD_ARMOUR := 0                # the sorts of module: one of each sort may be in the bay
 const MOD_FOCUS := 1
@@ -58,6 +62,8 @@ const ENGINE_DODGE: Array[float] = [0.0, 0.0, 0.05, 0.10] # added to our dodge w
 const ENGINE_JUMP: Array[float] = [0.0, 1.0, 0.75, 0.5]   # share of the jump's charge and the drive's rest
 const ENGINE_FREE_FUEL: Array[float] = [0.0, 0.0, 0.25, 0.5]   # chance a jump burns no fuel
 const SENSOR_SECONDS: Array[float] = [0.0, 7.0, 4.0, 2.5]      # our sensors make out one of its rooms this often
+const COIL_CAPACITY: Array[float] = [0.0, 1.0, 1.5, 2.0]      # (v61) the SMES holds this many times its built-in charge
+const COIL_CHARGE: Array[int] = [0, 0, 2, 4]                  # and charges this much faster a second
 # --- armour plating by its tier
 const ARMOUR_RICOCHET: Array[float] = [0.0, 0.1, 0.2, 0.3]   # share of kinetic shells turned aside
 const ARMOUR_HULL: Array[float] = [1.0, 0.85, 0.7, 0.55]     # share of the hull's strength a hit still takes
@@ -90,6 +96,10 @@ const INFO := {
 		"about": "Отсеки пиратского корабля распознаются раз в 4 с вместо 7."},
 	SENSORS_3: {"name": "Сканеры «Всевидящее око»", "sys": SYS_SENSORS, "tier": 3, "price": 120,
 		"about": "Отсеки распознаются раз в 2,5 с, а на пульте орудий видно, как заряжаются орудия пиратов."},
+	COILS_2: {"name": "Катушки «Ёмкость»", "sys": SYS_COILS, "tier": 2, "price": 80,
+		"about": "СМЭС держит в полтора раза больше заряда (4,5 минуты всего корабля вместо 3) и заряжается на 2 в секунду быстрее."},
+	COILS_3: {"name": "Катушки «Сверхпровод»", "sys": SYS_COILS, "tier": 3, "price": 160,
+		"about": "СМЭС держит вдвое больше заряда (6 минут всего корабля вместо 3) и заряжается на 4 в секунду быстрее."},
 	ARMOUR_1: {"name": "Броня «Стальные листы»", "mod": MOD_ARMOUR, "tier": 1, "price": 50,
 		"about": "Модуль. Попадание снимает с корпуса на 15% меньше, 15% пробоин не случается, 10% кинетических снарядов уходят рикошетом."},
 	ARMOUR_2: {"name": "Броня «Композит»", "mod": MOD_ARMOUR, "tier": 2, "price": 125,
@@ -102,7 +112,7 @@ const INFO := {
 		"about": "Модуль. Позиция в бою меняется мгновенно, и открывается позиция «В тыл» (мы попадаем на 25% лучше, они на 20% хуже). Потом привод 60 с перезаряжается. Топлива не берёт."},
 }
 const WHERE_ABOUT: Array[String] = ["Ставится у генератора щита.", "Ставится у двигателя.", "Ставится у двигателя.",
-	"Ставится у голокарты."]
+	"Ставится у голокарты.", "Ставится в СМЭС в машинном отделении."]
 const BAY_ABOUT := "Ставится в модульную стойку в машинном отделении."
 
 

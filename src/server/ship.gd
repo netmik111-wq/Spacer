@@ -39,6 +39,7 @@ var broken := {}                      # things out of order (bridge consoles, th
 var pumps := {}                       # airlock pumps at work: wall cell -> Systems.PUMP_OUT or PUMP_IN
 var power_out_until := 0              # a passing power failure lasts until this tick
 var power_told := true                # the state of the power as clients were last told
+var backup_told := false              # (v61) and of the bridge's backup SMES
 
 # its supplies, kept in the supply locker
 var store := {}                       # thing (Net.ITEM_*) -> how many
@@ -59,7 +60,7 @@ var guard := 0                        # (v58) the point defence in its own mount
 var guard_armed := false              # it draws power and charges
 var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours: by its armour plating, see Outfit)
 # (v59) its gear (see Gear, Outfit)
-var gear := PackedByteArray([1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)
+var gear := PackedByteArray([1, 1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)
 var modules := PackedByteArray([0, 0])      # per slot of the module bay: the crate in it (Gear.*; NONE = empty)
 var phase_ready := 0                  # the tick its phase drive is charged again
 
@@ -75,6 +76,7 @@ func engine_down() -> bool:
 
 
 func powered(tick: int) -> bool:
+	## (Before v61, and still for a ship with no SMES; the crew's ship asks Power.on.)
 	## The engine is what powers the ship. Without it every system stands still
 	## (none of them breaks): the bridge consoles, the air plant, the oxygen
 	## stations, the emergency shutters; doors have to be pushed open by hand.
@@ -150,8 +152,9 @@ func devices_packet() -> PackedByteArray:
 
 
 func power_packet() -> PackedByteArray:
-	var out := _head(Net.S_POWER, 4)
+	var out := _head(Net.S_POWER, 5)
 	out.encode_u8(3, 1 if power_told else 0)
+	out.encode_u8(4, 1 if backup_told else 0)
 	return out
 
 

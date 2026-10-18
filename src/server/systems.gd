@@ -23,22 +23,31 @@ func setup(p_server: GameServer) -> void:
 
 func at_console(p: Player, cells: Dictionary) -> bool:
 	## Does this player stand facing a working console of that kind?
-	if p.cond != Net.COND_OK or not server.powered():
+	if p.cond != Net.COND_OK:
 		return false
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
-	return ahead >= 0 and cells.has(ahead) and not server.ship.broken.has(ahead)
+	return ahead >= 0 and cells.has(ahead) and not server.ship.broken.has(ahead) and server.power.at(ahead)
 
 
 func power_changed() -> void:
 	## Looks whether the power has gone or come back since clients were last told,
 	## and does what goes with it. Called every tick and after anything that changes it.
 	var on := server.powered()
-	if on == server.ship.power_told:
+	var backup: bool = server.power.backup_on()
+	if on == server.ship.power_told and backup == server.ship.backup_told:
 		return
+	var was: bool = server.ship.power_told
 	server.ship.power_told = on
+	server.ship.backup_told = backup
 	server.doors.manual = not on
 	server.replication.sight_changed()
 	server.to_all(server.ship.power_packet())
+	if on == was:
+		if backup:
+			server.chat.say("Корабль обесточен. Резервный СМЭС держит мостик: свет и пульты там работают.")
+		return
+	if backup:
+		server.chat.say("Корабль обесточен. Резервный СМЭС держит мостик: свет и пульты там работают.")
 	if on:
 		server.chat.say("Питание восстановлено: системы корабля снова работают.")
 		return
@@ -55,10 +64,12 @@ func power_changed() -> void:
 
 func power_glitch() -> bool:
 	## The power fails for a few seconds and comes back by itself.
-	if not server.powered():
+	## (v61, my V7 pick) It is the engine stalling: the SMES carries the ship through it if it can.
+	if not server.power.engine_running():
 		return false
 	server.ship.power_out_until = server.tick + server.rng.randi_range(8, 15) * Net.TICK_HZ
-	server.chat.say("Сбой питания: все системы стоят.")
+	server.chat.say("Сбой питания: двигатель заглох на несколько секунд, корабль держится на СМЭС." if server.power.carrying()
+		else "Сбой питания: все системы стоят.")
 	power_changed()
 	return true
 
@@ -142,7 +153,7 @@ func can_break(what: String) -> bool:
 		"shutter":
 			return _count(server.doors.faulty) < 2 and _count(server.doors.jammed) + _count(server.doors.faulty) < server.doors.ready.size()
 		"power":
-			return server.powered()
+			return server.power.engine_running()
 	return false
 
 
@@ -153,7 +164,10 @@ func break_engine() -> bool:
 	var cell: int = cells[server.rng.randi_range(0, cells.size() - 1)]
 	server.ship.broken[cell] = true
 	server.to_all(server.ship.devices_packet())
-	server.chat.say("Отказ двигателя: корабль обесточен, все системы стоят, двери открываются только вручную. Двигатель на нижней палубе.")
+	if server.power.carrying():
+		server.chat.say("Отказ двигателя: корабль идёт на СМЭС, заряда хватит примерно на %s. Почините двигатель на нижней палубе, пока СМЭС не сел." % server.power._time(server.power.seconds_left_at(server.power.draw())))
+	else:
+		server.chat.say("Отказ двигателя: корабль обесточен, все системы стоят, двери открываются только вручную. Двигатель на нижней палубе.")
 	power_changed()
 	return true
 

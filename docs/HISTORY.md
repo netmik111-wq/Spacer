@@ -134,6 +134,18 @@ Open problems:
 
 ## Build notes
 
+### v61 (power, part 2 of the road plan)
+- The SMES (`S` in the engine room) and the bridge backup (`Q`), new server part `src/server/power.gd`: the new
+  rule "no engine and an empty SMES = no power", a +3 boost in fights, a hit takes the whole charge, an SS13
+  terminal with the power monitor (`src/ui/power_view.gd`, also on the holomap), SMES coils as gear.
+- The ion storm, a new sector kind, and hazards hitting pirates too (`src/server/hazards.gd`); pirates come in
+  meteor showers and storms.
+- Hull mending from outside with patches; bots on «Работы» go out through the airlock to do it
+  (`src/server/outside.gd`).
+- Admin: SMES full/empty, an ion surge, a meteor shower or storm here. New test `tools/powertest.gd`
+  (23 tests). Protocol 40. Question page for the author: https://claude.ai/artifact/4grTgyeExpFPEoshxMkMyU
+  (built on my picks; no answers yet).
+
 ### v60.1 (admin panel catches up; the author's request)
 - The author missed the gear modules in the spawn panel. Audit: gear crates were listed (at the bottom), but
   ship guns (carried since v60), their tier 3 effects and damaged guns, ammunition, probes, drones and gun parts

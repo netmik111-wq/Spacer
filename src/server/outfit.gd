@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## A crate of gear (see Gear) is carried in a hand to where it goes: a system's
 ## crate to its machine (the shield generator; the reactor and the engine both
-## to the engine; the sensors to a holomap), a module to the module bay ('U' in
+## to the engine; the sensors to a holomap; v61: the coils to the SMES), a module to the module bay ('U' in
 ## the map). Facing it with the crate in hand, an engineer holds "use" for
 ## Gear.INSTALL_SECONDS (the repair skill makes it up to twice as quick); the
 ## crate goes in, and what it replaces comes out into the hand (a built-in
@@ -104,23 +104,38 @@ func phase_used() -> void:
 
 
 func refresh() -> void:
-	## After the gear changed: the armour's share of ricochets, and guns cut if the
-	## reactor no longer feeds them all (a weaker one went in).
+	## After the gear changed: the armour's share of ricochets, the SMES's coils, and
+	## guns cut if the power no longer feeds them all (a weaker reactor went in).
 	var ship = server.ship
 	ship.armour = Gear.ARMOUR_RICOCHET[armour_tier()]
-	if server.gunnery == null or ship.mounts.is_empty():
-		return
+	if server.power != null:
+		server.power.coils_changed()
+	fit_power()
+
+
+func fit_power() -> bool:
+	## (v61) Guns switched off, last mount first, then the point defence and the shield,
+	## while they draw more than the power there is now (Power.budget). True if any was.
+	var ship = server.ship
+	if server.gunnery == null or ship.mounts.is_empty() or server.power == null:
+		return false
+	var budget: int = server.power.budget()
+	var cut := false
 	for i in range(ship.mounts.size() - 1, -1, -1):
-		if server.gunnery.power_used() <= reactor():
+		if server.gunnery.power_used() <= budget:
 			break
 		if ship.armed[i] == 1:
 			ship.armed[i] = 0
 			server.gunnery.charge[i] = 0.0
-	if server.gunnery.power_used() > reactor() and ship.guard_armed:
+			cut = true
+	if server.gunnery.power_used() > budget and ship.guard_armed:
 		ship.guard_armed = false
-	if server.gunnery.power_used() > reactor() and ship.shield_on:
+		cut = true
+	if server.gunnery.power_used() > budget and ship.shield_on:
 		ship.shield_on = false
 		ship.shield = 0.0
+		cut = true
+	return cut
 
 
 # ---------------------------------------------------------------- installing
@@ -134,6 +149,8 @@ func _machines(sys: int) -> Dictionary:
 			return map.engine
 		Gear.SYS_SENSORS:
 			return map.holo
+		Gear.SYS_COILS:
+			return map.smes
 	return {}
 
 

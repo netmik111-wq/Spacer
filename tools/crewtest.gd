@@ -130,6 +130,7 @@ func _initialize() -> void:
 	_run(Doors.HOLD_TICKS * 2 + 20)
 	_expect(server.doors.is_shut(bridge), "(the door has shut)")
 	server.director.fire(server.director.ENGINE_FAULT)
+	server.power.set_charge(0.0)             # (v61) and the SMES empty: the ship dark
 	_run(2)
 	_expect(not server.powered(), "(no power)")
 	_expect(_walk_through(q, bridge, outside, 80), "without power its lock does not work: it is pushed open by hand")
@@ -180,6 +181,7 @@ func _initialize() -> void:
 	_say(q, "! а я далеко")
 	_expect(_heard(e) < 0, "only right by a panel")
 	server.ship.broken[map.engine.keys()[0]] = true
+	server.power.set_charge(0.0)
 	server.systems.power_changed()
 	_say(p, "! без питания")
 	_expect(_heard(e) < 0, "and only with power")

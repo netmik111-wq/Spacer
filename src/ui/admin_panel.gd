@@ -308,9 +308,13 @@ func _ship_tab() -> Control:
 		["+1 человек в резерв", Net.ADMIN_RESERVE],
 		["Сохранить кампанию", Net.ADMIN_SAVE],
 		["Зарядить всё (щит, орудия, прыжок, фазовый привод)", Net.ADMIN_CHARGE],
+		["СМЭС: полный заряд", Net.ADMIN_SMES, 10],
+		["СМЭС: пустой", Net.ADMIN_SMES, 0],
+		["Ионный разряд сейчас", Net.ADMIN_SURGE],
 	]:
 		var command: int = b[1]
-		var button := _button(b[0], func() -> void: _send(command))
+		var argument: int = b[2] if b.size() > 2 else 0
+		var button := _button(b[0], func() -> void: _send(command, argument))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(button)
 	# (v60.1) the ship's gear at once, built from Gear's own list
@@ -353,7 +357,8 @@ func _space_tab() -> Control:
 	var page := _page("Космос и события")
 	_note(page, "Корабль ставится прямо у станции, торговца или брошенного корабля в этом секторе (до следующего прыжка).")
 	var grid := _grid(page, 2)
-	var places: Array = [["Станция здесь", Sectors.STATION], ["Брошенный корабль здесь", Sectors.DERELICT]]
+	var places: Array = [["Станция здесь", Sectors.STATION], ["Брошенный корабль здесь", Sectors.DERELICT],
+		["Метеорный поток здесь", Sectors.METEORS], ["Ионный шторм здесь", Sectors.ION_STORM]]
 	for d in Sectors.DEAL_NAMES.size():
 		places.append(["Торговец здесь: " + Sectors.DEAL_NAMES[d], Sectors.TRADER + Net.ADMIN_TRADER_DEAL * (d + 1)])
 	for b: Array in places:

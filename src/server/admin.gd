@@ -137,6 +137,10 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			bots(argument != 0)
 		Net.ADMIN_FIGHT:
 			fight(argument / 16, (argument / 2) % 8, argument % 2 == 1)
+		Net.ADMIN_SMES:
+			server.power.set_charge(argument / 10.0)
+		Net.ADMIN_SURGE:
+			server.hazards.surge()
 
 
 func give(p: Player, item: int) -> void:
@@ -224,7 +228,8 @@ func place_ship(kind: int, deal: int = -1) -> void:
 	## This sector gets a station, a trader or a derelict, and the ship is put
 	## right by it (until the ship jumps: space itself is not changed). (v60.1)
 	## A trader may be of the kind asked for (Sectors.DEAL_*; -1: as the sector has it).
-	if kind != Sectors.STATION and kind != Sectors.TRADER and kind != Sectors.DERELICT:
+	## (v61) Or the ship is put inside a meteor stream or an ion storm.
+	if kind != Sectors.STATION and kind != Sectors.TRADER and kind != Sectors.DERELICT and kind != Sectors.METEORS and kind != Sectors.ION_STORM:
 		return
 	if server.ship.jump_to != Net.NO_SECTOR or server.derelict.here:
 		return
@@ -232,7 +237,7 @@ func place_ship(kind: int, deal: int = -1) -> void:
 	server.sectors.kind[s] = kind
 	if kind == Sectors.TRADER and deal >= 0 and deal < Sectors.DEAL_NAMES.size() and server.sectors.deal.size() > s:
 		server.sectors.deal[s] = deal
-	server.sectors.reach[s] = Sectors.DOCK_RANGE
+	server.sectors.reach[s] = 60 if kind == Sectors.METEORS or kind == Sectors.ION_STORM else Sectors.DOCK_RANGE
 	server.ship.pos = server.sectors.spot[s]
 	server.ship.dest = server.ship.pos
 	server.ship.moving = false

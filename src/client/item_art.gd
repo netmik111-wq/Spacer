@@ -188,7 +188,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 static func _crate(canvas: CanvasItem, at: Vector2, u: float, g: int) -> void:
 	## (v59) A crate of ship gear: a box with straps, the frame of its tier, and the
 	## mark of what is in it (a shield arc, a reactor core, an engine nozzle, a sensor
-	## eye, armour plates, mirrors, a phase swirl).
+	## eye, coils, armour plates, mirrors, a phase swirl).
 	var rim: Color = TIER_RIM[clampi(Gear.tier(g), 0, 3)]
 	canvas.draw_rect(Rect2(at + Vector2(1.5, 3) * u, Vector2(14, 11.5) * u), rim)
 	canvas.draw_rect(Rect2(at + Vector2(2.5, 4) * u, Vector2(12, 9.5) * u), Color(0.36, 0.33, 0.27))
@@ -207,6 +207,9 @@ static func _crate(canvas: CanvasItem, at: Vector2, u: float, g: int) -> void:
 		Gear.SYS_SENSORS:
 			canvas.draw_circle(mid, 1.7 * u, Color(0.9, 0.9, 0.95))
 			canvas.draw_circle(mid, 0.8 * u, Color(0.2, 0.5, 0.9))
+		Gear.SYS_COILS:
+			for k in 3:                              # (v61) copper turns of a coil
+				canvas.draw_line(mid + Vector2(-1.8, -1.4 + k * 1.4) * u, mid + Vector2(1.8, -1.4 + k * 1.4) * u, Color(0.95, 0.65, 0.25), 0.7 * u)
 	match Gear.module_of(g):
 		Gear.MOD_ARMOUR:
 			for k in 3:

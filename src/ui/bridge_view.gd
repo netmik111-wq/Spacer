@@ -115,6 +115,11 @@ func update_helm() -> void:
 		Sectors.METEORS:
 			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
 			lines.append("Корабль внутри метеорного потока, до края %d." % int(ceil(edge)) if edge >= 0.0 else "Корабль вне метеорного потока.")
+		Sectors.ION_STORM:
+			# (v61) the ion storm
+			var edge := float(sectors.reach[here]) - at.distance_to(sectors.spot[here])
+			lines.append(("Корабль внутри ионного шторма, до края %d. Реактор даёт половину энергии, разряды выбивают орудия, щит и СМЭС." % int(ceil(edge)))
+				if edge >= 0.0 else "Корабль вне ионного шторма.")
 		Sectors.STATION, Sectors.TRADER:
 			var what := "станции" if sectors.kind[here] == Sectors.STATION else "торговца"
 			var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
@@ -211,7 +216,7 @@ func _draw_chart() -> void:
 		chart.draw_line(place.call(client.sector), place.call(client.jump_to), Color(1, 1, 1, 0.9), 3.0)
 	var font := ThemeDB.fallback_font
 	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8), Color(0.78, 0.5, 0.88),
-		GOAL]   # one per Sectors.KIND_NAMES
+		GOAL, ION]   # one per Sectors.KIND_NAMES
 	for id in sectors.count:
 		var at: Vector2 = place.call(id)
 		var known := client.knows_sector(id)
@@ -232,9 +237,13 @@ func _draw_chart() -> void:
 	var x := 8.0
 	var y := chart.size.y - 28
 	for k in Sectors.KIND_NAMES.size():
+		var w: float = 20.0 + font.get_string_size(Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		if x + w > chart.size.x and x > 8.0:
+			x = 8.0                              # (v61) seven kinds: the rest go on a line above
+			y -= 16.0
 		chart.draw_circle(Vector2(x + 5, y), 5.0, colours[k])
 		chart.draw_string(font, Vector2(x + 14, y + 4), Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ink)
-		x += 26.0 + font.get_string_size(Sectors.KIND_NAMES[k], HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
+		x += w
 	x = 8.0
 	y = chart.size.y - 10
 	var grey := colours[0] as Color
@@ -263,6 +272,7 @@ func _draw_chart() -> void:
 
 
 const GOAL := Color(1.0, 0.25, 0.25)      # (v57) the flagship's sector, and the way to it
+const ION := Color(0.4, 0.55, 1.0)         # (v61) an ion storm
 
 
 func _draw_goal(area: Rect2) -> void:
@@ -313,6 +323,10 @@ func _draw_helm() -> void:
 			chart.draw_circle(spot, sectors.reach[here] * scale, Color(1.0, 0.55, 0.2, 0.2))
 			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 48, Color(1.0, 0.6, 0.25, 0.8), 1.0)
 			chart.draw_string(font, spot + Vector2(-70, 4), "метеорный поток", HORIZONTAL_ALIGNMENT_CENTER, 140, 12, Color(1.0, 0.75, 0.5))
+		Sectors.ION_STORM:
+			chart.draw_circle(spot, sectors.reach[here] * scale, Color(ION, 0.18))
+			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 48, Color(ION, 0.8), 1.0)
+			chart.draw_string(font, spot + Vector2(-70, 4), "ионный шторм", HORIZONTAL_ALIGNMENT_CENTER, 140, 12, ION.lightened(0.3))
 		Sectors.STATION, Sectors.TRADER:
 			var colour := Color(0.3, 0.85, 0.8) if sectors.kind[here] == Sectors.STATION else Color(0.95, 0.85, 0.35)
 			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(colour, 0.6), 1.0)

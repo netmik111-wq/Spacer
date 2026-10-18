@@ -20,8 +20,8 @@ func sector_kind() -> int:
 
 func danger_kind() -> int:
 	## What the director should treat the ship's surroundings as: a meteor
-	## stream is only dangerous while the ship is inside it.
-	if sector_kind() == Sectors.METEORS and not server.ship.in_reach:
+	## stream (v61: or an ion storm) is only dangerous while the ship is inside it.
+	if (sector_kind() == Sectors.METEORS or sector_kind() == Sectors.ION_STORM) and not server.ship.in_reach:
 		return Sectors.EMPTY
 	return sector_kind()
 
@@ -52,6 +52,9 @@ func update() -> void:
 	match sector_kind():
 		Sectors.METEORS:
 			server.chat.say("Корабль вошёл в метеорный поток." if now_in else "Корабль вышел из метеорного потока.")
+			server.director.surroundings_changed()
+		Sectors.ION_STORM:
+			server.hazards.storm_changed(now_in)
 			server.director.surroundings_changed()
 		Sectors.STATION:
 			if now_in:
@@ -180,6 +183,9 @@ func update_jump() -> void:
 	match sector_kind():
 		Sectors.METEORS:
 			server.chat.say("Сектор %s. Корабль внутри потока: уйти можно своим ходом с пульта управления или прыжком." % server.sectors.describe(server.ship.sector))
+		Sectors.ION_STORM:
+			server.chat.say("Сектор %s. Корабль внутри ионного шторма: реактор даёт половину энергии, разряды выбивают орудия, щит и СМЭС. Уйти можно своим ходом или прыжком." % server.sectors.describe(server.ship.sector))
+			server.hazards.storm_changed(server.ship.in_reach, true)
 		Sectors.TRADER:
 			server.chat.say("Сектор %s. Торговец где-то рядом: подойдите к нему." % server.sectors.describe(server.ship.sector))
 		Sectors.STATION:

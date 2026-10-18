@@ -131,6 +131,7 @@ func _initialize() -> void:
 	print("the ship")
 	server.systems.breach_near(host.st.x, host.st.y)
 	server.ship.broken[server.map.engine.keys()[0]] = true
+	server.power.set_charge(0.0)
 	server.doors.jammed[0] = 1
 	_run(40)
 	_expect(not server.powered() and not server.air.holes.is_empty(), "(a hole, a broken engine, a jammed door)")

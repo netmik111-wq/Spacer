@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 39
+const PROTOCOL := 40
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -156,7 +156,30 @@ const S_HELM := 19                  # the ship inside its sector: s16 x*10, s16 
 const S_DEVICES := 20               # u8 count, then per thing out of order (a bridge console, the engine,
                                     # the air plant): u16 cell
 
-const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0)
+const S_POWER := 21                 # u8 on: the ship has power (1) or every system stands still (0),
+                                    # (v61) u8 1 if the ship is dark and the bridge's backup SMES keeps its room lit
+const C_SMES := 30                  # (v61) u8 which SMES (its number in S_SMES), u8 action (Power.ACT_*), u8 value:
+                                    # the SMES's terminal, from in front of it (it needs no power)
+const S_SMES := 40                  # (v61) to all, after the ship's id: u8 count, then per SMES 15 bytes: u8 1 = the
+                                    # bridge's backup, u16 cell, u16 charge, u16 capacity, u8 flags (1 charging on,
+                                    # 2 output on), u8 input target, u8 output target, u8 most input, u8 most output,
+                                    # u8 taking now * 10, u8 giving now * 10, u8 status (SMES_*); then the power
+                                    # monitor: u8 the engine gives, u8 the ship's own draw, u8 the guns and shield draw,
+                                    # u8 the power for the guns and shield now, u8 flags (POWF_*), u16 seconds the
+                                    # SMES lasts at what it gives (65535 = it gives nothing), u16 the reactor's power
+const SMES_IDLE := 0
+const SMES_CHARGING := 1
+const SMES_SENDING := 2
+const SMES_FULL := 3
+const SMES_EMPTY := 4
+const SMES_BROKEN := 5
+const SMES_JAMMED := 6
+const SMES_STATUS: Array[String] = ["Ожидание", "Заряжается", "Отдаёт энергию", "Заряжен полностью", "Нет заряда",
+	"Сломан", "Выбит ионным разрядом"]
+const POWF_STORM := 1               # the ship is inside an ion storm: the reactor gives half
+const POWF_ENGINE := 2              # the engine makes power
+const POWF_CARRYING := 4            # the SMES carries the whole ship
+const POWF_BACKUP := 8              # the ship is dark, the bridge's backup keeps its room lit
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
@@ -471,6 +494,8 @@ const ADMIN_FIT_CLEAR_BAY := 200
 const ADMIN_CHARGE := 24            # (v60.1) shield full, guns charged, the jump drive and the phase drive ready
 const ADMIN_SKILLS := 25            # (v60.1) every skill of the target at its best
 const ADMIN_BOTS := 26              # (v60.1) argument 1: one bot more in the crew, 0: one less
+const ADMIN_SMES := 28              # (v61) argument: every SMES charged to that many tenths (10 = full, 0 = empty)
+const ADMIN_SURGE := 29             # (v61) an ion surge now: one of our things put out for a while (and theirs, in a fight)
 const ADMIN_FIGHT := 27             # (v60.1) a pirate ship comes: argument = class * 16 + temper * 2 + (1: a fight at a
                                     # distance, 0: it docks to board); temper ADMIN_ANY_TEMPER = rolled
 const ADMIN_ANY_TEMPER := 7

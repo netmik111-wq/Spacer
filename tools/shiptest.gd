@@ -86,6 +86,7 @@ func _initialize() -> void:
 	_run(3)
 	_expect(g.revealed.count(1) == 1, "our sensors make out one room after a while")
 	server.ship.power_out_until = server.tick + 100000
+	server.power.set_charge(0.0)             # (v61) a stall alone is carried by the SMES
 	var before := g.revealed.count(1)
 	g._scan_next = server.tick + 1
 	_run(3)

@@ -113,6 +113,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
 		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
+		"smes": server.power.save(),
 	}
 
 
@@ -198,11 +199,14 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.supplies.sold[k] = back
 	# (v59) the ship's gear
 	var gear := PackedByteArray(data.get("gear", []))
-	server.ship.gear = gear if gear.size() == Gear.SYSTEMS else PackedByteArray([1, 1, 1, 1])
+	while gear.size() < Gear.SYSTEMS:
+		gear.append(1)                       # (v61) a save from before the SMES coils: built-in ones
+	server.ship.gear = gear if gear.size() == Gear.SYSTEMS else PackedByteArray([1, 1, 1, 1, 1])
 	var modules := PackedByteArray(data.get("modules", []))
 	server.ship.modules = modules if modules.size() == Gear.MODULE_SLOTS else PackedByteArray([0, 0])
 	server.ship.phase_ready = 0
 	server.outfit.refresh()
+	server.power.load_from(data.get("smes", []))     # (v61; an older save keeps the SMES as it starts: full)
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])
