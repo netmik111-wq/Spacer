@@ -216,9 +216,13 @@ func _initialize() -> void:
 	_run(Net.TICK_HZ)
 	_expect(server.pirates.aboard() == 0, "its teleporter knocked out, it sends nobody")
 	g.systems[Net.ESYS_TELEPORT] = g.systems_full[Net.ESYS_TELEPORT]
-	f._teleport_at = server.tick
-	_run(2)
-	_expect(server.pirates.aboard() == Flagship.TELEPORT_PARTY, "mended, it sends them again")
+	# (its crew walk their ship: wait, a while at most, for one of them to be back at the teleporter)
+	var waited := 0
+	while waited < 10 * Net.TICK_HZ and server.pirates.aboard() == 0:
+		f._teleport_at = server.tick
+		_run(1)
+		waited += 1
+	_expect(server.pirates.aboard() == Flagship.TELEPORT_PARTY, "mended, it sends them again (%.1f s)" % (waited / float(Net.TICK_HZ)))
 	# the whole crew down with its boarders aboard: the ship is taken
 	for q in [a, b, c]:
 		q.health = -5.0
