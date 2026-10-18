@@ -11,11 +11,20 @@ const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Director := preload("res://src/server/director.gd")   # only for the list of events
+const Weapons := preload("res://src/shared/weapons.gd")
+const Gear := preload("res://src/shared/gear.gd")
+const Hulls := preload("res://src/shared/hulls.gd")
 
 const COUNTS: Array[int] = [1, 2, 5, 10]
 
 var client: GameClient
 var _count := 1
+var _to_locker := false              # (v60.1) things go into the supply locker, not the hands
+var _fx := Weapons.FX_NONE           # (v60.1) the effect a tier 3 gun is given with
+var _damaged := false                # (v60.1) guns are given damaged
+var _klass := Net.ECLASS_RAIDER      # (v60.1) the pirate ship called up
+var _temper := Net.ADMIN_ANY_TEMPER
+var _gear_pickers: Array = []        # (v60.1) per Gear.SYS_*: its picker on the ship tab, kept to the ship's tiers
 var _people: VBoxContainer
 var _people_for := ""                # what the list of people was built from
 var _auto: CheckBox
@@ -72,6 +81,12 @@ func _process(_delta: float) -> void:
 		visible = false
 	if visible and _people_for != _people_key():
 		_fill_people()
+	if visible:
+		for sys in _gear_pickers.size():
+			var picker: OptionButton = _gear_pickers[sys]
+			var shown := clampi(client.gear_tiers[sys] - 1, 0, picker.item_count - 1) if client.gear_tiers.size() > sys else 0
+			if picker.selected != shown and not picker.get_popup().visible:
+				picker.select(shown)
 
 
 func _button(text: String, action: Callable) -> Button:
@@ -128,38 +143,86 @@ func _send(command: int, argument: int = 0, target: int = 0) -> void:
 # --------------------------------------------------------------- things
 
 func _things_tab() -> Control:
+	## (v60.1) Built from the game's own lists (Items.admin_sections), so new things show up by themselves.
 	var page := _page("Вещи")
-	_note(page, "Щелчок по вещи: она появится у вас в руке или в свободном слоте, а если места нет, то на полу под ногами.")
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	_note(page, "Щелчок по вещи: она появится у вас в руке или в свободном слоте, а если места нет, то на полу под ногами. "
+		+ "Трюмные вещи (боеприпасы, зонды, дроны, детали) всегда идут в шкаф снабжения. Уровень вещи виден только здесь.")
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 4)
 	page.add_child(row)
-	var caption := Label.new()
-	caption.text = "Сколько штук:"
-	row.add_child(caption)
-	var count := OptionButton.new()
-	count.focus_mode = Control.FOCUS_NONE
-	for n in COUNTS:
-		count.add_item(str(n))
-	count.item_selected.connect(func(i: int) -> void: _count = COUNTS[i])
-	row.add_child(count)
-	var grid := _grid(page, 3)
-	for item in Items.spawnable():
-		var b := _button("        " + Items.name_of(item), func() -> void:
-			for i in _count:
-				_send(Net.ADMIN_GIVE, item))
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.custom_minimum_size = Vector2(170, 40)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		b.tooltip_text = Items.about(item)
-		var thing := item
-		var icon := Control.new()
-		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		icon.position = Vector2(4, 4)
-		icon.size = Vector2(32, 32)
-		icon.draw.connect(func() -> void: ItemArt.draw(icon, Rect2(Vector2.ZERO, Vector2(32, 32)), thing))
-		b.add_child(icon)
-		grid.add_child(b)
+	row.add_child(_caption("Сколько штук:"))
+	row.add_child(_picker(COUNTS.map(func(n: int) -> String: return str(n)), 0, func(i: int) -> void: _count = COUNTS[i]))
+	row.add_child(_caption("Куда:"))
+	row.add_child(_picker(["в руки", "в шкаф снабжения"], 0, func(i: int) -> void: _to_locker = i == 1))
+	var guns := HFlowContainer.new()
+	guns.add_theme_constant_override("h_separation", 8)
+	guns.add_theme_constant_override("v_separation", 4)
+	page.add_child(guns)
+	guns.add_child(_caption("Орудия 3-го уровня с эффектом:"))
+	var fx_names: Array = ["без эффекта"]
+	for f in range(1, Weapons.FX_COUNT + 1):
+		fx_names.append(Weapons.FX_NAMES[f])
+	guns.add_child(_picker(fx_names, 0, func(i: int) -> void: _fx = i))
+	var broken := CheckBox.new()
+	broken.text = "повреждённые орудия"
+	broken.focus_mode = Control.FOCUS_NONE
+	broken.toggled.connect(func(on: bool) -> void: _damaged = on)
+	guns.add_child(broken)
+	for section: Array in Items.admin_sections():
+		var head := Label.new()
+		head.text = section[0]
+		head.add_theme_font_size_override("font_size", 15)
+		head.modulate = Color(1.0, 0.8, 0.6)
+		page.add_child(head)
+		var grid := _grid(page, 3)
+		for item: int in section[1]:
+			grid.add_child(_thing_button(item))
 	return page.get_parent()
+
+
+func _thing_button(item: int) -> Button:
+	var w := Weapons.of_item(item)
+	var g := Items.gear_of(item)
+	var label := Items.name_of(item)
+	if w != Weapons.NONE:
+		label += " · ур. %d" % Weapons.tier(w)
+	elif g != Gear.NONE:
+		label += " · ур. %d" % Gear.tier(g)
+	var b := _button("        " + label, func() -> void:
+		var thing := item
+		if w != Weapons.NONE:
+			thing = Weapons.item_of(w, _fx if Weapons.FX_GUNS.has(w) else Weapons.FX_NONE, _damaged)
+		for i in _count:
+			_send(Net.ADMIN_STORE if _to_locker else Net.ADMIN_GIVE, thing))
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(170, 40)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.clip_text = true
+	b.tooltip_text = Items.name_of(item) + "\n" + Items.about(item)
+	var icon := Control.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.position = Vector2(4, 4)
+	icon.size = Vector2(32, 32)
+	icon.draw.connect(func() -> void: ItemArt.draw(icon, Rect2(Vector2.ZERO, Vector2(32, 32)), item))
+	b.add_child(icon)
+	return b
+
+
+func _caption(text: String) -> Label:
+	var label := Label.new()
+	label.text = text
+	return label
+
+
+func _picker(names: Array, chosen: int, picked: Callable) -> OptionButton:
+	var o := OptionButton.new()
+	o.focus_mode = Control.FOCUS_NONE
+	for n: String in names:
+		o.add_item(n)
+	o.select(chosen)
+	o.item_selected.connect(picked)
+	return o
 
 
 # --------------------------------------------------------------- people
@@ -171,6 +234,11 @@ func _people_tab() -> Control:
 		for id: int in client.roster:
 			if int(client.roster[id]["kind"]) != Net.KIND_CORPSE and int(client.roster[id]["kind"]) != Net.KIND_PIRATE:
 				_send(Net.ADMIN_HEAL, 0, id)))
+	var bots := HBoxContainer.new()
+	bots.add_theme_constant_override("separation", 6)
+	page.add_child(bots)
+	bots.add_child(_button("+1 бот в экипаж", func() -> void: _send(Net.ADMIN_BOTS, 1)))
+	bots.add_child(_button("−1 бот", func() -> void: _send(Net.ADMIN_BOTS, 0)))
 	_people = VBoxContainer.new()
 	_people.add_theme_constant_override("separation", 10)
 	page.add_child(_people)
@@ -205,6 +273,8 @@ func _fill_people() -> void:
 		var target: int = id
 		row.add_child(_button("Вылечить", func() -> void: _send(Net.ADMIN_HEAL, 0, target)))
 		row.add_child(_button("Убить", func() -> void: _send(Net.ADMIN_KILL, 0, target)))
+		if kind != Net.KIND_PIRATE:
+			row.add_child(_button("Навыки на максимум", func() -> void: _send(Net.ADMIN_SKILLS, 0, target)))
 		if id != client.my_id:
 			row.add_child(_button("К нему", func() -> void: _send(Net.ADMIN_GOTO, 0, target)))
 			row.add_child(_button("Ко мне", func() -> void: _send(Net.ADMIN_BRING, 0, target)))
@@ -237,11 +307,43 @@ func _ship_tab() -> Control:
 		["Обшивка как новая", Net.ADMIN_HULL],
 		["+1 человек в резерв", Net.ADMIN_RESERVE],
 		["Сохранить кампанию", Net.ADMIN_SAVE],
+		["Зарядить всё (щит, орудия, прыжок, фазовый привод)", Net.ADMIN_CHARGE],
 	]:
 		var command: int = b[1]
 		var button := _button(b[0], func() -> void: _send(command))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(button)
+	# (v60.1) the ship's gear at once, built from Gear's own list
+	var head := Label.new()
+	head.text = "Снаряжение корабля сразу (без работы инженера)"
+	head.add_theme_font_size_override("font_size", 15)
+	head.modulate = Color(1.0, 0.8, 0.6)
+	page.add_child(head)
+	var gear := _grid(page, 2)
+	for sys in Gear.SYSTEMS:
+		gear.add_child(_caption(Gear.SYS_NAMES[sys] + ":"))
+		var names: Array = ["ур. 1: " + Gear.SYS_BUILT_IN[sys]]
+		var fits: Array = [Net.ADMIN_FIT_BUILT_IN + sys]
+		for t in range(2, 4):
+			var g := Gear.for_system(sys, t)
+			if g != Gear.NONE:
+				names.append("ур. %d: %s" % [t, Gear.name_of(g)])
+				fits.append(g)
+		var picker := _picker(names, 0, func(i: int) -> void: _send(Net.ADMIN_FIT, fits[i]))
+		_gear_pickers.append(picker)
+		gear.add_child(picker)
+	_note(page, "Модульная стойка (в ней %d ячейки, по одному модулю каждого вида):" % Gear.MODULE_SLOTS)
+	var bay := _grid(page, 2)
+	for g: int in Gear.all():
+		if Gear.system_of(g) >= 0:
+			continue
+		var button := _button("В стойку: %s · ур. %d" % [Gear.name_of(g), Gear.tier(g)], func() -> void: _send(Net.ADMIN_FIT, g))
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.tooltip_text = Gear.about(g)
+		bay.add_child(button)
+	var clear := _button("Очистить стойку", func() -> void: _send(Net.ADMIN_FIT, Net.ADMIN_FIT_CLEAR_BAY))
+	clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bay.add_child(clear)
 	return page.get_parent()
 
 
@@ -251,11 +353,37 @@ func _space_tab() -> Control:
 	var page := _page("Космос и события")
 	_note(page, "Корабль ставится прямо у станции, торговца или брошенного корабля в этом секторе (до следующего прыжка).")
 	var grid := _grid(page, 2)
-	for b: Array in [["Станция здесь", Sectors.STATION], ["Торговец здесь", Sectors.TRADER], ["Брошенный корабль здесь", Sectors.DERELICT]]:
+	var places: Array = [["Станция здесь", Sectors.STATION], ["Брошенный корабль здесь", Sectors.DERELICT]]
+	for d in Sectors.DEAL_NAMES.size():
+		places.append(["Торговец здесь: " + Sectors.DEAL_NAMES[d], Sectors.TRADER + Net.ADMIN_TRADER_DEAL * (d + 1)])
+	for b: Array in places:
 		var kind: int = b[1]
 		var button := _button(b[0], func() -> void: _send(Net.ADMIN_PLACE, kind))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(button)
+	# (v60.1) a pirate ship of the class and temper chosen, built from Hulls' own lists
+	_note(page, "Пиратский корабль на выбор (флагманы вызываются событиями ниже):")
+	var classes: Array = []
+	var class_names: Array = []
+	for k: int in Hulls.CLASSES.keys():
+		if not Hulls.CLASSES[k].has("boss"):
+			classes.append(k)
+			class_names.append(str(Hulls.CLASSES[k]["name"]))
+	var tempers: Array = [Net.ADMIN_ANY_TEMPER]
+	var temper_names: Array = ["нрав: любой"]
+	for t: int in Hulls.TEMPERS.keys():
+		if not Hulls.TEMPERS[t].has("boss"):
+			tempers.append(t)
+			temper_names.append("нрав: " + str(Hulls.TEMPERS[t]["name"]))
+	var pick := HFlowContainer.new()
+	pick.add_theme_constant_override("h_separation", 6)
+	pick.add_theme_constant_override("v_separation", 4)
+	page.add_child(pick)
+	_klass = classes[maxi(classes.find(_klass), 0)]
+	pick.add_child(_picker(class_names, classes.find(_klass), func(i: int) -> void: _klass = classes[i]))
+	pick.add_child(_picker(temper_names, 0, func(i: int) -> void: _temper = tempers[i]))
+	pick.add_child(_button("Бой на дистанции", func() -> void: _send(Net.ADMIN_FIGHT, _klass * 16 + _temper * 2 + 1)))
+	pick.add_child(_button("Идёт на абордаж", func() -> void: _send(Net.ADMIN_FIGHT, _klass * 16 + _temper * 2)))
 	grid.add_child(_button("Пират с пистолетом передо мной", func() -> void: _send(Net.ADMIN_PIRATE, 1)))
 	grid.add_child(_button("Пират с дубинкой передо мной", func() -> void: _send(Net.ADMIN_PIRATE, 0)))
 	_auto = CheckBox.new()

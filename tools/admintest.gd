@@ -11,6 +11,9 @@ const GameServer := preload("res://src/server/game_server.gd")
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
+const Gear := preload("res://src/shared/gear.gd")
+const Hulls := preload("res://src/shared/hulls.gd")
 
 const TOKEN := "secret"
 
@@ -64,6 +67,31 @@ func _initialize() -> void:
 	_admin(host, Net.ADMIN_GIVE, 250)
 	_expect(true, "(an unknown thing is refused without an error)")
 
+	# (v60.1) every thing the game knows is in the panel, and guns and cargo come too
+	var listed := {}
+	for section: Array in Items.admin_sections():
+		for item: int in section[1]:
+			listed[item] = true
+	var missing := []
+	for item: int in Items.INFO.keys():
+		var whole: bool = Items.kind_of(item) == item and Items.light(item).is_empty() and not Items.INFO[item].has("fx") and not Items.INFO[item].has("damaged")
+		if whole and not listed.has(item + Net.PISTOL_ROUNDS if Items.rounds(item) == 0 else item):
+			missing.append(item)
+	_expect(missing.is_empty(), "the panel lists every kind of thing (missing: %s)" % str(missing))
+	for g: int in Gear.all():
+		_expect(listed.has(Gear.item_of(g)), "(it lists %s)" % Gear.name_of(g))
+	host.slots.fill(Net.ITEM_NONE)
+	var hammer := Weapons.item_of(Weapons.HAMMER, Weapons.FX_PIERCE)
+	_admin(host, Net.ADMIN_GIVE, hammer)
+	_expect(host.slots[0] == hammer, "a ship gun with its effect comes into the hand")
+	server.ship.store.clear()
+	_admin(host, Net.ADMIN_GIVE, Net.ITEM_SHELL)
+	_admin(host, Net.ADMIN_STORE, Weapons.item_of(Weapons.LASER, Weapons.FX_NONE, true))
+	_admin(host, Net.ADMIN_STORE, Gear.item_of(Gear.PHASE))
+	_expect(int(server.ship.store.get(Net.ITEM_SHELL, 0)) == 1, "cargo that is never carried goes into the locker")
+	_expect(int(server.ship.store.get(Weapons.item_of(Weapons.LASER, Weapons.FX_NONE, true), 0)) == 1
+		and int(server.ship.store.get(Gear.item_of(Gear.PHASE), 0)) == 1, "and anything else may be sent there")
+
 	print("people")
 	guest.health = -150.0
 	_run(2)
@@ -91,6 +119,14 @@ func _initialize() -> void:
 	_expect(server.map.walkable(host.st.x, host.st.y), "(on a floor)")
 	_admin(host, Net.ADMIN_JOB, Net.JOB_ENGINEER, guest.slot)
 	_expect(guest.job == Net.JOB_ENGINEER and guest.st.access == Net.access_of(Net.JOB_ENGINEER), "a new job gives its access")
+	_admin(host, Net.ADMIN_SKILLS, 0, guest.slot)
+	_expect(guest.skills == PackedByteArray([Net.SKILL_MAX, Net.SKILL_MAX, Net.SKILL_MAX, Net.SKILL_MAX]), "every skill at its best")
+	var size := server.crew_size
+	_admin(host, Net.ADMIN_BOTS, 1)
+	var bots := server.players.filter(func(q) -> bool: return q != null and q.bot).size()
+	_expect(server.crew_size == size + 1 and bots >= 1, "one bot more")
+	_admin(host, Net.ADMIN_BOTS, 0)
+	_expect(server.crew_size == size and server.players.filter(func(q) -> bool: return q != null and q.bot).size() == bots - 1, "and one less")
 
 	print("the ship")
 	server.systems.breach_near(host.st.x, host.st.y)
@@ -118,10 +154,32 @@ func _initialize() -> void:
 	_admin(host, Net.ADMIN_HULL)
 	_expect(server.ship.hull == Net.HULL_MAX, "a hull as new")
 
+	_admin(host, Net.ADMIN_FIT, Gear.REACTOR_3)
+	_admin(host, Net.ADMIN_FIT, Gear.ARMOUR_2)
+	_admin(host, Net.ADMIN_FIT, Gear.FOCUS)
+	_expect(server.outfit.reactor() == Gear.REACTOR_POWER[3] and server.outfit.armour_tier() == 2 and server.outfit.focus(), "gear goes in at once")
+	_admin(host, Net.ADMIN_FIT, Gear.ARMOUR_3)
+	_expect(server.outfit.armour_tier() == 3 and server.outfit.focus(), "(a module of the same sort is swapped)")
+	_admin(host, Net.ADMIN_FIT, Net.ADMIN_FIT_BUILT_IN + Gear.SYS_REACTOR)
+	_admin(host, Net.ADMIN_FIT, Net.ADMIN_FIT_CLEAR_BAY)
+	_expect(server.outfit.reactor() == Gear.REACTOR_POWER[1] and server.outfit.armour_tier() == 0 and not server.outfit.focus(), "and comes out again")
+	server.ship.drive_ready = server.tick + 1000
+	server.ship.shield = 0.0
+	_admin(host, Net.ADMIN_CHARGE)
+	_expect(server.ship.drive_ready <= server.tick and (server.ship.shield == Weapons.SHIELD_FULL or not server.ship.shield_on), "everything charged")
+
 	print("space")
+	_admin(host, Net.ADMIN_FIGHT, Net.ECLASS_CRUISER * 16 + Net.TEMPER_HUNTER * 2 + 1)
+	_expect(server.derelict.here and int(server.derelict.design.get("klass", -1)) == Net.ECLASS_CRUISER
+		and int(server.derelict.design.get("temper", -1)) == Net.TEMPER_HUNTER and server.derelict.raid, "a pirate ship of the class and temper asked for")
+	_expect(server.shipyard.force_class == -1 and server.shipyard.force_temper == -1, "(and later ships are rolled again)")
+	server.derelict._leave(true)
+	_run(2)
 	_admin(host, Net.ADMIN_PLACE, Sectors.TRADER)
 	_run(2)
 	_expect(server.navigation.sector_kind() == Sectors.TRADER and server.ship.in_reach, "a trader here, with the ship at it")
+	_admin(host, Net.ADMIN_PLACE, Sectors.TRADER + Net.ADMIN_TRADER_DEAL * (1 + Sectors.DEAL_BLACK))
+	_expect(server.supplies.deal() == Sectors.DEAL_BLACK, "a trader of the kind asked for")
 	var before := server.pirates.aboard()
 	_admin(host, Net.ADMIN_PIRATE, 1)
 	_expect(server.pirates.aboard() == before + 1, "a pirate in front of the admin")

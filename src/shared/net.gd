@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 38
+const PROTOCOL := 39
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -463,6 +463,18 @@ const ADMIN_HULL := 18              # the hull as strong as new
 const ADMIN_RESERVE := 19           # +1 in the crew reserve
 const ADMIN_PIRATE := 20            # a pirate (argument 1: with a pistol, 0: with a baton) in front of the admin
 const ADMIN_PLACE := 21             # the sector becomes one of that kind (Sectors.*) and the ship is put at its spot
+const ADMIN_STORE := 22              # (v60.1) the thing (argument) into the supply locker
+const ADMIN_FIT := 23               # (v60.1) gear put in at once: Gear.* (argument); ADMIN_FIT_BUILT_IN + system: back to
+                                    # the built-in one; ADMIN_FIT_CLEAR_BAY: the module bay emptied
+const ADMIN_FIT_BUILT_IN := 100
+const ADMIN_FIT_CLEAR_BAY := 200
+const ADMIN_CHARGE := 24            # (v60.1) shield full, guns charged, the jump drive and the phase drive ready
+const ADMIN_SKILLS := 25            # (v60.1) every skill of the target at its best
+const ADMIN_BOTS := 26              # (v60.1) argument 1: one bot more in the crew, 0: one less
+const ADMIN_FIGHT := 27             # (v60.1) a pirate ship comes: argument = class * 16 + temper * 2 + (1: a fight at a
+                                    # distance, 0: it docks to board); temper ADMIN_ANY_TEMPER = rolled
+const ADMIN_ANY_TEMPER := 7
+const ADMIN_TRADER_DEAL := 16       # (v60.1) ADMIN_PLACE of a trader + this * (1 + Sectors.DEAL_*): a trader of that kind
 const ADMIN_CREDITS_GIVEN := 100
 
 const NO_SECTOR := 255

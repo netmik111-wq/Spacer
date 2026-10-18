@@ -264,3 +264,31 @@ static func spawnable() -> PackedInt32Array:
 			continue
 		out.append(item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item)
 	return out
+
+
+static func admin_sections() -> Array:
+	## (v60.1) Every thing, as it comes new, under the captions the locker uses
+	## (CATEGORIES), and whatever no caption holds under «Прочее»: for the admin
+	## panel, so that a new thing shows up there by itself. Ship guns are given
+	## whole and without an effect (the panel adds those).
+	var left := {}
+	for item in spawnable():
+		left[item] = true
+	for item: int in INFO.keys():
+		if kind_of(item) == item and cargo(item) and not INFO[item].has("fx") and not INFO[item].has("damaged"):
+			left[item] = true
+	var out: Array = []
+	for c: Array in CATEGORIES:
+		var things := PackedInt32Array()
+		for item: int in c[1]:
+			var new := item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item
+			if left.has(new):
+				things.append(new)
+				left.erase(new)
+		if not things.is_empty():
+			out.append([c[0], things])
+	if not left.is_empty():
+		var rest := PackedInt32Array(left.keys())
+		rest.sort()
+		out.append(["Прочее", rest])
+	return out

@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v60 (version 0.53) is the latest. Plans one to four are done except the darkness front (the
+Build v60.1 (version 0.53.1, an admin panel patch) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan

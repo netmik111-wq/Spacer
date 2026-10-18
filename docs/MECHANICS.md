@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v60 (version 0.53).
+Last updated: build v60.1 (version 0.53.1).
 
 Contents:
 
@@ -1032,18 +1032,31 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
 - For the **host** (the player whose game created the server) and for players the host **made
   admins**. Admins are remembered by player name in the campaign save. Opens with **F2** or from the
   menu (Esc). The server checks every command; others' presses do nothing. You can walk while it is open.
-- **Things** tab: every item, as new (a pistol loaded, a medkit full, a spacesuit's tank full), 1, 2,
-  5 or 10 at a time. It goes into the hand, else a free slot, else the floor underfoot.
+- **Things** tab (v60.1: built from the game's own item lists, so new things show up by themselves): every
+  item as new (a pistol loaded, a medkit full, a spacesuit's tank full), grouped under the supply locker's
+  sections, with its hidden **tier** shown on ship guns and ship gear ("ур. N"; only the admin sees it).
+  1, 2, 5 or 10 at a time, and **where**: into the hands (else a free slot, else the floor underfoot) or
+  into the **supply locker**. Ship guns come in every kind; a picker gives tier 3 guns one of the five
+  effects, and a box gives guns damaged. Ammunition, probes, drones and gun parts are cargo and always go
+  into the locker. All 13 gear crates (4 systems x 2 upgrades, 3 armours, focusing array, phase drive) are there.
 - **People** tab: for everyone aboard (bots and pirates too): heal (health 100, wounds closed, tank
   refilled; also raises the dead where they lie, but not bodies left after a return from the reserve),
-  kill, go to them, bring them to me, change job (and access). «Heal everyone». The host also
-  makes and unmakes admins here.
+  kill, go to them, bring them to me, change job (and access), (v60.1) every skill at its best. «Heal
+  everyone»; (v60.1) +1 bot / -1 bot (the crew is kept that size until the server stops; at most 16 bots).
+  The host also makes and unmakes admins here.
 - **Ship** tab: mend everything (breaches, machines, doors, shutters, power), seal breaches, breach
   the hull near me, normal air in every cell and a full air plant store, fill the supply locker up to
-  its starting stock, +100 credits, hull to 100, +1 in the reserve, save the campaign.
-- **Space and events** tab: a station, a trader or a derelict in this sector with the ship put at
-  it (until the next jump), a pirate with a pistol or a baton in front of me, the eventer on or off,
-  and every event by hand.
+  its starting stock, +100 credits, hull to 100, +1 in the reserve, save the campaign, (v60.1) charge
+  everything (shield full, armed guns charged, jump drive and phase drive ready). (v60.1) **Ship gear at
+  once**, without an engineer's work: each system's tier (1 = built in, 2, 3) from a list that shows the
+  tier now fitted, any module into the bay (a module of the same sort is swapped, else it takes a free
+  slot, else the first), and emptying the bay. What comes out this way is gone.
+- **Space and events** tab: a station, a derelict or (v60.1) a trader of a chosen kind (arms dealer, junk
+  dealer, black market) in this sector with the ship put at it (until the next jump), a pirate with a
+  pistol or a baton in front of me, (v60.1) a **pirate ship** of a chosen class (cutter, raider, gunship,
+  cruiser) and temper (any, calculating, cautious, reckless, hunter) that either fights at a distance or
+  comes to board (if a ship can come now), the eventer on or off, and every event by hand (the two
+  flagships among them).
 
 ## 21. Crew, jobs, reserve
 
