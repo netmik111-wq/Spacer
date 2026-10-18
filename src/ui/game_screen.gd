@@ -1169,7 +1169,27 @@ func _process(delta: float) -> void:
 	elif target == 8 and client.map.guns.has(client.use_cell()):
 		var g := client.map.guns.find(client.use_cell())
 		var c: int = client.gun_charge[g] if g < client.gun_charge.size() else 0
-		_hint.text = "Орудие %d: %s. Стреляют с пульта орудий на мостике" % [g + 1, "нет питания" if no_power else ("готово" if c >= 100 else "заряжается, %d%%" % c)]
+		_hint.text = "Орудие %d: %s. Стреляют с пульта орудий на мостике%s" % [g + 1, "нет питания" if no_power else ("готово" if c >= 100 else "заряжается, %d%%" % c),
+			"" if no_power else "; вы у орудия: оно заряжается быстрее"]
+	elif target == 25:
+		var mount_why := client.mount_here(client.use_cell())
+		var g := client.map.guns.find(client.use_cell())
+		var item: int = client.slots[client.hand]
+		if mount_why != "":
+			_hint.text = mount_why
+		elif _use_held and client.work > 0:
+			_hint.text = "Ставлю орудие…" if item != Net.ITEM_NONE else "Снимаю орудие…"
+		elif item != Net.ITEM_NONE:
+			_hint.text = "Орудие %d. Держите E, чтобы поставить: %s" % [g + 1, Items.name_of(item).to_lower()]
+		else:
+			var c: int = client.gun_charge[g] if g < client.gun_charge.size() else 0
+			_hint.text = "Орудие %d: %s%s. Держите E с пустыми руками, чтобы снять его" % [g + 1,
+				"нет питания" if no_power else ("готово" if c >= 100 else "заряжается, %d%%" % c),
+				"" if no_power else "; вы у орудия: оно заряжается быстрее"]
+	elif target == 26:
+		_hint.text = "Автодок обесточен: %s" % why if no_power else "Автодок: лечит того, кто лежит перед ним. Держите E, чтобы помогать (вдвое быстрее)"
+	elif target == 27:
+		_hint.text = "Сканер обесточен: %s" % why if no_power else "E: медицинский сканер (осмотрит лежащего в автодоке)"
 	elif target == 17:
 		_hint.text = "Пульт орудий обесточен: %s" % why if no_power else "E: пульт орудий"
 	elif target == 8:

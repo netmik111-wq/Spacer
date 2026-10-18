@@ -6,6 +6,9 @@ extends VBoxContainer
 ## the plan sums it up; the cell under the mouse is described under it. The
 ## server sends what it needs (Net.S_HOLO) while we stand at the monitor: see
 ## Holomap. Shown inside the console frame of GameScreen.
+## (v60) A click on a door of our ship locks it against boarders (a blast door:
+## it opens only for our own crew), a click again unlocks it; two buttons lock or
+## unlock them all.
 
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
@@ -22,6 +25,7 @@ const WINDOW := Color(0.45, 0.6, 0.7)
 const BROKEN := Color(0.95, 0.3, 0.25)
 const SHUTTER := Color(0.98, 0.8, 0.25)
 const JAMMED := Color(0.98, 0.5, 0.2)
+const BLAST := Color(0.75, 0.4, 0.98)
 # the pressure scale: share of normal pressure -> colour (between stops the colour is blended)
 const SCALE: Array = [[0.0, Color(0.16, 0.03, 0.05)], [0.2, Color(0.75, 0.16, 0.12)], [0.5, Color(0.9, 0.62, 0.18)],
 	[0.76, Color(0.25, 0.62, 0.72)], [1.0, Color(0.2, 0.5, 0.85)]]
@@ -56,6 +60,21 @@ func setup(p_client: GameClient) -> void:
 	_under.add_theme_font_size_override("font_size", 13)
 	_under.custom_minimum_size = Vector2(0, 20)
 	add_child(_under)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	add_child(row)
+	for b: Array in [["Заблокировать все двери", Net.BLAST_ALL], ["Снять блокировку со всех", Net.BLAST_NONE]]:
+		var button := Button.new()
+		button.text = b[0]
+		button.focus_mode = Control.FOCUS_NONE
+		var which: int = b[1]
+		button.pressed.connect(func() -> void: client.send_blast(which))
+		row.add_child(button)
+	var tip := Label.new()
+	tip.text = "Щелчок по двери: заблокировать её от абордажа (открывается только для своих)"
+	tip.add_theme_font_size_override("font_size", 12)
+	tip.add_theme_color_override("font_color", DIM)
+	row.add_child(tip)
 	_layout()
 
 
@@ -165,12 +184,15 @@ func _sum_up() -> String:
 		"Всё оборудование работает." if broken.is_empty() else "Не работает: %s." % ", ".join(broken)])
 	var shutters := 0
 	var jams := 0
+	var locked := 0
 	for d in client.holo_doors.size():
 		var f: int = client.holo_doors[d] >> 1
 		if f & 1:
 			shutters += 1
 		if f & 2:
 			jams += 1
+		if f & 16:
+			locked += 1
 	# rooms: floor split by doors, on each deck
 	var low := 0
 	var empty := 0
@@ -197,7 +219,7 @@ func _sum_up() -> String:
 		elif share < 0.76:
 			low += 1
 	var air := "Давление везде в норме." if low + empty == 0 else "Отсеков с пониженным давлением: %d, почти без воздуха: %d." % [low, empty]
-	lines.append("%s Аварийных заслонок опущено: %d. Заклинивших дверей: %d." % [air, shutters, jams])
+	lines.append("%s Аварийных заслонок опущено: %d. Заклинивших дверей: %d. Заблокировано от абордажа: %d." % [air, shutters, jams, locked])
 	lines.append(gear_line(client))
 	return "\n".join(lines)
 
@@ -269,13 +291,15 @@ func _draw_plan() -> void:
 						_plan.draw_rect(leaf, Color(0.75, 0.78, 0.82))
 					if f & 2:
 						_plan.draw_rect(r.grow(-1.0), JAMMED, false, 2.0)
+					elif f & 16:
+						_plan.draw_rect(r.grow(-1.0), BLAST, false, 2.0)
 				if cell == me and map.deck_of(y) == map.deck_of(client.pred.y):
 					_plan.draw_circle(r.get_center(), _px * 0.3, Color(1, 1, 1, 0.6 + 0.4 * blink))
 	# the legend
 	var y0 := _plan.custom_minimum_size.y - 12.0
 	var x := 0.0
 	for e: Array in [[pressure_colour(1.0), "норма"], [pressure_colour(0.6), "понижено"], [pressure_colour(0.3), "опасно"],
-			[pressure_colour(0.0), "вакуум"], [BROKEN, "сломано, пробоина"], [SHUTTER, "заслонка опущена"], [JAMMED, "дверь заклинило"], [Color.WHITE, "вы здесь"]]:
+			[pressure_colour(0.0), "вакуум"], [BROKEN, "сломано, пробоина"], [SHUTTER, "заслонка опущена"], [JAMMED, "дверь заклинило"], [BLAST, "заблокирована"], [Color.WHITE, "вы здесь"]]:
 		_plan.draw_rect(Rect2(Vector2(x, y0 - 10), Vector2(12, 12)), e[0])
 		_plan.draw_string(font, Vector2(x + 16, y0), e[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DIM)
 		x += 16.0 + font.get_string_size(e[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 14.0
@@ -302,6 +326,10 @@ func _describe(cell: int) -> String:
 				parts.append("заклинило")
 			if f & 4:
 				parts.append("заслонка неисправна")
+			if f & 16:
+				parts.append("заблокирована от абордажа (щелчок: снять)")
+			elif door < client.map.other_first_door:
+				parts.append("щелчок: заблокировать от абордажа")
 	else:
 		var what := map.device_name(cell)
 		for d: Array in _devices():
@@ -319,6 +347,13 @@ func _describe(cell: int) -> String:
 
 
 func _on_plan_input(event: InputEvent) -> void:
+	var click := event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
+		and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT
+	if click and _hover >= 0:
+		var door := client.map.door_of[_hover]
+		if door >= 0 and door < client.map.other_first_door:
+			client.send_blast(door)
+		return
 	if not (event is InputEventMouseMotion):
 		return
 	var at := (event as InputEventMouseMotion).position
