@@ -70,6 +70,9 @@ static func snapshot(server: Node) -> Dictionary:
 	var store := {}
 	for item: int in server.ship.store:
 		store[str(item)] = server.ship.store[item]
+	if server.robots != null and server.robots.pack_up() > 0:
+		# (v62) our security robots still standing go back into the locker in their crates
+		store[str(Net.ITEM_ROBOT)] = int(server.ship.store.get(Net.ITEM_ROBOT, 0)) + server.robots.pack_up()
 	var holes: Array = []
 	for cell: int in server.air.holes:
 		if not map.is_other(cell):
@@ -88,7 +91,7 @@ static func snapshot(server: Node) -> Dictionary:
 	var crew: Array = []
 	var here := {}
 	for p in server.players:
-		if p == null or p.bot or p.pirate or map.is_other(p.st.y * map.width + p.st.x):
+		if p == null or p.bot or p.pirate or p.ally or map.is_other(p.st.y * map.width + p.st.x):
 			continue
 		crew.append(character(p))
 		if not p.corpse:
@@ -203,7 +206,8 @@ static func restore(server: Node, data: Dictionary) -> String:
 		gear.append(1)                       # (v61) a save from before the SMES coils: built-in ones
 	server.ship.gear = gear if gear.size() == Gear.SYSTEMS else PackedByteArray([1, 1, 1, 1, 1])
 	var modules := PackedByteArray(data.get("modules", []))
-	server.ship.modules = modules if modules.size() == Gear.MODULE_SLOTS else PackedByteArray([0, 0])
+	server.ship.modules = modules if modules.size() >= Gear.MODULE_SLOTS and modules.size() <= Gear.MODULE_SLOTS_MAX \
+		else PackedByteArray([0, 0])         # (v62) three with the bay's extender
 	server.ship.phase_ready = 0
 	server.outfit.refresh()
 	server.power.load_from(data.get("smes", []))     # (v61; an older save keeps the SMES as it starts: full)

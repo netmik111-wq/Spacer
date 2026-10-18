@@ -13,6 +13,7 @@ extends RefCounted
 ##   hull, strength, shield (bool), regen, slower, dodge, weapons
 ##   (PackedByteArray), crew, reward, loot ([fewest, most]),
 ##   room_sys (per room of its drawing: Net.ESYS_* or Net.ROOM_EMPTY)
+##   (v62) drone (a drone ship: no crew, Gunnery.crewless), teleport (it carries a teleporter)
 
 const Net := preload("res://src/shared/net.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
@@ -28,6 +29,7 @@ var server: Node
 var classic := false                 # (tests) always the old raider: its first hull, its rooms as drawn, its old numbers
 var force_class := -1                # (tests, admin) this class only, if it may come at all
 var force_temper := -1               # (v60.1, admin) this temper, not a rolled one
+var force_teleport := false          # (v62, tests) a teleporter wherever it fits, however near the start
 var _rng := RandomNumberGenerator.new()
 
 
@@ -83,18 +85,30 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 		var w: int = pool[0] if k == 0 and tiers[k] == 1 else Weapons.pick_of_tier(tiers[k], pool, _rng)
 		weapons.append(w)
 		fx.append(Weapons.roll_fx(w, _rng))
+	var drone: bool = info.get("drone", false)
 	var crew_range: Array = info["crew"]
-	var crew := _rng.randi_range(crew_range[0], crew_range[1]) if raid else party
-	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool: return not Hulls.temper(t).has("boss"))
+	var crew := _rng.randi_range(crew_range[0], crew_range[1]) if raid or drone else party
+	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool:
+		return not Hulls.temper(t).has("boss") and not Hulls.temper(t).has("machine"))
 	var temper: int = tempers[_rng.randi_range(0, tempers.size() - 1)]
 	if force_temper >= 0 and tempers.has(force_temper):
 		temper = force_temper
+	if drone:
+		temper = Net.TEMPER_MACHINE          # (v62) a machine fights the same way every time
+	# (v62, the author's E5) a teleporter, now and then, far enough out
+	var teleport: bool = not drone and far >= Hulls.TELEPORT_FROM and _rng.randf() < float(info.get("teleport", 0.0))
+	teleport = teleport or (force_teleport and not drone)
+	if teleport and server.map.others[layout].rooms.size() < Net.ESYS_TELEPORT + (1 if shielded else 0):
+		teleport = false                     # (no room to spare for it in this hull)
+	var title := "%s «%s»" % [_cap(str(info["name"])), Hulls.NAMES[_rng.randi_range(0, Hulls.NAMES.size() - 1)]]
+	if drone:
+		title = "%s «%s»" % [_cap(str(info["name"])), Hulls.DRONE_NAMES[_rng.randi_range(0, Hulls.DRONE_NAMES.size() - 1)]]
 	return {
-		"klass": klass, "layout": layout, "temper": temper,
-		"name": "%s «%s»" % [_cap(str(info["name"])), Hulls.NAMES[_rng.randi_range(0, Hulls.NAMES.size() - 1)]],
+		"klass": klass, "layout": layout, "temper": temper, "drone": drone, "teleport": teleport,
+		"name": title,
 		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": shielded, "regen": float(info["regen"]),
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": maxi(crew, 1),
-		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, shielded),
+		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, shielded, teleport, drone),
 		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": far >= 4 and _rng.randf() < float(info.get("guard", 0.0)),
 	}
 
@@ -154,8 +168,9 @@ func tier_points() -> int:
 	return n
 
 
-func _lay_out(layout: int, shielded: bool, teleport: bool = false) -> PackedByteArray:
+func _lay_out(layout: int, shielded: bool, teleport: bool = false, drone: bool = false) -> PackedByteArray:
 	## Its systems, each in a room of the hull picked by lot; the rooms left over are empty.
+	## (v62) A drone ship has no cockpit, quarters or jump drive room, but a control core.
 	var rooms: Array = server.map.others[layout].rooms
 	var out := PackedByteArray()
 	out.resize(rooms.size())
@@ -164,7 +179,9 @@ func _lay_out(layout: int, shielded: bool, teleport: bool = false) -> PackedByte
 	_shuffle(order)
 	var k := 0
 	for system in Net.ESYS_COUNT:
-		if (system == Net.ESYS_SHIELDS and not shielded) or (system == Net.ESYS_TELEPORT and not teleport):
+		if (system == Net.ESYS_SHIELDS and not shielded) or (system == Net.ESYS_TELEPORT and not teleport) \
+				or (system == Net.ESYS_DRONES and not drone) \
+				or (drone and (system == Net.ESYS_HELM or system == Net.ESYS_CREW or system == Net.ESYS_JUMP)):
 			continue
 		if k >= order.size():
 			break

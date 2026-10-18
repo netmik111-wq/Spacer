@@ -34,12 +34,14 @@ needs:
 
 ## Where things stand
 
-Build v61 (version 0.54, power) is the latest. Plans one to four are done except the darkness front (the
+Build v62 (version 0.55, enemies) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
 (`/mnt/project-files/plans/road-plan.md`): crew at work (gunners, carried guns, bots at work, medbay, blast doors);
-v61 power (SMES, bridge backup, ion storm, hazards hit pirates, hull mending outside); v62 enemies, v63 road and story come next. Several reactors is a later
+v61 power (SMES, bridge backup, ion storm, hazards hit pirates, hull mending outside); v62 enemies (drone ships,
+teleporters, suitless boarders, bombs, Shrapnel, flagship phase two, passive modules, bay extender, security robots);
+v63 road and story comes next, then the cluster map (the author answered all 19 cluster questions "A"). Several reactors is a later
 question round (it breaks the one-engine rule).
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -72,7 +74,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 23 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 24 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -96,6 +98,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/geartest.gd (since v59: ship gear, installing, module bay, armour, focus, phase drive)
     godot --headless --path . --script res://tools/worktest.gd (since v60: gunners, carried guns, bots at work, medbay, blast doors, ammo)
     godot --headless --path . --script res://tools/powertest.gd (since v61: SMES, backup, terminal, coils, ion storm, hull mending outside)
+    godot --headless --path . --script res://tools/enemytest.gd (since v62: drone ship, teleport, suitless boarders, bombs, phase two, modules, robots)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -119,7 +122,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 23 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 24 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -146,7 +149,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   battle position, our boarders; since v57 `flagship`: the goal of the game, the boss fight, win and capture; since v58
   `workshop`: the workbench; since v59 `outfit`: the ship's gear, its effects and installing it; since v60 `mounts`: gunners and carrying guns
   onto mounts, `medbay`: autodocs and the scanner, `blast`: blast doors; since v61 `power`: the SMES and the ship's
-  power, `hazards`: the ion storm and hazards hitting pirates, `outside`: mending the hull from outside).
+  power, `hazards`: the ion storm and hazards hitting pirates, `outside`: mending the hull from outside; since v62 `assault`:
+  teleported boarders and assault drones, `robots`: our security robots).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -219,7 +223,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   shutting, power, the other ship moving already do): who sees whom is cached until then.
 - A Control that draws on another one from a method named `_draw` also runs it for itself, and
   Godot complains ("Drawing is only allowed inside this node's `_draw()`"). Name it otherwise.
-- Pirates are Players too: whatever counts the crew must skip `p.pirate` (and `p.bot`, `p.corpse`).
+- Pirates are Players too: whatever counts the crew must skip `p.pirate` (and `p.bot`, `p.corpse`; since v62 also
+  `p.ally`, our security robots). Enemy robots (assault drones, a drone ship's guards) are pirates with `p.robot`.
   The director counted boarders as crew until v40's fix, so it let holes pile up past its limit
   after a boarding (`directortest` failed now and then).
 - The pirate ship's own crew during a fight are not Players (v54): they are cells of its drawing in
@@ -269,6 +274,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - (v61) Power is set up before Outfit: it reads the coils from `Ship.gear` itself. A test that wants the ship dark
   must empty the SMES too (`server.power.set_charge(0.0)`): a broken engine alone no longer darkens it. Guns and
   shield draw from the SMES only in a fight (`Power._load`). Godot virtuals: never name a method `_get` or `_set`.
+- (v62) A drone ship (`Gunnery.crewless`) has no cockpit, quarters or jump drive room: `room_of_system` gives -1 for
+  them. `Ship.modules` may hold 3 slots (the extender): never assume `Gear.MODULE_SLOTS`. Gun ids from
+  `Weapons.HORNET` map to items from `Net.ITEM_GUN_LATE` (always go through `Weapons.item_of`/`of_item`).
 - Ships' shots land later than they are fired (v56, `Gunnery._flying`). A test that checks a hit right after
   `fire` or `_enemy_fires` must set `server.gunnery.flies = false` (the gun, ship, drone and station tests do).
   Effects that are only drawn take their lots from `Gunnery._fx`, so the game's own rng sequence is unchanged.

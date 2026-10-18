@@ -45,8 +45,11 @@ const GUN_DEVASTATOR := "gun_devastator"   # the «Опустошитель»: a
 const GUN_REAPER := "gun_reaper"           # the «Жнец»: a low droning beam
 const GUN_FLAK := "gun_flak"               # point defence firing: a short burst of pops
 const GUN_NOVA := "gun_nova"               # the «Сверхновая»: a rising scream and a blinding boom
+const GUN_BOMB := "gun_bomb"               # (v62) a bomb launcher: a teleport's warbling hum and a pop
+const GUN_SHRAPNEL := "gun_shrapnel"       # (v62) «Шрапнель»: a dry, scattered crackle
 const FIGHT_NAMES := [GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
-	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA]
+	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA,
+	GUN_BOMB, GUN_SHRAPNEL]
 
 static var _streams := {}            # sound kind (or name) -> Array of AudioStream (variants), made once
 static var own_files := PackedStringArray()   # (v56) the sounds replaced by files (told in the log)
@@ -92,6 +95,8 @@ static func prepare() -> void:
 	_streams[GUN_REAPER] = [_gun_reaper()]
 	_streams[GUN_FLAK] = [_gun_flak()]
 	_streams[GUN_NOVA] = [_gun_nova()]
+	_streams[GUN_BOMB] = [_gun_bomb()]
+	_streams[GUN_SHRAPNEL] = [_gun_shrapnel()]
 	_hum_stream = _engine_hum()
 	# (v56) files of one's own in place of these
 	for kind in NAMES:
@@ -479,6 +484,31 @@ static func _gun_storm() -> AudioStreamWAV:
 	_noise(out, 0.15, 1.3, 0.5, 3.5, 0.9)
 	_tone(out, 0.15, 50.0, 0.4, 5.0)
 	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _gun_bomb() -> AudioStreamWAV:
+	# (v62) a teleport sending a bomb off: a warbling rising hum that ends in a soft pop
+	var out := _buffer(0.8)
+	for i in out.size():
+		var t := float(i) / RATE
+		var env := clampf(t / 0.05, 0.0, 1.0) * exp(-3.0 * t)
+		out[i] += sin(TAU * (300.0 + 700.0 * t) * t + 3.0 * sin(TAU * 18.0 * t)) * 0.25 * env
+	_noise(out, 0.45, 0.6, 0.35, 30.0, 0.6)
+	_tone(out, 0.45, 120.0, 0.3, 18.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _gun_shrapnel() -> AudioStreamWAV:
+	# (v62) fragments: a heavy cough, then a dry crackle scattered over a moment
+	var out := _buffer(0.7)
+	_tone(out, 0.0, 70.0, 0.5, 16.0)
+	_noise(out, 0.0, 0.06, 0.6, 50.0, 0.5)
+	for k in 14:
+		var at := 0.05 + _rng.randf() * 0.45
+		_noise(out, at, at + 0.02, 0.35, 120.0, 0.2)
+	_fade(out, 0.003)
 	return _wav(out)
 
 

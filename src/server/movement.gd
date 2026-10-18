@@ -27,8 +27,8 @@ func move(p: Player) -> void:
 		p.self_dirty = true
 	if p.bot:
 		bot_think(p)
-	elif p.pirate:
-		server.pirates.think(p)
+	elif p.pirate or p.ally:
+		server.pirates.think(p)          # (v62) our security robots fight by the same mind
 	var was_x := p.st.x
 	var was_y := p.st.y
 	if Mover.step(p.st, server.map, server.doors, tick):

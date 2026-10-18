@@ -151,11 +151,12 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 		return false
 	design = given if not given.is_empty() else server.shipyard.make(party, p_raid, _pirate_spots())
 	_comes(Net.OTHER_PIRATE, int(design["layout"]), str(design["name"]))
-	raid = p_raid
+	var drone: bool = design.get("drone", false)
+	raid = p_raid or drone                   # (v62) a drone ship never docks: it fights at a distance
 	_place(_spots[layout][0])
 	for c in map.other_cells:
 		if map.walk[c] == 1:
-			server.air.air[c] = 1.0
+			server.air.air[c] = 0.0 if drone else 1.0   # (v62) machines need no air: board it in a suit
 	_pirates_dock_at = -1 if raid else server.tick + PIRATE_WARNING_TICKS
 	_pirates_party = int(design["crew"])
 	_crew_total = _pirates_party
@@ -169,6 +170,8 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 		server.chat.say(("Тревога! Из тени выходит %s, флагман пиратов. Это цель пути: бой до конца, он не бежит и не сдаётся. Разбейте его, и игра выиграна. " % who) +
 			("Он бьёт прицельно: сначала по генератору щита, потом по двигателю. Держите ремонтников наготове." if int(design["boss"]) == 1 else
 			"Его нейроизлучатели оглушают всех в отсеке, а телепорт высаживает абордажников прямо на мостик. Не отдавайте мостик!"))
+	elif drone:
+		server.chat.say("Тревога! Из темноты выходит %s: без экипажа, им правит машина. Он не бежит и не торгуется, шлёт штурмовых дронов, пока работает его ядро. Внутри нет воздуха: на абордаж только в скафандре, а взять его можно, разбив ядро руками." % who.substr(0, 1).to_lower() + who.substr(1))
 	elif raid:
 		server.chat.say("Тревога! %s выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать. Его отсеки пока не видны: их покажут сканеры, попадания и зонд." % who)
 	else:
@@ -180,7 +183,7 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 func someone_outside() -> bool:
 	## Is anybody alive outside our own ship (on the derelict, or out in space)?
 	for p in server.players:
-		if p != null and not p.corpse and not p.pirate and p.cond != Net.COND_DEAD \
+		if p != null and not p.corpse and not p.pirate and not p.ally and p.cond != Net.COND_DEAD \
 				and not map.on_ship(p.st.y * map.width + p.st.x):
 			return true
 	return false
@@ -284,7 +287,7 @@ func becomes_wreck() -> void:
 			_drop(_floor_cells(), PIRATE_LOOT)
 		server.replication.sight_changed()
 		return
-	if alive <= 0 or _rng.randf() < WRECK_ALL_DEAD:
+	if alive <= 0 or _rng.randf() < WRECK_ALL_DEAD or design.get("drone", false):
 		_outcome = "dead"
 		alive = 0
 	else:
@@ -296,7 +299,8 @@ func becomes_wreck() -> void:
 		if cells.is_empty():
 			break
 		var c: int = cells[_rng.randi_range(0, cells.size() - 1)]
-		var p = server.pirates.spawn(c % map.width, c / map.width, _rng.randf() < 0.6)
+		var p = server.pirates.spawn_robot(c % map.width, c / map.width, "Робот-охранник") if design.get("drone", false) \
+			else server.pirates.spawn(c % map.width, c / map.width, _rng.randf() < 0.6)
 		p.health = Net.HEALTH_DEAD
 		p.cond = Net.COND_DEAD
 		p.died_tick = server.tick
@@ -314,8 +318,8 @@ func _raid_closes_in() -> void:
 	## It warns, closes in and docks by force after RAID_BOARD_TICKS; if one of
 	## our guns speaks again before then, it pulls back to its distance.
 	var g = server.gunnery
-	if g.boss > 0:
-		return                               # (v57) the flagship does not close in: it has its own ways
+	if g.boss > 0 or g.crewless:
+		return                               # (v57) the flagship does not close in: it has its own ways (v62: nor a drone ship)
 	var helpless: bool = g.fighting() and not g.fleeing() and g.ransom == 0 \
 		and g.our_guns_silent() and server.navigation.cannot_jump()
 	if helpless and _pirates_dock_at < 0:
@@ -332,7 +336,7 @@ func _watch_boarding() -> void:
 		return
 	var first = null
 	for p in server.players:
-		if p != null and not p.pirate and not p.corpse and not p.bot and p.cond != Net.COND_DEAD \
+		if p != null and not p.pirate and not p.ally and not p.corpse and not p.bot and p.cond != Net.COND_DEAD \
 				and map.is_other(p.st.y * map.width + p.st.x):
 			first = p
 			break
@@ -390,7 +394,7 @@ func _pirates_board() -> void:
 	var theirs: Vector2i = map.doors[int(lock["outer"])] - Vector2i(0, 2)
 	for i in mini(_pirates_party, server.pirates.MAX_ABOARD):
 		var at := theirs - Vector2i(0, i % 2)
-		server.pirates.spawn(at.x + i / 2, at.y, _rng.randf() < 0.6)
+		server.pirates.spawn_boarder(at.x + i / 2, at.y, _rng.randf() < 0.6)
 	server.chat.say("Пиратский корабль пристыковался силой и вскрыл обе двери шлюза! Пираты идут на борт (их %d). Двери шлюза заклинило: чинить, как обычную дверь." % mini(_pirates_party, server.pirates.MAX_ABOARD))
 
 

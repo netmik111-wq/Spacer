@@ -778,7 +778,12 @@ SUIT_COLOURS = [
     ("cyan", (42, 169, 184)), ("white", (201, 204, 212)),
     # pirates (Net.PIRATE_COLOURS rows after the crew's): brown, blood red, near black
     ("pirate_brown", (112, 72, 40)), ("pirate_red", (128, 28, 24)), ("pirate_black", (44, 40, 46)),
+    # (v62) Net.ROBOT_COLOUR, OUR_ROBOT_COLOUR, ARMOUR_COLOUR: an enemy robot (red eye), our security
+    # robot (green eye), a heavy-armoured boarder (steel plates over a jumpsuit, no sealed suit).
+    # These rows look the same whatever the outfit: a machine wears nothing.
+    ("robot_enemy", (96, 92, 96)), ("robot_ours", (112, 120, 130)), ("armour", (104, 110, 122)),
 ]
+ROBOT_EYES = {"robot_enemy": (255, 60, 50, 255), "robot_ours": (90, 255, 120, 255)}
 OUTLINE = (20, 20, 28, 255)
 HELM = (86, 88, 100, 255)
 HELM_D = (58, 60, 72, 255)
@@ -949,17 +954,119 @@ def draw_char(colour, direction, pose, outfit=0, pack=False):
     return out
 
 
+def draw_robot(colour, eye, direction, pose):
+    # (v62) a squat machine on two thick legs: a box of a body, a head with one eye, a gun arm
+    im = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
+    px = im.load()
+    base = colour + (255,)
+    dark = shade(colour, 0.65)
+    lite = shade(colour, 1.3)
+
+    def rect(x0, y0, x1, y1, c):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                if 0 <= x < CHAR_W and 0 <= y < CHAR_H:
+                    px[x, y] = c
+
+    bob = 1 if pose != 0 else 0
+    top = 12 + bob
+    if direction in (0, 1):
+        l_up = 2 if pose == 1 else 0
+        r_up = 2 if pose == 2 else 0
+        rect(10, 34, 14, 44 - l_up, dark); rect(18, 34, 22, 44 - r_up, dark)
+        rect(9, 43 - l_up, 15, 45 - l_up, BOOT); rect(17, 43 - r_up, 23, 45 - r_up, BOOT)
+        rect(8, top + 8, 24, top + 22, base)                         # body
+        rect(8, top + 8, 24, top + 9, lite); rect(8, top + 21, 24, top + 22, dark)
+        rect(5, top + 10, 7, top + 18, dark); rect(25, top + 10, 27, top + 18, dark)   # arms
+        rect(25, top + 18, 27, top + 21, OUTLINE)                    # the gun's muzzle
+        rect(11, top, 21, top + 7, base); rect(11, top, 21, top, lite)  # head
+        if direction == 0:
+            rect(12, top + 2, 20, top + 5, OUTLINE)
+            rect(15, top + 3, 17, top + 4, eye)
+            rect(12, top + 12, 20, top + 18, dark)                   # a chest plate
+        else:
+            rect(12, top + 11, 20, top + 19, dark)                   # the power pack
+            rect(14, top + 13, 18, top + 14, eye)
+    else:
+        f = 0 if pose == 0 else (-2 if pose == 1 else 2)
+        rect(12 + f, 34, 16 + f, 44, dark); rect(15 - f, 34, 19 - f, 44, shade(colour, 0.5))
+        rect(11 + f, 43, 17 + f, 45, BOOT)
+        rect(10, top + 8, 21, top + 22, base)
+        rect(10, top + 8, 21, top + 9, lite); rect(10, top + 21, 21, top + 22, dark)
+        rect(5, top + 12, 13, top + 14, dark)                        # the gun arm, pointing ahead
+        rect(4, top + 12, 5, top + 14, OUTLINE)
+        rect(11, top, 20, top + 7, base); rect(11, top, 20, top, lite)
+        rect(11, top + 2, 15, top + 5, OUTLINE); rect(12, top + 3, 13, top + 4, eye)
+    solid = [[px[x, y][3] > 0 for x in range(CHAR_W)] for y in range(CHAR_H)]
+    for y in range(CHAR_H):
+        for x in range(CHAR_W):
+            if solid[y][x]:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < CHAR_W and 0 <= ny < CHAR_H and solid[ny][nx]:
+                    px[x, y] = OUTLINE
+                    break
+    if direction == 3:
+        im = im.transpose(Image.FLIP_LEFT_RIGHT)
+    out = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
+    sp = out.load()
+    for y in range(43, 48):
+        half = (10, 12, 12, 11, 8)[y - 43]
+        for x in range(16 - half, 16 + half):
+            sp[x, y] = (0, 0, 0, 80)
+    out.alpha_composite(im)
+    return out
+
+
+def draw_armoured(colour, direction, pose):
+    # (v62) a heavy stormtrooper: a jumpsuit-cut figure in steel, with plates on the
+    # shoulders and chest and an open steel helmet over the face (no sealed suit: it breathes our air)
+    im = draw_char(colour, direction, pose, 1, False)
+    px = im.load()
+    plate = (150, 156, 168, 255)
+    plate_d = (80, 84, 94, 255)
+    top = 7 + (1 if pose != 0 else 0)
+
+    def rect(x0, y0, x1, y1, c):
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1 + 1):
+                if 0 <= x < CHAR_W and 0 <= y < CHAR_H and px[x, y][3] > 0:
+                    px[x, y] = c
+
+    if direction in (0, 1):
+        rect(6, top + 12, 10, top + 15, plate); rect(22, top + 12, 26, top + 15, plate)
+        rect(12, top + 14, 20, top + 21, plate); rect(12, top + 21, 20, top + 21, plate_d)
+        rect(11, top, 21, top + 2, plate); rect(11, top, 12, top + 8, plate_d); rect(20, top, 21, top + 8, plate_d)
+    else:
+        # (the profile was flipped for direction 3 by draw_char: mirror the plates too)
+        flip = direction == 3
+        def fx(a, b):
+            return (CHAR_W - 1 - b, CHAR_W - 1 - a) if flip else (a, b)
+        a, b = fx(12, 20); rect(a, top + 12, b, top + 15, plate)
+        a, b = fx(12, 19); rect(a, top + 16, b, top + 22, plate)
+        a, b = fx(11, 20); rect(a, top, b, top + 2, plate)
+        a, b = fx(17, 20); rect(a, top, b, top + 8, plate_d)
+    return im
+
+
 def build_chars():
     # one row per colour, outfit and backpack: row = colour * OUTFITS * 2 + outfit * 2 + (1 with a backpack)
     rows = len(SUIT_COLOURS) * OUTFITS * 2
     sheet = Image.new("RGBA", (CELL_W * 12, CELL_H * rows), (0, 0, 0, 0))
-    for ci, (_, colour) in enumerate(SUIT_COLOURS):
+    for ci, (name, colour) in enumerate(SUIT_COLOURS):
         for outfit in range(OUTFITS):
             for pack in (False, True):
                 row = ci * OUTFITS * 2 + outfit * 2 + (1 if pack else 0)
                 for d in range(4):
                     for pose in range(3):
-                        sheet.paste(draw_char(colour, d, pose, outfit, pack), ((d * 3 + pose) * CELL_W + CHAR_PAD, row * CELL_H + CHAR_PAD))
+                        if name in ROBOT_EYES:
+                            frame = draw_robot(colour, ROBOT_EYES[name], d, pose)
+                        elif name == "armour":
+                            frame = draw_armoured(colour, d, pose)
+                        else:
+                            frame = draw_char(colour, d, pose, outfit, pack)
+                        sheet.paste(frame, ((d * 3 + pose) * CELL_W + CHAR_PAD, row * CELL_H + CHAR_PAD))
     sheet.save(os.path.join(OUT, "chars.png"))
     prev = sheet.resize((sheet.width * 3, sheet.height * 3), Image.NEAREST)
     bg = Image.new("RGBA", prev.size, (74, 78, 88, 255))

@@ -59,6 +59,8 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.slots[p.hand] = Net.ITEM_NONE
 			if who != p:
 				server.chat.say("%s заклеивает раны: %s." % [p.name, who.name])
+	elif item == Net.ITEM_ROBOT:
+		server.robots.deploy(p, Vector2i(roundi(at.x), roundi(at.y)))   # (v62) a security robot set down there
 	elif Items.uses(item) > 0:
 		# a first-aid kit: the treatment takes a while, and both must keep still for it
 		var who := _beside(p, at, true)
@@ -201,10 +203,11 @@ func hurt(q: Player, damage: int, by: Player) -> void:
 	## Crew.update_vitals on the next tick.
 	if q.cond == Net.COND_OK:
 		server.chat.sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
+	var taken := damage * q.toughness        # (v62) heavy armour takes half, our robot more
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
-	q.health = maxf(q.health - damage, Net.HEALTH_DEAD - 1.0)
-	q.wounds = minf(q.wounds + damage, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
-	if q.pirate and by != null:
+	q.health = maxf(q.health - taken, Net.HEALTH_DEAD - 1.0)
+	q.wounds = minf(q.wounds + taken, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
+	if (q.pirate or q.ally) and by != null:
 		server.pirates.attacked(q, by)
 
 

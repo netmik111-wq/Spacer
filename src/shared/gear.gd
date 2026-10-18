@@ -32,6 +32,7 @@ const SYS_NAMES: Array[String] = ["Генератор щита", "Реактор
 const SYS_BUILT_IN: Array[String] = ["штатный генератор щита", "штатный реактор", "штатный двигатель", "штатные сканеры",
 	"штатные катушки СМЭС"]
 const MODULE_SLOTS := 2              # free slots in the module bay
+const MODULE_SLOTS_MAX := 3          # (v62, the author's K3) with the bay's extender, bought at a station
 
 const NONE := 0
 const SHIELD_2 := 1
@@ -49,11 +50,21 @@ const FOCUS := 12
 const PHASE := 13
 const COILS_2 := 14                  # (v61)
 const COILS_3 := 15
-const COUNT := 16                    # every crate's number is below this
+const JAMMER := 16                   # (v62, the author's K2: passive gear, no respirators) the jump jammer
+const WELDER := 17                   # the welding drone: mends the hull after every jump
+const SALVAGE := 18                  # the salvage arm: wrecks and captures pay more
+const LOADER := 19                   # the auto-loader: guns with nobody at them charge faster
+const BAY_SLOT := 20                 # (v62, K3) the bay's extender: a third slot, for good (sold only at stations)
+const COUNT := 21                    # every crate's number is below this
 
 const MOD_ARMOUR := 0                # the sorts of module: one of each sort may be in the bay
 const MOD_FOCUS := 1
 const MOD_PHASE := 2
+const MOD_JAMMER := 3                # (v62)
+const MOD_WELDER := 4
+const MOD_SALVAGE := 5
+const MOD_LOADER := 6
+const MOD_EXTENDER := 7              # (v62) not a module that takes a slot: it adds one
 
 # --- what each system does by its tier (index 1..3; 0 unused)
 const REACTOR_POWER: Array[int] = [0, 8, 10, 12]
@@ -75,6 +86,12 @@ const FOCUS_PIERCE := 45.0
 # --- the phase drive (the author's G15/R7): the battle position changes at once,
 # "behind them" opens, then it recharges this long; it needs no fuel
 const PHASE_SECONDS := 60.0
+# --- (v62) the passive modules
+const JAMMER_SHARE := 0.5            # the enemy's escape jump charges at this share of its pace
+const WELDER_HULL := 5               # hull strength mended after every jump
+const SALVAGE_SHARE := 1.3           # wrecks and captures pay this much of their reward...
+const SALVAGE_PARTS := 1             # ... and give this many spare parts more
+const LOADER_PACE := 1.1             # a gun with no gunner charges this much faster
 const INSTALL_SECONDS := 10.0        # an engineer installs a crate (skill: up to twice as quick)
 const REMOVE_SECONDS := 5.0          # and takes a module out of the bay
 
@@ -110,6 +127,16 @@ const INFO := {
 		"about": "Модуль. Лазеры, выпущенные одним залпом в один отсек, сводятся в общий луч: щит для них слабее на 45 за каждый лазер сверх первого."},
 	PHASE: {"name": "Фазовый привод", "mod": MOD_PHASE, "tier": 2, "price": 150,
 		"about": "Модуль. Позиция в бою меняется мгновенно, и открывается позиция «В тыл» (мы попадаем на 25% лучше, они на 20% хуже). Потом привод 60 с перезаряжается. Топлива не берёт."},
+	JAMMER: {"name": "Глушитель прыжка", "mod": MOD_JAMMER, "tier": 2, "price": 110,
+		"about": "Модуль. Гипердвигатель врага заряжается вдвое медленнее: побитому пирату труднее сбежать."},
+	WELDER: {"name": "Сварочный дрон", "mod": MOD_WELDER, "tier": 2, "price": 120,
+		"about": "Модуль. После каждого прыжка дрон заваривает обшивку снаружи: прочность корпуса +5."},
+	SALVAGE: {"name": "Сборщик", "mod": MOD_SALVAGE, "tier": 2, "price": 100,
+		"about": "Модуль. Манипулятор разбирает обломки: за разбитый или захваченный корабль на 30% больше кредитов и ещё одна запчасть."},
+	LOADER: {"name": "Автозарядчик", "mod": MOD_LOADER, "tier": 2, "price": 100,
+		"about": "Модуль. Орудия, у которых никто не стоит, заряжаются на 10% быстрее."},
+	BAY_SLOT: {"name": "Расширитель стойки", "mod": MOD_EXTENDER, "tier": 0, "price": 150,
+		"about": "Третья ячейка модульной стойки, навсегда. Продаётся только на станциях. Ставится в модульную стойку, ячейку не занимает."},
 }
 const WHERE_ABOUT: Array[String] = ["Ставится у генератора щита.", "Ставится у двигателя.", "Ставится у двигателя.",
 	"Ставится у голокарты.", "Ставится в СМЭС в машинном отделении."]
@@ -172,6 +199,11 @@ static func armour_tier(modules: PackedByteArray) -> int:
 		if module_of(g) == MOD_ARMOUR:
 			return tier(g)
 	return 0
+
+
+static func extender(g: int) -> bool:
+	## (v62) Is it the bay's extender (it adds a slot, it does not take one)?
+	return module_of(g) == MOD_EXTENDER
 
 
 static func has_module(modules: PackedByteArray, which: int) -> bool:

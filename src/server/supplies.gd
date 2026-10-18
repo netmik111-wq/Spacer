@@ -68,6 +68,14 @@ func offers() -> Dictionary:
 	rng.seed = hash([server.space_seed, key, "trader"])
 	var kind := deal()
 	var gone: Array = bought.get(key, [])
+	if server.navigation.sector_kind() == Sectors.STATION:
+		# (v62, the author's K3 and K11) a supply station sells only what a trader does not:
+		# the module bay's extender (while the bay has not got its third slot) and security robots
+		var bay := Gear.item_of(Gear.BAY_SLOT)
+		if server.ship.modules.size() < Gear.MODULE_SLOTS_MAX:
+			_offers[bay] = Items.price(bay)
+		_offers[Net.ITEM_ROBOT] = Items.price(Net.ITEM_ROBOT)
+		return _offers
 	for item in Items.kept_in_locker():
 		if Items.price(item) <= 0 or Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
 			continue
@@ -164,7 +172,8 @@ func trade_packet() -> PackedByteArray:
 
 func can_trade() -> bool:
 	## Docked with a trader, with power for the link.
-	return server.powered() and server.navigation.sector_kind() == Sectors.TRADER and server.ship.in_reach
+	return server.powered() and (server.navigation.sector_kind() == Sectors.TRADER or server.navigation.sector_kind() == Sectors.STATION) \
+		and server.ship.in_reach
 
 
 func aboard(item: int) -> int:
@@ -287,7 +296,7 @@ func weapons_aboard() -> int:
 	## Weapons the crew could lay hands on: in the locker and in its pockets.
 	var n: int = server.ship.store.get(Net.ITEM_PISTOL, 0) + server.ship.store.get(Net.ITEM_BATON, 0)
 	for q: Player in server.players:
-		if q != null and not q.pirate and not q.corpse:
+		if q != null and not q.pirate and not q.ally and not q.corpse:
 			for v in q.slots:
 				if Items.is_weapon(v):
 					n += 1

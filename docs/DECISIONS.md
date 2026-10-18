@@ -707,3 +707,39 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
 - **Pirates come in hazards as often as in quiet space** (V14).
 - **Hull mending from outside** (moved from v60, V15/V16): +10 a patch, 10 s, up to full; bots on «Работы» go
   below 80% when there is nothing to mend aboard and no fight, one at a time, never in a fight (`Outside`).
+
+### Enemies (v62)
+Built on my picks (all "A") on the question page https://claude.ai/artifact/VCN8eFSoSqhm1E52mYTwrN, unanswered at
+build time; change them if the author answers otherwise.
+- **The drone ship is a fifth class, not a temper** (D1): `Hulls` class "drone" with its own temper `machine` (never
+  rolled for crewed ships). `Gunnery.crewless`: `EnemyCrew.manned` is always true, no `_plan`, and its "crew"
+  (`ESYS_CREW` strength) are 2 guard robots posted at the core and the guns. It has no cockpit, quarters or jump drive
+  rooms; helm and jump keep a strength so the old code paths stay whole, but nothing aims at them.
+- **A drone ship is taken only by wrecking its core by hand** (D3): its guards can be killed, but `_settle` waits for
+  `systems[ESYS_DRONES] == 0` while ours are aboard. Wrecked from outside it is a dead hulk (no survivors, robot bodies).
+  No air inside it (`Derelict.pirates_come`), so boarding it needs suits.
+- **Assault drones are Players** (`Pirates.spawn_robot`: pirate + robot, no suit, `Player.robot` breathes nothing),
+  cut in like a boarding party (`Pirates.cut_in`, split out of `board`), 2 at most, first at 20 s, every 35 s, shot
+  down by our charged point defence 60% (D2). They are not counted in its crew: they are machines it carries.
+- **Teleporters** (B1): rolled from 8 jumps for raiders/gunships/cruisers, only when the hull has a room to spare
+  (6-room hulls lost the teleporter with a shield). `Gunnery.crew_sent` takes the teleported crew out of every count
+  (`ESYS_CREW`, `Derelict._pirates_party`, `EnemyCrew.keep`) so the v54 pitfall holds. The teleporter post moved
+  before the shield post so a small crew mans it.
+- **Suitless boarders only by docking or teleport** (B2/B3): cutting through the hull means vacuum, so they wear
+  suits. Heavy stormtroopers have `Player.toughness` 0.5 (Combat.hurt multiplies); no suit, so venting works (B4).
+- **Bombs are their own class** (`Weapons.CLASS_BOMB`, G1) using rockets as ammunition: they skip `_hit_chance`
+  (a flat 90%: dodge does not apply to a teleport), the shield and point defence. Damage goes to the room's system,
+  not the hull (except Thermite's 1). `crew` = the chance each one in the room is wounded, `kill` kills one.
+  Weapon ids 23+ map to items from `ITEM_GUN_LATE` (200): `ITEM_GUN_MORE + 23` would have hit the shell's id.
+- **Shrapnel** (G2) is a kinetic gun with `area`: half its fragments land in a room beside (rooms within 2 cells
+  of each other, `Gunnery._beside`). Each wounds everyone where it lands.
+- **Pirates carry bombs from tier 2** (G3): gunships and cruisers have them in their pools; a pirate bomb lands where
+  `_enemy_target` aims, or where our people are.
+- **Flagship phase two** (F1, the author's K21): at a third of its hull, once: every system mended, shield full,
+  battleship guns ×1.3 and assault drones, carrier teleport every 25 s, 3 at a time, +4 troops (`Flagship.phase_two`).
+- **Passive modules** (P1, the author's K2 "no respirators"): jammer, welder, salvage arm, auto-loader, tier 2 each,
+  prices 100-120. The bay's extender (P2, K3) is a crate that is used up (`ship.modules.append`), only sold at stations,
+  which got a tiny shop at the locker (`Supplies.offers` for `Sectors.STATION`).
+- **Security robots** (R1, the author's K11): `Player.ally` (not crew, not pirate), moved by `Pirates.think` with
+  the sides turned (`Pirates.foe`). Up to 2, toughness 1.4, set down on a cell beside its carrier; a save puts them
+  back into the locker. Every check that counts the crew skips `ally` too (new pitfall).

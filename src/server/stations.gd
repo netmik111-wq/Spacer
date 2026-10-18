@@ -121,7 +121,7 @@ func _scan() -> void:
 	ours_aboard = false
 	var enemy: bool = server.derelict.here and server.derelict.kind == Net.OTHER_PIRATE and not server.derelict.wreck
 	for p: Player in server.players:
-		if p == null or p.pirate or p.corpse or p.cond == Net.COND_DEAD:
+		if p == null or p.pirate or p.ally or p.corpse or p.cond == Net.COND_DEAD:
 			continue
 		if enemy and map.is_other(p.st.y * map.width + p.st.x):
 			ours_aboard = true
@@ -849,11 +849,14 @@ func _boarding() -> void:
 	if ours_aboard and not em.in_world:
 		var who := ""
 		for p: Player in server.players:
-			if p != null and not p.pirate and not p.corpse and p.cond != Net.COND_DEAD and server.map.is_other(p.st.y * server.map.width + p.st.x):
+			if p != null and not p.pirate and not p.ally and not p.corpse and p.cond != Net.COND_DEAD and server.map.is_other(p.st.y * server.map.width + p.st.x):
 				who = p.name
 				break
 		em.come_to_life()
-		server.chat.say("%s поднимается на борт пиратского корабля! Его экипаж (%d) бросает посты и хватается за оружие." % [who, em.count()])
+		if g.crewless:
+			server.chat.say("%s поднимается на борт дрон-корабля! Его роботы-охранники (%d) включаются. Ядро дронов можно разбить руками: тогда корабль наш." % [who, em.count()])
+		else:
+			server.chat.say("%s поднимается на борт пиратского корабля! Его экипаж (%d) бросает посты и хватается за оружие." % [who, em.count()])
 	if not em.in_world:
 		return
 	if em.count() < g.boarders_left():
@@ -865,7 +868,7 @@ func _boarding() -> void:
 	var hands := PackedInt32Array()
 	hands.resize(Net.ESYS_COUNT)
 	for p: Player in server.players:
-		if p == null or p.pirate or p.corpse or p.cond != Net.COND_OK:
+		if p == null or p.pirate or p.ally or p.corpse or p.cond != Net.COND_OK:
 			continue
 		var cell := p.st.y * map.width + p.st.x
 		if not map.is_other(cell):

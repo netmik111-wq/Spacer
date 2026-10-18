@@ -49,7 +49,11 @@ const HAMMER := 19                   # (v58) «Молот»: the top kinetic gun
 const NEURAL := 20                   # (v57) the boarding flagship's neural emitter: stuns the crew in the room, no damage
 const GUARD := 21                    # (v58) «Заслон»: point defence in its own mount, shoots down rockets and drones
 const NOVA := 22                     # (v58) «Сверхновая»: the flagship's own gun, found nowhere else
-const COUNT := 23                    # every weapon's number is below this
+const HORNET := 23                   # (v62) «Шершень»: a bomb teleported into a room: wears its system, wounds whoever is there
+const DAMPER := 24                   # (v62) «Глушилка»: an ion bomb: puts the system out and stuns the room
+const THERMITE := 25                 # (v62) «Термит»: the top bomb: burns the system through, holes the hull, kills one
+const SHRAPNEL := 26                 # (v62) «Шрапнель»: kinetic fragments over the room aimed at and those beside it
+const COUNT := 27                    # every weapon's number is below this
 
 const CLASS_LASER := 0
 const CLASS_BEAM := 1
@@ -61,6 +65,8 @@ const CLASS_SIPHON := 6
 const CLASS_NEURAL := 7
 const CLASS_KINETIC := 8             # (v58) the shield takes KINETIC_SHIELD off its damage, the rest goes through; armour may turn it
 const CLASS_GUARD := 9               # (v58) point defence: it never fires at the enemy
+const CLASS_BOMB := 10               # (v62) a bomb: teleported straight into the room, past any shield and point
+                                     # defence; it does not hurt the hull (but «Термит»), only what is in the room
 
 # (v58, the author's tiers) A tier is a hidden rating of how strong a gun is:
 # 1, 2 or 3. It is never shown: players learn guns by their names, looks and
@@ -98,7 +104,7 @@ const FX_TWICE_CHANCE := 0.33
 const FX_KNOCK_SECONDS := 2.0
 const FX_STUN_HEALTH := 30.0
 # the tier 3 guns that may carry an effect, in the order their things are numbered (item_of)
-const FX_GUNS: Array[int] = [SIEGE, PHOENIX, STORM, DEVASTATOR, REAPER, HAMMER, NOVA]
+const FX_GUNS: Array[int] = [SIEGE, PHOENIX, STORM, DEVASTATOR, REAPER, HAMMER, NOVA, THERMITE]
 
 # the kinetic guns (v58, the author's notebook): the shield takes this much off
 # each shell's damage and wears by KINETIC_WEAR; armour on the ship hit turns a
@@ -214,6 +220,22 @@ const INFO := {
 	NOVA: {"name": "Сверхновая", "short": "Сверхновая", "class": CLASS_LASER, "charge": 25.0, "shots": 1, "hit": 0.9, "damage": 6,
 		"power": 4, "price": 400, "no_shield": true, "pierce": 1, "tier": 3, "kind": KIND_LASER, "unique": true,
 		"about": "Орудие флагмана, второго такого нет: сгусток света в 6 урона проходит сквозь любой щит и прожигает навылет ещё один отсек. Заряжается 25 с."},
+	# (v62) bombs (the author's K1: a few tier 2 and 3 guns) and an area gun (W2: crew damage and an area only on a
+	# few new guns). A bomb's "hull" is what it takes from the hull (most take nothing); "crew" is the chance that
+	# each one in the room hit is wounded; "kill" kills one of them; "area" spreads a gun's shots over the room
+	# aimed at and those beside it
+	HORNET: {"name": "Бомбомёт «Шершень»", "short": "Шершень", "class": CLASS_BOMB, "charge": 13.0, "shots": 1, "hit": 0.9, "damage": 2,
+		"power": 1, "price": 85, "ammo": Net.ITEM_ROCKET, "hull": 0, "crew": 1.0, "no_shield": true, "tier": 2, "kind": KIND_MISSILE, "next": THERMITE,
+		"about": "Бомба телепортируется прямо в наведённый отсек: щит и «Заслон» её не останавливают, 90% доходят. 2 урона системе в отсеке и ранит всех, кто там стоит. Корпусу урона нет. Тратит ракету."},
+	DAMPER: {"name": "Ионная бомба «Глушилка»", "short": "Глушилка", "class": CLASS_BOMB, "charge": 12.0, "shots": 1, "hit": 0.9, "damage": 0,
+		"power": 1, "price": 80, "ammo": Net.ITEM_ROCKET, "hull": 0, "disable": 8.0, "stun": 30.0, "no_shield": true, "tier": 2, "kind": KIND_MISSILE, "next": THERMITE,
+		"about": "Ионная бомба телепортируется в наведённый отсек мимо щита: выключает систему там на 8 с и оглушает всех в отсеке. Урона не наносит. Тратит ракету."},
+	THERMITE: {"name": "Бомба «Термит»", "short": "Термит", "class": CLASS_BOMB, "charge": 16.0, "shots": 1, "hit": 0.9, "damage": 3,
+		"power": 2, "price": 175, "ammo": Net.ITEM_ROCKET, "hull": 1, "crew": 1.0, "kill": true, "no_shield": true, "tier": 3, "kind": KIND_MISSILE,
+		"about": "Зажигательная бомба телепортируется в наведённый отсек мимо щита: 3 урона системе, 1 корпусу и пробоина; одного из тех, кто в отсеке, убивает, остальных ранит. Тратит ракету."},
+	SHRAPNEL: {"name": "Шрапнель", "short": "Шрапнель", "class": CLASS_KINETIC, "charge": 12.0, "shots": 4, "hit": 0.7, "damage": 1,
+		"power": 2, "price": 90, "ammo": Net.ITEM_SHELL, "crew": 1.0, "area": true, "tier": 2, "kind": KIND_KINETIC, "next": HAMMER,
+		"about": "Снаряд рвётся облаком осколков: 4 осколка ложатся в наведённый отсек и в соседние с ним, по 1 урона, и ранят всех, кого заденут. Щит снимает с осколка 1 урона, от брони бывает рикошет. Тратит один снаряд на залп."},
 	# (v57) the flagship's only: never sold, never ours. "stun" is the health it takes from each one in the room hit
 	NEURAL: {"name": "Нейроизлучатель", "short": "Нейро", "class": CLASS_NEURAL, "charge": 9.0, "shots": 1, "hit": 0.8, "damage": 0,
 		"power": 2, "price": 0, "stun": 40.0, "tier": 2, "kind": KIND_ION,
@@ -222,11 +244,11 @@ const INFO := {
 
 # (v58) What pirates may carry, by tier: every gun but the beams (theirs have no beam
 # gear), the point defence (a mount of its own) and the flagship's own two.
-const PIRATE_GUNS: Array = [[], [LASER, RAPID, ION, ROCKET, AUTOCANNON], [HEAVY, BLASTER, ION_CANNON, EMP, RAILGUN],
-	[SIEGE, PHOENIX, STORM, DEVASTATOR, HAMMER]]
+const PIRATE_GUNS: Array = [[], [LASER, RAPID, ION, ROCKET, AUTOCANNON], [HEAVY, BLASTER, ION_CANNON, EMP, RAILGUN, HORNET, DAMPER, SHRAPNEL],
+	[SIEGE, PHOENIX, STORM, DEVASTATOR, HAMMER, THERMITE]]
 # the ship weapons a crew may own, in the order the cargo shows them
 const OURS: Array[int] = [LASER, RAPID, HEAVY, BLASTER, SIEGE, PHOENIX, ION, ION_CANNON, STORM, ROCKET, EMP, DEVASTATOR,
-	TRACTOR, SIPHON, BEAM, REAPER, AUTOCANNON, RAILGUN, HAMMER, GUARD, NOVA]
+	HORNET, DAMPER, THERMITE, TRACTOR, SIPHON, BEAM, REAPER, AUTOCANNON, SHRAPNEL, RAILGUN, HAMMER, GUARD, NOVA]
 
 const SHIELD_HARDEN_PRICE := 80      # the rare upgrade: the shield stops rockets too
 const HARDEN_CHANCE := 0.3           # share of traders who offer it
@@ -286,6 +308,8 @@ static func flight_ticks(w: int) -> int:
 			return 16
 		CLASS_KINETIC:
 			return 12
+		CLASS_BOMB:
+			return 12                            # (v62) the time its teleport takes to put it there
 	return 0
 
 
@@ -349,6 +373,21 @@ static func passes_shield(w: int) -> bool:
 	return INFO.has(w) and bool(INFO[w].get("no_shield", false))
 
 
+static func bomb(w: int) -> bool:
+	## (v62) Is it a bomb: teleported into the room, past shields and point defence, not dodged?
+	return klass(w) == CLASS_BOMB
+
+
+static func area(w: int) -> bool:
+	## (v62) Do its shots spread over the room aimed at and those beside it?
+	return INFO.has(w) and bool(INFO[w].get("area", false))
+
+
+static func crew_wound(w: int) -> float:
+	## (v62) The chance its hit wounds each one in the room (0: the plain rule for hits that get through).
+	return float(INFO[w].get("crew", 0.0)) if INFO.has(w) else 0.0
+
+
 static func pierce(w: int) -> int:
 	return int(INFO[w].get("pierce", 0)) if INFO.has(w) else 0
 
@@ -385,6 +424,8 @@ static func item_of(w: int, fx: int = FX_NONE, damaged: bool = false) -> int:
 		return Net.ITEM_GUN_DAMAGED + w
 	if fx > FX_NONE and FX_GUNS.has(w):
 		return Net.ITEM_GUN_FX + FX_GUNS.find(w) * FX_COUNT + fx - 1
+	if w >= HORNET:
+		return Net.ITEM_GUN_LATE + w - HORNET    # (v62) the numbers after NOVA's were taken by the shells and parts
 	return Net.ITEM_GUN + w if w < TRACTOR else Net.ITEM_GUN_MORE + w
 
 
@@ -395,11 +436,13 @@ static func of_item(item: int) -> int:
 		return d if OURS.has(d) else NONE
 	if item >= Net.ITEM_GUN_FX and item < Net.ITEM_GUN_FX + FX_GUNS.size() * FX_COUNT:
 		return FX_GUNS[(item - Net.ITEM_GUN_FX) / FX_COUNT]
+	if item >= Net.ITEM_GUN_LATE and item < Net.ITEM_GUN_LATE + COUNT - HORNET:
+		return item - Net.ITEM_GUN_LATE + HORNET
 	var w := item - Net.ITEM_GUN
 	if w > NONE and w < TRACTOR:
 		return w
 	w = item - Net.ITEM_GUN_MORE
-	return w if w >= TRACTOR and OURS.has(w) else NONE
+	return w if w >= TRACTOR and w < HORNET and OURS.has(w) else NONE
 
 
 static func fx_of(item: int) -> int:

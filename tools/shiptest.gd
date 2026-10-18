@@ -42,7 +42,9 @@ func _initialize() -> void:
 	_expect(map.others.size() == Net.OTHER_MAPS.size(), "every other ship's drawing loads (%d)" % map.others.size())
 	for k in range(Net.OTHER_PIRATE, map.others.size()):
 		var o = map.others[k]
-		var needs := Net.ESYS_COUNT if Hulls.class_of_layout(k) == Net.ECLASS_CARRIER else Net.ESYS_COUNT - 1   # (v57: only the carrier has a teleporter)
+		# (v57: only the carrier is sure to have a teleporter; v62: only a drone ship has a control core,
+		# and an ordinary pirate carries a teleporter only when its hull has a room to spare for it)
+		var needs := Net.ESYS_COUNT - 1 if Hulls.class_of_layout(k) == Net.ECLASS_CARRIER else Net.ESYS_COUNT - 2
 		_expect(o.rooms.size() >= needs, "%s has a room for every system (%d rooms)" % [o.map_name, o.rooms.size()])
 		_expect(d._spots.has(k), "%s fits off our airlock" % o.map_name)
 		_expect(Hulls.class_of_layout(k) >= 0 and (Hulls.info(Hulls.class_of_layout(k))["layouts"] as Array).has(k),
@@ -173,7 +175,11 @@ func _initialize() -> void:
 		if Hulls.is_boss(k):
 			continue
 		yard.force_class = k
-		_expect(d.pirates_come(2) and not d.raid and d.layout >= Net.OTHER_PIRATE, "a %s can come to board" % Hulls.class_name_of(k))
+		if Hulls.is_drone(k):
+			# (v62) a drone ship never docks: it always fights at a distance
+			_expect(d.pirates_come(2) and d.raid and d.layout >= Net.OTHER_PIRATE, "a %s comes, but only to fight at a distance" % Hulls.class_name_of(k))
+		else:
+			_expect(d.pirates_come(2) and not d.raid and d.layout >= Net.OTHER_PIRATE, "a %s can come to board" % Hulls.class_name_of(k))
 		d._leave(true)
 	yard.force_class = -1
 
@@ -186,7 +192,10 @@ func _check_design(design: Dictionary) -> void:
 	var ok: bool = rooms.size() == server.map.others[int(design["layout"])].rooms.size()
 	for system in Net.ESYS_COUNT:
 		var n: int = rooms.count(system)
-		if (system == Net.ESYS_SHIELDS and not design["shield"]) or (system == Net.ESYS_TELEPORT and not design.get("teleport", false)):
+		var drone: bool = design.get("drone", false)
+		if (system == Net.ESYS_SHIELDS and not design["shield"]) or (system == Net.ESYS_TELEPORT and not design.get("teleport", false)) \
+				or (system == Net.ESYS_DRONES and not drone) \
+				or (drone and (system == Net.ESYS_HELM or system == Net.ESYS_CREW or system == Net.ESYS_JUMP)):
 			ok = ok and n == 0
 		else:
 			ok = ok and n == 1

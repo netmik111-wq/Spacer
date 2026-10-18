@@ -64,6 +64,9 @@ extends Node
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
 ## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside).
+## (v62, --inproc only) enemy_after=SECONDS with enemy_class=K (a pirate ship of that class, Net.ECLASS_*,
+## comes to fight at a distance), assault_after=SECONDS (an assault drone lands aboard at once),
+## robot_after=SECONDS (one of our security robots is set down beside the character).
 
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -78,6 +81,9 @@ const Options := preload("res://src/client/options.gd")
 var _placed := false
 var _derelicted := false
 var _pirateshipped := false
+var _enemied := false                # (v62) the screenshot options above
+var _assaulted := false
+var _roboted := false
 var _dockship := false
 var _server: GameServer = null
 var _client: GameClient = null
@@ -410,6 +416,22 @@ func _process(_delta: float) -> void:
 	if _opt.has("pirateship_after") and not _pirateshipped and _flags.has("server") and _server != null and t >= float(_opt["pirateship_after"]):
 		_pirateshipped = true
 		_server.director.fire(_server.director.PIRATE_SHIP)
+	if _opt.has("enemy_after") and not _enemied and _server != null and _screen != null and t >= float(_opt["enemy_after"]):
+		_enemied = true
+		_server.shipyard.force_class = int(_opt.get("enemy_class", Net.ECLASS_DRONE))
+		_server.derelict.pirates_come(3, true)
+		_server.shipyard.force_class = -1
+	if _opt.has("assault_after") and not _assaulted and _server != null and _screen != null and t >= float(_opt["assault_after"]):
+		_assaulted = true
+		_server.assault._drone_lands()
+	if _opt.has("robot_after") and not _roboted and _server != null and _screen != null and t >= float(_opt["robot_after"]):
+		_roboted = true
+		var me = _server.players[_client.my_id]
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var c: Vector2i = Vector2i(me.st.x, me.st.y) + d
+			if _server.map.walkable(c.x, c.y) and _server.map.door_at(c.x, c.y) < 0:
+				_server.robots.spawn(c.x, c.y)
+				break
 	if _opt.has("board_after") and not _boarded and _flags.has("server") and _server != null and t >= float(_opt["board_after"]):
 		_boarded = true
 		_server.director.fire(_server.director.BOARDING)

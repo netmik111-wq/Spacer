@@ -15,7 +15,8 @@ const COLOURS := {Net.SHOT_CANNON: Color(1.0, 0.45, 0.2), Net.SHOT_ION: Color(0.
 	# (v58) the new guns: each its own look, so a gun is known by it
 	Net.SHOT_SHELL: Color(1.0, 0.9, 0.35), Net.SHOT_RAIL: Color(0.75, 0.9, 1.0), Net.SHOT_FLAK: Color(1.0, 0.85, 0.6),
 	Net.SHOT_PHOENIX: Color(1.0, 0.62, 0.15), Net.SHOT_STORM: Color(0.3, 0.45, 1.0), Net.SHOT_HEAVY_ROCKET: Color(1.0, 0.35, 0.2),
-	Net.SHOT_REAPER: Color(0.95, 0.15, 0.3), Net.SHOT_NOVA: Color(0.95, 0.85, 1.0), Net.SHOT_HAMMER: Color(1.0, 0.75, 0.45)}
+	Net.SHOT_REAPER: Color(0.95, 0.15, 0.3), Net.SHOT_NOVA: Color(0.95, 0.85, 1.0), Net.SHOT_HAMMER: Color(1.0, 0.75, 0.45),
+	Net.SHOT_BOMB: Color(0.7, 1.0, 0.55), Net.SHOT_SHRAPNEL: Color(1.0, 0.8, 0.5)}
 const SHIELD := Color(0.45, 0.8, 1.0)
 const TRAIL := 46.0                  # pixels of a bolt's trail
 const BEAM_SECONDS := 0.9            # how long a second of a beam is drawn
@@ -57,7 +58,8 @@ static func rocket_like(kind: int) -> bool:
 
 static func heavy(kind: int) -> bool:
 	## A big burst: rockets and the heaviest guns.
-	return rocket_like(kind) or kind == Net.SHOT_PHOENIX or kind == Net.SHOT_NOVA or kind == Net.SHOT_HAMMER or kind == Net.SHOT_RAIL
+	return rocket_like(kind) or kind == Net.SHOT_PHOENIX or kind == Net.SHOT_NOVA or kind == Net.SHOT_HAMMER or kind == Net.SHOT_RAIL \
+		or kind == Net.SHOT_BOMB
 
 
 func update(delta: float) -> void:
@@ -211,6 +213,18 @@ func _draw_bolt(pen: CanvasItem, b: Array) -> void:
 	var fade := 1.0 if t <= flight else clampf(1.0 - (t - flight) / 0.15, 0.0, 1.0)
 	var tail := head - dir * minf(TRAIL, from.distance_to(head))
 	match kind:
+		Net.SHOT_BOMB:
+			# (v62) a bomb is not seen flying: a teleport's shimmer gathers where it will burst
+			var r := 4.0 + 12.0 * k
+			pen.draw_arc(to, r, t * 6.0, t * 6.0 + PI * 1.4, 14, Color(c, 0.8 * fade), 2.0)
+			pen.draw_arc(to, r * 0.6, -t * 9.0, -t * 9.0 + PI, 10, Color(c.lightened(0.5), 0.9 * fade), 1.5)
+			pen.draw_circle(to, 2.0 + 3.0 * k, Color(c.lightened(0.7), 0.6 * fade))
+		Net.SHOT_SHRAPNEL:
+			# (v62) a cloud of fragments
+			var side := dir.orthogonal()
+			for j in 3:
+				var at := head - dir * (j * 7.0) + side * ((j - 1) * 4.0)
+				pen.draw_line(at - dir * 5.0, at, Color(c, 0.9 * fade), 1.5)
 		Net.SHOT_ROCKET:
 			pen.draw_line(head - dir * 9.0, head, Color(0.8, 0.8, 0.82, fade), 4.0)
 			pen.draw_circle(head - dir * 10.0, 3.5 + _rng.randf() * 1.5, Color(1.0, 0.7, 0.3, 0.9 * fade))
