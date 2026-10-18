@@ -100,6 +100,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.enemy_crew.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.stations.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.outfit.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.mounts.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	for q: Player in server.players:
 		if q != null and q != p:
 			peer.send(0, look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
@@ -110,6 +111,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 
 	peer.send(0, campaign_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	announce_join(p, peer)
+	_bot_makes_way(p)
 	if demoted:
 		server.chat.tell(p, "Капитан на борту уже есть: вы поднимаетесь на борт матросом.")
 	if back_from_reserve:
@@ -132,6 +134,7 @@ func restore_character(p: Player, c: Dictionary) -> void:
 	p.take_job(int(c["job"]))
 	p.colour = int(c["colour"])
 	p.skills = PackedByteArray(c["skills"])
+	p.skills.resize(Net.SKILLS)              # (v60: a save from before piloting has three)
 	p.slots = PackedByteArray(c["slots"])
 	p.worn = PackedByteArray(c["worn"])
 	p.hand = int(c["hand"])
@@ -225,8 +228,51 @@ func add_bot() -> void:
 			n += 1
 	var p := new_player(_unique_name("Бот %d" % n))
 	p.bot = true
+	p.st.access = Net.ACCESS_ALL | Net.ACCESS_OURS     # (bots go everywhere; v60: and through our blast doors)
 	p.add(Net.ITEM_FLASHLIGHT, true)
 	announce_join(p, null)
+
+
+func _crew_aboard() -> int:
+	## Our people alive, players and bots alike.
+	var n := 0
+	for q: Player in server.players:
+		if q != null and not q.pirate and not q.corpse and q.cond != Net.COND_DEAD:
+			n += 1
+	return n
+
+
+func _bot_makes_way(newcomer: Player) -> void:
+	## (v60, the author's word: "if people join the game they take place of a bot")
+	## With the crew already full, one bot leaves for the newcomer: a free one, up
+	## and about, if there is one. What it carried goes back into the supply locker.
+	if _crew_aboard() <= server.crew_size:
+		return
+	var best: Player = null
+	var best_score := -1
+	for q: Player in server.players:
+		if q == null or not q.bot or q.corpse or q.cond == Net.COND_DEAD or q.dragged_by >= 0:
+			continue
+		var score := (2 if q.order == Net.POST_FREE else 0) + (1 if q.cond == Net.COND_OK else 0)
+		if score > best_score:
+			best = q
+			best_score = score
+	if best == null:
+		return
+	for at in Net.SLOTS:
+		server.supplies._put_back(best, at)
+	var who := best.name
+	remove(best)
+	server.supplies.tell_store()
+	server.chat.say("%s уступает место: на борт поднимается %s." % [who, newcomer.name])
+
+
+func _bot_takes_over(gone: String) -> void:
+	## (v60) ... "if they leave, bot takes their place".
+	if _crew_aboard() >= server.crew_size or server.over != Net.OVER_NONE:
+		return
+	add_bot()
+	server.chat.say("%s уходит с вахты: его место занимает бот." % gone)
 
 
 func announce_join(p: Player, except: ENetPacketPeer) -> void:
@@ -281,6 +327,8 @@ func drop(peer: ENetPacketPeer) -> void:
 		if not p.bot and not p.pirate and server.over == Net.OVER_NONE:
 			server.saved_crew[p.name] = Campaign.character(p)   # kept for when they come back
 		remove(p)
+		if not p.bot and not p.pirate:
+			_bot_takes_over(p.name)
 	server.log_line.emit("%s вышел (игроков: %d)." % [p.name, server.player_count()])
 
 

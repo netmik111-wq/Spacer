@@ -40,7 +40,7 @@ const Vitals := preload("res://src/server/vitals.gd")
 const Gear := preload("res://src/shared/gear.gd")
 
 const HELM_DODGE := 0.15             # the enemy's shots miss this much more often with somebody at the controls
-const PILOT_DODGE := 0.05            # and this much more again with a pilot by job there
+const PILOT_DODGE := 0.10            # (v60) and up to this much more again with the piloting skill (a pilot by job starts at half)
 const ENGINE_DODGE := 0.05           # and with somebody minding the engine
 const SHIELD_PACE := 1.25            # the shield refills this much faster with somebody at its generator
 const MANOEUVRE_SECONDS := 8.0       # to change the battle position, without dodging meanwhile
@@ -150,7 +150,7 @@ func our_dodge() -> float:
 	var pilot: Player = _at.get(Net.POST_HELM, null)
 	if pilot == null:
 		return 0.0
-	var d := HELM_DODGE + (PILOT_DODGE if pilot.job == Net.JOB_PILOT else 0.0) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0) \
+	var d := HELM_DODGE + PILOT_DODGE * pilot.skill(Net.SKILL_PILOT) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0) \
 		+ server.outfit.dodge_bonus()
 	return d * (FLANK_DODGE if position == Net.POS_FLANK else 1.0)
 
@@ -339,7 +339,8 @@ func _set_order(q: Player, post: int, by: Player) -> void:
 
 
 func _all_to_posts(by: Player) -> void:
-	## Every bot to a post nobody of the players mans: the controls, the guns, the shield, the engine; the rest mend.
+	## Every bot to a post nobody of the players mans: the controls, the gun console,
+	## the shield, the engine, (v60) then the mounted guns; the rest go to work.
 	var wanted: Array = []
 	for post: int in [Net.POST_HELM, Net.POST_GUNS, Net.POST_SHIELD, Net.POST_ENGINE]:
 		if (spots[post] as Array).is_empty():
@@ -347,6 +348,10 @@ func _all_to_posts(by: Player) -> void:
 		var p: Player = _at.get(post, null)
 		if p == null or p.bot:
 			wanted.append(post)
+	for i in server.map.guns.size():
+		var g := server.mounts.gunner(i)
+		if server.ship.mounts[i] != Weapons.NONE and (g == null or g.bot):
+			wanted.append(Net.POST_MOUNTS)
 	var bots := _bots()
 	for i in bots.size():
 		_set_order(bots[i], wanted[i] if i < wanted.size() else Net.POST_REPAIR, by)
@@ -355,15 +360,41 @@ func _all_to_posts(by: Player) -> void:
 
 # ---------------------------------------------------------------- a bot under orders
 
+# (v60) what a bot's way leads to
+const TASK_POST := 0                 # its post (or after its leader)
+const TASK_MEND := 1                 # something to mend
+const TASK_LOCKER := 2               # the supply locker: to take what it needs, or put a gun back
+const TASK_MOUNT := 3                # a gun mount: to put the gun it carries up, or take one down
+const TASK_OXYGEN := 4               # an oxygen station: to fill its suit's tank
+const TASK_HEAL := 5                 # an autodoc's bed: to be healed
+const TANK_LOW := 0.35               # (v60) a bot with less in its tank goes to fill it before it works on
+const TANK_FULL := 0.95
+const SUPPLY_AIR := 0.8              # a bot turns its suit's supply on in air thinner than this
+
+
+func bot_breathe(p: Player) -> void:
+	## (v60, the author's N1: bots use the air stores so they do not die in a vacuum)
+	## Any bot, under orders or not: the suit's supply on in thin air, off in good air.
+	if p.cond != Net.COND_OK:
+		return
+	var thin: bool = server.air.air[p.st.y * server.map.width + p.st.x] < SUPPLY_AIR
+	var on := thin and p.has_suit() and p.tank > 0.0
+	if on != p.supply:
+		server.inventory.set_supply(p, on)
+
+
 func bot_think(p: Player) -> bool:
-	## One tick of a bot's mind while it has an order. False: it has none (it wanders, see Movement).
-	if p.order == Net.POST_FREE:
-		p.doing = Net.DOING_IDLE
-		return false
+	## One tick of a bot's mind while it has an order (or, v60, is wounded and an
+	## autodoc is free). False: nothing for it to do (it wanders, see Movement).
 	if p.cond != Net.COND_OK:
 		p.doing = Net.DOING_DOWN
 		p.using = false
+		p.bot_healing = false
 		return true
+	_wants_healing(p)
+	if p.order == Net.POST_FREE and not p.bot_healing:
+		p.doing = Net.DOING_IDLE
+		return false
 	var map := server.map
 	var here := p.st.y * map.width + p.st.x
 	if server.tick - p.bot_plan_tick >= BOT_PLAN_TICKS or here != p.bot_from:
@@ -386,29 +417,55 @@ func bot_think(p: Player) -> bool:
 			p.st.facing = p.bot_face
 			p.self_dirty = true
 		_work(p)
+	elif p.bot_goal < 0 and p.order == Net.POST_FREE:
+		return false
 	return true
+
+
+func _wants_healing(p: Player) -> void:
+	## (v60) A badly hurt bot goes to lie in a free autodoc until it is whole enough.
+	var m = server.medbay
+	if p.bot_healing:
+		if p.health >= m.BOT_LEAVES_AT and p.wounds <= 0.0 or m.free_beds(p).is_empty():
+			p.bot_healing = false
+			p.bot_plan_tick = -1000
+	elif p.health < m.BOT_GOES_AT and not m.free_beds(p).is_empty():
+		p.bot_healing = true
+		p.bot_plan_tick = -1000
 
 
 func _plan(p: Player, here: int) -> void:
 	p.bot_plan_tick = server.tick
 	p.bot_from = here
 	var goals := {}                    # cell -> facing (0 = any)
-	match p.order:
-		Net.POST_HELM, Net.POST_GUNS, Net.POST_ENGINE, Net.POST_SHIELD:
-			var taken := _taken(p)
-			for s: Array in spots[p.order]:
-				if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
-					goals[int(s[0])] = int(s[1])
-		Net.POST_REPAIR:
-			goals = _repair_goals(p)
-		Net.POST_FOLLOW:
-			var lead: Player = server.players[p.order_by] if p.order_by >= 0 and p.order_by < server.players.size() else null
-			if lead != null and not lead.corpse and lead.cond != Net.COND_DEAD and server.map.on_ship(lead.st.y * server.map.width + lead.st.x):
-				var w := server.map.width
-				for o: int in [1, -1, w, -w]:
-					var c := lead.st.y * w + lead.st.x + o
-					if server.map.walkable(c % w, c / w) and server.map.on_ship(c):
-						goals[c] = 0
+	var was := p.bot_task
+	p.bot_task = TASK_POST
+	if p.bot_healing:
+		for bed: int in server.medbay.free_beds(p):
+			goals[bed] = 0
+		p.bot_task = TASK_HEAL
+	elif p.has_suit() and (p.tank < TANK_LOW or was == TASK_OXYGEN and p.tank < TANK_FULL) and p.order != Net.POST_FOLLOW \
+			and _oxygen_goals(p, goals):
+		p.bot_task = TASK_OXYGEN
+	else:
+		match p.order:
+			Net.POST_HELM, Net.POST_GUNS, Net.POST_ENGINE, Net.POST_SHIELD:
+				var taken := _taken(p)
+				for s: Array in spots[p.order]:
+					if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
+						goals[int(s[0])] = int(s[1])
+			Net.POST_MOUNTS:
+				goals = _mount_post_goals(p)
+			Net.POST_REPAIR:
+				p.bot_task = _work_goals(p, goals)
+			Net.POST_FOLLOW:
+				var lead: Player = server.players[p.order_by] if p.order_by >= 0 and p.order_by < server.players.size() else null
+				if lead != null and not lead.corpse and lead.cond != Net.COND_DEAD and server.map.on_ship(lead.st.y * server.map.width + lead.st.x):
+					var w := server.map.width
+					for o: int in [1, -1, w, -w]:
+						var c := lead.st.y * w + lead.st.x + o
+						if server.map.walkable(c % w, c / w) and server.map.on_ship(c):
+							goals[c] = 0
 	if goals.is_empty():
 		p.bot_goal = -1
 		p.bot_step = 0
@@ -419,34 +476,139 @@ func _plan(p: Player, here: int) -> void:
 		p.bot_goal = here
 		p.bot_face = goals[here]
 		p.bot_step = 0
-		p.doing = Net.DOING_WORK if p.order == Net.POST_REPAIR else Net.DOING_POST
+		p.doing = _doing(p)
 		return
 	var r := _route(here, goals)
 	p.bot_step = r[0]
 	p.bot_goal = r[1]
 	p.bot_face = int(goals.get(r[1], 0))
 	p.using = false
-	p.doing = Net.DOING_NO_WAY if p.bot_goal < 0 else Net.DOING_GOING
+	p.doing = Net.DOING_NO_WAY if p.bot_goal < 0 else (Net.DOING_CARRY if p.bot_task in [TASK_LOCKER, TASK_MOUNT] else
+		(Net.DOING_HEAL if p.bot_task == TASK_HEAL else Net.DOING_GOING))
 
 
-func _taken(p: Player) -> Dictionary:
-	## Cells others stand on or make for.
-	var out := {}
-	for q: Player in server.players:
-		if q == null or q == p or q.corpse:
-			continue
-		out[q.st.y * server.map.width + q.st.x] = true
-		if q.bot and q.order != Net.POST_FREE and q.bot_goal >= 0:
-			out[q.bot_goal] = true
-	return out
+func _doing(p: Player) -> int:
+	match p.bot_task:
+		TASK_MEND:
+			return Net.DOING_WORK
+		TASK_LOCKER, TASK_MOUNT, TASK_OXYGEN:
+			return Net.DOING_CARRY
+		TASK_HEAL:
+			return Net.DOING_HEAL
+	return Net.DOING_POST
 
 
 func _breathable(p: Player, cell: int) -> bool:
-	return server.air.air[cell] >= BOT_AIR or (p.supply and p.tank > 0.0)
+	return server.air.air[cell] >= BOT_AIR or (p.has_suit() and p.tank > 0.2)
 
 
-func _repair_goals(p: Player) -> Dictionary:
-	## Where it can stand to mend something: broken machines, doors gone wrong, holes (with a patch to hand).
+func _add_spots(p: Player, target: int, goals: Dictionary, taken: Dictionary) -> void:
+	for s: Array in _spots_for(target):
+		if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
+			goals[int(s[0])] = int(s[1])
+
+
+func _oxygen_goals(p: Player, goals: Dictionary) -> bool:
+	if not server.powered():
+		return false
+	var taken := _taken(p)
+	for c: int in server.map.oxygen.keys():
+		if not server.ship.broken.has(c) and server.map.on_ship(server.map.fitting_front(c)):
+			_add_spots(p, c, goals, taken)
+	return not goals.is_empty()
+
+
+func _mount_post_goals(p: Player) -> Dictionary:
+	## (v60) A free mount with a gun on it, nobody else at it or making for it.
+	var taken := _taken(p)
+	var goals := {}
+	var map := server.map
+	for i in map.guns.size():
+		if server.ship.mounts[i] == Weapons.NONE:
+			continue
+		var g := server.mounts.gunner(i)
+		if g != null and g != p:
+			continue
+		var mine := {}
+		_add_spots(p, map.guns[i], mine, taken)
+		var others := false
+		for q: Player in server.players:
+			if q != null and q != p and q.bot and q.order == Net.POST_MOUNTS and mine.has(q.bot_goal):
+				others = true
+		if not others:
+			goals.merge(mine)
+	return goals
+
+
+func _work_goals(p: Player, goals: Dictionary) -> int:
+	## (v60) A bot on "work": a gun it carries goes where it was ordered or back to
+	## the locker; then what is broken is mended (it fetches patches and spare parts
+	## from the locker first); then the console's orders for the guns are carried out.
+	var map := server.map
+	var mounts = server.mounts
+	var taken := _taken(p)
+	# a gun in its hands
+	var gun := _carried_gun(p)
+	if gun >= 0:
+		var i: int = mounts.order_for(p.slots[gun])
+		if i >= 0 and not server.ship.broken.has(map.guns[i]):
+			p.haul = i
+			_add_spots(p, map.guns[i], goals, taken)
+			if not goals.is_empty():
+				return TASK_MOUNT
+		p.haul = -1
+		_locker_goals(p, goals, taken)
+		return TASK_LOCKER
+	# a suit, if it has none and the locker has one
+	if not p.has_suit() and _store_suit() >= 0:
+		_locker_goals(p, goals, taken)
+		if not goals.is_empty():
+			return TASK_LOCKER
+	# what is broken
+	var jobs := _repair_jobs(p)
+	if not jobs.is_empty():
+		if not _supplies_wanted(p).is_empty():
+			_locker_goals(p, goals, taken)
+			if not goals.is_empty():
+				return TASK_LOCKER
+		for c: int in jobs:
+			_add_spots(p, c, goals, taken)
+		if not goals.is_empty():
+			return TASK_MEND
+	# the console's orders for the guns
+	var i := _haul_job(p)
+	p.haul = i
+	if i >= 0:
+		if mounts.wanted[i] == mounts.WANT_DOWN:
+			_add_spots(p, map.guns[i], goals, taken)
+			return TASK_MOUNT
+		if int(server.ship.store.get(mounts.wanted[i], 0)) > 0:
+			_locker_goals(p, goals, taken)
+			return TASK_LOCKER
+		p.haul = -1                          # (somebody else carries that gun already)
+	return TASK_POST
+
+
+func _carried_gun(p: Player) -> int:
+	## The slot of a ship gun the bot carries, or -1.
+	for k in p.slots.size():
+		if p.slots[k] != Net.ITEM_NONE and Weapons.of_item(p.slots[k]) != Weapons.NONE:
+			return k
+	return -1
+
+
+func _store_suit() -> int:
+	var s := Net.ITEM_SUIT + Net.SUIT_TANK_STEPS
+	return s if int(server.ship.store.get(s, 0)) > 0 else -1
+
+
+func _locker_goals(p: Player, goals: Dictionary, taken: Dictionary) -> void:
+	for c: int in server.map.locker.keys():
+		_add_spots(p, c, goals, taken)
+
+
+func _repair_jobs(p: Player) -> Array:
+	## Broken machines, doors gone wrong, holes (with a patch to hand or in the locker).
 	var map := server.map
 	var jobs: Array = []
 	for c: int in server.ship.broken.keys():
@@ -459,12 +621,55 @@ func _repair_goals(p: Player) -> Dictionary:
 		for c: int in server.air.holes.keys():
 			if not map.is_other(c):
 				jobs.append(c)
-	var taken := _taken(p)
+	return jobs
+
+
+func _supplies_wanted(p: Player) -> Array:
+	## (v60) What a bot on "work" should fetch from the locker before it sets to:
+	## patches for holes, a spare part for machines and doors (three times quicker).
+	var want: Array = []
+	var store: Dictionary = server.ship.store
+	var holes := false
+	for c: int in server.air.holes.keys():
+		holes = holes or not server.map.is_other(c)
+	if holes and p.count(Net.ITEM_PATCH) == 0 and int(store.get(Net.ITEM_PATCH, 0)) > 0:
+		want.append(Net.ITEM_PATCH)
+	var machines := not server.ship.broken.is_empty()
+	for d in mini(server.map.other_first_door, server.map.doors.size()):
+		machines = machines or server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1
+	if machines and p.count(Net.ITEM_PART) == 0 and int(store.get(Net.ITEM_PART, 0)) > 0:
+		want.append(Net.ITEM_PART)
+	if p.count(Net.ITEM_NONE) == 0:
+		return []
+	return want
+
+
+func _haul_job(p: Player) -> int:
+	## The mount whose order this bot carries out: the one it had, else one nobody else has.
+	var mounts = server.mounts
+	if p.haul >= 0 and p.haul < mounts.wanted.size() and mounts.wanted[p.haul] != mounts.WANT_NONE:
+		return p.haul
+	for i in mounts.wanted.size():
+		if mounts.wanted[i] == mounts.WANT_NONE or server.ship.broken.has(server.map.guns[i]):
+			continue
+		var free := true
+		for q: Player in server.players:
+			if q != null and q != p and q.bot and q.haul == i and q.order == Net.POST_REPAIR and q.cond == Net.COND_OK:
+				free = false
+		if free:
+			return i
+	return -1
+
+
+func _taken(p: Player) -> Dictionary:
+	## Cells others stand on or make for.
 	var out := {}
-	for c: int in jobs:
-		for s: Array in _spots_for(c):
-			if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
-				out[int(s[0])] = int(s[1])
+	for q: Player in server.players:
+		if q == null or q == p or q.corpse:
+			continue
+		out[q.st.y * server.map.width + q.st.x] = true
+		if q.bot and q.order != Net.POST_FREE and q.bot_goal >= 0:
+			out[q.bot_goal] = true
 	return out
 
 
@@ -508,6 +713,24 @@ func _route(start: int, goals: Dictionary) -> Array:
 
 func _work(p: Player) -> void:
 	## What a bot does at the end of its way.
+	match p.bot_task:
+		TASK_HEAL:
+			p.doing = Net.DOING_HEAL
+			p.using = false
+			return
+		TASK_OXYGEN:
+			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+			p.using = server.map.oxygen.has(ahead) and p.tank < TANK_FULL
+			p.doing = Net.DOING_CARRY
+			if not p.using:
+				p.bot_plan_tick = -1000
+			return
+		TASK_LOCKER:
+			_at_locker(p)
+			return
+		TASK_MOUNT:
+			_at_mount(p)
+			return
 	match p.order:
 		Net.POST_GUNS:
 			p.doing = Net.DOING_POST
@@ -523,18 +746,84 @@ func _work(p: Player) -> void:
 				p.bot_plan_tick = -1000          # done here: on to the next
 				return
 			var item := Net.ITEM_PATCH if hole else Net.ITEM_PART
-			if p.count(item) == 0 and int(server.ship.store.get(item, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
-				server.ship.store[item] -= 1
-				p.add(item)
-				server.supplies.tell_store()
 			if hole and p.count(Net.ITEM_PATCH) == 0:
 				p.using = false
 				p.doing = Net.DOING_IDLE
+				p.bot_plan_tick = -1000          # (off to the locker for one)
 				return
 			p.using = true
 			p.doing = Net.DOING_WORK
 		_:
 			p.doing = Net.DOING_POST
+
+
+func _at_locker(p: Player) -> void:
+	## (v60) At the supply locker: a gun not wanted goes back in; the gun its order
+	## wants, patches, a spare part and a suit come out. Then it goes on.
+	var sup = server.supplies
+	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+	p.using = false
+	if ahead < 0 or not server.map.locker.has(ahead):
+		p.bot_plan_tick = -1000
+		return
+	var gun := _carried_gun(p)
+	if gun >= 0 and server.mounts.order_for(p.slots[gun]) < 0:
+		sup.store_asked(p, Net.STORE_PUT_ONE, gun)
+	if p.haul >= 0 and p.haul < server.mounts.wanted.size():
+		var want: int = server.mounts.wanted[p.haul]
+		if want != server.mounts.WANT_NONE and want != server.mounts.WANT_DOWN and not p.slots.has(want) \
+				and int(server.ship.store.get(want, 0)) > 0:
+			sup.store_asked(p, Net.STORE_TAKE, want)
+	for item: int in _supplies_wanted(p):
+		for n in (2 if item == Net.ITEM_PATCH else 1):
+			if int(server.ship.store.get(item, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
+				sup.store_asked(p, Net.STORE_TAKE, item)
+	if not p.has_suit() and _store_suit() >= 0 and p.count(Net.ITEM_NONE) > 0:
+		sup.store_asked(p, Net.STORE_TAKE, _store_suit())
+		var k := p.slots.find(_store_suit())
+		if k >= 0:
+			p.hand = k
+			server.inventory.act(p)          # it puts the suit on
+	p.doing = Net.DOING_CARRY
+	p.bot_plan_tick = -1000
+
+
+func _at_mount(p: Player) -> void:
+	## (v60) At the gun mount its order is for: the gun it carries goes up (or, with
+	## the order to take the gun down, it comes down into empty hands). Holding "use"
+	## does it (see Mounts); then it goes on.
+	var i := p.haul
+	var cell := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+	if i < 0 or i >= server.map.guns.size() or cell != server.map.guns[i]:
+		p.using = false
+		p.bot_plan_tick = -1000
+		return
+	var want: int = server.mounts.wanted[i]
+	if want == server.mounts.WANT_NONE:
+		p.using = false
+		p.haul = -1
+		p.bot_plan_tick = -1000
+		return
+	if want == server.mounts.WANT_DOWN:
+		var empty := -1
+		for k in p.slots.size():
+			if p.usable(k) and p.slots[k] == Net.ITEM_NONE:
+				empty = k
+				break
+		if empty < 0:
+			p.using = false
+			p.doing = Net.DOING_IDLE
+			return
+		p.hand = empty
+	else:
+		var k := p.slots.find(want)
+		if k < 0:
+			p.using = false
+			p.bot_plan_tick = -1000
+			return
+		p.hand = k
+	p.using = true
+	p.doing = Net.DOING_CARRY
 
 
 func _a_gun_ready() -> bool:

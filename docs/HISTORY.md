@@ -134,6 +134,17 @@ Open problems:
 
 ## Build notes
 
+### v60 (crew at work, part 1 of the road plan; the author's notes N1 and S1)
+- Gunners at the mounts (+25%, up to +50% with gunnery), guns carried from the locker and mounted by hand with E,
+  the gun console gives orders that bots on «Работы» carry out (new server part `src/server/mounts.gd`, S_MOUNTS).
+- Bots fetch parts, patches and suits from the locker, turn on oxygen in thin air, refill tanks, lie in an
+  autodoc when hurt; a new order «У орудия». The crew is kept full: a joining player takes a bot's place and a
+  bot takes a leaver's (the author's word).
+- Medbay: two autodocs and a body scanner (`src/server/medbay.gd`, map letters Y and X). Blast doors from the
+  holomap, which pirates cut through in 12 s (`src/server/blast.gd`).
+- The workbench makes shells and rockets from spare parts; point defence shoots slow shells (30%); a piloting
+  skill. New test `tools/worktest.gd` (22 tests now). Protocol 38. Bots mending the hull outside move to v61.
+
 ### v59 (ship gear, part 2 of the tiers plan)
 - Ship gear in crates (`src/shared/gear.gd`, server part `src/server/outfit.gd`): four systems with three hidden
   tiers each (shield generator, reactor, engine, sensors; tier 1 built in) and a module bay ('U' on the map) with

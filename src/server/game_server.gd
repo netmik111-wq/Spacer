@@ -29,6 +29,9 @@ extends Node
 ##   flagship     (v57) the goal: the pirates' flagship, its teleporter, winning and losing the ship
 ##   workshop     (v58) the workbench: guns taken apart, mended and upgraded by engineers
 ##   outfit       (v59) the ship's gear: its systems' tiers, the module bay, engineers installing crates
+##   mounts       (v60) the gun mounts: gunners at them, guns carried up and down by hand, the console's orders
+##   medbay       (v60) the autodocs and the body scanner
+##   blast        (v60) blast doors locked from a holomap, and pirates cutting through them
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -71,6 +74,9 @@ const Stations := preload("res://src/server/stations.gd")
 const Flagship := preload("res://src/server/flagship.gd")
 const Workshop := preload("res://src/server/workshop.gd")
 const Outfit := preload("res://src/server/outfit.gd")
+const Mounts := preload("res://src/server/mounts.gd")
+const Medbay := preload("res://src/server/medbay.gd")
+const Blast := preload("res://src/server/blast.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -78,6 +84,7 @@ const MAX_INPUT_LEAD := 40          # inputs stamped further ahead than this are
 
 var port := Net.DEFAULT_PORT
 var max_players := 32
+var crew_size := 1                   # (v60, the author's word) the crew is kept this big: bots stand in for players who are not here
 var map := ShipMap.new()
 var running := false
 var tick := 0
@@ -146,6 +153,9 @@ var stations := Stations.new()
 var flagship := Flagship.new()
 var workshop := Workshop.new()
 var outfit := Outfit.new()
+var mounts := Mounts.new()
+var medbay := Medbay.new()
+var blast := Blast.new()
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -232,6 +242,9 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
 	derelict.setup(self)
 	gunnery.setup(self)
+	mounts.setup(self)
+	medbay.setup(self)
+	blast.setup(self)
 	shipyard.setup(self)
 	pirates.setup(self)
 	director.setup(self)
@@ -242,6 +255,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	tick = 0
 	_acc = 0.0
 	running = true
+	crew_size = bots + 1                 # (the one who hosts, and the bots asked for)
 	for i in bots:
 		crew.add_bot()
 	log_line.emit("Сервер запущен: порт %d, карта «%s», ботов %d." % [port, map.map_name, bots])
@@ -448,6 +462,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 				chat.say(why)
 			elif derelict.here:
 				chat.say("%s: %s." % [p.name, ("стыковка: " + derelict.ship.name.to_lower()) if derelict.docked else "расстыковка"])
+	elif kind == Net.C_BLAST:
+		if pkt.size() > 1:
+			blast.asked(p, pkt[1])
 	elif kind == Net.C_BENCH:
 		if pkt.size() > 2:
 			workshop.asked(p, pkt[1], pkt[2])
@@ -597,7 +614,10 @@ func _tick() -> void:
 	derelict.update()
 	flagship.tick()
 	stations.tick()
+	mounts.tick()
 	gunnery.tick()
+	medbay.tick()
+	blast.tick()
 	outfit.tick()
 	enemy_crew.tick()
 	drone.tick()

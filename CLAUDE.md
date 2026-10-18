@@ -34,10 +34,12 @@ needs:
 
 ## Where things stand
 
-Build v59 (version 0.52) is the latest. Plans one to four are done except the darkness front (the
-author is still thinking it through); builds v40 to v59 were the author's own requests, one build each.
+Build v60 (version 0.53) is the latest. Plans one to four are done except the darkness front (the
+author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
-(systems' tiers, the module bay, armour, focusing array, phase drive) in v59. Several reactors is a later
+(systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
+(`/mnt/project-files/plans/road-plan.md`): crew at work (gunners, carried guns, bots at work, medbay, blast doors);
+v61 power (SMES), v62 enemies, v63 road and story come next. Several reactors is a later
 question round (it breaks the one-engine rule).
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -69,7 +71,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 21 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 22 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -91,6 +93,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/flagshiptest.gd (since v57: the goal, both flagships, win, capture)
     godot --headless --path . --script res://tools/tiertest.gd (since v58: gun tiers, kinetic guns, point defence, loot, traders, workbench)
     godot --headless --path . --script res://tools/geartest.gd (since v59: ship gear, installing, module bay, armour, focus, phase drive)
+    godot --headless --path . --script res://tools/worktest.gd (since v60: gunners, carried guns, bots at work, medbay, blast doors, ammo)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -114,7 +117,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 21 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 22 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -139,7 +142,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   and `shipyard`, which rolls every pirate ship since v53; since v54 `enemy_crew`, the pirate ship's crew at
   their posts, and `drone`, the scouting drone; since v55 `stations`: our crew at posts, bot orders, the
   battle position, our boarders; since v57 `flagship`: the goal of the game, the boss fight, win and capture; since v58
-  `workshop`: the workbench; since v59 `outfit`: the ship's gear, its effects and installing it).
+  `workshop`: the workbench; since v59 `outfit`: the ship's gear, its effects and installing it; since v60 `mounts`: gunners and carrying guns
+  onto mounts, `medbay`: autodocs and the scanner, `blast`: blast doors).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -253,6 +257,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   longer feeds. `Outfit.can()` and `GameClient.gear_here()` must give the same answers (hover hints).
 - (v59) A test holding "use" at a machine must let go once the gear went in: with empty hands at the bay the
   same hold starts taking the last module out.
+- (v60) The server must not change a player's `hand` (the client keeps its own and is not told): `Mounts.finish`
+  puts the gun into the hand slot already chosen. Only bots get their hand set by the server.
+- (v60) Bots are kept at `GameServer.crew_size` (bots asked for + 1) by `Crew._bot_makes_way`/`_bot_takes_over`
+  on join and leave; tests that add players with `new_player` skip it.
+- (v60) A blast-locked door (`Doors.blast`) is checked in `Mover.step` through `Doors.blocks(door, access)`; our
+  people and bots carry `Net.ACCESS_OURS` (`Net.access_of(job)`), never compare `Net.JOB_ACCESS` with access any more.
 - Ships' shots land later than they are fired (v56, `Gunnery._flying`). A test that checks a hit right after
   `fire` or `_enemy_fires` must set `server.gunnery.flies = false` (the gun, ship, drone and station tests do).
   Effects that are only drawn take their lots from `Gunnery._fx`, so the game's own rng sequence is unchanged.
@@ -291,5 +301,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
 - The map is drawn by decks, the top one first; each starts with a line `= name`.
   New signs: `g` glass, `c` catwalks, `H` ladder (in one tile of two adjacent decks),
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
-  `I` intercom, `M` holomap, `5` drone monitor (v54), `B` workbench (v58), `U` module bay (v59). A line `% deck x y system` names the room of an enemy ship's system (used only by
+  `I` intercom, `M` holomap, `5` drone monitor (v54), `B` workbench (v58), `U` module bay (v59), `Y` autodoc, `X` body scanner (v60). A line `% deck x y system` names the room of an enemy ship's system (used only by
   the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked.

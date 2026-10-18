@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v59 (version 0.52).
+Last updated: build v60 (version 0.53).
 
 Contents:
 
@@ -586,8 +586,9 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 
 Since v55 our own crew matter in a fight the way the pirates' do. A post counts as manned when somebody (a player
 or a bot) stands facing its machine, conscious, the machine whole and the ship powered.
-- **Ship's controls** (pilot): the pirates' shots miss more often: **15%** less chance to hit, **20%** with a
-  pilot by job. Somebody also at the **engine** adds **5%** more. Nobody at the controls: **nothing is dodged**
+- **Ship's controls** (pilot): the pirates' shots miss more often: **15%** less chance to hit, plus up to
+  **10%** more with the piloting skill (v60; a pilot by job starts at 50, so 20%). Every enemy volley dodged
+  at the controls teaches piloting. Somebody also at the **engine** adds **5%** more. Nobody at the controls: **nothing is dodged**
   (as before v55). No dodge with the engine down or without power.
 - **Shield generator**: with somebody at it the shield refills **25%** faster.
 - **Gun console**: shots are fired from it, as before; a bot there fires every ready gun by itself.
@@ -888,6 +889,66 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
   a **10%** quicker shield.
 - Gear is saved with the campaign.
 
+### Crew at work (v60)
+
+The author's notes N1 and S1: the crew do the ship's work with their hands, and bots do it too.
+- **Gunners at the mounts.** Whoever stands facing a gun mount in its gun bay (a player or a bot on the new order
+  «У орудия»), conscious, with the ship powered, is that gun's gunner: the gun charges **25%** faster, up to
+  **50%** with the best gunnery skill (a guard by job, skill 50: 37.5%). Every shot of that gun teaches its gunner
+  gunnery. A gun with nobody at it charges as before, so a small crew can still fight. The gun console shows
+  «у орудия канонир» on a manned gun. Whoever fires from the console also aims better: **+5%** to hit with the
+  best gunnery skill (+2.5% at 50).
+- **Guns are carried by hand.** A ship gun is taken out of the supply locker into the hands (click it in the
+  locker). Facing a mount with it in hand, hold E for **8 s** (the repair skill makes it up to twice as quick):
+  it goes up, unpowered, and the gun that was on the mount comes down into the hands, to be carried back to the
+  locker. With empty hands, holding E at a mounted gun for **5 s** takes it down. A damaged gun can't go up (mend
+  it at the workbench); the point defence still goes on its own mount from the gun console.
+- **The gun console gives orders.** Its weapon list now says «Принести и поставить» (fetch and mount) or «Снять и
+  убрать в шкаф» (take down into the locker): the order is shown on the gun's line, and the same order again
+  cancels it. Bots on «Работы» carry orders out by themselves; anybody else may too. An order is dropped when it
+  is done or nothing can carry it out.
+- **Bots at work** («Работы», was "repair"): first a gun in their hands goes to its mount or back to the locker;
+  a bot with no suit fetches one from the locker; then broken machines, doors and holes, **walking to the locker
+  for spare parts and patches first** (they no longer take them from the hold by magic); then the console's gun
+  orders. «Все по местам» now also sends spare bots to the mounted guns.
+- **Bots and air.** In air under 80% a bot turns its suit's oxygen supply on (off again in good air). A bot on
+  orders whose tank is under 35% walks to a powered oxygen station and fills it to 95% before going on.
+- **Bots heal.** A bot under 40 health walks to a free autodoc by itself and lies there until 90 health.
+- **The crew is kept full** (the author's word). The "bots" number set when creating a game is how many bots
+  stand in besides the host: the crew is kept at bots + 1 people. When another player joins and the crew is full,
+  a bot steps aside for them (a free one first; what it carried goes back into the locker). When a living player
+  leaves, a bot takes their place. Dead players are not replaced: their bodies stay and the reserve rules hold.
+
+### Medbay: autodocs and the body scanner (v60)
+
+- Two **autodocs** ('Y' on the map) on the medbay's lower wall on the upper deck of ship02, and a **body
+  scanner** ('X') between them.
+- Whoever lies or stands on the floor cell in front of an autodoc (dragged there unconscious, or walked in) is
+  healed **3 health a second** while the ship has power and the autodoc works: wounds close first (they never
+  close by themselves), then health. Someone out cold comes round as usual once health is back. From nothing to
+  whole takes about 35 s. It **never brings back the dead** (bodies stay).
+- Somebody holding E at the autodoc **tends** the patient: twice as quick, and a lesson in medicine every 5 s.
+- E at the scanner reports on whoever lies in the nearest autodoc (or on yourself): health, wounds, conscious or
+  not, suit and oxygen. It is groundwork for the complex health the author has in mind (cryo capsules later).
+- Both can break and be mended like any machine.
+
+### Blast doors (v60)
+
+- Whoever stands at a **holomap** monitor can lock doors against boarders: a click on a door on the plan locks
+  it (a click again unlocks it); two buttons lock or unlock every door of our ship. Locked doors are outlined
+  purple on the holomap; the summary counts them.
+- A locked door still opens for our own crew and bots, but not for pirates while the ship has power. A pirate
+  that walks into it stands there **cutting through**: **12 s** of work for one (two cut twice as fast), with a
+  blow sound every second. Then the door is wrecked open (jammed) until somebody mends it.
+- Without power the locks don't hold, as every lock aboard.
+
+### Ammunition at the workbench (v60)
+
+- An engineer at the workbench makes ammunition from **one spare part** in **6 s** (the repair skill makes it up
+  to twice as quick): **3 shells**, or **2 rockets**, or **1 EMP rocket**.
+- **Point defence** now also shoots at slow shells (the autocannon's and the Hammer's), bringing one down **30%**
+  of the time; rockets still 60%. A railgun's slug is too quick for it. This works for us and for pirates alike.
+
 ## 18. Bridge and flight within a sector
 
 - The bridge has two consoles (power needed):
@@ -993,7 +1054,7 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
 |---|---|---|---|
 | Sailor | nowhere | — | — |
 | Captain | everywhere (one per ship) | — | flashlight |
-| Pilot | bridge | — | flashlight |
+| Pilot | bridge | piloting (v60) | flashlight |
 | Engineer | engine room, life support, gun compartments | repair | spare part |
 | Doctor | medbay | medicine | plaster |
 | Guard | armoury, gun compartments | shooting | baton |
@@ -1004,7 +1065,9 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
 - Each member of the first crew arrives with a **radio**, a **patch** and a **spare part**, plus their
   job's item. Those who come from the reserve (by R or by rejoining after death) are dressed
   (spacesuit and jumpsuit), but **with no items**.
-- **Skills**: repair, medicine, shooting, from 0 to 100. Your job's skill starts
+- **Skills**: repair, medicine, shooting (gunnery), and since v60 **piloting** (the pilot's own skill), from 0 to 100.
+  Gunnery grows by firing and standing at a mount, piloting by dodging at the controls, medicine by tending an
+  autodoc, repair by mending and mounting guns. Your job's skill starts
   at **50**. Each finished task of your own skill gives **+2**; a task of another skill gives **+1**
   for every three. Skills are shown in the second top line (F1).
 - Bots and pirates go everywhere (they have no jobs).

@@ -198,9 +198,12 @@ func _about_text(trading: bool) -> String:
 		var line := "%s. %s В шкафу: %d, у вас: %d." % [Items.name_of(_hover), Items.about(_hover), client.stock(_hover), client.carried(_hover)]
 		if trading and client.trade.has(_hover):
 			line += " У торговца: %d кр. (правый щелчок)." % client.trade[_hover]
-		if Items.cargo(_hover):
+		if Items.carried_gun(_hover):
+			line += " Корабельное орудие (щелчок: взять): его несут к орудию в корпусе и ставят, держа E%s." % (
+				"; приказ, что куда ставить, даёт пульт орудий" if not Weapons.damaged(_hover) else ", но сначала его чинят на верстаке")
+		elif Items.cargo(_hover):
 			var gun := Weapons.of_item(_hover) != Weapons.NONE
-			line += " Это груз корабля: из шкафа не берётся%s." % ((", ставится на орудие с пульта орудий; разбирает и улучшает его инженер на верстаке" if not Weapons.damaged(_hover) else "") if gun else "")
+			line += " Это груз корабля: из шкафа не берётся%s." % (", ставится с пульта орудий" if gun else "")
 		lines.append(line)
 	elif _hover_slot >= 0 and client.slots[_hover_slot] != Net.ITEM_NONE:
 		var thing := client.slots[_hover_slot]
@@ -322,7 +325,7 @@ func _on_cards_input(event: InputEvent) -> void:
 	var item := _card_at(click.position)
 	if item < 0:
 		return
-	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0 and not Items.cargo(item):
+	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0 and (not Items.cargo(item) or Items.carried_gun(item)):
 		client.send_store(Net.STORE_TAKE, item)
 	elif click.button_index == MOUSE_BUTTON_RIGHT and client.can_trade() and client.trade.has(item):
 		client.send_store(Net.STORE_BUY, item)

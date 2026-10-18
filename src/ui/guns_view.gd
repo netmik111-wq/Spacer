@@ -15,6 +15,7 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")    # only for its numbers, to explain them
 const Weapons := preload("res://src/shared/weapons.gd")
+const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
 const EnemyPlan := preload("res://src/ui/enemy_plan.gd")
@@ -415,8 +416,16 @@ func _update_guns(fighting: bool) -> void:
 			state = "готово" if c >= 100 else "заряжается, %d%%" % c
 		var ammo := Weapons.ammo(w)
 		var fx: int = client.gun_fx[i] if i < client.gun_fx.size() else Weapons.FX_NONE
-		(row[0] as Label).text = "%d. %s (%s): %s%s" % [i + 1, Weapons.full_name(w, fx), place, state,
-			(", %s: %d" % ["снарядов" if ammo == Net.ITEM_SHELL else "ракет", client.stock(ammo)]) if ammo != 0 else ""]
+		var want: int = client.mount_wanted[i] if i < client.mount_wanted.size() else 0
+		var order := ""
+		if want == 255:
+			order = "  [приказ: снять в шкаф]"
+		elif want != 0:
+			order = "  [приказ: поставить %s]" % Items.name_of(want).to_lower()
+		var gunner: bool = i < client.mount_gunner.size() and client.mount_gunner[i] == 1
+		(row[0] as Label).text = "%d. %s (%s): %s%s%s%s" % [i + 1, Weapons.full_name(w, fx), place, state,
+			(", %s: %d" % ["снарядов" if ammo == Net.ITEM_SHELL else "ракет", client.stock(ammo)]) if ammo != 0 else "",
+			", у орудия канонир" if gunner else "", order]
 		var fill: ColorRect = row[1]
 		var share := 0.0 if c >= Net.GUN_JAMMED else c / 100.0
 		_fill(fill, 1.0 if c >= Net.GUN_JAMMED else share)
@@ -428,17 +437,20 @@ func _update_guns(fighting: bool) -> void:
 		power.text = ("Питание: вкл" if flags & Net.GUNF_ARMED else "Питание: выкл (%d эн.)" % Weapons.power(w)) if w != Weapons.NONE else "Питание"
 		any = any or ready
 		# the list to change the weapon, rebuilt when the cargo or the gun changes
-		var sig := "%d:%d:%s" % [w, fx, str(cargo)]
+		var sig := "%d:%d:%s:%d" % [w, fx, str(cargo), want]
 		if row[5] != sig:
 			row[5] = sig
 			var change: OptionButton = row[4]
 			change.clear()
-			change.add_item("Сменить оружие…", -1)
+			# (v60) the console gives the order; somebody carries the gun from the locker and puts it up by hand
+			change.add_item("Приказ: сменить оружие…", -1)
 			for k: Array in cargo:
 				var kw := Weapons.of_item(k[0])
-				change.add_item("Поставить: %s (в трюме %d, %d эн.)" % [Weapons.full_name(kw, Weapons.fx_of(k[0])), k[1], Weapons.power(kw)], k[0])
+				var gun_name := Weapons.full_name(kw, Weapons.fx_of(k[0]))
+				change.add_item("Отменить приказ: %s" % gun_name if want == k[0]
+					else "Принести и поставить: %s (в шкафу %d, %d эн.)" % [gun_name, k[1], Weapons.power(kw)], k[0])
 			if w != Weapons.NONE:
-				change.add_item("Снять в трюм", Net.ITEM_NONE)
+				change.add_item("Снять и убрать в шкаф", Net.ITEM_NONE)
 			change.select(0)
 			change.disabled = change.item_count <= 1
 	_volley.disabled = not fighting or not any

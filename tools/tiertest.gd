@@ -305,6 +305,9 @@ func _bench() -> void:
 	var map := server.map
 	var ship := server.ship
 	_expect(map.bench.size() == 1, "the ship has a workbench")
+	# the fights above may have left holes: the air would run out and the engineer pass out mid-work
+	server.admin.repair_all()
+	server.air.refill()
 	var bench: int = map.bench.keys()[0]
 	var p := server.crew.new_player("Механик")
 	var front: int = map.fitting_front(bench)

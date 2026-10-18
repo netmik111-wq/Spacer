@@ -4,6 +4,7 @@ extends VBoxContainer
 ## upgrade it into the next gun of its line), and the parts the locker holds.
 ## The server does the work (see Workshop); the progress is shown like any
 ## other work. Shown inside the console frame of GameScreen.
+## (v60) And ammunition: a spare part makes 3 shells, 2 rockets or 1 EMP rocket.
 
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
@@ -74,6 +75,18 @@ func refresh() -> void:
 	_shown = key
 	for c in _rows.get_children():
 		c.queue_free()
+	var ammo := HBoxContainer.new()
+	ammo.add_theme_constant_override("separation", 8)
+	var what := _label(14, INK)
+	what.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	what.text = "Боеприпасы из запчасти: снарядов %d, ракет %d, ЭМИ-ракет %d" % [int(client.store.get(Net.ITEM_SHELL, 0)),
+		int(client.store.get(Net.ITEM_ROCKET, 0)), int(client.store.get(Net.ITEM_EMP_ROCKET, 0))]
+	ammo.add_child(what)
+	var spare := int(client.store.get(Net.ITEM_PART, 0)) > 0
+	_button(ammo, "3 снаряда", Net.BENCH_SHELLS, 0, engineer and spare)
+	_button(ammo, "2 ракеты", Net.BENCH_ROCKETS, 0, engineer and spare)
+	_button(ammo, "1 ЭМИ-ракета", Net.BENCH_EMP, 0, engineer and spare)
+	_rows.add_child(ammo)
 	if guns.is_empty():
 		_rows.add_child(_label(14, DIM))
 		(_rows.get_child(-1) as Label).text = "В шкафу снабжения нет корабельных орудий. Снятые с пульта орудия и добыча попадают туда."

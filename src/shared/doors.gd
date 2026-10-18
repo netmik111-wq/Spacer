@@ -21,9 +21,14 @@ extends RefCounted
 ##  - a door can jam open (`jammed`): it stays open until somebody mends it;
 ##  - its shutter can fail (`faulty`): it stays as it is, up or down, whatever
 ##    the pressure does, until somebody mends it.
+## (v60) And the bridge can lock a door as a blast door (`blast`, from a holomap):
+## while the ship has power it opens only for our own crew (Net.ACCESS_OURS);
+## pirates must cut through it (see Blast).
 ##
 ## Closing is decided by the server alone (it knows who stands where) and
 ## reaches clients as an ordinary change.
+
+const Net := preload("res://src/shared/net.gd")
 
 const CLOSED := 0x7FFFFFFF
 const OPEN_TICKS := 6                # 0.3 s from the push to an open door
@@ -39,6 +44,7 @@ var forced := PackedByteArray()      # per door: 1 = its airlock lock was overri
 var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no longer works by itself
 var partner := PackedInt32Array()    # per door: the other door of its airlock, or -1 (set from ShipMap.door_partner)
 var dead := PackedByteArray()        # per door: 1 = it has no power at all (a derelict's): always opened by hand
+var blast := PackedByteArray()       # (v60) per door: 1 = locked as a blast door against boarders
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -59,6 +65,8 @@ func setup(count: int) -> void:
 	partner.fill(-1)
 	dead.resize(count)
 	dead.fill(0)
+	blast.resize(count)
+	blast.fill(0)
 	bumped.clear()
 
 
@@ -68,6 +76,7 @@ func copy_from(o: RefCounted) -> void:
 	jammed = o.jammed.duplicate()
 	faulty = o.faulty.duplicate()
 	forced = o.forced.duplicate()
+	blast = o.blast.duplicate()
 	partner = o.partner
 	dead = o.dead
 	manual = o.manual
@@ -76,7 +85,7 @@ func copy_from(o: RefCounted) -> void:
 
 func flags(door: int) -> int:
 	## The door's troubles as one byte, the way they travel over the network.
-	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3)
+	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3) | (blast[door] << 4)
 
 
 func set_flags(door: int, value: int) -> void:
@@ -84,6 +93,7 @@ func set_flags(door: int, value: int) -> void:
 	jammed[door] = (value >> 1) & 1
 	faulty[door] = (value >> 2) & 1
 	forced[door] = (value >> 3) & 1
+	blast[door] = (value >> 4) & 1
 
 
 func open_ticks(door: int = -1) -> int:
@@ -114,6 +124,11 @@ func barred(door: int, needs: int, has: int) -> bool:
 	## access. Its lock needs power: without it the door is pushed open by hand
 	## like any other.
 	return needs != 0 and (has & needs) == 0 and ready[door] == CLOSED and not manual and dead[door] == 0
+
+
+func blocks(door: int, has: int) -> bool:
+	## (v60) A blast door, locked with power on, does not open for one who is not of our crew.
+	return blast[door] == 1 and (has & Net.ACCESS_OURS) == 0 and not manual and dead[door] == 0
 
 
 func bump(door: int, tick: int) -> void:

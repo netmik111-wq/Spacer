@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 37
+const PROTOCOL := 38
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -232,6 +232,15 @@ const BENCH_STOP := 0               # put the work down
 const BENCH_APART := 1              # take the gun apart into parts of its kind
 const BENCH_MEND := 2               # mend a damaged gun (one spare part)
 const BENCH_UPGRADE := 3            # make it the next gun of its line (parts of its kind)
+const BENCH_SHELLS := 4             # (v60) make shells of a spare part (the thing byte is not used)
+const BENCH_ROCKETS := 5            # (v60) make rockets of a spare part
+const BENCH_EMP := 6                # (v60) make an EMP rocket of a spare part
+const C_BLAST := 29                 # (v60) u8 door of the ship (BLAST_ALL / BLAST_NONE: every door): lock it as a blast
+                                    # door, or unlock it, from the holomap the player watches
+const BLAST_ALL := 255
+const BLAST_NONE := 254
+const S_MOUNTS := 39                # (v60) to all, after the ship's id: u8 count of mounts, then per mount u8 1 if a gunner
+                                    # stands at it, u8 the gun the console ordered onto it (a thing; 0 = none, 255 = take it down)
 const S_STATIONS := 35              # to all, after the ship's id: u8 position (POS_*), u8 the one it is going to
                                     # (POS_NONE = none), u8 seconds of the manoeuvre left, u8 our dodge in %, u8 our hit
                                     # +100 in %, u8 theirs +100 in %, u8 posts manned (STATION_* bits), u8 count,
@@ -243,9 +252,10 @@ const POST_ENGINE := 3              # at the engine (a little more dodge)
 const POST_SHIELD := 4              # at the shield generator (it refills faster)
 const POST_REPAIR := 5              # mending what is broken, holes in the hull included
 const POST_FOLLOW := 6              # after the one who gave the order
-const POSTS := 7
+const POST_MOUNTS := 7              # (v60) at a gun mount in a gun bay (its gun charges faster)
+const POSTS := 8
 const POST_ALL := 255               # (with NOBODY) every bot to a post nobody mans
-const POST_NAMES: Array[String] = ["Свободен", "Штурвал", "Орудия", "Двигатель", "Щиты", "Ремонт", "За мной"]
+const POST_NAMES: Array[String] = ["Свободен", "Штурвал", "Пульт орудий", "Двигатель", "Щиты", "Работы", "За мной", "У орудия"]
 const STATION_HELM := 1
 const STATION_GUNS := 2
 const STATION_ENGINE := 4
@@ -256,7 +266,9 @@ const DOING_POST := 2               # at its post
 const DOING_WORK := 3               # mending
 const DOING_DOWN := 4               # out cold or dead
 const DOING_NO_WAY := 5             # it cannot get there
-const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "чинит", "без сознания", "не может пройти"]
+const DOING_CARRY := 6              # (v60) fetching from the supply locker or carrying a gun
+const DOING_HEAL := 7               # (v60) wounded: gone to lie in the autodoc
+const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "чинит", "без сознания", "не может пройти", "носит", "лечится"]
 const POS_CLOSE := 0                # close in: both fire as before; boarding either way
 const POS_FAR := 1                  # at a distance: both hit less, their boarding comes slower
 const POS_FLANK := 2                # on its flank: we hit better, but dodge worse
@@ -493,6 +505,7 @@ const ACCESS_MEDBAY := 4
 const ACCESS_ARMORY := 8
 const ACCESS_GUNS := 16             # the gun bays
 const ACCESS_ALL := 31
+const ACCESS_OURS := 32             # (v60) one of our own crew: blast doors open for them (pirates lack it); see access_of
 const ACCESS_NAMES := {ACCESS_BRIDGE: "мостик", ACCESS_ENGINE: "машинное отделение", ACCESS_MEDBAY: "медблок",
 	ACCESS_ARMORY: "арсенал", ACCESS_GUNS: "орудийный отсек"}
 const JOB_CREWMAN := 0
@@ -515,15 +528,21 @@ const JOB_ACCESS: Array[int] = [0, ACCESS_ALL, ACCESS_BRIDGE, ACCESS_ENGINE | AC
 # skills, 0..SKILL_MAX: how quickly one mends, treats, how well one shoots
 const SKILL_REPAIR := 0
 const SKILL_MEDICINE := 1
-const SKILL_GUNS := 2
-const SKILLS := 3
-const SKILL_NAMES: Array[String] = ["ремонт", "медицина", "стрельба"]
+const SKILL_GUNS := 2                # (v60) also the ship's guns: at the gun console and at a mount
+const SKILL_PILOT := 3               # (v60) at the ship's controls in a fight: dodging
+const SKILLS := 4
+const SKILL_NAMES: Array[String] = ["ремонт", "медицина", "стрельба", "пилотирование"]
 const SKILL_MAX := 100
-const JOB_SKILL: Array[int] = [-1, -1, -1, SKILL_REPAIR, SKILL_MEDICINE, SKILL_GUNS]   # the skill a job is about
+const JOB_SKILL: Array[int] = [-1, -1, SKILL_PILOT, SKILL_REPAIR, SKILL_MEDICINE, SKILL_GUNS]   # the skill a job is about
 const JOB_START_SKILL := 50          # where a job's own skill starts
 const SKILL_GAIN := 2                # what one piece of work adds to its job's own skill
 const SKILL_GAIN_OTHER := 1          # and, every SKILL_SLOW_EVERY such pieces, to any other skill
 const SKILL_SLOW_EVERY := 3
+static func access_of(job: int) -> int:
+	## (v60) The rooms a job lets one into, and the mark of our own crew.
+	return JOB_ACCESS[clampi(job, 0, JOBS - 1)] | ACCESS_OURS
+
+
 const HACK_TICKS := 100             # holding "use" on a door one has no access to for 5 s breaks its lock
 const S_ME := 30                    # u8 job, then SKILLS bytes: our own character's job and skills, then u8 flags
                                     # (ME_ADMIN, ME_HOST)

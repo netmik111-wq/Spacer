@@ -30,6 +30,7 @@ const Doors := preload("res://src/shared/doors.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 const Sight := preload("res://src/shared/sight.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
@@ -115,6 +116,8 @@ var enemy_fx := PackedByteArray()    # (v58) per enemy gun: its effect
 var enemy_charge := PackedByteArray() # (v59) per enemy gun: its charge 0..100 as our top sensors see it (255 = not seen)
 # (v59) our ship's gear (Net.S_GEAR)
 var gear_tiers := PackedByteArray([1, 1, 1, 1])   # per Gear.SYS_*: its tier
+var mount_gunner := PackedByteArray()  # (v60) per gun mount: 1 = somebody stands at it as its gunner (Net.S_MOUNTS)
+var mount_wanted := PackedByteArray()  # (v60) per gun mount: the gun the console ordered onto it, 0 = none, 255 = take it down
 var gear_modules := PackedByteArray([0, 0])       # per slot of the module bay: the crate in it (Gear.*)
 var phase_left := 0                  # seconds until the phase drive is charged (0 = ready, or none)
 var gear_flags := 0                  # Net.GEARF_*
@@ -183,7 +186,7 @@ var voyage_seconds := 0
 var won := false                     # (v57) the flagship is beaten: the game is won, the voyage goes on
 # our own job and skills (see Net.S_ME)
 var job := Net.JOB_CREWMAN
-var skills := PackedByteArray([0, 0, 0])
+var skills := PackedByteArray([0, 0, 0, 0])
 var _power := true                   # the ship has power (see powered)
 
 # our own character's body
@@ -266,7 +269,7 @@ func connect_to(address: String, port: int, player_name: String, wanted_job: int
 		return "Не удалось начать подключение к %s:%d. Проверьте адрес." % [address, port]
 	_name = player_name
 	job = clampi(wanted_job, 0, Net.JOBS - 1)
-	_auth.access = Net.JOB_ACCESS[job]     # until the server says otherwise (see Net.S_ME)
+	_auth.access = Net.access_of(job)     # until the server says otherwise (see Net.S_ME)
 	pred.access = _auth.access
 	_t_connect = Time.get_ticks_msec()
 	phase = CONNECTING
@@ -530,6 +533,12 @@ func send_holo(on: bool) -> void:
 		_peer.send(0, PackedByteArray([Net.C_HOLO, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_blast(which: int) -> void:
+	## (v60) At a holomap: locks a door against boarders (or unlocks it), or all of them (Net.BLAST_ALL, Net.BLAST_NONE).
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_BLAST, which]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_wear(wear: int) -> void:
 	## Asks to take off what we wear there.
 	if _peer != null:
@@ -682,7 +691,9 @@ func use_target(facing: int = -1) -> int:
 	## 17 = the gun console, 18 = a shut door of a room our job gives no access to (its lock can be broken),
 	## 19 = an intercom, 20 = a holomap monitor, 21 = the drone monitor (v54), 22 = the workbench (v58),
 	## 23 = (v59) where the crate of gear in hand goes (or the module bay, with empty hands): hold to install,
-	## 24 = the module bay with something else in hand.
+	## 24 = the module bay with something else in hand,
+	## 25 = (v60) a gun mount where the gun in hand goes up (or, with empty hands, its gun comes down),
+	## 26 = an autodoc, 27 = the body scanner.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -711,8 +722,14 @@ func use_target(facing: int = -1) -> int:
 			return 15
 		if map.gun_console.has(cell):
 			return 17
+		if mount_here(cell) != "-":
+			return 25
 		if map.guns.has(cell):
 			return 8
+		if map.autodoc.has(cell):
+			return 26
+		if map.scanner.has(cell):
+			return 27
 		if map.intercom.has(cell):
 			return 19
 		if map.holo.has(cell):
@@ -779,6 +796,26 @@ func gear_here(cell: int) -> String:
 	return ""
 
 
+func mount_here(cell: int) -> String:
+	## (v60) As Mounts.can on the server: "" if the gun in our hand goes up on the
+	## mount at that cell (or, with empty hands, the gun on it comes down), "-" if
+	## there is nothing of that to do there, else why not, in the player's words.
+	var i := map.guns.find(cell)
+	if i < 0:
+		return "-"
+	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
+	var on: int = gun_weapon[i] if i < gun_weapon.size() else Weapons.NONE
+	if item != Net.ITEM_NONE and Weapons.of_item(item) != Weapons.NONE:
+		if Weapons.of_item(item) == Weapons.GUARD:
+			return "«Заслон» ставят в его собственное гнездо с пульта орудий."
+		if Weapons.damaged(item):
+			return "Орудие повреждено: сначала его чинят на верстаке."
+		return "-" if broken.has(cell) else ""
+	if item == Net.ITEM_NONE and on != Weapons.NONE and not broken.has(cell):
+		return ""
+	return "-"
+
+
 func usable_at(cell: int) -> bool:
 	## Is there something in that cell the "use" key (or a click) works on, near
 	## or not: a thing on a wall, a door, a hole, things on the floor, somebody
@@ -789,7 +826,7 @@ func usable_at(cell: int) -> bool:
 			or gear_here(cell) != "-":
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay]:
+			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay, map.autodoc, map.scanner]:
 		if things.has(cell):
 			return true
 	for e: Ent in ents.values():
@@ -1310,6 +1347,14 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			drone_battery = pkt[4]
 			drone_coming = pkt[5]
 			drones = pkt[6]
+		Net.S_MOUNTS:
+			if not _ours(pkt) or pkt.size() < 4 + pkt[3] * 2:
+				return
+			mount_gunner = PackedByteArray()
+			mount_wanted = PackedByteArray()
+			for i in pkt[3]:
+				mount_gunner.append(pkt[4 + i * 2])
+				mount_wanted.append(pkt[5 + i * 2])
 		Net.S_STATIONS:
 			if not _ours(pkt) or pkt.size() < 11:
 				return
@@ -1387,8 +1432,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				var flags: int = pkt[2 + Net.SKILLS] if pkt.size() > 2 + Net.SKILLS else 0
 				is_admin = flags & Net.ME_ADMIN != 0
 				is_host = flags & Net.ME_HOST != 0
-				if _auth.access != Net.JOB_ACCESS[job]:
-					_auth.access = Net.JOB_ACCESS[job]
+				if _auth.access != Net.access_of(job):
+					_auth.access = Net.access_of(job)
 					pred.access = _auth.access
 					_rebuild_prediction()
 		Net.S_POWER:

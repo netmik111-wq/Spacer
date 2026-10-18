@@ -49,6 +49,8 @@ var holo := {}                       # wall cells with a holomap monitor: the wh
 var shield := {}                     # wall cells with the shield generator (see Gunnery)
 var bench := {}                      # (v58) wall cells with the workbench: guns taken apart, mended, upgraded
 var bay := {}                        # (v59) wall cells with the module bay: ship modules go in its free slots
+var autodoc := {}                    # (v60) wall cells with an autodoc: wall cell -> the bed (the floor cell in front)
+var scanner := {}                    # (v60) wall cells with a body scanner
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
                                      # PackedInt32Array of cells each, top-left room first (see _find_rooms)
 var room_of := PackedInt32Array()    # per cell: its number in `rooms`, -1 = in none
@@ -90,7 +92,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
-	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay"]
+	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -189,6 +191,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	shield = {}
 	bench = {}
 	bay = {}
+	autodoc = {}
+	scanner = {}
 	guns = PackedInt32Array()
 	gun_console = {}
 	drone_console = {}
@@ -220,6 +224,10 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			bench[i] = true
 		if cells[i] == tile_ids.get("bay", -1):
 			bay[i] = true
+		if cells[i] == tile_ids.get("scanner", -1):
+			scanner[i] = true
+		if cells[i] == tile_ids.get("autodoc", -1):
+			autodoc[i] = fitting_front(i)
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
@@ -598,6 +606,10 @@ func device_name(cell: int) -> String:
 		return "генератор щита"
 	if bay.has(cell):
 		return "модульная стойка"
+	if autodoc.has(cell):
+		return "автодок"
+	if scanner.has(cell):
+		return "медицинский сканер"
 	return ""
 
 

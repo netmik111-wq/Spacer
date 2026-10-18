@@ -19,6 +19,7 @@ extends SceneTree
 const GameServer := preload("res://src/server/game_server.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
 const Derelict := preload("res://src/server/derelict.gd")
+const Mounts := preload("res://src/server/mounts.gd")
 const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
@@ -255,28 +256,35 @@ func _v49(p) -> void:
 	# the cargo and the mounts
 	ship.store[Weapons.item_of(Weapons.HEAVY)] = 1
 	ship.store[Weapons.item_of(Weapons.SIEGE)] = 1
-	g.setup_asked(p, Net.GUNSET_MOUNT, 1, Weapons.item_of(Weapons.HEAVY))
+	g._mount(p, 1, Weapons.item_of(Weapons.HEAVY))      # (v60: carried up by hand, see worktest; the old swap stays for tests)
 	_expect(ship.mounts[1] == Weapons.HEAVY and ship.armed[1] == 0 and int(ship.store[Weapons.item_of(Weapons.LASER)]) == 1
 		and int(ship.store[Weapons.item_of(Weapons.HEAVY)]) == 0, "a heavy laser from the cargo goes on gun 2; the laser it replaces goes into the cargo, unpowered")
 	g.setup_asked(p, Net.GUNSET_ARM, 1, 1)
 	_expect(ship.armed[1] == 1 and g.power_used() == 2 + 3 + Weapons.SHIELD_POWER, "powered, it draws 3 (7 of 8 now)")
-	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
+	g._mount(p, 2, Weapons.item_of(Weapons.SIEGE))
 	g.setup_asked(p, Net.GUNSET_ARM, 2, 1)
 	_expect(ship.armed[2] == 0, "the siege laser (4) does not fit in what the reactor has left")
 	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
 	g.setup_asked(p, Net.GUNSET_ARM, 0, 0)
 	g.setup_asked(p, Net.GUNSET_ARM, 2, 1)
 	_expect(ship.armed[2] == 1 and g.power_used() == 7 and ship.shield == 0.0, "with the shield and a laser switched off it does")
-	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.NONE)
+	g._mount(p, 2, Net.ITEM_NONE)
 	_expect(ship.mounts[2] == Weapons.NONE and int(ship.store[Weapons.item_of(Weapons.SIEGE)]) == 1, "a gun is taken down into the cargo")
+	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
+	_expect(ship.mounts[2] == Weapons.NONE and server.mounts.wanted[2] == Weapons.item_of(Weapons.SIEGE),
+		"(v60) the console orders a gun onto a mount; it does not put it up by itself")
+	g.setup_asked(p, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
+	_expect(server.mounts.wanted[2] == Mounts.WANT_NONE, "the same order again takes it back")
 	var stranger := server.crew.new_player("Мимо2")
 	g.setup_asked(stranger, Net.GUNSET_MOUNT, 2, Weapons.item_of(Weapons.SIEGE))
-	_expect(ship.mounts[2] == Weapons.NONE, "only from the gun console")
+	_expect(server.mounts.wanted[2] == Mounts.WANT_NONE, "only from the gun console")
 	server.crew.remove(stranger)
 	var before: Dictionary = ship.store.duplicate()
 	server.supplies.store_asked(_at_locker(p), Net.STORE_TAKE, Weapons.item_of(Weapons.SIEGE))
-	_expect(int(ship.store[Weapons.item_of(Weapons.SIEGE)]) == int(before[Weapons.item_of(Weapons.SIEGE)]) and p.count(Weapons.item_of(Weapons.SIEGE)) == 0,
-		"a ship's gun is cargo: it cannot be taken into the hands")
+	_expect(int(ship.store[Weapons.item_of(Weapons.SIEGE)]) == int(before[Weapons.item_of(Weapons.SIEGE)]) - 1 and p.count(Weapons.item_of(Weapons.SIEGE)) == 1,
+		"(v60) a ship's gun is taken from the locker into the hands, to be carried to its mount")
+	p.slots[p.slots.find(Weapons.item_of(Weapons.SIEGE))] = Net.ITEM_NONE
+	ship.store[Weapons.item_of(Weapons.SIEGE)] = int(before[Weapons.item_of(Weapons.SIEGE)])
 	_to_console(p)
 
 	# our shield

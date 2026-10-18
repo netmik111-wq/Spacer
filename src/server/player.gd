@@ -79,10 +79,13 @@ var bot_face := 0                    # and which way it faces there
 var bot_plan_tick := -1000           # when it last worked out its way
 var bot_from := -1                   # the cell it worked it out from
 var bot_step := 0                    # its next step: a direction, -1 for the ladder underfoot, 0 = none
+var bot_task := 0                    # (v60) what the bot's way leads to (Stations.TASK_*)
+var haul := -1                       # (v60) the gun mount whose order the bot is carrying out (-1 = none)
+var bot_healing := false             # (v60) the bot lies in the autodoc until it is whole enough
 var home := -1                       # (v55) a pirate on its own ship: its post, a cell of that ship's drawing
 var hold := -1                       # (v57) a pirate the flagship put aboard: the cell of our bridge it holds
 var job := 0                         # Net.JOB_*: its access (st.access) and which skills grow quickly
-var skills := PackedByteArray([0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
+var skills := PackedByteArray([0, 0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
 var slow_work := 0                   # pieces of work outside its job (every Net.SKILL_SLOW_EVERY-th one teaches)
 var me_sent := PackedByteArray()     # job and skills as last told to its client
 
@@ -99,7 +102,7 @@ func _init() -> void:
 func take_job(which: int) -> void:
 	## Takes a job: its access, and its own skill at least where a newcomer to it starts.
 	job = clampi(which, 0, Net.JOBS - 1)
-	st.access = Net.JOB_ACCESS[job]
+	st.access = Net.access_of(job)
 	var own := Net.JOB_SKILL[job]
 	if own >= 0:
 		skills[own] = maxi(skills[own], Net.JOB_START_SKILL)

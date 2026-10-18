@@ -139,6 +139,8 @@ var _rng := RandomNumberGenerator.new()
 var flies := true                    # (v56) shots take their flight before they land (tests set false: at once)
 var _flying: Array = []              # (v56) shots on their way: [the tick they land, what they do then]
 var _fx := RandomNumberGenerator.new()   # (v56) for what is only drawn (so the game's own lots stay as they were)
+var _aim_bonus := 0.0                # (v60) added to our hit chance while the console's volley is rolled (the gunnery skill)
+const GUNNER_HIT := 0.05             # (v60) the most the gunnery skill of the one at the console adds to our hit chance
 var boss := 0                        # (v57) the flagship at the goal point: 1 battleship, 2 carrier (0 = an ordinary pirate)
 const STUN_FLOOR := -10.0           # (v57) a neural shot takes health no lower than this: down for a while, not dead
 const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what it means to hit this often (else the hull near the crew)
@@ -462,7 +464,10 @@ func setup_asked(p, action: int, a: int, b: int) -> void:
 					return
 				ship.shield_on = true
 		Net.GUNSET_MOUNT:
-			_mount(p, a, b)
+			if a == Net.GUARD_MOUNT:
+				_mount(p, a, b)
+			else:
+				server.mounts.order(p, a, b)  # (v60) guns are carried up by hand: the console orders it
 
 
 func _mount(p, a: int, item: int) -> void:
@@ -548,7 +553,7 @@ func tick() -> void:
 		if w == Weapons.NONE or ship.armed[i] == 0:
 			charge[i] = 0.0
 		elif server.powered() and not ship.broken.has(map.guns[i]) and not jammed(map.guns[i]):
-			charge[i] = minf(charge[i] + 1.0 / Weapons.charge_ticks(w), 1.0)
+			charge[i] = minf(charge[i] + server.mounts.pace(i) / Weapons.charge_ticks(w), 1.0)   # (v60) quicker with a gunner
 	if ship.guard == Weapons.NONE or not ship.guard_armed:
 		guard_charge = 0.0
 	elif server.powered():
@@ -722,6 +727,7 @@ func fire(p, which: int) -> void:
 		return
 	var fired := 0
 	var focus := _focus(which)
+	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS)   # (v60) the one at the console aims better with skill
 	for i in charge.size():
 		if not ((which == 255 or which == i) and charge[i] >= 1.0 and ship.armed[i] == 1 and not ship.broken.has(map.guns[i]) \
 				and not jammed(map.guns[i]) and beam_left[i] == 0):
@@ -738,6 +744,7 @@ func fire(p, which: int) -> void:
 			server.supplies.tell_store()
 		charge[i] = 0.0
 		fired += 1
+		server.mounts.fired(i)
 		if Weapons.klass(w) == Weapons.CLASS_BEAM or Weapons.klass(w) == Weapons.CLASS_SIPHON:
 			beam_left[i] = Weapons.pulses(w)
 			_beam_next[i] = server.tick
@@ -753,7 +760,9 @@ func fire(p, which: int) -> void:
 				_our_volley(i, w, fx, int(Weapons.info(w)["shots"]) * Weapons.BURST_GAP_TICKS + 6)
 		if not fighting() or _settle():
 			break
+	_aim_bonus = 0.0
 	if fired > 0:
+		p.train(Net.SKILL_GUNS)
 		if ransom > 0 and fighting():
 			_ransom_ends("Мы открыли огонь: пираты отзывают выкуп.")
 		_settle()
@@ -810,7 +819,7 @@ func _broken_off() -> void:
 func _hit_chance(w: int) -> float:
 	## Ours: better while its bridge is out (it cannot dodge) and while our tractor beam holds it.
 	var dodge := _dodge if server.enemy_crew.manned(Net.ESYS_HELM) else minf(_dodge, 0.0)
-	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge + server.stations.our_hit_bonus(), 0.05, Weapons.BEST_HIT)
+	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge + server.stations.our_hit_bonus() + _aim_bonus, 0.05, Weapons.BEST_HIT)
 	var bonus := (Weapons.BLIND_BONUS if down(Net.ESYS_HELM) else 0.0) + (Weapons.TRACTOR_BONUS if held() else 0.0)
 	if bonus > 0.0:
 		hit = maxf(hit, minf(hit + bonus, Weapons.BEST_HIT))
@@ -862,9 +871,9 @@ func _our_volley(i: int, w: int, fx: int = Weapons.FX_NONE, start: int = 0, focu
 		var room := -1
 		var stop := false
 		var how := HOW_PLAIN
-		if Weapons.klass(w) == Weapons.CLASS_ROCKET and enemy_guard and not down(Net.ESYS_WEAPONS) and server.tick + delay >= _enemy_guard_ready:
+		if Weapons.guard_chance(w) > 0.0 and enemy_guard and not down(Net.ESYS_WEAPONS) and server.tick + delay >= _enemy_guard_ready:
 			_enemy_guard_ready = server.tick + delay + Weapons.charge_ticks(Weapons.GUARD)
-			if _rng.randf() < Weapons.GUARD_HIT:
+			if _rng.randf() < Weapons.guard_chance(w):
 				how = HOW_DOWN
 				hit = false
 		if hit:
@@ -934,7 +943,9 @@ func _tell_volley(log: Dictionary) -> void:
 	if int(log.get("ricochet", 0)) > 0:
 		parts.append("рикошет от брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
 	if int(log.get("down", 0)) > 0:
-		parts.append("ракету сбила их точечная оборона" if int(log["down"]) == 1 else "ракеты сбила их точечная оборона (%d)" % int(log["down"]))
+		var what := "ракет" if Weapons.klass(int(log["w"])) == Weapons.CLASS_ROCKET else "снаряд"
+		parts.append(("%s сбила их точечная оборона" % ("ракету" if what == "ракет" else "снаряд")) if int(log["down"]) == 1
+			else "%s сбила их точечная оборона (%d)" % ["ракеты" if what == "ракет" else "снаряды", int(log["down"])])
 	if parts.is_empty():
 		return
 	server.chat.say("Орудие %d (%s%s): %s.%s%s" % [int(log["gun"]) + 1, Weapons.lower_name(int(log["w"]), int(log.get("fx", 0))),
@@ -1547,6 +1558,8 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 	var map = server.map
 	var ship = server.ship
 	reveal(room_of_system(Net.ESYS_WEAPONS), "Вспышки выстрелов выдали отсек пиратов")
+	if start == 0 and server.stations.our_dodge() > 0.0:
+		server.stations.at_post(Net.POST_HELM).train(Net.SKILL_PILOT)   # (v60) piloting is learnt under fire
 	var shots: int = Weapons.info(w)["shots"]
 	var chance: float = float(Weapons.info(w)["hit"]) if enemy_hit_chance < 0.0 else enemy_hit_chance
 	if enemy_hit_chance < 0.0:
@@ -1561,12 +1574,12 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 	var kinetic := Weapons.klass(w) == Weapons.CLASS_KINETIC
 	for s in shots:
 		var delay := start + s * Weapons.BURST_GAP_TICKS
-		if Weapons.klass(w) == Weapons.CLASS_ROCKET and guard_ready():
-			# (v58) our point defence fires at it, hit or miss
+		if Weapons.guard_chance(w) > 0.0 and guard_ready():
+			# (v58) our point defence fires at it, hit or miss (v60: at slow shells too, less surely)
 			guard_charge = 0.0
 			if map.guns.size() > 0:              # (heard by the guns: it has no place of its own)
 				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.guns[0] % map.width, map.guns[0] / map.width))
-			if _rng.randf() < Weapons.GUARD_HIT:
+			if _rng.randf() < Weapons.guard_chance(w):
 				var by: int = _hull_near_crew()
 				var spot := _draw_theirs(w, by, Net.SHOT_DOWN, delay)
 				_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.SHOT_DOWN, -1, -1, spot))
@@ -1693,7 +1706,9 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 	if misses > 0:
 		parts.append("мимо" + ("" if misses == 1 else " ×%d" % misses))
 	if int(log["down"]) > 0:
-		parts.append("«Заслон» сбил ракету" if int(log["down"]) == 1 else "«Заслон» сбил ракеты (%d)" % int(log["down"]))
+		var rocket := Weapons.klass(w) == Weapons.CLASS_ROCKET
+		parts.append(("«Заслон» сбил " + ("ракету" if rocket else "снаряд")) if int(log["down"]) == 1
+			else "«Заслон» сбил %s (%d)" % ["ракеты" if rocket else "снаряды", int(log["down"])])
 	if int(log.get("ricochet", 0)) > 0:
 		parts.append("рикошет от нашей брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
 	if parts.is_empty() and said.is_empty():

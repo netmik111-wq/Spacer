@@ -91,6 +91,8 @@ TILES.append(("holo", None, "wall"))
 TILES.append(("shield", None, "wall"))
 TILES.append(("bench", None, "wall"))
 TILES.append(("bay", None, "wall"))
+TILES.append(("autodoc", None, "wall"))
+TILES.append(("scanner", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -374,6 +376,28 @@ def make_machine(wall, what):
             rect(sx + 3, 22, sx + 5, 22, (90, 220, 110, 255))   # its lamp
         for x in range(4, 28):
             o[x, 24] = HAZARD if (x // 2) % 2 == 0 else dark
+    elif what == "autodoc":
+        # (v60) the autodoc: a white bed-head housing with a green cross, arms and a lamp over the bed in front
+        white, pale = (214, 222, 228, 255), (176, 186, 196, 255)
+        rect(4, 3, 27, 25, pale); rect(5, 4, 26, 24, white); rect(5, 4, 26, 5, (240, 244, 248, 255))
+        rect(13, 7, 18, 18, (60, 190, 110, 255)); rect(9, 11, 22, 14, (60, 190, 110, 255))     # the cross
+        rect(14, 8, 17, 17, (120, 230, 160, 255)); rect(10, 12, 21, 13, (120, 230, 160, 255))
+        rect(6, 20, 25, 23, (90, 100, 112, 255))                                              # the arms' rail
+        for ax in (8, 23):
+            rect(ax, 18, ax + 1, 23, (70, 76, 88, 255))
+        rect(24, 6, 25, 7, (90, 220, 110, 255))                                               # a lamp
+        for x in range(4, 28):
+            o[x, 26] = (60, 190, 110, 255) if (x // 2) % 2 == 0 else dark
+    elif what == "scanner":
+        # (v60) the body scanner: a tall frame with a scan bar and a small screen with a body outline
+        rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
+        rect(8, 6, 23, 16, (12, 24, 36, 255))                                                 # the screen
+        cyan = (70, 200, 230, 255)
+        rect(15, 7, 16, 8, cyan); rect(14, 9, 17, 12, cyan); rect(12, 9, 13, 11, cyan); rect(18, 9, 19, 11, cyan)
+        rect(14, 13, 14, 15, cyan); rect(17, 13, 17, 15, cyan)                                # a body on it
+        rect(8, 11, 23, 11, (240, 80, 60, 255))                                               # the scan line
+        rect(7, 19, 24, 21, dark); rect(8, 20, 23, 20, (111, 190, 240, 255))                  # the scan bar
+        rect(21, 23, 22, 23, (90, 220, 110, 255))
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -417,6 +441,8 @@ def build_tiles():
         "shield": lambda: make_machine(images["wall_h"], "shield"),
         "bench": lambda: make_machine(images["wall_h"], "bench"),
         "bay": lambda: make_machine(images["wall_h"], "bay"),
+        "autodoc": lambda: make_machine(images["wall_h"], "autodoc"),
+        "scanner": lambda: make_machine(images["wall_h"], "scanner"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -454,6 +480,8 @@ def build_tiles():
 #   'Z'  wall with the shield generator in it
 #   'B'  (v58) wall with the workbench at it: engineers take guns apart, mend and upgrade them there
 #   'U'  (v59) wall with the module bay in it: two free slots for ship modules (armour, focusing array, phase drive)
+#   'Y'  (v60) wall with an autodoc at it: whoever lies or stands in front of it is healed while the ship has power
+#   'X'  (v60) wall with a body scanner on it: shows the health of whoever is on the nearest autodoc (or of oneself)
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -474,7 +502,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBU")
+BAND_CHARS = set("#DW<>123456789TIMZBUYX")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -563,7 +591,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
