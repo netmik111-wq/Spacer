@@ -27,6 +27,7 @@ const CLASSIC_THIRD_FROM := 5
 var server: Node
 var classic := false                 # (tests) always the old raider: its first hull, its rooms as drawn, its old numbers
 var force_class := -1                # (tests, admin) this class only, if it may come at all
+var force_temper := -1               # (v60.1, admin) this temper, not a rolled one
 var _rng := RandomNumberGenerator.new()
 
 
@@ -86,6 +87,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 	var crew := _rng.randi_range(crew_range[0], crew_range[1]) if raid else party
 	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool: return not Hulls.temper(t).has("boss"))
 	var temper: int = tempers[_rng.randi_range(0, tempers.size() - 1)]
+	if force_temper >= 0 and tempers.has(force_temper):
+		temper = force_temper
 	return {
 		"klass": klass, "layout": layout, "temper": temper,
 		"name": "%s «%s»" % [_cap(str(info["name"])), Hulls.NAMES[_rng.randi_range(0, Hulls.NAMES.size() - 1)]],

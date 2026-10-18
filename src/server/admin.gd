@@ -10,6 +10,11 @@ const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const Gear := preload("res://src/shared/gear.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
+const Hulls := preload("res://src/shared/hulls.gd")
+
+const BOTS_MOST := 16                # (v60.1) the admin panel adds bots up to this many
 
 var server: GameServer
 var names := {}                      # players made admins by the host: name -> true
@@ -118,12 +123,29 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 				at = Vector2i(ahead % server.map.width, ahead / server.map.width)
 			server.pirates.spawn(at.x, at.y, argument != 0)
 		Net.ADMIN_PLACE:
-			place_ship(argument)
+			place_ship(argument % Net.ADMIN_TRADER_DEAL, argument / Net.ADMIN_TRADER_DEAL - 1)
+		Net.ADMIN_STORE:
+			store(argument)
+		Net.ADMIN_FIT:
+			fit(argument)
+		Net.ADMIN_CHARGE:
+			charge_all()
+		Net.ADMIN_SKILLS:
+			if target != null and not target.corpse and not target.pirate:
+				target.skills.fill(Net.SKILL_MAX)
+		Net.ADMIN_BOTS:
+			bots(argument != 0)
+		Net.ADMIN_FIGHT:
+			fight(argument / 16, (argument / 2) % 8, argument % 2 == 1)
 
 
 func give(p: Player, item: int) -> void:
 	## A thing into the hand (or a free slot), or onto the floor at the admin's feet.
+	## (v60.1) Cargo that is never carried (rockets, shells, probes, parts) goes into the locker.
 	if not Items.INFO.has(item) or p.corpse:
+		return
+	if Items.cargo(item) and not Items.carried_gun(item):
+		store(item)
 		return
 	if p.add(item, true):
 		p.self_dirty = true
@@ -198,15 +220,18 @@ func repair_all() -> void:
 	server.chat.say("Администратор: корабль полностью исправлен.")
 
 
-func place_ship(kind: int) -> void:
+func place_ship(kind: int, deal: int = -1) -> void:
 	## This sector gets a station, a trader or a derelict, and the ship is put
-	## right by it (until the ship jumps: space itself is not changed).
+	## right by it (until the ship jumps: space itself is not changed). (v60.1)
+	## A trader may be of the kind asked for (Sectors.DEAL_*; -1: as the sector has it).
 	if kind != Sectors.STATION and kind != Sectors.TRADER and kind != Sectors.DERELICT:
 		return
 	if server.ship.jump_to != Net.NO_SECTOR or server.derelict.here:
 		return
 	var s := server.ship.sector
 	server.sectors.kind[s] = kind
+	if kind == Sectors.TRADER and deal >= 0 and deal < Sectors.DEAL_NAMES.size() and server.sectors.deal.size() > s:
+		server.sectors.deal[s] = deal
 	server.sectors.reach[s] = Sectors.DOCK_RANGE
 	server.ship.pos = server.sectors.spot[s]
 	server.ship.dest = server.ship.pos
@@ -214,3 +239,81 @@ func place_ship(kind: int) -> void:
 	server.to_all(server.navigation.sectors_packet())
 	server.to_all(server.ship.nav_packet())
 	server.to_all(server.ship.helm_packet(server.tick))
+
+
+func store(item: int) -> void:
+	## (v60.1) A thing into the supply locker (counted as the thing it is a state of).
+	if not Items.INFO.has(item):
+		return
+	var kind := Items.kind_of(item)
+	server.ship.store[kind] = int(server.ship.store.get(kind, 0)) + 1
+	server.supplies.tell_store()
+
+
+func fit(what: int) -> void:
+	## (v60.1) Gear in place at once, without an engineer's work (tests): a system's
+	## tier or a module into the bay (what was there is gone), the built-in one back,
+	## or the bay emptied.
+	var ship = server.ship
+	if what == Net.ADMIN_FIT_CLEAR_BAY:
+		ship.modules.fill(Gear.NONE)
+	elif what >= Net.ADMIN_FIT_BUILT_IN and what < Net.ADMIN_FIT_BUILT_IN + Gear.SYSTEMS:
+		ship.gear[what - Net.ADMIN_FIT_BUILT_IN] = 1
+	elif what > Gear.NONE and what < Gear.COUNT:
+		if Gear.system_of(what) >= 0:
+			ship.gear[Gear.system_of(what)] = Gear.tier(what)
+		elif not ship.modules.has(what):
+			var at: int = server.outfit._slot_for(what)
+			ship.modules[maxi(at, 0)] = what
+	else:
+		return
+	server.outfit.refresh()
+	server.outfit.tick()
+	server.chat.say("Администратор: снаряжение корабля изменено.")
+
+
+func charge_all() -> void:
+	## (v60.1) The shield full, every armed gun charged, the jump drive and the phase drive ready.
+	var ship = server.ship
+	if ship.shield_on:
+		ship.shield = Weapons.SHIELD_FULL
+	for i in ship.armed.size():
+		if ship.armed[i] == 1 and i < server.gunnery.charge.size():
+			server.gunnery.charge[i] = 1.0
+	ship.drive_ready = server.tick
+	ship.phase_ready = server.tick
+	server.to_all(ship.helm_packet(server.tick))
+	server.outfit.tick()
+
+
+func bots(more: bool) -> void:
+	## (v60.1) The crew kept one bot bigger or smaller (until the server stops).
+	if more:
+		if server.crew_size >= BOTS_MOST + 1:
+			return
+		server.crew_size += 1
+		server.crew.add_bot()
+		return
+	for i in range(server.players.size() - 1, -1, -1):
+		var q: Player = server.players[i]
+		if q == null or not q.bot or q.corpse or q.dragged_by >= 0:
+			continue
+		for at in Net.SLOTS:
+			server.supplies._put_back(q, at)
+		server.crew.remove(q)
+		server.crew_size = maxi(server.crew_size - 1, 1)
+		server.supplies.tell_store()
+		server.chat.say("Администратор: %s покидает корабль." % q.name)
+		return
+
+
+func fight(klass: int, temper: int, at_range: bool) -> void:
+	## (v60.1) A pirate ship of the class and temper asked for comes up now (if one may).
+	if not Hulls.CLASSES.has(klass) or Hulls.CLASSES[klass].has("boss"):
+		return
+	server.shipyard.force_class = klass
+	server.shipyard.force_temper = temper if Hulls.TEMPERS.has(temper) else -1
+	if not server.derelict.pirates_come(server.director._party(), at_range):
+		server.chat.say("Администратор: пиратский корабль сейчас подойти не может (рядом другой корабль или кто-то снаружи).")
+	server.shipyard.force_class = -1
+	server.shipyard.force_temper = -1

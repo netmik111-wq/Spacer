@@ -134,6 +134,16 @@ Open problems:
 
 ## Build notes
 
+### v60.1 (admin panel catches up; the author's request)
+- The author missed the gear modules in the spawn panel. Audit: gear crates were listed (at the bottom), but
+  ship guns (carried since v60), their tier 3 effects and damaged guns, ammunition, probes, drones and gun parts
+  could not be spawned; nothing could fit gear at once, set skills, add bots, or call a chosen pirate ship or trader.
+- The things tab is built from `Items.admin_sections()` (the locker's sections plus «Прочее» for anything new),
+  shows hidden tiers, sends things to the hands or the locker (`ADMIN_STORE`), with an effect picker and a
+  damaged box for guns. New commands `ADMIN_FIT`, `ADMIN_CHARGE`, `ADMIN_SKILLS`, `ADMIN_BOTS`, `ADMIN_FIGHT`
+  (`Shipyard.force_temper`), and a trader's kind on `ADMIN_PLACE`. `admintest` checks that every kind of thing
+  is listed. Protocol 39.
+
 ### v60 (crew at work, part 1 of the road plan; the author's notes N1 and S1)
 - Gunners at the mounts (+25%, up to +50% with gunnery), guns carried from the locker and mounted by hand with E,
   the gun console gives orders that bots on «Работы» carry out (new server part `src/server/mounts.gd`, S_MOUNTS).

@@ -376,6 +376,11 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   `C_ADMIN` with no text; the server checks `Player.admin`. The client learns its rights from the flags
   byte at the end of `S_ME`. The author asked for an admin panel "for all tests"; I decided that
   healing raises the dead where they lie, and that a body left after a return from the reserve stays a body.
+  (v60.1) The panel's lists are built from the game's own tables (`Items.admin_sections`, `Gear.all`,
+  `Hulls.CLASSES`/`TEMPERS`, `Sectors.DEAL_NAMES`, `Director.EVENTS`), so new content appears in it without
+  touching the panel; `admintest` fails if a kind of thing is missing. Gear fitted from the panel skips the
+  engineer and what it replaces is gone (a test shortcut, my call); the flagships stay events, since they
+  are the end of the game, not a class to pick.
 - **The player's settings** live in `user://options.cfg` (`src/client/options.gd`), not in the menu's
   `settings.cfg`, which the menu rewrites whole. Every key is an action in `Options.ACTIONS` (two keys
   each, physical keycodes, optional Ctrl/Shift/Alt). Check keys with `Options.pressed` and `Options.held`,
