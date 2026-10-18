@@ -644,3 +644,32 @@ new decision, add a bullet here in the same style: the rule, its reason, and the
   junk dealer 1 at its 20% discount.
 - **The flagship grows with our gear at half its tier points** (my default, asked the author): as +2 hull and a
   10% quicker shield per step, not more guns, so gear makes the boss tougher but not deadlier.
+- **Gunners are a bonus, not a need** (v60, the author's W1): a manned mount charges 25% faster, up to 50% with
+  gunnery skill, so a small crew still fights at full rate from the console (`Mounts.pace`, `Gunnery` charge).
+  Firing from the console adds up to +5% to hit with gunnery (`Gunnery.GUNNER_HIT`).
+- **Guns are mounted by hand; the console orders** (v60, the author's N1 "bots take guns from storage and mount
+  them", A1 on the question page). The point defence keeps its console mount (it has no place in the hull).
+  The cost, told to the author: a lone player with no bots walks to the mount. The server never changes a
+  player's hand slot (it is not sent to the client); only bots' (`Mounts`, `Stations._at_mount`).
+- **No shell crates to carry to kinetic guns** (my advice on A2, the author agreed): it would make kinetic the
+  only gun that needs a person and a small crew could not use it mid-fight.
+- **Bots walk to the locker for supplies** (v60): they no longer take parts and patches from the hold at a
+  distance. A bot fetches a suit if it has none, turns its supply on in air under 80%, fills its tank under 35%
+  (to 95%, kept as the task until full so replanning does not stop it at 36%) and lies in an autodoc under 40
+  health until 90 (`Stations`).
+- **The crew is kept full by bots** (the author's word, 2026-10-18: "if people join the game they take place of
+  a bot, if they leave, bot takes their place"). `GameServer.crew_size` = bots asked for + 1 (the host). A joining
+  player beyond it removes a bot (free ones first, its things into the locker); a living player leaving adds one.
+  Dead players are not replaced, so bodies and the reserve keep their meaning (`Crew._bot_makes_way`,
+  `_bot_takes_over`).
+- **The autodoc heals, never revives** (v60, the author's S1; bodies stay): 3 health a second (A4), doubled
+  while somebody tends it, wounds first. The scanner only reports for now: groundwork for complex health and
+  cryo capsules (`Medbay`). Two autodocs and the scanner went on the existing upper-deck medbay wall (A5).
+- **Blast doors from any holomap** (v60, A6, A7): our people pass (`Net.ACCESS_OURS`, given to every job and
+  bot), pirates cut 12 s and leave the door jammed; no power, no lock, like every lock aboard (`Blast`,
+  `Doors.blocks`, checked in `Mover.step` so both sides agree).
+- **Ammo from spare parts** (v60, A8): 1 part = 3 shells, 2 rockets or 1 EMP rocket, 6 s at the workbench.
+- **Point defence also shoots slow shells, at 30%** (v60, my number; rockets stay 60%). The railgun's slug is too
+  quick (`Weapons.guard_chance`).
+- **Piloting is the only new skill** (v60, A9): the pilot's own, worth up to +10% dodge (a pilot by job starts at
+  50, so the old 20% stays). It grows with each enemy volley dodged at the controls.
