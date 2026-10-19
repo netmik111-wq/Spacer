@@ -59,6 +59,8 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.slots[p.hand] = Net.ITEM_NONE
 			if who != p:
 				server.chat.say("%s заклеивает раны: %s." % [p.name, who.name])
+		else:
+			_why_not_treated(p, who)
 	elif item == Net.ITEM_ROBOT:
 		server.robots.deploy(p, Vector2i(roundi(at.x), roundi(at.y)))   # (v62) a security robot set down there
 	elif Items.uses(item) > 0:
@@ -69,6 +71,31 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.work = 0
 			p.work_cell = -2
 			p.work_total = _treat_ticks(p)
+			if who == p:
+				server.chat.tell(p, "Вы обрабатываете свои раны: стойте на месте %d с." % ceili(_treat_ticks(p) / float(Net.TICK_HZ)))
+		else:
+			_why_not_treated(p, who)
+
+
+func treat_self(p: Player) -> void:
+	## (v69, the author's note "the first-aid kit doesn't work at all") Z with a kit
+	## or a patch in hand: the same as a click on oneself.
+	use_at(p, server.tick, Vector2(p.st.x, p.st.y))
+
+
+func _why_not_treated(p: Player, who: Player) -> void:
+	## (v69) A kit or a patch did nothing: say why, so it does not look broken.
+	if who == null:
+		server.chat.tell(p, "Лечить некого: щёлкните по себе (или Z) или по тому, кто стоит рядом.")
+		return
+	var whose := "У вас" if who == p else "У %s" % who.name
+	var hunger: float = server.garden.hunger_of(who)
+	if who.health < Net.HEALTH_FULL - 0.5 and hunger > 0.5 and who.health >= Net.HEALTH_FULL - who.wounds - hunger - 0.5:
+		server.chat.tell(p, "%s нет ран: это голод. Поможет только еда." % whose)
+	elif who.health < Net.HEALTH_FULL - 0.5:
+		server.chat.tell(p, "%s нет ран: здоровье отнял плохой воздух. Оно вернётся само в нормальном воздухе (или в автодоке)." % whose)
+	else:
+		server.chat.tell(p, "%s нет ран: лечить нечего." % whose)
 
 
 func hurt_level(q: Player) -> int:
@@ -173,7 +200,9 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 	## nearest the click. A click is never quite on the cell, and the one
 	## clicked may be in mid-step, so this is forgiving.
 	var from := Vector2(p.st.x, p.st.y)
-	if self_too and at.distance_to(from) < 0.5:
+	# (v69) a click anywhere on our own cell is on us: the client rounds the mouse to a cell
+	# the same way (GameScreen._fires_at), and the old 0.5 radius missed the cell's corners
+	if self_too and Vector2i(roundi(at.x), roundi(at.y)) == Vector2i(p.st.x, p.st.y):
 		return p
 	var best: Player = null
 	var best_d := 1.6

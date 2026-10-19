@@ -226,6 +226,7 @@ func repair_all() -> void:
 		server.ship.broken.clear()
 		server.to_all(server.ship.devices_packet())
 	for d in server.map.other_first_door:
+		server.doors.picked[d] = 0           # (v69) broken locks too
 		if server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1:
 			server.doors.jammed[d] = 0
 			server.doors.faulty[d] = 0

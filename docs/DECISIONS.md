@@ -1001,3 +1001,46 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   on `say`.
 - Questions on this build: https://claude.ai/artifact/BbM7SUq3yA36g4PBxrGA2q (built on my picks, all "A").
 
+### Bug fixes and two ideas (v69, the author's notebook: 11 bugs and 2 ideas; his answers on the questions page)
+
+- **Self-treatment** (notes "bandage/first aid kit doesn't work at all"): both worked, but `Combat._beside` took a click
+  on oneself only within 0.5 of the cell's middle while the client rounds the mouse to a cell, so the corners missed.
+  It now compares the rounded cell. Z with a plaster or medkit in hand treats oneself (`Combat.treat_self`, from
+  `Inventory.act`). They still close wounds only (his M1 "A"): `_why_not_treated` says why nothing happened (no wounds,
+  hunger, thin air) instead of silence.
+- **"Cannot take bandage"**: a patch floating outside lay where the derelict docked, inside its wall.
+  `Derelict._unbury` moves anything left in a non-walkable cell after `_place` to the nearest free cell (else the
+  locker), and `_put` adds to what lies there instead of replacing it (that lost finds 1 time in 15).
+- **The autodoc** (his M2 "A"): `Medbay.in_bed(doc, but)` picks the worst off who needs healing and skips the one
+  tending, so one can stand on the bed and hold E for somebody lying there.
+- **People popping in late when turning** (his video, S1 "A"): the server sent only those inside the 160° cone, so a
+  turn waited a ping. `Replication.all_round` sends everyone the character could see by turning (walls still hide);
+  the client already hides those behind. Cost: a hacked client could show people behind. `sighttest` pins it off.
+- **Hunters and the one other-ship slot** (notes "docked, hunter not attacking", "it came back at full hp"; H1, H2 "A"):
+  only one other ship fits beside ours. If nobody of ours is outside, `Derelict.cast_off` pushes the ship alongside away
+  and the hunter comes; while somebody is outside it shells the hull (4 every 8 s, my numbers) so nobody is left in
+  space with no ship. The "same hunter at full HP" was a second hunter already waiting in the system: it now waits
+  `Road.breather` (45 s) after a fight ends. `roadtest` sets the breather to 0.
+- **Wrecks stay on the chart** (note "cannot dock to the killed ship", H3 "A", and his message "make it appear on the map
+  like an event ... a little further"): the wreck left as soon as the ship moved. Now it stays while the ship is within
+  `WRECK_REACH` of `wreck_at`, and when the ship leaves it is kept in `Road.hulks` per system (a P_HULK place on the
+  chart, saved) with its things, air and survivors; coming within reach brings it back alongside. `Road.hulk_spot` nudges
+  the spot clear of the system's trader or station, places and other wrecks by `HULK_APART` (6) past both reaches,
+  in rings of 4. Only a pirate wreck is kept, and only when the ship moves on (a test's `_leave` does not record one).
+- **Docking on the move** (note): `dock(true)` is refused while the ship has a course or charges a jump.
+- **The station worked like a trader** (note, D2 "A"): the server let every trade action through at a station while
+  the client showed nothing. `Supplies.trader_here` gates selling, buying back and services; a station sells only
+  what `offers()` lists (robots, the extender) and its locker screen says so.
+- **Locked rooms** (note "no time to unlock the door and the airlock", D1): leaving a locked compartment is always
+  free (`ShipMap.leaving`, from `access_in` per cell, checked in `Mover.step`), and a hacked lock stays broken
+  (`Doors.picked`, flags bit 5, amber lamp) until mended with the repair hold. He picked "B" (airlocks in rooms of
+  their own, open to all): ship02's only airlock already is one (its chamber opens on the open corridor), so there was
+  nothing to redraw; my question wrongly said both lower airlocks sat in locked rooms.
+- **One-press airlock** (his idea, A1 "A"): `Systems.call_lock` starts a trip (`cycles`): shut the other door, pump,
+  then open the pressed door for 3 s more than usual. 40 s gives up. Buttons stay on the doors, so bots use it as before.
+- **Vents** (his idea, A2: "stop while there is a hole, start again when sealed, stop at normal kPa, take air from
+  storage"): `ShipMap.vents`, one per room but airlock chambers; `Systems._vents` feeds 0.012 per air step from the
+  reserve up to 95%, needs power, the air plant whole and its breaker on, and skips holed rooms. `machinetest` turns
+  vents off (it checks sealed rooms staying empty).
+- Protocol 46 (the door flags' new bit). New test `tools/fixtest.gd` (30 scripts).
+- Questions: https://claude.ai/artifact/9DBk13CrtNCfmyFPdQoL1N (all answered: "A" but D1 "B", and a comment on A2).

@@ -564,6 +564,15 @@ func _draw_things(d: int) -> void:
 	## Things lying on the floor of one deck.
 	var map := client.map
 	var pen := _decks[d].things
+	# (v69) each room's air vent: a grille in the floor, under whatever lies on it
+	for cell: int in map.vents:
+		if map.deck_of_cell(cell) != d:
+			continue
+		var at := _on_deck(cell) * _tile + Vector2(8, 11)
+		pen.draw_rect(Rect2(at - Vector2(1, 1), Vector2(18, 12)), Color(0.12, 0.13, 0.15))
+		pen.draw_rect(Rect2(at, Vector2(16, 10)), Color(0.32, 0.35, 0.38))
+		for k in 4:
+			pen.draw_rect(Rect2(at + Vector2(1, 1 + k * 2.5), Vector2(14, 1.2)), Color(0.08, 0.09, 0.1))
 	for cell: int in client.floor_things.keys():
 		if map.deck_of_cell(cell) != d:
 			continue
@@ -1598,7 +1607,9 @@ func _draw_fx(d: int) -> void:
 			var ours := (client.pred.access & needs) != 0
 			var lock_at := corner + (Vector2(3, 14) if band else Vector2(14, 1))
 			pen.draw_rect(Rect2(lock_at - Vector2(1, 1), Vector2(5, 5)), Color(0.05, 0.05, 0.08))
-			pen.draw_rect(Rect2(lock_at, Vector2(3, 3)), Color(0.25, 0.9, 0.4) if ours else Color(1.0, 0.25, 0.2))
+			# (v69) amber: its lock was broken open and lets anybody through
+			pen.draw_rect(Rect2(lock_at, Vector2(3, 3)), Color(1.0, 0.7, 0.15) if client.doors.picked[door] == 1
+				else (Color(0.25, 0.9, 0.4) if ours else Color(1.0, 0.25, 0.2)))
 		if not sealed:
 			continue
 		var plate := Rect2(corner + Vector2(8, 9), Vector2(20, 14)) if band else Rect2(corner + Vector2(12, 3), Vector2(8, 21))

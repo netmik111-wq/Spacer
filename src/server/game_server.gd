@@ -656,6 +656,7 @@ func _tick() -> void:
 			save_campaign()
 	crew.tell_campaign()
 	systems.update_doors()
+	systems.run_cycles()          # (v69) airlock trips
 	navigation.update_jump()
 	navigation.update()
 	road.tick()

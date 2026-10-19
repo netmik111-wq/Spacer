@@ -25,6 +25,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.replication.set_round(false)   # (v69) these checks are of the cone itself: since v69 the server sends all round (fixtest)
 	server.keep_heard = true
 	var map := server.map
 	var doors := server.doors

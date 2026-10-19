@@ -293,7 +293,9 @@ func _about_text(trading: bool) -> String:
 			lines.append("%s: щелчок, чтобы положить в шкаф." % Items.name_of(thing))
 	else:
 		lines.append("Щелчок по карточке: взять одну (в руку, если она пуста). Щелчок по своей вещи внизу: положить её в шкаф.")
-	if trading:
+	if trading and client.at_station():
+		lines.append("Станция снабжения на связи: она продаёт только своё (кнопка «Торговля»), а покупать у нас не станет.")
+	elif trading:
 		lines.append("Торговец на связи: правый щелчок по карточке покупает одну; продать и купить остальное: кнопка «Торговля».")
 	elif client.sectors.count > 0 and client.sectors.kind[client.sector] == Sectors.TRADER:
 		lines.append("Торговец в этом секторе. Чтобы покупать, %s." % ("подойдите к нему" if client.powered() else "нужно питание"))

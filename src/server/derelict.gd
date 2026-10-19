@@ -66,6 +66,8 @@ var _crew_total := 0                 # its crew when it came
 var _outcome := ""                   # (a wreck) what the first of us aboard finds: "dead", "fight" or "join"
 var _boarded := false                # somebody of our crew has set foot on the wreck
 var _came_in := 0                    # the sector it came in (Sectors.key): it does not follow a jump
+var wreck_at := Vector2.ZERO         # (v69) where in the system a raider was wrecked: it stays alongside while we are near
+var held_off_until := -1             # (v69) a derelict pushed away by a hunter does not come back alongside before this tick
 var _left := {}                      # sector key -> [[cell inside it, things], ...]: what was left on it
 var _rng := RandomNumberGenerator.new()
 
@@ -180,6 +182,25 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 	return true
 
 
+func cast_off() -> bool:
+	## (v69, the author's note: a hunter never came while we were docked) A hunter comes
+	## out at us: a derelict alongside is let go (undocked first) and drifts off, to come
+	## back once the fight is over and the ship is still near it. False while anybody of
+	## ours is outside (on it or in space): they are not left behind.
+	if not here or (kind != Net.OTHER_DERELICT and not wreck) or someone_outside():
+		return false
+	if docked:
+		_move(map.other_at, _spots[layout][0])
+		_set_docked(false)
+	if wreck:
+		_hulk_leaves()
+	_leave(true)
+	held_off_until = server.tick + 5 * Net.TICK_HZ
+	server.chat.say("Охотник выходит на нас! Пришлось отдать швартовы: %s отнесло в сторону. После боя к нему можно вернуться." % (
+		"брошенный корабль" if kind == Net.OTHER_DERELICT else "разбитый корабль"))
+	return true
+
+
 func someone_outside() -> bool:
 	## Is anybody alive outside our own ship (on the derelict, or out in space)?
 	for p in server.players:
@@ -204,14 +225,19 @@ func update() -> void:
 	if here and kind == Net.OTHER_PIRATE:
 		var free := holds_ship() == ""
 		if free and Sectors.key(server.sectors.cell[server.ship.sector]) != _came_in:
-			# our ship has jumped away: it is left behind
+			# our ship has jumped away: it is left behind (v69: a wreck stays on that system's chart)
+			if wreck:
+				_hulk_leaves()
 			_leave(true)
 			server.chat.say("Пиратский корабль остался позади, в другом секторе.")
 			return
 		if wreck:
 			_watch_boarding()
-			if free and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
-				_leave()                     # we move on: the hulk stays where it drifts
+			# (v69, the author's note: a wreck could not be docked to) it drifts where it died:
+			# it is left behind only once we fly out of reach of that spot, or jump
+			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
+				_hulk_leaves()
+				_leave()
 			return
 		if raid:
 			_raid_closes_in()
@@ -220,10 +246,14 @@ func update() -> void:
 		elif _pirates_dock_at < 0 and not raid and not docked and free:
 			_leave()
 		return
+	var hulk: Dictionary = server.road.at_hulk()
+	if not here and not hulk.is_empty() and server.tick >= held_off_until and not server.gunnery.fighting() and _spots.has(int(hulk["layout"])):
+		_hulk_arrives(hulk)                  # (v69) a pirate ship we wrecked here before
+		return
 	if not possible():
 		return
 	var want: bool = (server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach) or server.road.at_wreck()   # (v64) or an abandoned ship among the places
-	if want and not here:
+	if want and not here and server.tick >= held_off_until and not server.gunnery.fighting():
 		_arrive()
 	elif not want and here and holds_ship() == "":
 		_leave()
@@ -235,6 +265,8 @@ func dock(on: bool) -> String:
 		return ""
 	if kind == Net.OTHER_PIRATE and on and not wreck:
 		return "Стыковаться с пиратами по своей воле никто не станет."
+	if on and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
+		return "Стыковка на ходу невозможна: сначала остановите корабль."   # (v69, the author's note)
 	var from: Vector2i = map.other_at
 	var to: Vector2i = _spots[layout][1] if on else _spots[layout][0]
 	if _anyone_in_way(from, to):
@@ -269,6 +301,7 @@ func becomes_wreck() -> void:
 	_pirates_dock_at = -1
 	raid = false
 	wreck = true
+	wreck_at = server.road.hulk_spot(server.ship.pos)   # (v69) where it stays on the chart (Road.hulks)
 	ship.kind = Net.SHIP_WRECK
 	ship.name = "Разбитый пиратский корабль" if design.has("classic") else "Обломки: " + ship.name.substr(0, 1).to_lower() + ship.name.substr(1)
 	for d in range(map.other_first_door, map.doors.size()):
@@ -454,6 +487,50 @@ func _arrive() -> void:
 	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 
 
+func _hulk_arrives(h: Dictionary) -> void:
+	## (v69, the author: wrecks "appear on the map like an event, so they don't disappear")
+	## A raider we wrecked in this system comes alongside again, as it was left.
+	server.road.take_hulk(h)
+	design = h["design"]
+	_comes(Net.OTHER_PIRATE, int(h["layout"]), str(h["name"]))
+	ship.id = int(h["id"])                   # (Salvage keeps what is left to cut by this id)
+	ship.kind = Net.SHIP_WRECK
+	wreck = true
+	wreck_at = h["pos"]
+	_boarded = bool(h["boarded"])
+	_outcome = str(h["outcome"])
+	_pirates_party = int(h["party"])
+	_place(_spots[layout][0])
+	var air_of: Dictionary = h["air"]
+	for c in map.other_cells:
+		if map.walk[c] == 1:
+			server.air.air[c] = float(air_of.get(_local(c, map.other_at), 0.0))
+	for e: Array in h["things"]:
+		_put(map.other_at, int(e[0]), e[1])
+	server.air.wake()
+	server.chat.say("Рядом %s: его можно обыскать и резать на лом. Пристыковаться можно с пульта управления." % ship.name.substr(0, 1).to_lower() + ship.name.substr(1))
+
+
+func _hulk_leaves() -> void:
+	## (v69) A wreck alongside is left where it lies: it stays on the chart (Road.hulks).
+	if kind != Net.OTHER_PIRATE or ship == null or server.over != Net.OVER_NONE:
+		return
+	var things := []
+	var air_of := {}
+	for c in map.other_cells:
+		if server.floor_things.has(c):
+			things.append([_local(c, map.other_at), (server.floor_things[c] as PackedByteArray).duplicate()])
+		if map.walk[c] == 1 and server.air.air[c] > 0.01:
+			air_of[_local(c, map.other_at)] = server.air.air[c]
+	var hiding := 0
+	for p in server.players:
+		if p != null and p.pirate and not p.corpse and p.cond != Net.COND_DEAD and map.is_other(p.st.y * map.width + p.st.x):
+			hiding += 1                      # living pirates still aboard: they will be there again
+	server.road.add_hulk(_came_in, {"pos": wreck_at, "layout": layout, "name": ship.name, "id": ship.id, "things": things,
+		"air": air_of, "outcome": "fight" if hiding > 0 else _outcome, "party": hiding if hiding > 0 else _pirates_party,
+		"boarded": _boarded and hiding == 0, "design": design})
+
+
 func _leave(quiet: bool = false) -> void:
 	var was_wreck := wreck
 	# what is left on a derelict is remembered for this sector
@@ -478,7 +555,7 @@ func _leave(quiet: bool = false) -> void:
 	server.gunnery.enemy_gone()
 	if not quiet:
 		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else
-			("Разбитый пиратский корабль остался позади." if was_wreck else "Пиратский корабль отошёл от шлюза и ушёл."))
+			("Разбитый пиратский корабль остался позади: он отмечен на карте сектора." if was_wreck else "Пиратский корабль отошёл от шлюза и ушёл."))
 
 
 func _move(from: Vector2i, to: Vector2i) -> void:
@@ -526,6 +603,42 @@ func _place(at: Vector2i) -> void:
 		server.doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck else 0     # a pirate ship has power, a wreck not
 	server.replication.index_doors()
 	server.air.reshape()
+	_unbury()
+
+
+func _unbury() -> void:
+	## (v69, the author's note "cannot take the patch") Things floating in space where the
+	## ship now lies (it came alongside or docked over them) would be stuck inside its
+	## walls: each goes to the nearest cell one can stand or drift in (else the locker).
+	for c: int in server.floor_things.keys():
+		var x: int = c % map.width
+		var y: int = c / map.width
+		if map.walkable(x, y) or map.floats(x, y):
+			continue
+		var things: PackedByteArray = server.floor_things[c]
+		server.floor_things.erase(c)
+		server.replication.floor_record(c)
+		for item in things:
+			if item != Net.ITEM_NONE and not _drift_from(c, item):
+				server.ship.store[item] = int(server.ship.store.get(item, 0)) + 1
+
+
+func _drift_from(start: int, item: int) -> bool:
+	var seen := {start: true}
+	var queue := [start]
+	while not queue.is_empty() and seen.size() < 400:
+		var c: int = queue.pop_front()
+		for o: int in [1, -1, map.width, -map.width]:
+			var j := c + o
+			if j < 0 or j >= map.cells.size() or seen.has(j) or absi(j % map.width - c % map.width) > 1:
+				continue
+			seen[j] = true
+			var x := j % map.width
+			var y := j / map.width
+			if (map.walkable(x, y) or map.floats(x, y)) and map.door_of[j] < 0 and server.put_on_floor(j, item):
+				return true
+			queue.append(j)
+	return false
 
 
 func _clear_region() -> void:
@@ -541,7 +654,11 @@ func _clear_region() -> void:
 
 func _put(at: Vector2i, local: int, things: PackedByteArray) -> void:
 	var c := _cell(at, local)
-	server.floor_things[c] = things.duplicate()
+	var here: PackedByteArray = things.duplicate()
+	if server.floor_things.has(c):
+		# (v69) something drifted onto it when the ship was laid down: keep both
+		here.append_array(server.floor_things[c] as PackedByteArray)
+	server.floor_things[c] = here
 	server.replication.floor_record(c)
 
 

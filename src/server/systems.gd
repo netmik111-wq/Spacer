@@ -15,10 +15,17 @@ const PUMP_CLOSE := 0.05               # a chamber this close to the docked ship
 const PUMP_PER_STEP := 0.02            # air moved per chamber cell per air step (two ticks): about 5 s for a full chamber
 
 var server: GameServer
+var cycles := {}                     # (v69) airlock pump cell -> [the door pressed, the tick it was pressed] (see call_lock)
+var vents_on := true                 # (v69) the room vents (tests switch them off)
+const CYCLE_SECONDS := 40            # a press gives up after this long
+const CYCLE_OPEN_TICKS := 60         # the door it opens stays open at least this long (3 s)
+const VENT_PER_STEP := 0.012         # (v69) air a room's vent blows into it per air step: as an air plant does
+const VENT_UNTIL := 0.95             # it tops a room up to this share of normal pressure
 
 
 func setup(p_server: GameServer) -> void:
 	server = p_server
+	cycles = {}
 
 
 func at_console(p: Player, cells: Dictionary) -> bool:
@@ -294,6 +301,43 @@ func feed_air() -> void:
 	for cell: int in server.map.air_plant.keys():
 		if not server.ship.broken.has(cell) and server.ship.store_air > 0.0:
 			server.ship.store_air = maxf(server.ship.store_air - server.air.feed(server.map.air_plant[cell], minf(Air.PLANT_PER_STEP, server.ship.store_air)), 0.0)
+	_vents()
+
+
+func _vents() -> void:
+	## (v69, the author's idea: "a vent in every room, so we get the air back; bots
+	## collapse without it") Each room of our ship has a vent (ShipMap.vents) fed by
+	## the air plant from the ship's store: it tops the room up toward normal pressure.
+	## It needs the plant whole, and it shuts in a room with a hole in the hull (it
+	## would only blow the store into space).
+	if not vents_on or server.ship.store_air <= 0.0:
+		return
+	var plant_ok := false
+	for cell: int in server.map.air_plant.keys():
+		plant_ok = plant_ok or not server.ship.broken.has(cell)
+	if not plant_ok:
+		return
+	var map := server.map
+	for k in map.vents.size():
+		var room: PackedInt32Array = map.rooms[map.room_of[map.vents[k]]]
+		var sum := 0.0
+		for c in room:
+			sum += server.air.air[c]
+		if sum / room.size() >= VENT_UNTIL or _holed(room):
+			continue
+		server.ship.store_air = maxf(server.ship.store_air - server.air.feed(map.vents[k], minf(VENT_PER_STEP, server.ship.store_air)), 0.0)
+		if server.ship.store_air <= 0.0:
+			return
+
+
+func _holed(room: PackedInt32Array) -> bool:
+	## Is there a hole in the hull next to this room (or a door of it open to space)?
+	var w := server.map.width
+	for c in room:
+		for o: int in [1, -1, w, -w]:
+			if server.air.holes.has(c + o):
+				return true
+	return false
 
 
 func break_console(near: int = -1) -> bool:
@@ -469,15 +513,59 @@ func lock_bars(door: int) -> bool:
 
 func call_lock(p: Player, door: int) -> bool:
 	## (v66, the author's answer to L1) The button by each airlock door, on both
-	## sides: a press on a shut airlock door held by its shutter runs the chamber's
-	## pump so that this door can open (in for the inner door, out for the outer
-	## one, or to a docked ship's pressure). True if the pump is at it.
+	## sides. (v69, the author's idea "buttons for the room where we go to space")
+	## A press does the whole trip: the chamber's other door shuts, the pump empties
+	## the chamber into the ship's air store or fills it from there (or matches a
+	## docked ship), and the door pressed opens by itself (see run_cycles). True if
+	## the trip has begun.
 	var pump := _pump_of(door)
-	if pump < 0 or not lock_bars(door) or not _pump_helps(pump, door):
+	if pump < 0 or not lock_bars(door):
 		return false
-	if not server.ship.pumps.has(pump):
+	var doors := server.doors
+	var other: int = doors.partner[door]
+	if doors.held_by_partner(door):
+		if doors.jammed[other] == 1 or doors.forced[other] == 1 or not server.powered():
+			return false                     # stuck open: only forcing by hand gets past
+	elif not _pump_helps(pump, door):
+		return false
+	if not cycles.has(pump) and p != null and p.peer != null:
+		server.chat.tell(p, "Шлюз: %s." % ("выход наружу" if door == int(server.map.lock_pump[pump]["outer"]) else "вход в корабль"))
+	cycles[pump] = [door, server.tick]
+	if not doors.held_by_partner(door) and not server.ship.pumps.has(pump):
 		toggle_pump(p, pump, _way_through(pump, door))
-	return server.ship.pumps.has(pump)
+	return true
+
+
+func run_cycles() -> void:
+	## (v69) Airlock trips under way (call_lock): one step each tick.
+	if cycles.is_empty():
+		return
+	var doors := server.doors
+	for pump: int in cycles.keys():
+		var door: int = cycles[pump][0]
+		var other: int = doors.partner[door]
+		if server.tick - int(cycles[pump][1]) > CYCLE_SECONDS * Net.TICK_HZ or not server.powered():
+			cycles.erase(pump)
+			continue
+		if not doors.is_shut(other):
+			if doors.jammed[other] == 1 or doors.forced[other] == 1:
+				cycles.erase(pump)
+				continue
+			server.door_hold[other] = mini(server.door_hold[other], server.tick)   # it shuts once its doorway is clear
+			continue
+		if doors.locked[door] == 1:
+			if not server.ship.pumps.has(pump):
+				if _pump_helps(pump, door):
+					server.ship.pumps[pump] = _way_through(pump, door)
+					server.to_all(server.ship.devices_packet())
+				elif server.tick - int(cycles[pump][1]) > Net.TICK_HZ:
+					cycles.erase(pump)           # the pump cannot do it (no air in store): forcing by hand is left
+			continue
+		if doors.is_shut(door) and doors.blast[door] == 0:
+			doors.ready[door] = server.tick + Doors.OPEN_TICKS
+			server.door_hold[door] = server.tick + Doors.OPEN_TICKS + CYCLE_OPEN_TICKS
+			server.chat.sound(Net.SOUND_DOOR, server.map.doors[door].x, server.map.doors[door].y)
+		cycles.erase(pump)
 
 
 func get_past(p: Player, door: int, ours: bool) -> bool:

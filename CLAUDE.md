@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v68 (version 0.61, fights for the whole crew) is the latest. Plans one to four are done except the darkness front (the
+Build v69 (version 0.62, the author's bug notes and two ideas) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -50,7 +50,8 @@ interesting" plan (`/mnt/project-files/plans/every-part-plan.md`): fuel in units
 outside, work places, traders' wants, the refinery, the parting volley; v68 fights for the whole crew: the pilot's evade, the engineer's power panel (switches, breakers,
 overcharge), rounds loaded by hand, fights with goals, alert levels, breakdowns from hits, fight news on the bridge only.
 Several reactors is a later question round (it breaks the one-engine rule).
-Next in that plan: v69 people over bots, v70 upkeep, v71 fear, then a fire question round.
+v69 was the author's notebook between plan builds: 11 bug fixes, wrecks kept on the chart, the one-press airlock, vents.
+Next in that plan: people over bots, upkeep, fear (each its own build), then a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -81,7 +82,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 29 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 30 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -111,6 +112,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/airlocktest.gd (since v66: bots and pirates through the airlock, follow outside)
     godot --headless --path . --script res://tools/salvagetest.gd (since v67: fuel units, pouring, scrap, floating finds, work places, refinery)
     godot --headless --path . --script res://tools/crewfighttest.gd (since v68: power panel, overcharge, evade, loaded mounts, goals, alerts, knock-on)
+    godot --headless --path . --script res://tools/fixtest.gd (since v69: self-healing, autodoc, buried finds, docking, wrecks on the chart, hunters, station, locked rooms, airlock cycle, vents, sight)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -134,7 +136,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 29 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 30 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -322,6 +324,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   that needs one calls `Systems` directly; `systems.knock_chance` pins pirate hits' knock-on (0 or 1). Raids roll a goal only
   with `gunnery.goal_next` (the director and the road set it) or `goal_for_test`. A mount fires its breech first
   (`Mounts.take_round`/`has_round`): never take ammo from the store by hand for a shot.
+- (v69) A pirate wreck left behind is kept in `Road.hulks` (a P_HULK place) and comes back alongside when the ship is
+  within `WRECK_REACH` of it again: a test that wrecks pirates and then moves the ship or wants a clear system clears
+  `server.road.hulks`. A hunter after a fight waits `road.breather` (tests set 0). The server sends characters all round
+  (`replication.set_round(false)` for strict cone checks). Vents refill sealed rooms (`systems.vents_on = false` to
+  keep a room empty). Leaving a locked room is free (`ShipMap.leaving`); a hacked lock stays open (`Doors.picked`).
+  `Derelict._put` adds to a floor cell, never replaces.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

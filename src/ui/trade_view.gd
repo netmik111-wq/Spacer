@@ -108,6 +108,9 @@ func refresh() -> void:
 		_note("Торговца рядом нет: торговать можно, пристыковавшись к нему, и только с питанием.")
 		_about.text = ""
 		return
+	if client.at_station():
+		_station()
+		return
 	if _cat == SERVICES:
 		_services()
 	else:
@@ -219,6 +222,17 @@ func _thing_row(item: int) -> void:
 		func() -> void: client.send_store(Net.STORE_BUY, item))
 	_button(row, ("Продать: %d кр." % sell) if sell > 0 else "Не купит", have > 0 and sell > 0,
 		func() -> void: client.send_store(Net.STORE_SELL, item))
+
+
+func _station() -> void:
+	## (v69) A supply station: it refills air, fuel and the hull for free and sells only a
+	## few things; it buys nothing (that is a trader's business).
+	_credits.text = "Станция снабжения · Кредиты: %d" % client.credits
+	for item: int in client.trade.keys():
+		var row := _row(item, Items.name_of(item), "в шкафу: %d" % client.stock(item), "%s. %s" % [Items.name_of(item), Items.about(item)])
+		var price: int = client.trade[item]
+		_button(row, "Купить: %d кр." % price, client.credits >= price, func() -> void: client.send_store(Net.STORE_BUY, item))
+	_about.text = "Станция снабжения бесплатно пополняет воздух, топливо и обшивку, а продаёт только это. Продать что-то, нанять людей и купить остальное можно у торговцев."
 
 
 func _services() -> void:

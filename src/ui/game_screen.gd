@@ -597,7 +597,7 @@ func _show_trade(on: bool) -> void:
 		_trade_view.setup(client)
 	_store_view.visible = not on
 	_trade_view.visible = on
-	_console_title.text = "Торговец" if on else "Склад корабля: шкаф снабжения"
+	_console_title.text = ("Станция снабжения" if client.at_station() else "Торговец") if on else "Склад корабля: шкаф снабжения"
 	_console.reset_size()
 
 
@@ -1324,6 +1324,8 @@ func _process(delta: float) -> void:
 		_hint.text = "Голокарта обесточена: %s" % why if no_power else "E: голокарта корабля (воздух, пробоины, поломки)"
 	elif target == 19:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
+	elif target == 40:
+		_hint.text = "Чиню замок…" if (_use_held and client.work > 0) else "Замок взломан: дверь открыта для всех. Держите E, чтобы починить (с запчастью быстрее)"
 	elif target == 18:
 		var room: String = Net.ACCESS_NAMES.get(client.map.door_access[client.map.door_of[client.use_cell()]], "отсек")
 		_hint.text = "Взламываю замок…" if (_use_held and client.work > 0) else "Нет доступа: %s. Держите E, чтобы взломать замок (услышит весь корабль)" % room
@@ -1449,14 +1451,14 @@ func _process(delta: float) -> void:
 			elif info.has("blow"):
 				extra = "    Щелчок рядом: удар"
 			elif info.has("heal"):
-				extra = "    Щелчок по себе или соседу: заклеить раны"
+				extra = "    Щелчок по соседу или Z на себя: заклеить раны"
 			elif Items.worn_as(item) >= 0:
 				if Items.tank_of(item) >= 0:
 					what += " (кислорода %d%%)" % (Items.tank_of(item) * 100 / Net.SUIT_TANK_STEPS)
 				extra = "    Z: надеть"
 			elif Items.uses(item) > 0:
 				what += " (%d из %d)" % [Items.uses(item), Net.MEDKIT_USES]
-				extra = "    Щелчок по себе или соседу: лечить, 3 с не двигаясь"
+				extra = "    Щелчок по соседу или Z на себя: лечить, 3 с не двигаясь"
 			_hand_label.text = Options.keyed("В руке: %s%s    G: положить" % [what, extra])
 		# a weapon in the hand shows a sight instead of the arrow
 		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") or Items.uses(item) > 0 else Input.CURSOR_ARROW)

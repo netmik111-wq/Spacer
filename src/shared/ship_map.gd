@@ -68,6 +68,9 @@ var door_partner := PackedInt32Array() # per door: the other door of its airlock
                                      # Only one of the two may be open at a time (see Doors.bump)
 var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
 var door_access := PackedByteArray() # per door: the access it asks for (Net.ACCESS_* bits), 0 = anybody
+var vents := PackedInt32Array()     # (v69) floor cells with a room's air vent, one per room (see _place_vents)
+var access_in := PackedByteArray()   # (v69) per cell: the access of the restricted room it lies in (0 = none):
+                                     # its doors open for anybody leaving it (see leaving)
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -216,6 +219,13 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			zones.append(PackedInt32Array())
 		zones[at] = PackedInt32Array(z[1])
 	_find_rooms()
+	access_in = PackedByteArray()
+	access_in.resize(width * height)
+	for r: Array in data.get("access_rooms", []):
+		var at := int(r[1]) * width + int(r[0])
+		if at >= 0 and at < room_of.size() and room_of[at] >= 0:
+			for c: int in rooms[room_of[at]]:
+				access_in[c] |= int(r[2])
 	for i in cells.size():
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
@@ -315,7 +325,36 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			var outside := is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 			if inside and outside:
 				hull.append(y * width + x)
+	_place_vents()
 	return ""
+
+
+func _place_vents() -> void:
+	## (v69, the author's idea) A vent in every room but an airlock's chamber: on the
+	## floor cell nearest the room's middle that is no ladder, hatch or catwalk.
+	vents = PackedInt32Array()
+	var chambers := {}
+	for pump: int in lock_pump.keys():
+		for c: int in lock_pump[pump]["chamber"]:
+			chambers[c] = true
+	for room: PackedInt32Array in rooms:
+		if room.size() < 2 or chambers.has(room[0]):
+			continue
+		var mid := Vector2.ZERO
+		for c in room:
+			mid += Vector2(c % width, c / width)
+		mid /= room.size()
+		var best := -1
+		var best_d := INF
+		for c in room:
+			if climb[c] >= 0 or see_through[c] == 1:
+				continue
+			var d := Vector2(c % width, c / width).distance_squared_to(mid)
+			if d < best_d - 0.001:
+				best_d = d
+				best = c
+		if best >= 0:
+			vents.append(best)
 
 
 func _find_airlocks() -> String:
@@ -496,6 +535,13 @@ func door_tint(d: int) -> String:
 func is_other(cell: int) -> bool:
 	## Is this cell part of the other ship (while it is here)?
 	return other_at != NO_OTHER and cell >= 0 and cell < cells.size() and base_cells[cell] < 0 and cells[cell] >= 0
+
+
+func leaving(x: int, y: int, door: int) -> bool:
+	## (v69, the author's note: no time to break the lock coming back from space) Is one
+	## standing at x, y on the inside of that restricted door? Leaving a locked room is free.
+	var c := y * width + x
+	return c >= 0 and c < access_in.size() and (access_in[c] & door_access[door]) != 0
 
 
 func on_ship(cell: int) -> bool:

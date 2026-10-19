@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v68 (version 0.61).
+Last updated: build v69 (version 0.62).
 
 Contents:
 
@@ -111,6 +111,10 @@ Contents:
     who hacked it and where.
   - **Without power** locks don't work: the door opens by hand like any other. That way
     the path to the bridge remains even when everything is broken.
+  - (v69, the author's note) **Leaving is always free**: a locked door opens for anyone walking out of its
+    compartment, so nobody is shut in (coming back from space short of oxygen, say).
+  - (v69) A **hacked lock stays broken**: the door opens for everybody and its lock lamp glows **amber** until
+    someone mends it (hold E, 6 s with a spare part, which it uses, 18 s without).
 - Door troubles (eventer events):
   - **jammed open**: air moves freely until repaired;
   - **shutter faulty**: stuck as it was, raised or dropped, until repaired.
@@ -139,6 +143,10 @@ Contents:
   pressing **E** on a shut airlock door held by its shutter runs the chamber's pump so that this door can open (in for
   the inner door, out for the outer one, to a docked ship's pressure at the outer door); ~5 s. It needs power, both doors
   shut and, to pump in, air in the reserve. Holding E still raises the shutter by hand.
+- (v69, the author's idea) **One press does the whole trip.** E on either airlock door (from the corridor, the
+  chamber or space) shuts the chamber's other door, runs the pump (air out goes into the ship's reserve, air in
+  comes from it) and then **opens the pressed door by itself**; it stays open at least **3 s**. A press gives up
+  after **40 s** or when the power goes.
 - (v66) **Bots and pirates get through the airlock too.** A bot of ours whose way leads through a door that will not
   open presses that door's button and waits; with no power or no air in the reserve it raises the shutter by hand
   (3 s, as above). It waits while the chamber's other door is merely open (that one shuts by itself), and it
@@ -163,6 +171,11 @@ Contents:
 - **Sealing a breach**: face it and hold E for 6 s; a **patch** is needed.
 - A sealed compartment stays without air until you open a door to an intact one. Air lost to space
   is returned by the air plant and the supply station.
+- (v69, the author's idea) **A vent in every room** of our ship (drawn as a small floor grille; none in the
+  airlock chamber). Fed from the ship's air reserve, it tops its room up to **95%** of normal pressure at the
+  air plant's pace (**0.012** of a cell's air per air step). It needs power, a working air plant and the air
+  breaker on; it **stops while the room has a hole in the hull** and starts again once the hole is sealed. So a
+  sealed-off compartment fills again by itself while the reserve lasts.
 
 ## 5. Health, wounds and death
 
@@ -362,6 +375,8 @@ Contents:
   no more than 9 in reserve), **patch the hull** (+**20** integrity for **10** credits).
 - **Supply station**: when docked, free of charge it restores air in the compartments and the plant's reserve,
   tops the fuel tank up to **300** units (v67) and patches the hull completely.
+  (v69, the author's note) It is **not a trader**: no selling, buying back, hiring or paid services there. Its
+  locker screen («Станция снабжения») lists only what it sells (robots, the extender) and what it does for free.
 
 ## 11. Light and darkness
 
@@ -400,6 +415,9 @@ Contents:
 
 ## 12. Field of view
 
+- (v69, the author's note: people popped in late when turning) The server sends each player everyone their
+  character could see **by turning round** (walls still hide them); the game itself hides those behind instantly.
+  So turning shows people at once, without waiting for the ping.
 - A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
   in the middle (later, losing an eye will remove its part of the cone).
 - The eyes reach **9 cells** (v46, the author: as in SS13; before it was 20). The screen is zoomed so
@@ -503,6 +521,9 @@ Contents:
   Enough for **5** uses. If you move, treatment is interrupted. 3 s is without skill; the medicine
   skill cuts the time by up to half (with skill 50 — 2.25 s).
 - Healing closes only wounds; health taken by the air returns by itself.
+- (v69, the author's note) A click **anywhere on your own cell** treats yourself, and **Z** with a plaster or a
+  medkit in hand treats yourself too. When nothing happens a message says why: no wounds, the health was lost to
+  hunger (food helps) or to thin air (good air brings it back).
 
 ## 16. Helping the fallen: searching and dragging
 
@@ -710,8 +731,12 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   - **15%**: its survivors **fight**: they come out armed from the far end of the wreck;
   - **15%**: its survivors **give up and join us**: each one becomes +1 to the crew reserve (up to 9).
 - Bodies of crew killed by hits on its quarters lie aboard in every case.
-- It stays until our ship moves (a course or a jump); while someone is on it or it is docked, the ship
-  doesn't move, as with a derelict.
+- (v69, the author's request) It **stays on the chart** as a place, «разбитый пират», where it was wrecked. It
+  stays alongside while our ship is within **10** of that spot; fly further or jump away and it is left there,
+  with what is still on it (and any survivors). Come back within 10 and it comes alongside again. If that spot is too
+  close to a trader, a station, another place or another wreck, it is marked a little further off (at least **6**
+  past both ranges). While someone is on it or it is docked, the ship doesn't move, as with a derelict.
+- (v69) **Docking needs the ship stopped**: no course and no jump charging.
 
 ### Pirate flagship: the goal of the game (v57)
 
@@ -1001,6 +1026,8 @@ The author's notes N1 and S1: the crew do the ship's work with their hands, and 
   close by themselves), then health. Someone out cold comes round as usual once health is back. From nothing to
   whole takes about 35 s. It **never brings back the dead** (bodies stay).
 - Somebody holding E at the autodoc **tends** the patient: twice as quick, and a lesson in medicine every 5 s.
+- (v69) With two on its cell it heals **the worst off who needs it**, never a whole one, and never the one holding E:
+  you may stand on the bed and tend somebody lying there.
 - E at the scanner reports on whoever lies in the nearest autodoc (or on yourself): health, wounds, conscious or
   not, suit and oxygen. It is groundwork for the complex health the author has in mind (cryo capsules later).
 - Both can break and be mended like any machine.
@@ -1230,6 +1257,11 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   our trail from where we left it.
   (v67, the author's O3) Jumping out of any pirate fight: every pirate gun charged at least half fires a **parting
   volley** as we go (it lands at once), and the next hunter comes **60 s** sooner.
+  (v69, the author's notes) A second hunter already waiting in our system comes out only **45 s** after a fight ends
+  (the chat warns), so it can't be taken for the first one back at full strength. A hunter no longer waits while
+  another ship is alongside or docked: if nobody of ours is outside, that ship is **pushed off** and the fight starts
+  (fly back to it later and it comes alongside again); while anybody of ours is outside, the hunter **shells our hull
+  from range**: **4** hull every **8 s** until everyone is back aboard, then comes in.
   (v66) Each time we escape the same hunter it is slower: a lane takes it **75 s × (1 + 0.5 per escape)** (113 s after
   one escape, 150 s after two, 188 s after three).
 
@@ -1239,7 +1271,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   and the kind of cluster each leads to, «?» for unknown systems, nebulae as grey clouds, hunters, the flagship, quest
   marks and SOS) and **«Карта пути»** (the road: the clusters passed, the one we are in, and how many to the flagship's).
   Its text says the cluster's kind and number, fuel, whether this is an exit, the hunters and the time to the next.
-- The ship-control console shows the places found in the system (and the ambush's circle).
+- The ship-control console shows the places found in the system (and the ambush's circle), and (v69) the pirate
+  wrecks left in it.
 
 ## 20. Eventer (GM)
 

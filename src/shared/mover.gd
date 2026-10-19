@@ -63,8 +63,8 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 		return false
 	var door := map.door_at(nx, ny)
 	if door >= 0:
-		if doors.barred(door, map.door_access[door], st.access):
-			return false                 # a restricted room, and its job gives no access there
+		if doors.barred(door, map.door_access[door], st.access) and not map.leaving(st.x, st.y, door):
+			return false                 # a restricted room, and its job gives no access there (v69: leaving it is free)
 		if doors.blocks(door, st.access):
 			return false                 # (v60) a blast door locked against boarders
 		doors.bump(door, tick)

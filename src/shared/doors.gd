@@ -45,6 +45,7 @@ var faulty := PackedByteArray()      # per door: 1 = its emergency shutter no lo
 var partner := PackedInt32Array()    # per door: the other door of its airlock, or -1 (set from ShipMap.door_partner)
 var dead := PackedByteArray()        # per door: 1 = it has no power at all (a derelict's): always opened by hand
 var blast := PackedByteArray()       # (v60) per door: 1 = locked as a blast door against boarders
+var picked := PackedByteArray()      # (v69) per door: 1 = its access lock was broken open: it opens for anybody until mended
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -67,6 +68,8 @@ func setup(count: int) -> void:
 	dead.fill(0)
 	blast.resize(count)
 	blast.fill(0)
+	picked.resize(count)
+	picked.fill(0)
 	bumped.clear()
 
 
@@ -77,6 +80,7 @@ func copy_from(o: RefCounted) -> void:
 	faulty = o.faulty.duplicate()
 	forced = o.forced.duplicate()
 	blast = o.blast.duplicate()
+	picked = o.picked.duplicate()
 	partner = o.partner
 	dead = o.dead
 	manual = o.manual
@@ -85,7 +89,7 @@ func copy_from(o: RefCounted) -> void:
 
 func flags(door: int) -> int:
 	## The door's troubles as one byte, the way they travel over the network.
-	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3) | (blast[door] << 4)
+	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3) | (blast[door] << 4) | (picked[door] << 5)
 
 
 func set_flags(door: int, value: int) -> void:
@@ -94,6 +98,7 @@ func set_flags(door: int, value: int) -> void:
 	faulty[door] = (value >> 2) & 1
 	forced[door] = (value >> 3) & 1
 	blast[door] = (value >> 4) & 1
+	picked[door] = (value >> 5) & 1
 
 
 func open_ticks(door: int = -1) -> int:
@@ -123,7 +128,7 @@ func barred(door: int, needs: int, has: int) -> bool:
 	## A shut door of a restricted room does not open for one without its
 	## access. Its lock needs power: without it the door is pushed open by hand
 	## like any other.
-	return needs != 0 and (has & needs) == 0 and ready[door] == CLOSED and not manual and dead[door] == 0
+	return needs != 0 and (has & needs) == 0 and ready[door] == CLOSED and not manual and dead[door] == 0 and picked[door] == 0
 
 
 func blocks(door: int, has: int) -> bool:

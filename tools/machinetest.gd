@@ -34,6 +34,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.systems.vents_on = false   # (v69) the rooms' vents would fill the compartments this test keeps shut
 	var map := server.map
 	_expect(map.engine.size() == 1 and map.air_plant.size() == 1, "the ship has an engine and an air plant")
 	var engine: int = map.engine.keys()[0]
