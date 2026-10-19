@@ -37,6 +37,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	_pirates()
 	_kinetic_and_guard()
 	_loot()

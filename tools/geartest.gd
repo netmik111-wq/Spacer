@@ -39,6 +39,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	eng = server.crew.new_player("Механик")
 	eng.take_job(Net.JOB_ENGINEER)
 	_systems()

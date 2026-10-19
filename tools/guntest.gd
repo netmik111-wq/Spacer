@@ -39,6 +39,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.gunnery.flies = false              # (v56) shots land the moment they are fired here
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	var map := server.map
 	var g: Gunnery = server.gunnery
 	server.shipyard.classic = true          # (the checks below were written for the old pirate ship: see shiptest for the rolled ones)
