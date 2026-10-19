@@ -210,6 +210,12 @@ func _roam() -> void:
 		if s.kind[n] != Sectors.STATION:
 			ways.append(s.cell[n])
 	if ways.is_empty():
+		# a dead end whose only lane leads to a station: it slips past the station (never stops there)
+		for n in s.neighbours(s.index_of(at)):
+			for m in s.neighbours(n):
+				if s.kind[m] != Sectors.STATION and s.cell[m] != at:
+					ways.append(s.cell[m])
+	if ways.is_empty():
 		return
 	# it leans towards us when we are in its area
 	var pick: Vector2i = ways[_rng.randi_range(0, ways.size() - 1)]

@@ -135,6 +135,7 @@ func next_cluster(exit_k: int) -> void:
 	_fight = {}
 	server.been[Sectors.key(entry)] = true
 	build(entry)
+	server.ship.sector = s.here              # (before the story looks: its locker news reads the system's kind)
 	_restart_clock()
 	server.story.left_cluster()
 	server.chat.say("Корабль вышел в скопление «%s» (%d-е на пути): %s.%s" % [Sectors.CLUSTER_NAMES[into], depth + 1,

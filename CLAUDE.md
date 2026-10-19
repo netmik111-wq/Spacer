@@ -203,7 +203,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `comms_view.gd` (v63, the comms console).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
-  under xvfb-run). `maps/`: ship blueprints (`*.txt`, built to `*.json`).
+  under xvfb-run), `playthrough.gd` (2026-10-19: a script captain plays whole campaigns and records every number,
+  `-- OUT_DIR runs first mode hours stay`), `simreport.py` (gathers those records into tables for the records page).
+  `maps/`: ship blueprints (`*.txt`, built to `*.json`).
 
 ## Pitfalls
 
