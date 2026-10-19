@@ -743,6 +743,11 @@ build time; change them if the author answers otherwise.
 - **Security robots** (R1, the author's K11): `Player.ally` (not crew, not pirate), moved by `Pirates.think` with
   the sides turned (`Pirates.foe`). Up to 2, toughness 1.4, set down on a cell beside its carrier; a save puts them
   back into the locker. Every check that counts the crew skips `ally` too (new pitfall).
+- **Hold fire past a friend** (2026-10-19, mine, found by a flaky enemytest check): a bullet hits whoever it meets
+  first, and `Pirates.think` shot without looking, so our robot emptied magazines into the crewman beside it and
+  pirates shot each other. `Pirates._friend_in_way` stops the shot when one of its own side stands within
+  `FRIEND_CLEAR` (0.8 cells: the hit radius 0.45 plus about half the aim spread) of the line short of the target;
+  it then walks toward the target, which usually clears the line.
 
 ### The road and its story (v63)
 

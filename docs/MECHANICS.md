@@ -1051,6 +1051,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   100), needs no air, wears nothing, does no work, cannot be ordered and is **not crew** (it fills no crew place). At
   most **2** stand aboard. Broken, it leaves a spare part half the time. A save puts those still standing back into the
   locker in their crates.
+- (after v63) A robot or a pirate **holds fire** while one of its own side stands within 0.8 of a cell of the line of
+  fire, and moves toward its target instead. Before this our robot kept shooting the crewman standing between it and
+  a pirate.
 - Supply stations now have a small shop at the supply locker: the extender (while the bay has 2 slots) and robots.
 
 ### Ammunition at the workbench (v60)
