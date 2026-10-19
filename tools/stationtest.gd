@@ -157,7 +157,14 @@ func _initialize() -> void:
 	var victims: Array = server.enemy_crew.people.duplicate()
 	server.combat.hurt(victims[0], 999, null)
 	_run(3)
-	_expect(g.boarders_left() == n - 1 and d._pirates_party == n - 1 and server.enemy_crew.count() == n - 1, "one dead: its crew count follows (%d)" % g.boarders_left())
+	# (its crew walk about, and now and then one has stepped across onto our ship: it
+	# no longer counts as its crew, so count those still on their own ship)
+	var home := 0
+	for v in victims:
+		if not v.corpse and v.cond != Net.COND_DEAD and map.is_other(v.st.y * map.width + v.st.x):
+			home += 1
+	_expect(home < n and g.boarders_left() == home and d._pirates_party == home and server.enemy_crew.count() == home,
+		"one dead: its crew count follows (%d, %d of %d on their ship)" % [g.boarders_left(), home, n])
 	for v in victims:
 		server.combat.hurt(v, 999, null)
 	boarder.health = 100.0
@@ -169,7 +176,11 @@ func _initialize() -> void:
 	for p in server.players:
 		if p != null and p.corpse and map.is_other(p.st.y * map.width + p.st.x):
 			bodies += 1
-	_expect(bodies == n, "its dead lie aboard, no more and no fewer (%d)" % bodies)
+	var there := 0                                     # (those who died on our side lie there)
+	for v in victims:
+		if map.is_other(v.st.y * map.width + v.st.x):
+			there += 1
+	_expect(bodies == there and there > 0, "its dead lie aboard, no more and no fewer (%d of %d)" % [bodies, there])
 
 	server.stop()
 	print("stationtest: %d failed" % failed)
