@@ -41,8 +41,9 @@ func _initialize() -> void:
 		if p != null and p.bot and not p.corpse:
 			if bot == null:
 				bot = p
-			else:
-				server.stations.order_asked(cap, p.slot, Net.POST_FREE)
+			# kept at the engine, below decks, while not under test: a wandering bot would use the airlock too
+			server.stations.order_asked(cap, p.slot, Net.POST_ENGINE)
+	_buttons()
 	_follow_into_chamber()
 	_back_from_empty_chamber()
 	_back_from_outside()
@@ -96,6 +97,39 @@ func _outside_spot() -> int:
 
 func _bridge_spot() -> int:
 	return int(server.stations.spots[Net.POST_HELM][0][0])
+
+
+func _buttons() -> void:
+	print("  -- the button by each airlock door (the author's answer to L1)")
+	var map = server.map
+	_reset()
+	_suit(cap)
+	var o: Vector2i = map.doors[outer]
+	var out := _outside_spot()
+	_place(cap, out)
+	for d in range(1, 5):
+		if out % map.width + Net.DX[d] == o.x and out / map.width + Net.DY[d] == o.y:
+			cap.st.facing = d
+	_wait(1, func(): return false)
+	_expect(server.doors.locked[outer] == 1, "from space the outer door is held: the chamber is full")
+	server.repairs.press(cap)
+	_expect(int(server.ship.pumps.get(pump, 0)) == server.systems.PUMP_OUT, "its button pumps the chamber out")
+	var ok := _wait(20, func(): return server.doors.locked[outer] == 0)
+	_expect(ok and server.systems.lock_air(pump) < 0.1, "and the outer door gives (chamber air %.2f)" % server.systems.lock_air(pump))
+	var i: Vector2i = map.doors[inner]
+	var below := -1
+	for d in range(1, 5):
+		var c: int = (i.y + Net.DY[d]) * map.width + i.x + Net.DX[d]
+		if map.walkable(i.x + Net.DX[d], i.y + Net.DY[d]) and not chamber.has(c):
+			below = c
+			_place(cap, c)
+			cap.st.facing = [0, 2, 1, 4, 3][d]
+	_wait(2, func(): return false)
+	_expect(below >= 0 and server.doors.locked[inner] == 1, "from the corridor the inner door is held: the chamber is empty")
+	server.repairs.press(cap)
+	_expect(int(server.ship.pumps.get(pump, 0)) == server.systems.PUMP_IN, "its button pumps the chamber full")
+	ok = _wait(20, func(): return server.doors.locked[inner] == 0)
+	_expect(ok and server.systems.lock_air(pump) > 0.85, "and the inner door gives (chamber air %.2f)" % server.systems.lock_air(pump))
 
 
 func _follow_into_chamber() -> void:
@@ -156,7 +190,7 @@ func _follow_back_in() -> void:
 	var ok := _wait(90, func(): return _inside(bot) and absi(bot.st.x - cap.st.x) + absi(bot.st.y - cap.st.y) <= 1)
 	_expect(ok, "it comes back in beside him (at %d,%d, doing %d)" % [bot.st.x, bot.st.y, bot.doing])
 	_expect(_ship_air_ok(), "and the ship still has its air")
-	server.stations.order_asked(cap, bot.slot, Net.POST_FREE)
+	server.stations.order_asked(cap, bot.slot, Net.POST_ENGINE)
 
 
 func _pirate_comes_in() -> void:
@@ -215,7 +249,7 @@ func _follow_onto_docked() -> void:
 	server.stations.order_asked(cap, bot.slot, Net.POST_FOLLOW)
 	_wait(20, func(): return false)
 	_expect(_inside(bot) and bot.cond == Net.COND_OK, "but without a suit it will not follow him into a vacuum (at %d,%d, doing %d)" % [bot.st.x, bot.st.y, bot.doing])
-	server.stations.order_asked(cap, bot.slot, Net.POST_FREE)
+	server.stations.order_asked(cap, bot.slot, Net.POST_ENGINE)
 	d.dock(false)
 
 
@@ -234,7 +268,7 @@ func _jammed_outer() -> void:
 	server.stations.order_asked(cap, bot.slot, Net.POST_FOLLOW)
 	_wait(40, func(): return false)
 	_expect(server.doors.is_shut(inner) and _ship_air_ok(), "a bot will not override the inner door's lock and let the ship's air out")
-	server.stations.order_asked(cap, bot.slot, Net.POST_FREE)
+	server.stations.order_asked(cap, bot.slot, Net.POST_ENGINE)
 
 
 func _ship_air_ok() -> bool:
@@ -251,7 +285,7 @@ func _wait(seconds: int, done: Callable) -> bool:
 		if done.call():
 			return true
 		if OS.get_environment("LOCKDEBUG") != "" and t % 20 == 0:
-			print("    t%d bot %d,%d step %d lock %d using %s work %d | inner r%d l%d f%d | outer r%d l%d f%d | air %.2f pumps %s" % [t, bot.st.x, bot.st.y, bot.bot_step, bot.bot_lock, bot.using, bot.work,
+			print("    t%d bot %d,%d step %d using %s work %d | inner r%d l%d f%d | outer r%d l%d f%d | air %.2f pumps %s" % [t, bot.st.x, bot.st.y, bot.bot_step, bot.using, bot.work,
 				server.doors.ready[inner] - server.tick, server.doors.locked[inner], server.doors.forced[inner], server.doors.ready[outer] - server.tick, server.doors.locked[outer], server.doors.forced[outer], server.systems.lock_air(pump), server.ship.pumps])
 	return false
 

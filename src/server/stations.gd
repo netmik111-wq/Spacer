@@ -410,7 +410,7 @@ func bot_think(p: Player) -> bool:
 		server.movement.climb(p)
 		p.bot_plan_tick = -1000
 		return true
-	if _through_lock(p, here):
+	if _through_lock(p):
 		return true
 	if p.bot_step > 0:
 		p.using = false
@@ -427,23 +427,13 @@ func bot_think(p: Player) -> bool:
 	return true
 
 
-func _through_lock(p: Player, here: int) -> bool:
-	## (v66) Its way leads through an airlock door that will not open: it pumps the
-	## chamber or forces the door (Systems.get_past) until the door gives.
-	if p.st.cd > 0:
-		return p.bot_lock >= 0               # mid-step on its way to the pump: keep going
-	var sys := server.systems
-	if p.bot_step > 0:
-		var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
-		if sys.lock_bars(ahead):
-			p.bot_lock = ahead
-	if p.bot_lock >= 0:
-		var pump: int = sys._pump_of(p.bot_lock)
-		var near: bool = pump >= 0 and (server.map.lock_pump[pump]["chamber"] as PackedInt32Array).has(here) \
-			or server.map.doors[p.bot_lock].distance_squared_to(Vector2i(p.st.x, p.st.y)) == 1
-		if not sys.lock_bars(p.bot_lock) or not near:
-			p.bot_lock = -1
-	return p.bot_lock >= 0 and sys.get_past(p, p.bot_lock, true)
+func _through_lock(p: Player) -> bool:
+	## (v66) Its next step is into an airlock door that will not open: it presses
+	## the door's button or forces it (Systems.get_past) until the door gives.
+	if p.bot_step <= 0 or p.st.cd > 0:
+		return false
+	var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
+	return server.systems.lock_bars(ahead) and server.systems.get_past(p, ahead, true)
 
 
 func _wants_healing(p: Player) -> void:

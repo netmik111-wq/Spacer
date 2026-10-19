@@ -133,10 +133,13 @@ Contents:
   - (v54) With a ship **docked** at the outer door that holds air, the pump brings the chamber to **that ship's
     pressure** instead (in or out), so the outer door opens onto it; the inner door then follows the usual rule.
 - An open outer door vents the air in its doorway into space.
+- (v66, the author's request) **A button by each airlock door**, from the corridor, from the chamber and from space:
+  pressing **E** on a shut airlock door held by its shutter runs the chamber's pump so that this door can open (in for
+  the inner door, out for the outer one, to a docked ship's pressure at the outer door); ~5 s. It needs power, both doors
+  shut and, to pump in, air in the reserve. Holding E still raises the shutter by hand.
 - (v66) **Bots and pirates get through the airlock too.** A bot of ours whose way leads through a door that will not
-  open stands at the pump inside the chamber and runs it (out to open the outer door, in to open the inner one),
-  exactly as a player would; outside the chamber (or with no power, or no air in the reserve) it raises the shutter
-  by hand (3 s, as above). It waits while the chamber's other door is merely open (that one shuts by itself), and it
+  open presses that door's button and waits; with no power or no air in the reserve it raises the shutter by hand
+  (3 s, as above). It waits while the chamber's other door is merely open (that one shuts by itself), and it
   never releases the interlock while the other door is stuck open, so a bot never lets the ship's air out.
   Pirates don't pump: they force the shutter or the interlock by hand.
 

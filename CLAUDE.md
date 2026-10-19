@@ -44,8 +44,8 @@ teleporters, suitless boarders, bombs, Shrapnel, flagship phase two, passive mod
 v63 road and story (comms console, events, quests, missions, SOS, food, hydroponics, cryopods, the roaming flagship,
 modes); v64 the cluster map (his 19 cluster answers and 11 follow-ups, all "A"): a road of clusters with lanes and exits,
 cluster kinds and nebulae, places inside systems, pirate hunters; v65 fixes (the locker window's tabs, the admin
-refill fills every kind, seed names, robots and pirates hold fire past their own side); v66 airlocks (bots pump or force
-airlock doors, follow out into space; pirates cross space) and the simulator's fixes. Several reactors is a later
+refill fills every kind, seed names, robots and pirates hold fire past their own side); v66 airlocks (a button by each
+airlock door, bots use it, follow out into space; pirates cross space) and the simulator's fixes. Several reactors is a later
 question round (it breaks the one-engine rule).
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -303,8 +303,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `Items.CATEGORIES` captions); a new category goes into a tab there or lands in the last one. The admin refill
   (`Admin.restock_least`) gives every kind `Items.kept_in_locker()` lists; `admintest` checks none stays at 0 and all have names.
 - (v66) Bot and pirate routes may pass airlock doors whose shutter is down (`Systems.lock_door`); whoever walks a route
-  must call `Systems.get_past` when the next door `lock_bars`, or it pushes on a shut door forever. Bots keep the door in
-  `Player.bot_lock` while walking to the pump.
+  must call `Systems.get_past` when the next door `lock_bars`, or it pushes on a shut door forever. E on such a door is its
+  button (`Systems.call_lock`); the client's hint finds the pump with `GameScreen._lock_pump_of`.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

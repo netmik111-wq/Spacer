@@ -1317,10 +1317,18 @@ func _process(delta: float) -> void:
 		elif no_power:
 			_hint.text = "Аварийный шлюз закрыт и обесточен.\nДержите E, чтобы открыть вручную"
 		else:
-			var gap := client.shutter_gap(client.map.door_of[client.use_cell()])
+			var door := client.map.door_of[client.use_cell()]
+			var pump := _lock_pump_of(door)
+			var gap := client.shutter_gap(door)
 			var kpa := int(round(int(gap[0]) * Net.KPA_FULL / Net.AIR_FULL))
 			var where := "" if int(gap[1]) == 0 else (", за ним давление ниже" if int(gap[1]) < 0 else ", за ним давление выше")
-			_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
+			if pump >= 0 and client.pumps.has(pump):
+				_hint.text = "Насос шлюза выравнивает давление: дверь скоро откроется"
+			elif pump >= 0 and client.doors.is_shut(client.doors.partner[door]):
+				# (v66) the button by the airlock door, on either side
+				_hint.text = "Дверь шлюза: разница давлений %d кПа%s.\nE: кнопка шлюза (насос выровняет давление)    Держите E: открыть вручную" % [kpa, where]
+			else:
+				_hint.text = "Аварийный шлюз закрыт: разница давлений %d кПа%s.\nДержите E, чтобы открыть вручную" % [kpa, where]
 	elif target == 15:
 		var pump := client.use_cell()
 		var lock: Dictionary = client.map.lock_pump[pump]
@@ -1485,3 +1493,12 @@ func _process(delta: float) -> void:
 				int(round(_fps_smooth)), client.health,
 				int(round(maxi(client.air_at(client.pred.x, client.pred.y), 0) * Net.KPA_FULL / Net.AIR_FULL)),
 				client.tank * 100 / Net.TANK_FULL]
+
+
+func _lock_pump_of(door: int) -> int:
+	## (v66) The pump of the airlock that door belongs to, or -1.
+	for c: int in client.map.lock_pump.keys():
+		var lock: Dictionary = client.map.lock_pump[c]
+		if int(lock["inner"]) == door or int(lock["outer"]) == door:
+			return c
+	return -1

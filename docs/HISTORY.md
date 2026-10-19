@@ -144,7 +144,8 @@ Open problems:
 
 ### v66 (airlocks; the author's note "feels like bots cannot do it", plus the simulator's fixes)
 - Bots could not use the airlock: a bot in an emptied chamber stood at the inner door forever, and «за мной» stopped at
-  our own hull. Now a bot in the chamber runs the pump (or raises the shutter by hand elsewhere), follows through the
+  our own hull. Now each airlock door has a button (E on the door, from either side, runs the pump: the author's answer),
+  bots press it (or raise the shutter by hand without power), follow through the
   airlock, onto a docked ship and into space in a suit, and never lets the ship's air out. Pirates in suits cross space and
   force airlock doors. New test `tools/airlocktest.gd` (27 scripts in `runtests.sh`).
 - Ships the fixes merged after v65 (PRs #34, #35, #37): quest cargo on the long jump, the roaming flagship stuck by a

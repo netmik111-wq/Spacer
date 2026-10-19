@@ -82,7 +82,6 @@ var bot_face := 0                    # and which way it faces there
 var bot_plan_tick := -1000           # when it last worked out its way
 var bot_from := -1                   # the cell it worked it out from
 var bot_step := 0                    # its next step: a direction, -1 for the ladder underfoot, 0 = none
-var bot_lock := -1                   # (v66) the airlock door it is getting past (Systems.get_past), or -1
 var bot_task := 0                    # (v60) what the bot's way leads to (Stations.TASK_*)
 var haul := -1                       # (v60) the gun mount whose order the bot is carrying out (-1 = none)
 var bot_healing := false             # (v60) the bot lies in the autodoc until it is whole enough

@@ -160,7 +160,7 @@ func _lying_near(p: Player) -> bool:
 func press(p: Player) -> void:
 	## The "use" key went down (on the tick the client pressed it). Most of what
 	## it does is holding it (see update); a press itself starts or stops an
-	## airlock pump, or picks up a thing lying in front or underfoot, or else
+	## airlock pump (or, v66, presses an airlock door's button), or picks up a thing lying in front or underfoot, or else
 	## takes a ladder: in the order GameClient.use_target shows the player.
 	if p.cond != Net.COND_OK or p.corpse:
 		return
@@ -169,6 +169,8 @@ func press(p: Player) -> void:
 	var gun_why := server.mounts.can(p, ahead)
 	if ahead >= 0 and server.map.lock_pump.has(ahead):
 		server.systems.toggle_pump(p, ahead)
+	elif ahead >= 0 and server.systems.call_lock(p, server.map.door_of[ahead]):
+		pass                                 # (v66) the airlock door's button: the pump is at work
 	elif gear_why != "" and gear_why != server.outfit.NOT_HERE and not server.ship.broken.has(ahead):
 		server.chat.tell(p, gear_why)        # (v59) why that crate cannot go in here
 	elif gun_why != "" and gun_why != server.mounts.NOT_HERE:
