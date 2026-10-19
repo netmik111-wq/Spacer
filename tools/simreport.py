@@ -69,7 +69,9 @@ def row(r):
         "flagship_met": r["flagship"]["met"], "flagship_growth": r["flagship"]["growth_when_met"],
         "flagship_result": r["flagship"]["result"] or "",
         "crew_deaths": cr["deaths"], "captain_deaths": cr["captain_deaths"], "bot_deaths": cr["bot_deaths"],
-        "respawns": cr["respawns"], "hired": cr["hired"],
+        "respawns": cr["respawns"], "hired": cr["hired"], "tank_refills": cr.get("tank_refills", 0),
+        "console_mending_seconds": round(cr.get("captain_repairs", 0) * 0.25),   # (counted once per captain's think, 5 ticks)
+        "stalls": r.get("stalls", 0),
         "calls_received": r["calls"]["received"], "calls_answered": r["calls"]["answered"],
         "quests_done": r["quests"]["done"], "quests_failed": r["quests"]["failed"],
         "guns_bought": len(r["guns_bought"]),

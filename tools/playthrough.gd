@@ -74,6 +74,7 @@ var _shopped := -1                    # the visit (jumps, cluster) the captain l
 var _cluster_since := 0               # the tick the ship came into this cluster
 var _foe_hull := -1                   # the enemy's hull when last looked at, and the tick it last changed
 var _foe_hit_at := 0
+var _refilling := false
 var _stay := 0.0                      # seconds it means to stay in each system
 var _leave_at := 0                    # the tick it may jump on from this system
 
@@ -151,6 +152,8 @@ func _run(number: int, mode: int) -> void:
 		if server.jumps != last_jumps:
 			last_jumps = server.jumps
 			stuck_since = server.tick
+		elif server.tick - stuck_since > 8 * 60 * Net.TICK_HZ and server.tick % (60 * Net.TICK_HZ) == 0 and _unstick():
+			pass
 		elif server.tick - stuck_since > 25 * 60 * Net.TICK_HZ:
 			rec["outcome"] = "stuck (no jump for 25 min)"
 			var sh = server.ship
@@ -196,6 +199,9 @@ func _think() -> void:
 		return
 	if cap.cond != Net.COND_OK:
 		return
+	if _breathe():
+		return
+	cap.using = false                        # (held again below while it mends a broken console)
 	var g = server.gunnery
 	if g.fighting():
 		_fight_tick()
@@ -221,6 +227,49 @@ func _think() -> void:
 		_shop()
 		_shopped = visit                     # (once a visit: what it could not buy here it will not find by waiting)
 	_travel()
+
+
+func _breathe() -> bool:
+	## The suit's oxygen on in thin air (as bots do), and a low tank filled at an oxygen
+	## station before anything else. True while it is filling.
+	server.stations.bot_breathe(cap)
+	var filling: bool = _refilling and cap.tank < 0.95
+	if cap.has_suit() and (cap.tank < 0.35 or filling) and not server.map.oxygen.is_empty() and server.powered() \
+			and _at(server.map.oxygen):
+		cap.using = true
+		_refilling = true
+		return true
+	if _refilling:
+		_refilling = false
+		cap.using = false
+		rec["crew"]["tank_refills"] = int(rec["crew"].get("tank_refills", 0)) + 1
+	return false
+
+
+func _unstick() -> bool:
+	## Eight minutes with no jump outside a fight: the captain's plan has run into
+	## something it does not handle. Note what it was (once), give up on this
+	## system's trader and jump to a neighbour. True if a jump was set.
+	var sh = server.ship
+	if server.gunnery.fighting() or cap.cond != Net.COND_OK or sh.fuel() < 1 or sh.jump_to != Net.NO_SECTOR:
+		return false
+	if not rec.has("first_stall"):
+		rec["first_stall"] = {"t": snappedf(server.voyage_ticks / float(Net.TICK_HZ) / 60.0, 0.1), "target": _target(), "here": sh.sector,
+			"kind": server.navigation.sector_kind(), "fuel": sh.fuel(), "credits": sh.credits, "in_reach": sh.in_reach,
+			"moving": sh.moving, "shopped": _shopped == server.jumps * 1000 + server.road.depth, "wants_shopping": _wants_shopping(),
+			"call_open": not server.story.call.is_empty(), "holds_ship": server.derelict.holds_ship(),
+			"holds_jump": server.flagship.holds_jump(), "derelict_here": server.derelict.here, "leave_wait": _leave_at - server.tick,
+			"broken": str(sh.broken.keys()), "engine_down": server.engine_down(), "powered": server.powered()}
+	rec["stalls"] = int(rec.get("stalls", 0)) + 1
+	_shopped = server.jumps * 1000 + server.road.depth
+	if not server.story.call.is_empty():
+		server.story.answer_asked(cap, 0)
+	server.derelict.dock(false)
+	var ns: PackedInt32Array = server.sectors.neighbours(sh.sector)
+	if ns.is_empty() or not _at(server.map.chart):
+		return false
+	server.navigation.jump_asked(cap, ns[randi() % ns.size()])
+	return sh.jump_to != Net.NO_SECTOR
 
 
 func _fetch(item: int, want: int) -> void:
@@ -539,24 +588,35 @@ func _fly_to(spot: Vector2) -> void:
 
 
 func _at(cells: Dictionary) -> bool:
-	## Steps the captain in front of a working console of that kind, facing it.
-	var map = server.map
+	## Steps the captain in front of a working console of that kind, facing it. If every
+	## one of them is broken it steps up to one and mends it (slowly without a spare part).
 	if server.systems.at_console(cap, cells):
 		return true
 	for c: int in cells.keys():
-		if server.ship.broken.has(c):
+		if not server.ship.broken.has(c) and _face(c):
+			return server.systems.at_console(cap, cells)
+	for c: int in cells.keys():
+		if _face(c):
+			if not cap.using:
+				rec["crew"]["captain_repairs"] = int(rec["crew"].get("captain_repairs", 0)) + 1     # (once per think: 5 ticks of mending)
+			cap.using = true
+			return false
+	return false
+
+
+func _face(c: int) -> bool:
+	var map = server.map
+	var x: int = c % map.width
+	var y: int = c / map.width
+	for d in [[0, 1, Net.DIR_UP], [0, -1, Net.DIR_DOWN], [1, 0, Net.DIR_LEFT], [-1, 0, Net.DIR_RIGHT]]:
+		var sx: int = x + int(d[0])
+		var sy: int = y + int(d[1])
+		if not map.walkable(sx, sy) or map.door_at(sx, sy) >= 0:
 			continue
-		var x: int = c % map.width
-		var y: int = c / map.width
-		for d in [[0, 1, Net.DIR_UP], [0, -1, Net.DIR_DOWN], [1, 0, Net.DIR_LEFT], [-1, 0, Net.DIR_RIGHT]]:
-			var sx: int = x + int(d[0])
-			var sy: int = y + int(d[1])
-			if not map.walkable(sx, sy) or map.door_at(sx, sy) >= 0:
-				continue
-			if map.use_ahead(sx, sy, int(d[2])) == c:
-				cap.st.place(sx, sy)
-				cap.st.facing = int(d[2])
-				return server.systems.at_console(cap, cells)
+		if map.use_ahead(sx, sy, int(d[2])) == c:
+			cap.st.place(sx, sy)
+			cap.st.facing = int(d[2])
+			return true
 	return false
 
 
