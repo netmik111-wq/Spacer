@@ -2129,15 +2129,19 @@ func _outward(cell: int) -> Vector2i:
 
 # ---------------------------------------------------------------- (v55) our boarders
 
-func crew_lost(alive: int) -> void:
+func crew_lost(alive: int, crossed: int = 0) -> void:
 	## Its crew, come to life as pirates (EnemyCrew.in_world), are down to `alive`:
-	## the count of its crew follows, and the fight may be over.
+	## the count of its crew follows, and the fight may be over. (v64) `crossed` of
+	## those gone walked over onto our ship alive: they are boarders now, not dead.
 	if systems.size() <= Net.ESYS_CREW or _over:
 		return
 	var was := boarders_left()
 	systems[Net.ESYS_CREW] = mini(systems[Net.ESYS_CREW], maxi(alive, 0) * HITS_PER_BOARDER)
 	server.derelict._pirates_party = boarders_left()
-	if boarders_left() < was and boarders_left() > 0:
+	var gone := was - boarders_left()
+	if crossed > 0 and gone > 0:
+		server.chat.say("Пират перебрался с их корабля на наш! На пиратском корабле их осталось %d." % boarders_left())
+	elif gone > 0 and boarders_left() > 0:
 		server.chat.say("На пиратском корабле убит пират: их осталось %d." % boarders_left())
 	_settle()
 

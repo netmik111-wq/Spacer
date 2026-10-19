@@ -184,7 +184,7 @@ func _fight_effects() -> void:
 	ship.shield_on = false
 	ship.shield = 0.0
 	var turned := 0
-	for i in 40:
+	for i in 120:                         # (many tries: at 30% the share in 40 strayed out of bounds now and then)
 		var before := ship.hull
 		g._enemy_fires(Weapons.RAILGUN)
 		g._land_due()
@@ -192,7 +192,7 @@ func _fight_effects() -> void:
 			turned += 1
 		ship.hull = Net.HULL_MAX
 		_mend()
-	_expect(turned >= 4 and turned <= 22, "our armour turns some of their shells aside (%d of 40)" % turned)
+	_expect(turned >= 18 and turned <= 60, "our armour turns some of their shells aside (%d of 120)" % turned)
 	ship.modules = PackedByteArray([Gear.FOCUS, Gear.NONE])
 	server.outfit.refresh()
 	var bare := _hull_lost(g)

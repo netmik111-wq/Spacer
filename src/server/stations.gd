@@ -874,7 +874,8 @@ func _boarding() -> void:
 	if not em.in_world:
 		return
 	if em.count() < g.boarders_left():
-		g.crew_lost(em.count())
+		g.crew_lost(em.count(), em.crossed)
+		em.crossed = 0
 		if not g.fighting():
 			return
 	# ours in a room with a system in it wreck it

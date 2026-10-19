@@ -146,6 +146,8 @@ Open problems:
   Old saves go on at a fresh first cluster. New server part `src/server/road.gd`, test `tools/roadtest.gd` (26 tests).
   Protocol 43. Follow-up questions https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVqN (all "A"). Build in
   `/mnt/project-files/builds/v64/`.
+- Fix (found by the CI thread, the author said yes): while one of ours is aboard a pirate ship, a pirate that walks
+  across onto our ship is no longer announced as killed; the chat says it crossed over, and it stays a boarder.
 
 ### v63 (road and story, part 4 of the road plan)
 - The comms console on the bridge (`K`): 26 text events with 2–4 answers each, blue answers by job, skill or

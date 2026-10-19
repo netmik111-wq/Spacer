@@ -367,6 +367,8 @@ func _target(kinds: Array, near: int, far: int, toward_goal: bool = false) -> Ve
 	var found := _targets(kinds, near, far, toward_goal)
 	if found.is_empty():
 		found = _targets(kinds, 1, 99, toward_goal)          # (v64) a cluster is small: nearer or further, then
+	if found.is_empty() and kinds == [Sectors.DERELICT]:
+		found = _targets(kinds, 0, 99, toward_goal)          # (its only wreck may be where we are: the box lies there)
 	if found.is_empty():
 		return Vector2i.MAX
 	return found[_rng.randi_range(0, found.size() - 1)]

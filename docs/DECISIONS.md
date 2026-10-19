@@ -846,3 +846,6 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
   locker, money, the chapter and the codes; visited marks and side quests are reset; the flagship goes back to sleep.
 - **The chart (C16)**: the cluster view plus a road tab, drawn in `BridgeView`; what is known comes from the server
   (`S_ROAD`), so the client cannot peek at unknown systems' kinds (it still has them in the cluster packet, as before).
+- **A pirate crossing over during our boarding** (the CI thread's find, the author's "yes"): `EnemyCrew._read_world` counts
+  those gone from its crew alive and off their ship (`crossed`); `Gunnery.crew_lost` then says it crossed over instead of
+  "killed". It still leaves the enemy's crew count (it is a boarder aboard ours, counted by `Pirates.aboard`).

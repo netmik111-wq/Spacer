@@ -222,8 +222,9 @@ func _initialize() -> void:
 
 
 func _shoot_until(p, done: Callable) -> void:
-	## Fires one gun at a time until the enemy is in the state wanted (or 30 shots).
-	for i in 30:
+	## Fires one gun at a time until the enemy is in the state wanted (or 60 shots:
+	## a wreck takes 12 to 25 with misses and shields, now and then 30).
+	for i in 60:
 		if done.call():
 			return
 		server.gunnery.charge.fill(1.0)

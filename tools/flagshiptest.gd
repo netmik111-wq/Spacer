@@ -222,8 +222,9 @@ func _initialize() -> void:
 		q.health = -5.0
 	_run(2 * Net.TICK_HZ)
 	_expect(f.capture > 0 and server.over == Net.OVER_NONE, "the whole crew down: the capture has begun")
-	a.health = 100.0
-	_run(2 * Net.TICK_HZ)
+	for t in 2 * Net.TICK_HZ:
+		a.health = 100.0                         # (up, and kept up: the boarders hunt and may fell him again)
+		server._tick()
 	_expect(f.capture == 0, "one gets up: it is stopped")
 	for t in (Flagship.CAPTURE_SECONDS + 2) * Net.TICK_HZ:
 		for q in [a, b, c]:

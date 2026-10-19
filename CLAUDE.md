@@ -294,6 +294,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a test in another cluster set `server.road.depth` and `server.road.entry` (`Vector2i(6 * depth, 0)`) and call
   `server.road.build(cell)`. The long jump's target is `Sectors.EXIT_JUMP`. Hunters come only while `road.auto` and
   `director.auto`. Tests that need places, wrecks or ambushes use `ship02` (`ship01` has no spots for a ship alongside).
+- Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
+  this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
+  `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
+  place, give more tries, look at everybody a lot may pick) rather than widening bounds blindly.
 - Ships' shots land later than they are fired (v56, `Gunnery._flying`). A test that checks a hit right after
   `fire` or `_enemy_fires` must set `server.gunnery.flies = false` (the gun, ship, drone and station tests do).
   Effects that are only drawn take their lots from `Gunnery._fx`, so the game's own rng sequence is unchanged.

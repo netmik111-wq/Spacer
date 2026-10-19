@@ -271,7 +271,7 @@ func _traders() -> void:
 	for i in sectors.count:
 		if sectors.kind[i] == Sectors.TRADER:
 			at = i
-	_expect(at >= 0, "(a trader nearby for the trade checks)")
+	_expect(at >= 0, "(a trader in the cluster for the trade checks: every cluster has one since v64)")
 	if at < 0:
 		return
 	ship.sector = at

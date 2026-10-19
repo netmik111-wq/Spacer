@@ -97,11 +97,15 @@ func _put(at: Vector2) -> void:
 
 func _find_place(kind: int) -> Array:
 	## [depth, cell, place index] of a system holding a place of that kind (not in the flagship's cluster).
-	for depth: int in [0, 1, 2, 4, 5, 6, 7]:
+	for depth in 16:
+		if depth == Sectors.FLAG_DEPTH:
+			continue
 		var s := Sectors.new()
 		var at := Vector2i(6 * depth, 0)
 		s.build(server.space_seed, at, {}, depth, at)
 		for i in s.count:
+			if kind == Sectors.P_AMBUSH and s.kind[i] == Sectors.DERELICT:
+				continue                         # (a wreck alongside keeps pirates off until it goes)
 			var p := s.places(server.space_seed, i)
 			for k in p.size():
 				if int(p[k][0]) == kind:
@@ -219,7 +223,8 @@ func _places() -> void:
 		_expect(r.found.has(key) and not server.gunnery.fighting(), "an ambush is seen from afar (%.0f away), and waits" % server.ship.pos.distance_to(_place_at(f[2])))
 		_put(_off(_place_at(f[2]), Sectors.AMBUSH_REACH - 2.0))
 		_run(Net.TICK_HZ * 3)
-		_expect(server.derelict.here and server.gunnery.fighting(), "flown close, its pirate ship comes out")
+		_expect(server.derelict.here and server.gunnery.fighting(), "flown close, its pirate ship comes out (here %s, fighting %s, taken %s, kind %d)"
+			% [server.derelict.here, server.gunnery.fighting(), r.taken.has(key), server.sectors.kind[server.ship.sector]])
 		_calm()
 	_enter_cluster(0)
 

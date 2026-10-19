@@ -141,10 +141,12 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.story.auto = false                             # (no comms calls: their outcomes may pay credits)
+	server.story.m1_next = 1 << 30        # (the chapter's mission and SOS sectors call even so; those are kept off below)
 	# a ship under way when the jump is set coasts straight on, whatever point it was making for
 	var from: Vector2 = server.ship.pos
 	server.ship.dest = from + Vector2(20, 0)
 	server.ship.moving = true
+	server.story.sos_done[Sectors.key(server.sectors.cell[server.sectors.neighbours(server.ship.sector)[0]])] = true
 	server.navigation.start_jump(server.sectors.neighbours(server.ship.sector)[0], "Проверка")
 	_expect(server.ship.moving and server.ship.dest == Vector2(Sectors.SPAN, from.y), "set for a jump, a moving ship coasts on to the edge of the sector instead of its old course")
 	for t in Net.JUMP_TICKS - 2:
@@ -175,6 +177,7 @@ func _initialize() -> void:
 		if s.visited[next] == 0:
 			fresh += 1
 		server.ship.drive_ready = 0
+		server.story.sos_done[Sectors.key(s.cell[next])] = true
 		server.navigation.start_jump(next, "Проверка")
 		for t in Net.JUMP_TICKS + 2:
 			server._tick()

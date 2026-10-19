@@ -666,6 +666,9 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 - When its whole crew is dead the ship is **captured** and salvaged: **150%** of its reward, **2 spare parts** and
   a **can of fuel** into the hold. It stays alongside dead and dark, to be searched like a wreck.
 
+- (v64) A pirate of its crew that walks across onto our ship while ours are aboard leaves its crew count but is not
+  dead: the chat says it crossed over, and it fights on aboard our ship.
+
 ### Wrecked raider
 
 - A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a

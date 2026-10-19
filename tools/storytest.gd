@@ -333,7 +333,9 @@ func _sos() -> void:
 	var found := Vector2i.MAX
 	var n := 0
 	var depth := -1
-	for dp: int in [0, 1, 2, 4, 5, 6, 7]:     # cluster after cluster along the road, but the flagship's
+	for dp in 16:                            # cluster after cluster along the road, but the flagship's
+		if dp == Sectors.FLAG_DEPTH:
+			continue
 		var s := Sectors.new()
 		var at := Vector2i(6 * dp, 0)
 		s.build(server.space_seed, at, {}, dp, at)
@@ -343,7 +345,7 @@ func _sos() -> void:
 				if found == Vector2i.MAX and Story.sos_at(server.space_seed, s.cell[i], s.kind[i]) and not st.sos_done.has(Sectors.key(s.cell[i])):
 					found = s.cell[i]
 					depth = dp
-	_expect(found != Vector2i.MAX, "some quiet systems send an SOS (%d quiet in seven clusters)" % n)
+	_expect(found != Vector2i.MAX, "some quiet systems send an SOS (%d quiet in fifteen clusters)" % n)
 	if found == Vector2i.MAX:
 		return
 	st.call = {}
