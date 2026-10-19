@@ -15,6 +15,7 @@ var chart: Control                   # the picture
 var text: Label                      # the lines under it
 var buttons: GridContainer           # the buttons under those
 var buttons_for := -1                # what the buttons were last built for (-1: build them anew)
+var _story_seen := 0                 # (v63) the comms console's marks as last drawn
 
 
 func _init(p_client: GameClient, p_chart: Control, p_text: Label, p_buttons: GridContainer) -> void:
@@ -44,7 +45,16 @@ func update_chart() -> void:
 		text.text += "\nТоплива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях, станция снабжения даёт немного."
 	text.text += "\nДо начала пути отсюда прыжков: %d. Карта показывает только окрестности корабля." % client.sectors.far_from_start(client.sector)
 	var goal := client.sectors.jumps_to_goal(client.sector)
-	if client.won:
+	var st: Dictionary = client.story
+	if st.hash() != _story_seen:
+		_story_seen = st.hash()
+		chart.queue_redraw()
+	if not client.won and int(st.get("flags", 0)) & Net.STORY_FLAGSHIP:
+		var fs: Vector2i = st["flagship"]
+		var d := Sectors.jumps_between(client.sectors.cell[client.sector], fs)
+		text.text += "\nФлагман пиратов проснулся и рыщет у цели: %s (красный треугольник). Рост: %d из 4." % [
+			"он в нашем секторе!" if d == 0 else "%d прыжк%s отсюда" % [d, _jumps_word(d)], int(st["growth"])]
+	elif client.won:
 		text.text += "\nФлагман пиратов повержен: цель пути достигнута. Летите куда хотите."
 	else:
 		text.text += ("\nФлагман пиратов здесь, в этом секторе: уйти прыжком он не даст." if goal == 0 else
@@ -67,6 +77,29 @@ func update_chart() -> void:
 			(go as Button).disabled = jumping or wait > 0.0 or fuel < 1
 	if jumping:
 		chart.queue_redraw()
+
+
+func _draw_story(place: Callable) -> void:
+	## (v63) Marks from the comms console: quests' targets, SOS calls, and the roaming flagship.
+	var sectors := client.sectors
+	var font := ThemeDB.fallback_font
+	var st: Dictionary = client.story
+	var awake := int(st.get("flags", 0)) & Net.STORY_FLAGSHIP != 0 and not client.won
+	for id in sectors.count:
+		var at: Vector2 = place.call(id)
+		var c: Vector2i = sectors.cell[id]
+		for m: Array in st.get("marks", []):
+			if m[1] == c and int(m[0]) == Net.MARK_SOS:
+				chart.draw_string(font, at + Vector2(-12, -12), "SOS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.35, 0.3))
+		for q: Dictionary in st.get("quests", []):
+			if q["at"] == c:
+				var d := 9.0
+				chart.draw_polyline(PackedVector2Array([at + Vector2(0, -d - 6), at + Vector2(d, -6), at + Vector2(0, d - 6),
+					at + Vector2(-d, -6), at + Vector2(0, -d - 6)]), QUEST, 2.0)
+				chart.draw_string(font, at + Vector2(10, -10), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, QUEST)
+		if awake and st["flagship"] == c:
+			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -16), at + Vector2(9, -2), at + Vector2(-9, -2)]), GOAL)
+			chart.draw_string(font, at + Vector2(-40, -20), "ФЛАГМАН", HORIZONTAL_ALIGNMENT_CENTER, 80, 11, GOAL)
 
 
 static func _jumps_word(n: int) -> String:
@@ -231,6 +264,7 @@ func _draw_chart() -> void:
 		chart.draw_string(font, at + Vector2(-70, 24), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, Color(0.85, 0.95, 0.88))
 		if sectors.kind[id] == Sectors.FLAGSHIP:
 			chart.draw_arc(at, 11.0, 0.0, TAU, 32, GOAL, 2.0)
+	_draw_story(place)
 	_draw_goal(area)
 	# legend: what the colours are, then what the marks are
 	var ink := Color(0.7, 0.8, 0.74)
@@ -272,6 +306,7 @@ func _draw_chart() -> void:
 
 
 const GOAL := Color(1.0, 0.25, 0.25)      # (v57) the flagship's sector, and the way to it
+const QUEST := Color(1.0, 0.85, 0.3)       # (v63) a quest's target
 const ION := Color(0.4, 0.55, 1.0)         # (v61) an ion storm
 
 

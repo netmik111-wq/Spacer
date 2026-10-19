@@ -743,3 +743,61 @@ build time; change them if the author answers otherwise.
 - **Security robots** (R1, the author's K11): `Player.ally` (not crew, not pirate), moved by `Pirates.think` with
   the sides turned (`Pirates.foe`). Up to 2, toughness 1.4, set down on a cell beside its carrier; a save puts them
   back into the locker. Every check that counts the crew skips `ally` too (new pitfall).
+
+### The road and its story (v63)
+
+Built on my picks (all "A") from the question page https://claude.ai/artifact/LJnEaFStDXqbZFq1xWPcQZ (S1..S17;
+no answers when it was built). Change any of these if he answers otherwise.
+- **The road plan's v63 was split** (S1): v63 = comms console, text events, quests, missions, SOS, dry-fuel visitors,
+  food and hydroponics, cryosleep, the roaming growing flagship, the easy and hard modes. The cluster map (his 19 "A"
+  answers), its regions, places inside a system with C6's secrets, and the pirate hunters are v64: they change how
+  space is laid out, and events/quests were written to sit on it (a target is a sector cell; a cluster system can
+  take the same role).
+- **Calls come through one console** (S2), on the bridge where a window was (`K`): one place for the story, as FTL's
+  event window, but in the world, so somebody has to walk there. Anyone answers; nobody answering in 90 s takes a plain
+  answer (S3), so a crew busy elsewhere is not stuck. Never during a fight; one at a time.
+- **35% of quiet arrivals bring a call** (S4); meteors and the storm have only the swarm/container/jellyfish/toll ones.
+- **Blue answers** (S5, FTL's): a job held by anyone alive aboard, bots included (bots fill every slot, so most jobs are
+  aboard most of the time; a dead doctor closes the doctor's answers), a skill of 70, or a thing in the locker that
+  is not used up. Paid answers are grey when the ship cannot pay. Blue answers always turn out well.
+- **Quests have no time limit** (S6) and at most 3 at once; targets are 2–4 jumps away (6 if nothing fits), worked
+  out from `Sectors.kind_at` over the whole of space, not only the chart's window. Cargo is a real crate in the locker
+  (losing it fails the quest); the bounty's pirate is a rolled raid with a name; the black box lies aboard the derelict
+  of its sector (placed once, at `Derelict._arrive`; kept like any loot after) and counts when put into the locker
+  (`Story._boxes`, once a second). A bounty paid off by ransom counts as beaten (it surrendered); one that escapes,
+  or that we jump away from, is lost.
+- **The chapter is two missions** (S7): find the convoy's log (3–6 jumps out), then catch the courier (a gunship,
+  towards the goal) for the flagship's codes: all its rooms shown and one step of growth off. The courier that gets
+  away is found again (the main story must not be lost for good).
+- **SOS sectors** (S8) are an overlay on calm sectors (`Story.sos_at`, a hash of the seed and the cell, 15%), so
+  `Sectors.kind_at` and older saves stay as they were. Answered ones are saved by key. Odds: 40/30/30 good/salvage/trap;
+  the guard's blue answer sees the trap.
+- **Out of fuel** (S9, the author's R8): after the old 2 minutes, 70% a passing ship calls (a trader selling 2 cans
+  for 20, or giving 1 for nothing; kind people giving 2), 30% the old drifting can. The trader's free can is also the
+  unanswered default, so there is still no dead end.
+- **Food** (S10): one ration per two crew per jump, bots included (they stand for people), the reserve not
+  (cryosleep). Start 16, price 3. Hunger lowers the health ceiling (`Garden.hunger`, passed to `Vitals.advance` with the
+  wounds) by 0.1/s down to 30, never lower: the rule "no two obstacles at once" (hunger never kills, it only weakens
+  for the next fight). It goes back at 1/s once there is food.
+- **Hydroponics** (S11, his notebook note page1016-04): 4 trays, 4 bought plants and 2 hybrids, traits by mutation
+  (rich, early, choice), hybrids from ripe neighbours (35%). Harvests go straight to the locker (carrying rations by
+  hand would only be walking); planting with empty hands takes the best seed from the locker so bots can do it too.
+  Tending every 60–90 s keeps somebody busy between fights; neglect halves growth and withers after 5 min, so a
+  crew that ignores it loses only the seed. Mushrooms grow without power (something to eat when dark).
+- **Cryosleep** (S12): 4 pods in the quarters; the one from the reserve wakes in front of a pod with power. It explains
+  why the reserve eats nothing.
+- **The flagship roams** (S13, the author's R7): it wakes when we come within 2 jumps of the goal (before that it would
+  only be a far dot), roams that area every 90 s along routes, leaning half the time towards us; it can step into our
+  sector with a 20 s warning (time to jump: no fight starts without a way out until it is actually out). Its growth
+  clock (S14) runs from waking, even while we are away, every 3 min (2 on hard), 4 steps in his order: faster guns
+  (×0.8 charge), shield (×1.5 refill and +1 system strength), boarders (+4; the battleship gets a teleporter, so
+  `Flagship._teleport_tick` runs for any boss with one), point defence. The clock stops in its fight. "Ask how fast":
+  these numbers are on the question page (S14).
+- **Modes** (S15, the author's R9 "easier mode"): picked in the menu for a new campaign. Easy keeps the voyage when the
+  hull breaks, at 50 of its top strength each time (`Ship.hull_max`, 200 → 50, then the end): mistakes cost but do
+  not end the evening. Hard: no cautious tempers, +1 boarder, 75% pirate rewards, faster flagship growth (S16).
+- **Hunger and the easy mode never stack into a dead end**: the easy mode does not touch food; hunger never kills.
+- **Admin** (S17): a call by name, the flagship's growth step, every tray ripe.
+- **Text is server data** (`src/server/tales.gd`): one table, so adding an event needs no code. Effects are a small
+  closed set (`Story._apply`).
+

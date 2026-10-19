@@ -447,6 +447,7 @@ func _arrive() -> void:
 			if _rng.randf() < derelict_gear_chance:
 				item = server.outfit.loot(far, _rng)     # (v59) or a crate of ship gear
 			server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], item)
+	server.story.derelict_arrived(cells)     # (v63) a quest's black box
 	server.air.wake()
 	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 

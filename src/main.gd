@@ -13,6 +13,7 @@ extends Node
 ##   campaign=continue   a server goes on with the saved campaign, if there is one (the default);
 ##                       campaign=new starts a new one (the old save is overwritten at the first autosave),
 ##                       campaign=off neither reads nor writes a save
+##   mode=normal         (v63) a new campaign's mode: easy, normal or hard (a continued one keeps its own)
 ## Other keys: F11 toggles full screen.
 ## Used by the game itself when it starts a server for a hosted game:
 ##   --autoquit (stop once the server has stayed empty), token=TEXT (lets that game stop it).
@@ -98,6 +99,7 @@ var _host_name := ""
 var _host_tries := 0
 var _host_bots := 0
 var _host_campaign := "continue"    # a hosted game goes on with the saved campaign, or starts a new one
+var _host_mode := "normal"           # (v63) and the mode a new one is played in (Net.MODE_KEYS)
 var _empty_since := 0.0              # dedicated server with --autoquit: when it last had a player
 var _had_players := false
 
@@ -169,6 +171,7 @@ func _ready() -> void:
 		_server.director.auto = not _flags.has("no-events")
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
 		_server.measure = _opt.has("bench")
+		_server.mode = maxi(Net.MODE_KEYS.find(str(_opt.get("mode", "normal"))), 0)
 		var problem := _server.start(port, "ship02", bots)
 		if problem == "":
 			problem = _open_campaign(_server, str(_opt.get("campaign", "continue")))
@@ -261,15 +264,17 @@ func _start_server_process(port: int, bots: int) -> bool:
 	if OS.has_feature("editor"):         # started from the editor: the program is Godot itself
 		args.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://")]))
 	args.append_array(PackedStringArray(["--", "--server", "--autoquit",
-		"port=%d" % port, "bots=%d" % bots, "token=%s" % _server_token, "campaign=%s" % _host_campaign]))
+		"port=%d" % port, "bots=%d" % bots, "token=%s" % _server_token, "campaign=%s" % _host_campaign,
+		"mode=%s" % _host_mode]))
 	_server_pid = OS.create_process(OS.get_executable_path(), args)
 	_server_started = Time.get_ticks_msec() / 1000.0
 	return _server_pid > 0
 
 
-func _host_game(player: String, port: int, bots: int, campaign: String = "") -> void:
+func _host_game(player: String, port: int, bots: int, campaign: String = "", mode: String = "") -> void:
 	_stop_server()
 	_host_campaign = campaign if campaign != "" else str(_opt.get("campaign", "continue"))
+	_host_mode = mode if mode != "" else str(_opt.get("mode", "normal"))
 	_hosting = true
 	_host_name = player
 	_host_bots = bots
@@ -290,6 +295,7 @@ func _host_inside(port: int) -> void:
 	_server = GameServer.new()
 	add_child(_server)
 	_server.shutdown_token = _server_token
+	_server.mode = maxi(Net.MODE_KEYS.find(_host_mode), 0)
 	if _flags.has("log"):
 		_server.log_line.connect(func(text: String) -> void: print(text))
 	var problem := _server.start(port, "ship02", _host_bots)

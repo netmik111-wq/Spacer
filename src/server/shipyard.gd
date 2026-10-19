@@ -91,6 +91,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 	var tempers: Array = Hulls.TEMPERS.keys().filter(func(t: int) -> bool:
 		return not Hulls.temper(t).has("boss") and not Hulls.temper(t).has("machine"))
 	var temper: int = tempers[_rng.randi_range(0, tempers.size() - 1)]
+	if server.mode == Net.MODE_HARD and temper == Net.TEMPER_CAUTIOUS:
+		temper = Net.TEMPER_RECKLESS if _rng.randf() < 0.5 else Net.TEMPER_HUNTER   # (v63) the hard mode: no cautious ones
 	if force_temper >= 0 and tempers.has(force_temper):
 		temper = force_temper
 	if drone:
@@ -108,7 +110,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 		"name": title,
 		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": shielded, "regen": float(info["regen"]),
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": maxi(crew, 1),
-		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, shielded, teleport, drone),
+		"reward": roundi(int(info["reward"]) * (HARD_REWARD if server.mode == Net.MODE_HARD else 1.0)), "loot": info["loot"],
+		"room_sys": _lay_out(layout, shielded, teleport, drone),
 		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": far >= 4 and _rng.randf() < float(info.get("guard", 0.0)),
 	}
 
@@ -123,7 +126,8 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 	var layout: int = (info["layouts"] as Array)[0]
 	if not fits.has(layout):
 		return {}
-	var teleport := kind == 2
+	var grown: int = server.flagship.growth          # (v63) how far it has grown while we took our time
+	var teleport := kind == 2 or grown >= 3
 	var crew: int = (info["crew"] as Array)[0]
 	var weapons := PackedByteArray(info["pool"])
 	var extra: Array = info["extra"]
@@ -135,12 +139,12 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 	return {
 		"klass": klass, "layout": layout, "temper": Net.TEMPER_SIEGE if kind == 1 else Net.TEMPER_STORM,
 		"name": "%s «%s»" % [_cap(str(info["name"])), "Владыка пустоты" if kind == 1 else "Пожиратель"],
-		"hull": int(info["hull"]) + GEAR_HULL * gear_upgrades(), "strength": int(info["strength"]), "shield": true,
-		"regen": float(info["regen"]) * (1.0 + GEAR_REGEN * gear_upgrades()),
-		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": crew,
+		"hull": int(info["hull"]) + GEAR_HULL * gear_upgrades(), "strength": int(info["strength"]) + (1 if grown >= 2 else 0), "shield": true,
+		"regen": float(info["regen"]) * (1.0 + GEAR_REGEN * gear_upgrades()) * (GROWN_REGEN if grown >= 2 else 1.0),
+		"slower": float(info["slower"]) * (GROWN_PACE if grown >= 1 else 1.0), "dodge": float(info["dodge"]), "weapons": weapons, "crew": crew,
 		"reward": int(info["reward"]), "loot": info["loot"], "room_sys": _lay_out(layout, true, teleport),
 		"boss": kind, "teleport": teleport,
-		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": float(info.get("guard", 0.0)) >= 1.0,
+		"fx": fx, "armour": float(info.get("armour", 0.0)), "guard": float(info.get("guard", 0.0)) >= 1.0 or grown >= 4,
 	}
 
 
@@ -151,6 +155,9 @@ func upgrades() -> int:
 	return tier_points() / 2
 
 
+const HARD_REWARD := 0.75            # (v63) on the hard mode a pirate ship pays this much of its reward
+const GROWN_PACE := 0.8              # (v63) grown one step, its guns charge in this much of the time
+const GROWN_REGEN := 1.5             # (v63) grown two steps, its shield refills this much faster (and each of its systems takes one more hit)
 const GEAR_HULL := 2                 # (v59) the flagship's hull grows this much per step of our gear...
 const GEAR_REGEN := 0.1              # ... and its shield refills this much faster
 

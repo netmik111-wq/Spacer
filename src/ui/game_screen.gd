@@ -22,6 +22,8 @@ const HoloView := preload("res://src/ui/holo_view.gd")
 const DroneView := preload("res://src/ui/drone_view.gd")
 const BenchView := preload("res://src/ui/bench_view.gd")
 const PowerView := preload("res://src/ui/power_view.gd")
+const CommsView := preload("res://src/ui/comms_view.gd")
+const Plants := preload("res://src/shared/plants.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
@@ -92,6 +94,7 @@ var _holo_view: HoloView
 var _drone_view: DroneView           # (v54) the drone monitor's screen, set up when first shown
 var _bench_view: BenchView           # (v58) the workbench's screen, set up when first shown
 var _power_view: PowerView           # (v61) an SMES's terminal, set up when first shown
+var _comms_view: CommsView           # (v63) the comms console, set up when first shown
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _hand_shown := -1
@@ -485,6 +488,9 @@ func _build_console(root: Control) -> void:
 	_power_view = PowerView.new()
 	_power_view.visible = false
 	box.add_child(_power_view)
+	_comms_view = CommsView.new()
+	_comms_view.visible = false
+	box.add_child(_comms_view)
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
@@ -510,8 +516,8 @@ func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
 	## The bridge consoles and the holomap need power (v61: the bridge's backup SMES keeps those in its
 	## room going); the supply locker and the workbench are worked by hand, an SMES's terminal is its own.
-	return target == 12 or target == 22 or target == 28 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21)
-		and client.power_at(client.use_cell()))
+	return target == 12 or target == 22 or target == 28 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
+		or target == 30) and client.power_at(client.use_cell()))
 
 
 func _open_console(kind: int) -> void:
@@ -530,7 +536,7 @@ func _open_console(kind: int) -> void:
 		return
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
@@ -538,6 +544,8 @@ func _open_console(kind: int) -> void:
 		_drone_view.setup(client)
 	if kind == 22 and _bench_view.client == null:
 		_bench_view.setup(client)
+	if kind == 30 and _comms_view.client == null:
+		_comms_view.setup(client)
 	if kind == 28:
 		if _power_view.client == null:
 			_power_view.setup(client)
@@ -549,15 +557,16 @@ func _open_console(kind: int) -> void:
 	_drone_view.visible = kind == 21
 	_bench_view.visible = kind == 22
 	_power_view.visible = kind == 28
+	_comms_view.visible = kind == 30
 	_chart.visible = not own_view
 	_console_text.visible = not own_view
 	_jump_box.visible = not own_view
 	_jump_box.columns = 2
 	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
-		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 else (Color(0.9, 0.8, 0.3) if kind == 28 else Color(0.3, 0.75, 0.45))))))
+		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 else Color(0.3, 0.75, 0.45)))))))
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
 		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения",
-		28: _power_view.title() if kind == 28 else ""}.get(kind, "")
+		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи"}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
@@ -614,10 +623,35 @@ func _update_console() -> void:
 	if _console_kind == 28:
 		_power_view.refresh()
 		return
+	if _console_kind == 30:
+		_comms_view.refresh()
+		return
 	if _console_kind == 4:
 		_bridge.update_helm()
 		return
 	_bridge.update_chart()
+
+
+func _tray_hint(cell: int, no_power: bool) -> String:
+	## (v63) What a hydroponic tray shows, and what holding E does there (see Garden).
+	var t: Array = client.garden.get(cell, [0, Net.GROW_EMPTY, 0, 0])
+	var working := _use_held and client.work > 0
+	match int(t[1]):
+		Net.GROW_EMPTY:
+			var item: int = client.slots[client.hand]
+			if Plants.is_seed(item):
+				return "Сажаю…" if working else "Пустой лоток. Держите E, чтобы посадить: %s" % Plants.name_of(item).to_lower()
+			return "Сажаю…" if working else "Пустой лоток. Держите E, чтобы посадить лучшие семена из шкафа снабжения"
+		Net.GROW_GROWING:
+			var what := "%s: %d%%" % [Plants.plant_name(int(t[0])), int(t[2])]
+			if int(t[3]) & Net.GARDEN_CARE:
+				return "Ухаживаю…" if working else "%s. Требует ухода: держите E%s" % [what, " (скоро завянет!)" if int(t[3]) & Net.GARDEN_NEGLECT else ""]
+			if int(t[3]) & Net.GARDEN_DARK:
+				return "%s. Без энергии не растёт" % what
+			return "%s. Растёт" % what
+		Net.GROW_RIPE:
+			return "Собираю урожай…" if working else "%s созрел(а). Держите E, чтобы собрать урожай" % Plants.plant_name(int(t[0]))
+	return "Расчищаю…" if working else "Растение завяло. Держите E, чтобы расчистить лоток"
 
 
 func _bar_width(px: float, gap: float) -> float:
@@ -1216,6 +1250,14 @@ func _process(delta: float) -> void:
 		_hint.text = "%s: %s" % [_capital(client.map.device_name(client.use_cell())), state]
 	elif target == 12:
 		_hint.text = "E: шкаф снабжения (склад корабля)"
+	elif target == 30:
+		var calling := int(client.comms.get("state", Net.COMMS_QUIET)) == Net.COMMS_CALL
+		_hint.text = "Пульт связи обесточен: %s" % why if no_power else ("E: пульт связи — входящий вызов!" if calling else "E: пульт связи (вызовы, задания, флагман)")
+	elif target == 31:
+		_hint.text = _tray_hint(client.use_cell(), no_power)
+	elif target == 32:
+		_hint.text = "Криокапсула: здесь спит резерв экипажа (%d). Замена погибшему выходит отсюда%s" % [client.reserve,
+			"" if not no_power else " (сейчас обесточена: выход у точки появления)"]
 	elif target == 28:
 		var k := client.smes_at(client.use_cell())
 		var share := 0
@@ -1223,12 +1265,12 @@ func _process(delta: float) -> void:
 			share = roundi(100.0 * float(client.smes[k]["charge"]) / maxf(float(client.smes[k]["capacity"]), 1.0))
 		_hint.text = "E: терминал %s (заряд %d%%)" % ["резервного СМЭС" if k >= 0 and client.smes[k]["small"] else "СМЭС", share]
 	elif target == 29:
-		if client.hull >= Net.HULL_MAX:
+		if client.hull >= client.hull_max:
 			_hint.text = "Обшивка цела"
 		elif client.patches <= 0:
-			_hint.text = "Обшивка %d из %d: латать снаружи можно заплатками из шкафа снабжения" % [client.hull, Net.HULL_MAX]
+			_hint.text = "Обшивка %d из %d: латать снаружи можно заплатками из шкафа снабжения" % [client.hull, client.hull_max]
 		else:
-			_hint.text = "Латаю обшивку…" if (_use_held and client.work > 0) else "Обшивка %d из %d. Держите E, чтобы залатать снаружи (+10 за заплатку)" % [client.hull, Net.HULL_MAX]
+			_hint.text = "Латаю обшивку…" if (_use_held and client.work > 0) else "Обшивка %d из %d. Держите E, чтобы залатать снаружи (+10 за заплатку)" % [client.hull, client.hull_max]
 	elif target == 23:
 		var gear_why := client.gear_here(client.use_cell())
 		var item: int = client.slots[client.hand]
@@ -1429,7 +1471,7 @@ func _process(delta: float) -> void:
 		_info.text = "Кадров: %d" % int(round(_fps_smooth))
 	if _info_timer <= 0.0 and _info_on:
 		_info.text = "На борту: %d     Резерв: %d     Обшивка: %d%%     Пинг: %d мс     Сектор: %s" % [client.crew_count(),
-			client.reserve, client.hull * 100 / Net.HULL_MAX, int(round(client.rtt_ms)),
+			client.reserve, client.hull * 100 / client.hull_max, int(round(client.rtt_ms)),
 			client.sectors.describe(client.sector) if client.sectors.count > 0 else "?"]
 		if client.map.deck_count > 1:
 			_info.text += "     %s" % client.map.deck_names[client.my_deck()]

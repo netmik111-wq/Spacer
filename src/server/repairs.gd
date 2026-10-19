@@ -65,6 +65,10 @@ func update(p: Player) -> void:
 			server.mounts.finish(p, cell)
 	elif cell >= 0 and server.map.autodoc.has(cell) and server.medbay.tending(p, cell):
 		p.work = 0                           # (v60) tending whoever lies in the autodoc (see Medbay)
+	elif cell >= 0 and server.garden.can(p, cell) == "":
+		# (v63) a hydroponic tray: planting, tending, harvesting, clearing (see Garden)
+		if _work_done(p, cell, server.garden.ticks(cell)):
+			server.garden.finish(p, cell)
 	elif door >= 0 and server.doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
@@ -132,7 +136,8 @@ func usable_ahead(p: Player) -> bool:
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
-			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell) or map.autodoc.has(cell) or map.scanner.has(cell):
+			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell) or map.autodoc.has(cell) or map.scanner.has(cell) \
+			or map.comms.has(cell) or map.trays.has(cell) or map.cryo.has(cell):
 		return true
 	var door := map.door_of[cell]
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
@@ -170,6 +175,10 @@ func press(p: Player) -> void:
 		server.chat.tell(p, gun_why)         # (v60) why that gun cannot go up here
 	elif ahead >= 0 and server.map.scanner.has(ahead):
 		server.medbay.scan(p, ahead)         # (v60) the body scanner's report
+	elif ahead >= 0 and server.map.trays.has(ahead) and server.garden.can(p, ahead) != "":
+		server.chat.tell(p, server.garden.can(p, ahead))     # (v63) how the plant is doing, or why nothing can be planted
+	elif ahead >= 0 and server.map.cryo.has(ahead):
+		server.chat.tell(p, "Криокапсула. Резерв экипажа спит здесь и не ест: %d чел. Замена погибшему выходит отсюда." % server.reserve)
 	elif usable_ahead(p) or _lying_near(p):
 		return
 	elif p.in_hand() == Net.ITEM_ROBOT and server.robots.can_set(p, Vector2i(p.st.x + Net.DX[p.st.facing], p.st.y + Net.DY[p.st.facing])) != "-":

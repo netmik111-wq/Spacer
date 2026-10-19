@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 41
+const PROTOCOL := 42
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -140,6 +140,10 @@ const ITEM_GUN_DAMAGED := 140       # (v58) a damaged gun, mended at the workben
 const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gear.* (171..190; carried, kept in the locker)
 const ITEM_ROBOT := 195             # (v62) a security robot in its crate: set down on the floor, it switches on and guards
 const ITEM_GUN_LATE := 200          # (v62) weapons from Weapons.HORNET on: ITEM_GUN_LATE + (w - Weapons.HORNET) (200..203; cargo)
+const ITEM_SEED := 204              # (v63) a packet of seeds: ITEM_SEED + Plants.seed_item (204..227; carried, kept in the locker)
+const ITEM_FOOD := 230              # (v63) a ration: the crew eats them from the supply locker at every jump (see Garden)
+const ITEM_CARGO := 231             # (v63) a quest's crate of cargo, for a station (cargo: kept in the locker)
+const ITEM_BLACKBOX := 232          # (v63) a wreck's black box, carried home to the supply locker for a quest
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -404,6 +408,47 @@ const OTHER_PIRATE := 1
 # (v53) every drawing from OTHER_PIRATE on is a pirate ship's: see Hulls for which class each is
 const OTHER_MAPS: Array[String] = ["derelict01", "pirate01", "pirate02", "pirate03", "pirate04", "pirate05", "pirate06", "pirate07",
 	"pirate08", "pirate09"]
+# (v63) the road and its story (see Story, Garden)
+const C_COMMS := 31                 # u8 choice (its number on the screen): answer the call on the comms console
+const S_COMMS := 41                 # to all: the comms console's screen. u8 state (COMMS_*), u16 seconds left to answer,
+                                    # u16 title length, title, u16 text length, text, u8 count of choices, then per
+                                    # choice u8 flags (CHOICE_*), u16 length, its text
+const COMMS_QUIET := 0              # nobody calls (the title and text are the last call's outcome, or empty)
+const COMMS_CALL := 1               # a call waits for an answer
+const CHOICE_BLUE := 1              # a blue option: open thanks to somebody's job, a skill, gear or cargo
+const CHOICE_SHUT := 2              # cannot be taken now (it needs what the ship has not got)
+const S_STORY := 42                 # to all: u8 flags (STORY_*), s16 x, s16 y of the flagship's sector, u8 its growth,
+                                    # u16 seconds to its next step (65535 = none), u8 count of quests, then per quest
+                                    # u8 kind (QUEST_*), s16 x, s16 y, u16 reward, u16 title length, title, u16 text
+                                    # length, text; u8 count of marks, per mark u8 kind (MARK_*), s16 x, s16 y
+const STORY_FLAGSHIP := 1           # the flagship roams its area: its sector is known
+const STORY_CAUGHT := 2             # it is fighting us now (its growth stands still)
+const STORY_STARVING := 4           # the locker has no rations: the crew starve
+const STORY_CODES := 8              # the flagship's codes are ours (the chapter's second mission)
+const STORY_AWAKE := 16             # the flagship has woken: its growth clock runs
+const QUEST_CARGO := 0              # carry a crate of cargo to a station
+const QUEST_BOUNTY := 1             # a named pirate ship waits in a sector: beat it
+const QUEST_BLACKBOX := 2           # a wreck's black box: bring it back to the supply locker
+const QUEST_MISSION := 3            # a chapter of the story (it has a quest kind of its own inside)
+const MARK_SOS := 0                 # a distress call comes from that sector
+const MARK_QUEST := 1               # a quest's target
+const S_GARDEN := 43                # to all: u8 count of trays, per tray u16 cell, u8 seed (ITEM_SEED + ...; 0 = empty),
+                                    # u8 stage (GROW_*), u8 growth 0..100, u8 flags (GARDEN_*)
+const GROW_EMPTY := 0
+const GROW_GROWING := 1
+const GROW_RIPE := 2
+const GROW_DEAD := 3                # withered: cleared by hand
+const GARDEN_CARE := 1              # it wants tending
+const GARDEN_DARK := 2              # no power: it stands still (mushrooms grow anyway)
+const GARDEN_NEGLECT := 4           # left untended too long: it grows at half pace and will wither
+# (v63, the author's K23) how hard the game is, chosen when it is created
+const MODE_NORMAL := 0
+const MODE_EASY := 1                # hull at nothing costs the hull's top strength, not the voyage
+const MODE_HARD := 2                # fiercer pirates, one more boarder, less money from loot, the flagship grows faster
+const MODE_NAMES: Array[String] = ["Обычный", "Лёгкий", "Тяжёлый"]
+const MODE_KEYS: Array[String] = ["normal", "easy", "hard"]
+const EASY_HULL_LOSS := 50          # (easy) what a hull worn to nothing costs its top strength...
+const EASY_HULL_LEAST := 50         # ... and below this top strength the ship is lost after all
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
@@ -442,7 +487,8 @@ const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirat
 # every hole takes from; at nothing the ship breaks up. Either loss ends the campaign.
 const S_CAMPAIGN := 29              # u8 hull, u8 reserve, u8 over (OVER_*), u16 sectors visited, u16 farthest
                                     # (jumps from the start), u16 jumps made, u32 seconds the voyage has lasted,
-                                    # (v57) u8 1 = the flagship is beaten (the game is won; the voyage goes on)
+                                    # (v57) u8 1 = the flagship is beaten (the game is won; the voyage goes on),
+                                    # (v63) u8 the hull's top strength, u8 the mode (MODE_*)
 const OVER_NONE := 0
 const OVER_WRECKED := 1             # the hull gave way
 const OVER_CREW_LOST := 2           # everyone dead, nobody left in the reserve
@@ -511,6 +557,9 @@ const ADMIN_FIGHT := 27             # (v60.1) a pirate ship comes: argument = cl
 const ADMIN_ANY_TEMPER := 7
 const ADMIN_TRADER_DEAL := 16       # (v60.1) ADMIN_PLACE of a trader + this * (1 + Sectors.DEAL_*): a trader of that kind
 const ADMIN_CREDITS_GIVEN := 100
+const ADMIN_TALE := 30              # (v63) the comms console takes the call of that event (Tales.ALL index; 255 = any that fits)
+const ADMIN_GROW := 31              # (v63) the flagship wakes in its area (if not yet) and takes one more step of growth
+const ADMIN_GARDEN := 32            # (v63) every tray ripe now
 
 const NO_SECTOR := 255
 const JUMP_TICKS := 160             # a jump takes 8 s to charge

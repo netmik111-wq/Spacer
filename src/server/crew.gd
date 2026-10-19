@@ -102,6 +102,9 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.outfit.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.mounts.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.power.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.story.comms_packet(), ENetPacketPeer.FLAG_RELIABLE)     # (v63)
+	peer.send(0, server.story.story_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.garden.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	for q: Player in server.players:
 		if q != null and q != p:
 			peer.send(0, look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
@@ -313,6 +316,29 @@ func spawn_point() -> Vector2i:
 	return server.map.spawns[start]
 
 
+func cryo_spot() -> Vector2i:
+	## (v63) The floor in front of a working cryopod with nobody on it, or (-1, -1).
+	var map = server.map
+	var w: int = map.width
+	for pod: int in map.cryo:
+		if server.ship.broken.has(pod) or not server.power.at(pod):
+			continue
+		for d in range(1, 5):
+			var x: int = pod % w + Net.DX[d]
+			var y: int = pod / w + Net.DY[d]
+			var c := y * w + x
+			if x < 0 or y < 0 or x >= w or c >= map.walk.size() or map.walk[c] != 1 or map.door_of[c] >= 0:
+				continue
+			var taken := false
+			for q: Player in server.players:
+				if q != null and q.st.x == x and q.st.y == y:
+					taken = true
+					break
+			if not taken:
+				return Vector2i(x, y)
+	return Vector2i(-1, -1)
+
+
 func drop(peer: ENetPacketPeer) -> void:
 	server.pending.erase(peer)
 	if not server.slot_of.has(peer):
@@ -444,7 +470,7 @@ func update_vitals(p: Player) -> void:
 			breathes = 1.0
 		else:
 			p.supply = false
-	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds)
+	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds + server.garden.hunger_of(p))
 	var cond := Vitals.condition(p.health, p.cond)
 	if cond == p.cond:
 		return
@@ -499,6 +525,10 @@ func respawn(p: Player) -> void:
 		p.skills.fill(0)
 		p.take_job(p.job)
 	var spot := spawn_point()
+	if not p.bot:
+		var pod := cryo_spot()               # (v63) the one from the reserve wakes in a cryopod
+		if pod.x >= 0:
+			spot = pod
 	p.st.place(spot.x, spot.y)
 	p.st.dir = Net.DIR_NONE
 	p.st.down = false
@@ -555,10 +585,17 @@ func hull_hit(amount: int) -> void:
 		return
 	var was := server.ship.hull
 	server.ship.hull = maxi(server.ship.hull - amount, 0)
-	if server.ship.hull == 0:
+	if server.ship.hull == 0 and server.mode == Net.MODE_EASY and server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST:
+		# (v63, the author's K23) the easy mode: a hull worn to nothing costs its top strength, not the voyage
+		server.ship.hull_max -= Net.EASY_HULL_LOSS
+		server.ship.hull = server.ship.hull_max
+		server.chat.say("Обшивка не выдержала, но экипаж успел залатать каркас: корабль держится. Наибольшая прочность теперь %d%s." % [
+			server.ship.hull_max, "" if server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST else " — следующий раз станет последним"])
+		tell_campaign()
+	elif server.ship.hull == 0:
 		end_campaign(Net.OVER_WRECKED)
 	elif was > 50 and server.ship.hull <= 50:
-		server.chat.say("Обшивка на пределе: прочность %d из %d. Залатать её могут на станции снабжения или у торговца." % [server.ship.hull, Net.HULL_MAX])
+		server.chat.say("Обшивка на пределе: прочность %d из %d. Залатать её могут на станции снабжения или у торговца." % [server.ship.hull, server.ship.hull_max])
 
 
 func end_campaign(how: int) -> void:
@@ -589,7 +626,7 @@ static func voyage_text(ticks: int) -> String:
 
 func campaign_packet() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(15)
+	out.resize(17)
 	out.encode_u8(0, Net.S_CAMPAIGN)
 	out.encode_u8(1, server.ship.hull)
 	out.encode_u8(2, server.reserve)
@@ -599,6 +636,8 @@ func campaign_packet() -> PackedByteArray:
 	out.encode_u16(8, mini(server.jumps, 65535))
 	out.encode_u32(10, server.voyage_ticks / Net.TICK_HZ)
 	out.encode_u8(14, 1 if server.won else 0)
+	out.encode_u8(15, server.ship.hull_max)
+	out.encode_u8(16, server.mode)
 	return out
 
 

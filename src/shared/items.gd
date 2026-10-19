@@ -18,6 +18,8 @@ extends RefCounted
 ##            (ship weapons and their rockets)
 ##   gun      the ship weapon (Weapons.*) it is: its name, words and price come from there
 ##   gear     (v59) the crate of ship gear (Gear.*) it is: the same; carried, and kept in the locker
+##   keep     (v63) kept in the supply locker though the ship sets out with none (seeds, a black box)
+##   seed     (v63) the packet of seeds it is (Plants): its name, words and price come from there
 ## Later things will add their own properties here (damage, what it protects
 ## from, which layer of clothing it is), so a new kind of thing does not need
 ## new code where things are moved about.
@@ -25,6 +27,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Plants := preload("res://src/shared/plants.gd")
 
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
@@ -83,6 +86,13 @@ const BASE := {
 	# (v62, the author's K11) a security robot in its crate: kept in the locker, carried, set down to switch on
 	Net.ITEM_ROBOT: {"name": "Охранный робот", "about": "Робот в ящике. Поставьте его на пол (щёлкните по соседней клетке или нажмите E перед свободным местом): он включится и будет охранять этот отсек, стреляя по абордажникам. Воздух ему не нужен. На борту не больше двух.",
 		"price": 120, "robot": true},
+	# (v63, the author's R1) the crew's food, and what quests are about
+	Net.ITEM_FOOD: {"name": "Паёк", "about": "Еда экипажа. Каждый прыжок экипаж съедает из шкафа снабжения по пайку на двоих; без еды все слабеют. Растёт в гидропонике.",
+		"price": 3, "stock": 16},
+	Net.ITEM_CARGO: {"name": "Груз по заданию", "about": "Опечатанный контейнер. Его ждут на станции снабжения, отмеченной на карте: подойдите к ней. Хранится в трюме.",
+		"cargo": true},
+	Net.ITEM_BLACKBOX: {"name": "Чёрный ящик", "about": "Бортовой самописец с обломков. Положите его в шкаф снабжения: заказчик заберёт запись по связи.",
+		"keep": true},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -112,6 +122,14 @@ static func _made() -> Dictionary:
 		out[item] = e
 	for g in Gear.all():
 		out[Gear.item_of(g)] = {"gear": g}
+	for kind in Plants.COUNT:
+		for t in Plants.TRAITS:
+			var e := {"seed": true, "keep": true}
+			if t == Plants.PLAIN and kind < Plants.BOUGHT:
+				e["price"] = int(Plants.KINDS[kind]["price"])
+				if kind == Plants.MUSHROOM or kind == Plants.POTATO:
+					e["stock"] = 2                   # the ship sets out with a little to plant
+			out[Plants.seed_item(kind, t)] = e
 	for k in Weapons.KINDS:
 		out[Net.ITEM_GUN_PARTS + k] = {"name": "Детали: %s" % Weapons.KIND_NAMES[k], "cargo": true, "price": 12,
 			"about": "Детали орудий, %s. Получаются, когда инженер разбирает такое орудие на верстаке; ими же он улучшает орудия этого рода. Хранятся в трюме." % Weapons.KIND_NAMES[k]}
@@ -187,6 +205,11 @@ static func about(item: int) -> String:
 		return str(Weapons.info(w)["about"]) + " Энергия: %d." % Weapons.power(w) + ("" if fx == 0 else " " + Weapons.about_fx(fx))
 	if INFO.has(item) and INFO[item].has("gear"):
 		return Gear.about(int(INFO[item]["gear"]))
+	if INFO.has(item) and INFO[item].has("seed"):
+		var k: Dictionary = Plants.KINDS[Plants.kind_of(item)]
+		return "%s Держите E у лотка гидропоники, чтобы посадить. Созревает за %d мин, урожай: %d пайк%s%s." % [
+			k["about"], roundi(Plants.seconds(item) / 60.0), Plants.food(item), "а" if Plants.food(item) in [2, 3, 4] else ("" if Plants.food(item) == 1 else "ов"),
+			(" и %d пластыря" % Plants.plasters(item)) if Plants.plasters(item) > 0 else ""]
 	return str(INFO[item].get("about", "")) if INFO.has(item) else ""
 
 
@@ -229,7 +252,7 @@ static func kept_in_locker() -> PackedInt32Array:
 	## The things the supply locker holds, in the order they are shown.
 	var out := PackedInt32Array()
 	for item: int in INFO.keys():
-		if kind_of(item) == item and (stock(item) > 0 or cargo(item) or INFO[item].has("gear") or INFO[item].has("robot")) \
+		if kind_of(item) == item and (stock(item) > 0 or cargo(item) or INFO[item].has("gear") or INFO[item].has("robot") or INFO[item].has("keep")) \
 				and not INFO[item].has("fx") and not INFO[item].has("damaged"):
 			out.append(item)                 # ((v58) a gun's other states get a place in the locker when one comes)
 	return out
@@ -247,7 +270,14 @@ static var CATEGORIES: Array = [
 	["Модули корабля", Gear.all().map(func(g: int) -> int: return Gear.item_of(g))],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
 	["Охрана", [Net.ITEM_ROBOT]],
+	["Провизия", [Net.ITEM_FOOD]],
+	["Семена", range(Net.ITEM_SEED, Net.ITEM_SEED + Plants.COUNT * Plants.TRAITS)],
+	["Задания", [Net.ITEM_CARGO, Net.ITEM_BLACKBOX]],
 ]
+
+
+static func is_seed(item: int) -> bool:
+	return INFO.has(item) and INFO[item].has("seed")
 
 
 static func gear_of(item: int) -> int:

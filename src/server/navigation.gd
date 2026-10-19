@@ -64,8 +64,8 @@ func update() -> void:
 				var topped := server.ship.fuel() < Net.STATION_FUEL
 				if topped:
 					server.ship.store[Net.ITEM_FUEL] = Net.STATION_FUEL
-				var patched := server.ship.hull < Net.HULL_MAX
-				server.ship.hull = Net.HULL_MAX
+				var patched := server.ship.hull < server.ship.hull_max
+				server.ship.hull = server.ship.hull_max
 				server.supplies.tell_store()
 				server.chat.say("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %
 					[", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else "",
@@ -197,3 +197,5 @@ func update_jump() -> void:
 		_:
 			server.chat.say("Сектор %s." % server.sectors.describe(server.ship.sector))
 	server.director.entered_sector()
+	server.garden.jumped()               # (v63) the crew eat
+	server.story.entered_sector()

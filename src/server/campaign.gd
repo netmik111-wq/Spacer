@@ -31,7 +31,8 @@ static func summary(path: String = PATH) -> String:
 	if data.is_empty():
 		return ""
 	var minutes := int(data.get("voyage", 0)) / Net.TICK_HZ / 60
-	return "секторов пройдено: %d, продержались %s, в резерве %d" % [(data.get("been", []) as Array).size(),
+	return "%s, секторов пройдено: %d, продержались %s, в резерве %d" % [Net.MODE_NAMES[clampi(int(data.get("mode", 0)), 0, 2)].to_lower() + " режим",
+		(data.get("been", []) as Array).size(),
 		("%d ч %02d мин" % [minutes / 60, minutes % 60]) if minutes >= 60 else ("%d мин" % minutes), int(data.get("reserve", 0))]
 
 
@@ -117,6 +118,8 @@ static func snapshot(server: Node) -> Dictionary:
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
 		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
 		"smes": server.power.save(),
+		"mode": server.mode, "hull_max": server.ship.hull_max,               # (v63)
+		"story": server.story.save(), "roam": server.flagship.save(), "garden": server.garden.save(),
 	}
 
 
@@ -167,9 +170,13 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.ship.store[item] = 0          # (things new since the save was made: none of them)
 	for item: String in data["store"]:
 		server.ship.store[int(item)] = int(data["store"][item])
+	if not (data["store"] as Dictionary).has(str(Net.ITEM_FOOD)):
+		server.ship.store[Net.ITEM_FOOD] = Items.stock(Net.ITEM_FOOD)   # (v63) a save from before food: the start's rations
 	server.ship.store_air = float(data["store_air"])
 	server.ship.credits = int(data["credits"])
 	server.reserve = int(data["reserve"])
+	server.mode = int(data.get("mode", Net.MODE_NORMAL))           # (v63; older saves: the normal mode)
+	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))
 	server.ship.hull = int(data["hull"])
 	if data.has("mounts"):
 		var mounts := PackedByteArray(data["mounts"])
@@ -186,7 +193,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.ship.guard = int(data.get("guard", 0))
 		server.ship.guard_armed = bool(data.get("guard_armed", false))
 	else:
-		server.ship.hull = mini(server.ship.hull * 2, Net.HULL_MAX)   # saved before v49, when the hull was 100
+		server.ship.hull = mini(server.ship.hull * 2, server.ship.hull_max)   # saved before v49, when the hull was 100
 	server.supplies.bought.clear()
 	server.supplies.sold.clear()
 	server.supplies._offers_for = -1
@@ -210,6 +217,9 @@ static func restore(server: Node, data: Dictionary) -> String:
 		else PackedByteArray([0, 0])         # (v62) three with the bay's extender
 	server.ship.phase_ready = 0
 	server.outfit.refresh()
+	server.story.load_from(data.get("story", {}))
+	server.flagship.load_from(data.get("roam", {}))
+	server.garden.load_from(data.get("garden", {}))
 	server.power.load_from(data.get("smes", []))     # (v61; an older save keeps the SMES as it starts: full)
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])

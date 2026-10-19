@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v62 (version 0.55).
+Last updated: build v63 (version 0.56).
 
 Contents:
 
@@ -32,6 +32,7 @@ Contents:
 22. [Speech, radio, intercom](#22-speech-radio-intercom)
 23. [Campaign: hull, end, saving](#23-campaign-hull-end-saving)
 24. [Controls](#24-controls)
+25. [The road: comms console, quests, food, hydroponics, modes (v63)](#25-the-road-comms-console-quests-food-hydroponics-modes-v63)
 
 ---
 
@@ -709,6 +710,17 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   says the flagship is beaten; its reward is **200** credits and the wreck can be searched. The voyage
   goes on after that; the flagship does not come back.
 - The eventer has «Флагман: линкор» and «Флагман: абордажник» to call either one in for testing.
+- **It roams and grows** (v63, the author's R7: "FTL-style"). It sleeps at the goal until our ship first comes
+  within **2 jumps** of it. Then it wakes («флагман пиратов проснулся») and roams the sectors within 2 jumps of
+  the goal: every **90 s** it moves to a neighbouring sector along a route (half the time towards us, when we are in
+  its area). The chart shows it as a red triangle «ФЛАГМАН», the sector console and the comms console say where it
+  is. Meeting it is the fight: we arrive where it is (it comes out 5 s later), or it comes into our sector (a warning,
+  then **20 s** to jump away). Arriving at the goal while it is elsewhere, the chat says so.
+- From waking, its **growth clock** runs, even while we are far away (it is saved): every **3 min** (**2 min** on the
+  hard mode) it takes a step, up to **4**: 1 its guns charge in **0.8** of the time; 2 its shield refills **1.5×**
+  faster and each of its systems takes one more hit; 3 it carries **4** more boarders (the battleship gets a teleporter
+  and sends them the carrier's way); 4 point defence. The clock stands still while it fights us. The chat tells each
+  step. The chapter's codes (section 25) take one step off and show all its rooms in the fight.
 
 ### Ship weapons
 
@@ -1103,8 +1115,10 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   The ship sets out with **8** canisters. Other sources: the trader (**6** credits), loot
   on derelict and pirate ships, the supply station (up to **3**), a wrecked pirate ship (**1**).
 - If there isn't a single canister on board (in the locker, in pockets, on bodies or on the floor), after
-  **2 minutes** the «Дрейфующее топливо» ("Drifting fuel") event comes: **2** canisters into the locker. So there's no dead end without
-  fuel, but time passes.
+  **2 minutes** help comes. (v63) Most often a ship calls on the comms console: a passing trader sells **2** cans for
+  **20** credits, or leaves **1** for nothing if asked (also what happens when nobody answers), or kind people give
+  **2**. Three times in ten it is still the «Дрейфующее топливо» ("Drifting fuel") event: **2** canisters into the
+  locker. So there's no dead end without fuel, but time passes.
 
 ## 20. Eventer (GM)
 
@@ -1224,6 +1238,11 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 - The **goal** (since v57) is to reach the pirates' flagship 12 jumps away and beat it (section 17); after
   that the game is won and the voyage may go on. Until then, hold out. The top line (F1) shows the reserve and hull integrity.
+- **Modes** (v63, the author's R9): chosen for a new campaign in the menu («Режим новой кампании»), kept in the save.
+  **Easy**: a hull worn to nothing does not end the voyage; it costs **50** of the hull's top strength instead, and
+  the hull is whole again (200 → 150 → 100 → 50; the next time at 50 is the end). **Normal**: as before. **Hard**:
+  pirates are never cautious (reckless or hunters instead), one more boarder in every party, a pirate ship pays
+  **75%** of its reward, the flagship grows every 2 min.
 - **Hull**: integrity **200** (100 until v49; an older save has its hull doubled). Each breach takes **5**, each
   pirate hit on a gun, console or the shield generator **3** per point of its damage. At **50** and below the ship warns you. It is patched at a trader
   and at a supply station (section 10).
@@ -1240,6 +1259,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
     кампания»** ("New campaign"; if a save exists, the button must be pressed twice: the old one will be lost).
   - The dedicated server (`start-server.bat`) continues the saved campaign if there is one;
     `CAMPAIGN=new` in the file starts a new one.
+  - (v63) Also saved: the mode and the hull's top strength, quests, the chapter, answered SOS calls, the trays,
+    hunger, and the flagship's roaming and growth. A save from before v63 plays on the normal mode and gets the
+    start's 16 rations.
   - What is saved: the place in space and where the ship has been, supplies, credits, reserve, hull,
     breakdowns and breaches, jammed doors, air in each compartment, items on the floor, bodies,
     and **each character by player name**: where they stood, health and wounds, items, clothing,
@@ -1286,3 +1308,84 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
   with a modifier held, unless that exact combination belongs to another action. Hints on the
   screen name the keys as set.
+
+## 25. The road: comms console, quests, food, hydroponics, modes (v63)
+
+### Comms console and calls
+
+- A **comms console** stands on the bridge (sign `K` on the map, where a window was). E at it opens its screen;
+  it needs power (the bridge's backup SMES keeps it going). Its lamp blinks while a call waits.
+- **Calls** (the author's R2, "text events"): a short story and **2–4 answers**. Anybody at the console answers
+  for the ship; the chat tells everyone the outcome. A call nobody answers in **90 s** takes its plain answer
+  (or, if that cannot be paid, the first that can). One call at a time; never in a fight (a call due then waits).
+- A call comes on arriving somewhere quiet (calm space, trader, station, derelict; a few also in meteors or the
+  storm) **35%** of the time, **8 s** after arriving. **21 events** besides the special ones: a rescue capsule,
+  a peddler, miners in trouble, an unmarked container, refugees asking for food, a pirate toll, a broken drone,
+  a science ship, a debris swarm, a seed bank, a middleman with cargo, a bounty board, a lost ship's black box,
+  a sick trader, an ion jellyfish (storm only), a voice on the radio, an old friend, a trader's fuel leak, a ration
+  vending machine, a quarantine buoy, a station's order. Outcomes are drawn by weight: credits, fuel, rations,
+  parts, medkits, seeds, a crate of gear, a survivor for the reserve, or a breach, a hurt crew member (wounds 25–35),
+  a power glitch, a pirate ship to fight.
+- **Blue answers** are open only when somebody alive aboard (a bot counts) has the **job** (doctor, engineer,
+  guard), the **skill** (piloting or repair **70**+), or the locker holds the **thing** (a probe; it is not used up).
+  They always turn out well. Answers that **cost** (credits, rations, a medkit) are grey without it.
+
+### Quests
+
+- Some answers give a **quest** (at most **3** besides the chapter's missions; no time limit). Its target is a
+  sector **2–4 jumps** away (a little further if none fits), marked on the chart with a yellow diamond «!»; the
+  comms console lists them with the jumps left and the reward.
+  - **Cargo** («Груз для станции»): a crate (`Груз по заданию`) goes into the locker; arriving at the target station
+    with it pays **30 + 8 per jump**. Without the crate in the locker the quest fails.
+  - **Bounty** («Награда за голову»): a named pirate ship (a rolled raid) comes out **6 s** after we arrive in its
+    sector. Wreck it, break off its boarding, take it, or take its ransom: paid **40 + 8 per jump**. If it gets away
+    (or we jump away from it) the quest is lost.
+  - **Black box** («Чёрный ящик»): in a derelict sector; the derelict there has the box (`Чёрный ящик`) lying aboard.
+    Put it into the supply locker: paid **30 + 8 per jump**.
+- **The chapter's missions** (the author's R6): arriving **3–6 jumps** from the start, the fleet calls: «Пропавший
+  конвой» (find the convoy's wreck in a derelict sector and bring its log, a black box, to the locker; **60** credits
+  and a crate of better gear). That opens «Коды флагмана»: a pirate courier (a gunship) waits in a sector 2–4 jumps
+  away, towards the goal; beat it for **80** credits and the **flagship's codes**: in its fight all its rooms show at
+  once, and its growth goes **one step back**. Turned down, the first mission is offered again 3 jumps later; a
+  courier that gets away is found again in another sector.
+- **SOS** (the author's R5): about **15%** of calm sectors send an SOS, marked «SOS» on the chart. Arriving there brings
+  its call: help (**40%** survivors: 2 to the reserve and 3 rations; **30%** salvage: 3 parts and 15 credits; **30%** a
+  pirate trap), the guard's blue answer (no trap: survivors, or the pirates reported for 25 credits), or leave.
+
+### Food and hunger
+
+- **Rations** («Паёк») are kept in the supply locker; the ship starts with **16**; traders sell them (**3** credits).
+- Every **jump** the crew eat **one ration for every two** of them (players and bots alive; the reserve sleeps and eats
+  nothing). The chat warns when two jumps' worth or less are left.
+- With nothing to eat at a jump the crew **starve**: everybody's health sinks by **0.1 a second**, down to **30** and
+  never lower: nobody dies of hunger. Food in the locker again: the hunger passes (1 health a second back).
+  The comms console shows «Пайков нет: экипаж голодает».
+
+### Hydroponics
+
+- Four **hydroponic trays** (sign `P`) on the lower deck. Hold **E** at one:
+  - empty: plants the seed packet in hand, or else the best packet from the locker (**2 s**);
+  - growing: when it **wants tending** (every **60–90 s**; a blue drop blinks over it), tends it (**2 s**). Wanting
+    care it grows at **half pace**; after **5 min** of that (the drop turns red at half way) it **withers** and must be cleared (2 s);
+  - ripe (yellow fruit): harvests it (2 s): its rations (and the herb's plasters) go to the supply locker.
+- Without power a tray stands still; **mushrooms** grow in the dark.
+- Plants (rations at harvest, time to ripen when tended): **mushrooms** 2, 4 min (seeds 4 cr.); **chlorella** 3, 5 min
+  (5 cr.); **soy** 4, 7 min (6 cr.); **potato** 6, 9 min (8 cr.); and two hybrids that are not sold: **sweet tuber** 8, 8 min
+  (potato and soy), **healing herb** 1 ration and **2 plasters**, 6 min (mushrooms and chlorella). The ship starts with
+  2 packets each of mushrooms and potato.
+- A harvest gives its seed back **60%** of the time; that seed **mutates** **20%** of the time: plain → **rich** (+1 ration)
+  or **early** (ripens in two thirds of the time), either of those → **choice** (both). A mutated packet has a gold corner.
+- **Hybrids**: harvesting a plant while the tray beside it is ripe with its pair gives a hybrid seed **35%** of the time.
+- **Bots** on «Работы» tend, harvest, clear and plant the trays (after what is broken, before the guns' orders).
+- The eventer's admin panel: «Гидропоника: всё созрело».
+
+### Cryosleep
+
+- Four **cryopods** (sign `C`) in the crew quarters: the reserve sleeps there. One from the reserve who replaces the
+  dead (R) comes out in front of a working pod with power; without one, at a spawn point as before. E at a pod tells how
+  many sleep.
+
+### The admin panel (v63)
+
+- «Вызов на пульт связи» (any for this sector) and a list of every call by name; «Флагман: проснуться и +1 шаг роста»;
+  «Гидропоника: всё созрело».

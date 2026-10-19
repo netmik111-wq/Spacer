@@ -52,7 +52,7 @@ func can_mend(p: Player, cell: int) -> bool:
 	## Is the character out in space, facing a whole cell of our hull, with a
 	## patch, and the hull short of full?
 	var map = server.map
-	return cell >= 0 and server.ship.hull < Net.HULL_MAX and p.count(Net.ITEM_PATCH) > 0 and map.floats(p.st.x, p.st.y) \
+	return cell >= 0 and server.ship.hull < server.ship.hull_max and p.count(Net.ITEM_PATCH) > 0 and map.floats(p.st.x, p.st.y) \
 		and not server.air.holes.has(cell) and not map.is_other(cell) and map.hull.has(cell)
 
 
@@ -63,8 +63,8 @@ func mend_ticks(p: Player) -> int:
 func mended(p: Player) -> void:
 	p.remove(Net.ITEM_PATCH)
 	p.train(Net.SKILL_REPAIR)
-	server.ship.hull = mini(server.ship.hull + HULL_PER_PATCH, Net.HULL_MAX)
-	server.chat.say("%s латает обшивку снаружи: прочность %d из %d." % [p.name, server.ship.hull, Net.HULL_MAX])
+	server.ship.hull = mini(server.ship.hull + HULL_PER_PATCH, server.ship.hull_max)
+	server.chat.say("%s латает обшивку снаружи: прочность %d из %d." % [p.name, server.ship.hull, server.ship.hull_max])
 
 
 # ------------------------------------------------------------------ a bot going out
@@ -82,7 +82,7 @@ func _wants(p: Player) -> bool:
 	## Should this bot set off to mend the hull from outside now?
 	if p.order != Net.POST_REPAIR or p.bot_healing or server.tick < _rest_until or _threat() or not server.powered():
 		return false
-	if server.ship.hull >= roundi(Net.HULL_MAX * BOT_GOES_BELOW) or not trips.is_empty():
+	if server.ship.hull >= roundi(server.ship.hull_max * BOT_GOES_BELOW) or not trips.is_empty():
 		return false
 	if _pump() < 0 or not server.stations._repair_jobs(p).is_empty() or server.stations._carried_gun(p) >= 0:
 		return false
@@ -157,7 +157,7 @@ func drive(p: Player) -> bool:
 				return true
 			if _least_air(chamber) >= FULL or server.ship.store_air <= 0.0:
 				server.ship.pumps.erase(pump)
-				return _done(p, server.ship.hull >= roundi(Net.HULL_MAX * BOT_GOES_BELOW))
+				return _done(p, server.ship.hull >= roundi(server.ship.hull_max * BOT_GOES_BELOW))
 			if not server.ship.pumps.has(pump) and server.systems.lock_shut(pump):
 				server.systems.toggle_pump(p, pump)
 			p.doing = Net.DOING_WORK
