@@ -391,6 +391,15 @@ func _food() -> void:
 	_run(Net.TICK_HZ * 900)
 	_expect(p.health >= Garden.STARVE_FLOOR - 0.01 and p.health < 40.0, "health sinks, but not below %d (%.0f)" % [int(Garden.STARVE_FLOOR), p.health])
 	_expect(p.cond == Net.COND_OK, "nobody dies of hunger")
+	# knocked out while starving, with light wounds: it still comes round (the playthrough's soft lock)
+	p.wounds = 30.0
+	p.health = -5.0
+	p.cond = Net.COND_CRIT
+	p.st.down = true
+	server.air.air[p.st.y * server.map.width + p.st.x] = 1.0
+	_run(Net.TICK_HZ * 60)
+	_expect(p.cond == Net.COND_OK, "out cold, starving and lightly wounded: still comes round (%.0f)" % p.health)
+	p.wounds = 0.0
 	server.ship.store[Net.ITEM_FOOD] = 5
 	_run(Net.TICK_HZ * 80)
 	_expect(not gd.starving() and gd.hunger == 0.0 and p.health > 90.0, "food again: the hunger passes (%.0f)" % p.health)

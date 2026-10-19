@@ -1440,6 +1440,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   nothing). The chat warns when two jumps' worth or less are left.
 - With nothing to eat at a jump the crew **starve**: everybody's health sinks by **0.1 a second**, down to **30** and
   never lower: nobody dies of hunger. Food in the locker again: the hunger passes (1 health a second back).
+  Hunger never holds health below **30** on top of wounds, so someone knocked out while starving still comes round
+  (only wounds of **90** and more need the autodoc).
   The comms console shows «Пайков нет: экипаж голодает».
 
 ### Hydroponics
