@@ -187,7 +187,7 @@ func _sum_up() -> String:
 	for d: Array in _devices():
 		if client.broken.has(int(d[0])):
 			broken.append(d[1])
-	lines.append("Обшивка: %d из %d. Пробоин: %d. %s" % [client.hull, Net.HULL_MAX, client.holo_holes.size(),
+	lines.append("Обшивка: %d из %d. Пробоин: %d. %s" % [client.hull, client.hull_max, client.holo_holes.size(),
 		"Всё оборудование работает." if broken.is_empty() else "Не работает: %s." % ", ".join(broken)])
 	var shutters := 0
 	var jams := 0

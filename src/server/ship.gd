@@ -46,7 +46,8 @@ var store := {}                       # thing (Net.ITEM_*) -> how many
 var store_air := 0.0                  # air the air plant still has to give, in cells' worth
 var credits := 0
 var store_told := PackedByteArray()   # the supplies as clients were last told
-var hull := Net.HULL_MAX              # strength of the hull, 0..Net.HULL_MAX
+var hull := Net.HULL_MAX              # strength of the hull, 0..hull_max
+var hull_max := Net.HULL_MAX          # (v63) its top strength: Net.HULL_MAX, less what the easy mode took for each wreck
 
 # its guns and shield (see Gunnery, Weapons)
 var mounts := PackedByteArray()       # per gun mount (ShipMap.guns): the weapon on it (Weapons.*; NONE = empty)

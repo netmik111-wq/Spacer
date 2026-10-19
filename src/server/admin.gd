@@ -113,7 +113,7 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 		Net.ADMIN_CREDITS:
 			server.ship.credits = mini(server.ship.credits + Net.ADMIN_CREDITS_GIVEN, 60000)
 		Net.ADMIN_HULL:
-			server.ship.hull = Net.HULL_MAX
+			server.ship.hull = server.ship.hull_max
 		Net.ADMIN_RESERVE:
 			server.reserve = mini(server.reserve + 1, Net.RESERVE_MAX)
 		Net.ADMIN_PIRATE:
@@ -141,6 +141,12 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			server.power.set_charge(argument / 10.0)
 		Net.ADMIN_SURGE:
 			server.hazards.surge()
+		Net.ADMIN_TALE:
+			server.story.admin_call(argument)
+		Net.ADMIN_GROW:
+			server.flagship.admin_grow()
+		Net.ADMIN_GARDEN:
+			server.garden.ripen_all()
 
 
 func give(p: Player, item: int) -> void:

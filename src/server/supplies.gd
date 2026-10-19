@@ -268,9 +268,9 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.reserve += 1
 				server.chat.say("%s нанимает у торговца нового члена экипажа. В резерве: %d." % [p.name, server.reserve])
 		Net.STORE_BUY_HULL:
-			if can_trade() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < Net.HULL_MAX and server.over == Net.OVER_NONE:
+			if can_trade() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < server.ship.hull_max and server.over == Net.OVER_NONE:
 				server.ship.credits -= Net.PRICE_HULL
-				server.ship.hull = mini(server.ship.hull + Net.HULL_LOT, Net.HULL_MAX)
+				server.ship.hull = mini(server.ship.hull + Net.HULL_LOT, server.ship.hull_max)
 	tell_store()
 
 

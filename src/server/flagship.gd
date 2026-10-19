@@ -20,6 +20,17 @@ extends RefCounted
 ## jump while it fights, and the battleship goes for the engine even when a
 ## bridge console is broken. Wrecking the flagship, or killing its whole crew
 ## by boarding it, wins the game (GameServer.won); the voyage goes on after.
+##
+## (v63, the author's R7: "the flagship roams its sector FTL-style and grows
+## stronger the longer you take") It sleeps at the goal until our ship first
+## comes within AREA jumps of it. Then it wakes and roams: every MOVE_SECONDS it
+## moves to a neighbouring sector of its area (along a route), shown on the
+## chart; meeting it in a sector (we arrive, or it comes to us, WARN_SECONDS
+## after a warning) is the fight. From waking its growth clock runs, even while
+## we are far away: every GROW_SECONDS (GROW_HARD on the hard mode) it takes a
+## step, up to GROWTH_MAX: 1 its guns charge faster, 2 its shield refills faster
+## and its systems take one more hit, 3 it carries boarders (the battleship gets a
+## teleporter too), 4 point defence. The chapter's codes take one step off.
 
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -35,6 +46,15 @@ const PHASE2_SECONDS := 25.0         # (v62) in its second phase the carrier tel
 const PHASE2_PARTY := 3              # ... this many at a time...
 const PHASE2_TROOPS := 4             # ... and calls up this many more troops
 const CAPTURE_SECONDS := 10          # the whole crew down this long with its boarders aboard: the ship is theirs
+const AREA := 2                      # (v63) it roams the sectors this many jumps from the goal
+const MOVE_SECONDS := 90.0           # (v63) it moves on this often
+const WARN_SECONDS := 20.0           # (v63) coming into our sector, it is seen this long before it comes out
+const GROW_SECONDS := 180.0          # (v63) it takes a step of growth this often once awake...
+const GROW_HARD := 120.0             # ... on the hard mode this often
+const GROWTH_MAX := 4
+const GROWN_TROOPS := 4              # (v63) the boarders it carries from its third step (the carrier: more)
+const GROWTH_NAMES: Array[String] = ["", "его орудия заряжаются быстрее", "его системы прочнее, а щит восстанавливается быстрее",
+	"он взял на борт абордажников", "он поставил противоракетную защиту"]
 
 var server: GameServer
 var forced := 0                      # (admin, tests) the flagship's kind; 0 = the game's own
@@ -46,6 +66,11 @@ var _teleport_at := 0
 var _every := TELEPORT_SECONDS
 var _party := TELEPORT_PARTY
 var _rng := RandomNumberGenerator.new()
+var awake := false                   # (v63) it has woken and roams
+var at := Vector2i.ZERO              # (v63) its sector while it roams
+var growth := 0                      # (v63) its steps of growth
+var grow_ticks := 0                  # (v63) ticks of growth clock since its last step
+var move_ticks := 0
 
 
 func setup(p_server: GameServer) -> void:
@@ -56,6 +81,11 @@ func setup(p_server: GameServer) -> void:
 	_come_at = -1
 	_sector_key = 0
 	_rng.randomize()
+	awake = false
+	at = goal()
+	growth = 0
+	grow_ticks = 0
+	move_ticks = 0
 
 
 func kind() -> int:
@@ -82,6 +112,11 @@ func call_in(which: int = 0) -> bool:
 	if not d.pirates_come(0, true, design):
 		return false
 	troops = TROOPS if int(design["boss"]) == 2 else 0
+	if growth >= 3:
+		troops += GROWN_TROOPS
+	if server.story.codes:
+		server.gunnery.reveal_all()          # (v63) the chapter's codes show its rooms
+		server.chat.say("Коды флагмана сработали: все его отсеки видны на пульте орудий.")
 	if server.ship.jump_to != Net.NO_SECTOR:
 		server.ship.jump_to = Net.NO_SECTOR
 		server.navigation.tell_nav()
@@ -96,12 +131,90 @@ func call_in(which: int = 0) -> bool:
 func tick() -> void:
 	if server.over != Net.OVER_NONE:
 		return
+	_roam()
 	_watch_arrival()
 	var g = server.gunnery
-	if g.boss == 2 and g.fighting():
+	if g.boss > 0 and g.teleport and g.fighting():
 		_teleport_tick()
 	if server.tick % Net.TICK_HZ == 0:
 		_watch_crew()
+
+
+func where() -> Vector2i:
+	## (v63) Its sector now: the goal while it sleeps.
+	return at if awake else goal()
+
+
+func is_at(c: Vector2i) -> bool:
+	return not server.won and c == where()
+
+
+func in_area(c: Vector2i) -> bool:
+	return Sectors.jumps_between(c, goal()) <= AREA
+
+
+func caught() -> bool:
+	## It is fighting us now (its clock stands still, it does not move).
+	return server.gunnery.boss > 0 and server.gunnery.fighting()
+
+
+func seconds_to_grow() -> int:
+	if not awake or growth >= GROWTH_MAX or server.won:
+		return 65535
+	return maxi(roundi(_grow_period() - float(grow_ticks) / Net.TICK_HZ), 0)
+
+
+func _grow_period() -> float:
+	return GROW_HARD if server.mode == Net.MODE_HARD else GROW_SECONDS
+
+
+func _roam() -> void:
+	## (v63) Wakes when we come near, then moves about its area and grows.
+	if server.won:
+		return
+	var ours: Vector2i = server.sectors.cell[server.ship.sector]
+	if not awake:
+		if in_area(ours):
+			awake = true
+			at = goal()
+			grow_ticks = 0
+			move_ticks = 0
+			server.story.changed()
+			server.chat.say("Сенсоры ловят тяжёлую сигнатуру: флагман пиратов проснулся и вышел на охоту. Его сектор виден на карте. Чем дольше мы тянем, тем он сильнее.")
+		return
+	if caught():
+		return
+	if growth < GROWTH_MAX:
+		grow_ticks += 1
+		if grow_ticks >= roundi(_grow_period() * Net.TICK_HZ):
+			grow_ticks = 0
+			growth += 1
+			server.story.changed()
+			server.chat.say("Разведка: флагман готовится к бою, %s." % GROWTH_NAMES[growth])
+	if at == ours or _come_at >= 0:
+		return                               # it has found us: it stays
+	move_ticks += 1
+	if move_ticks < roundi(MOVE_SECONDS * Net.TICK_HZ):
+		return
+	move_ticks = 0
+	var ways: Array = []
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var c := at + d
+		if in_area(c) and c != Vector2i.ZERO and Sectors.joined(server.space_seed, at, c):
+			ways.append(c)
+	if ways.is_empty():
+		return
+	# it leans towards us when we are in its area
+	var pick: Vector2i = ways[_rng.randi_range(0, ways.size() - 1)]
+	if in_area(ours) and _rng.randf() < 0.5:
+		for c: Vector2i in ways:
+			if Sectors.jumps_between(c, ours) < Sectors.jumps_between(pick, ours):
+				pick = c
+	at = pick
+	server.story.changed()
+	if at == ours:
+		_come_at = server.tick + roundi(WARN_SECONDS * Net.TICK_HZ)
+		server.chat.say("Флагман пиратов вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(WARN_SECONDS))
 
 
 func _watch_arrival() -> void:
@@ -109,7 +222,12 @@ func _watch_arrival() -> void:
 	var key := Sectors.key(server.sectors.cell[server.ship.sector])
 	if key != _sector_key:
 		_sector_key = key
-		_come_at = server.tick + roundi(COME_SECONDS * Net.TICK_HZ) if server.sectors.kind[server.ship.sector] == Sectors.FLAGSHIP else -1
+		var ours: Vector2i = server.sectors.cell[server.ship.sector]
+		_come_at = server.tick + roundi(COME_SECONDS * Net.TICK_HZ) if is_at(ours) else -1
+		if not is_at(ours) and ours == goal() and awake and not server.won:
+			server.chat.say("Флагмана здесь нет: он рыщет по соседним секторам.")
+	elif _come_at >= 0 and not is_at(server.sectors.cell[server.ship.sector]):
+		_come_at = -1
 	if _come_at >= 0 and server.won:
 		_come_at = -1                        # beaten once, it is not there any more
 	if _come_at >= 0 and server.tick >= _come_at and not server.derelict.here:
@@ -209,6 +327,31 @@ func holds_jump() -> String:
 	if server.gunnery.boss > 0 and server.gunnery.fighting():
 		return "Флагман глушит гипердвигатель: уйти прыжком нельзя. Здесь либо победа, либо гибель."
 	return ""
+
+
+func admin_grow() -> void:
+	## (admin) It wakes (if it sleeps) and takes a step of growth.
+	if not awake:
+		awake = true
+		at = goal()
+	growth = mini(growth + 1, GROWTH_MAX)
+	grow_ticks = 0
+	server.story.changed()
+	server.chat.say("Флагман: шаг роста %d из %d%s." % [growth, GROWTH_MAX, (", " + GROWTH_NAMES[growth]) if growth > 0 else ""])
+
+
+func save() -> Dictionary:
+	return {"awake": awake, "at": [at.x, at.y], "growth": growth, "grow": grow_ticks, "move": move_ticks}
+
+
+func load_from(d: Dictionary) -> void:
+	if d.is_empty():
+		return
+	awake = bool(d.get("awake", false))
+	at = Vector2i(int(d["at"][0]), int(d["at"][1])) if d.has("at") else goal()
+	growth = int(d.get("growth", 0))
+	grow_ticks = int(d.get("grow", 0))
+	move_ticks = int(d.get("move", 0))
 
 
 func won(captured: bool) -> void:

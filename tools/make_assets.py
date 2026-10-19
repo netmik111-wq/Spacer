@@ -95,6 +95,9 @@ TILES.append(("autodoc", None, "wall"))
 TILES.append(("scanner", None, "wall"))
 TILES.append(("smes", None, "wall"))
 TILES.append(("smes_small", None, "wall"))
+TILES.append(("comms", None, "wall"))
+TILES.append(("tray", None, "wall"))
+TILES.append(("cryo", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -415,6 +418,35 @@ def make_machine(wall, what):
         rect(22, top + 1, 23, top + 1, (240, 200, 60, 255))           # a lamp
         for x in range(4, 28):
             o[x, 26] = HAZARD if (x // 2) % 2 == 0 else dark
+    elif what == "comms":
+        # (v63) the comms console: a screen of text lines with a dish lamp and a row of answer keys
+        rect(4, 4, 27, 24, body); rect(4, 4, 27, 5, cap); rect(4, 24, 27, 24, mid)
+        rect(6, 7, 25, 17, (10, 22, 30, 255))
+        amber = (240, 190, 80, 255)
+        for y, w in ((9, 15), (11, 12), (13, 16), (15, 9)):
+            rect(8, y, 8 + w, y, amber)                                                       # lines of a message
+        for k, kx in enumerate((7, 12, 17, 22)):
+            rect(kx, 19, kx + 3, 21, (70, 150, 230, 255) if k == 1 else dark)                 # the answer keys
+        rect(23, 9, 24, 10, (90, 220, 110, 255))                                              # the link lamp
+    elif what == "tray":
+        # (v63) a hydroponic tray: a long trough of dark soil under a strip of grow lights
+        rect(3, 5, 28, 25, mid); rect(3, 5, 28, 6, cap)
+        rect(4, 7, 27, 9, (60, 60, 80, 255))                                                  # the lamp housing
+        for x in range(5, 27, 3):
+            rect(x, 8, x + 1, 8, (230, 120, 230, 255))                                        # grow lights
+        rect(4, 18, 27, 25, body); rect(5, 19, 26, 22, (70, 50, 35, 255))                     # the trough of soil
+        rect(5, 19, 26, 19, (95, 70, 48, 255))
+        for x in (6, 12, 18, 24):
+            rect(x, 23, x + 1, 24, (60, 130, 210, 255))                                       # water nozzles
+    elif what == "cryo":
+        # (v63) a cryosleep pod: a frosted capsule stood in the wall, a sleeper's outline, a blue lamp
+        rect(7, 2, 24, 26, body); rect(7, 2, 24, 3, cap)
+        rect(9, 5, 22, 23, (150, 200, 225, 255)); rect(10, 6, 21, 22, (190, 228, 245, 255))
+        rect(14, 8, 17, 10, (120, 150, 175, 255)); rect(13, 11, 18, 18, (120, 150, 175, 255))   # a sleeper
+        rect(13, 19, 14, 21, (120, 150, 175, 255)); rect(17, 19, 18, 21, (120, 150, 175, 255))
+        rect(15, 24, 16, 25, (80, 170, 255, 255))                                             # the lamp
+        for x in range(7, 25):
+            o[x, 26] = (80, 170, 255, 255) if (x // 2) % 2 == 0 else dark
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -462,6 +494,9 @@ def build_tiles():
         "scanner": lambda: make_machine(images["wall_h"], "scanner"),
         "smes": lambda: make_machine(images["wall_h"], "smes"),
         "smes_small": lambda: make_machine(images["wall_h"], "smes_small"),
+        "comms": lambda: make_machine(images["wall_h"], "comms"),
+        "tray": lambda: make_machine(images["wall_h"], "tray"),
+        "cryo": lambda: make_machine(images["wall_h"], "cryo"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -503,6 +538,9 @@ def build_tiles():
 #   'X'  (v60) wall with a body scanner on it: shows the health of whoever is on the nearest autodoc (or of oneself)
 #   'S'  (v61) wall with the ship's SMES in it: stores the engine's power and carries the ship when the engine stops
 #   'Q'  (v61) wall with the small backup SMES of the bridge: keeps the room it faces lit and its consoles working
+#   'K'  (v63) wall with the comms console: calls, text events with choices, quests
+#   'P'  (v63) wall with a hydroponic tray: plants grow in it (two side by side may cross)
+#   'C'  (v63) wall with a cryosleep pod: the crew reserve sleeps in them and wakes from them
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -523,7 +561,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQ")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPC")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -612,7 +650,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

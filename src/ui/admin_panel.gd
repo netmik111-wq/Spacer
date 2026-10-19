@@ -6,6 +6,7 @@ extends PanelContainer
 ## It does not hold the keyboard: the character can walk while it is open.
 
 const Net := preload("res://src/shared/net.gd")
+const Tales := preload("res://src/server/tales.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Items := preload("res://src/shared/items.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
@@ -311,12 +312,26 @@ func _ship_tab() -> Control:
 		["СМЭС: полный заряд", Net.ADMIN_SMES, 10],
 		["СМЭС: пустой", Net.ADMIN_SMES, 0],
 		["Ионный разряд сейчас", Net.ADMIN_SURGE],
+		["Вызов на пульт связи (любой по сектору)", Net.ADMIN_TALE, 255],
+		["Флагман: проснуться и +1 шаг роста", Net.ADMIN_GROW],
+		["Гидропоника: всё созрело", Net.ADMIN_GARDEN],
 	]:
 		var command: int = b[1]
 		var argument: int = b[2] if b.size() > 2 else 0
 		var button := _button(b[0], func() -> void: _send(command, argument))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(button)
+	# (v63) a call of one event of the comms console, picked from the list
+	var tales := HBoxContainer.new()
+	tales.add_theme_constant_override("separation", 8)
+	page.add_child(tales)
+	tales.add_child(_caption("Вызов:"))
+	var pick := OptionButton.new()
+	pick.focus_mode = Control.FOCUS_NONE
+	for i in Tales.EVENTS.size():
+		pick.add_item("%s (%s)" % [Tales.EVENTS[i]["title"], Tales.EVENTS[i]["id"]], i)
+	tales.add_child(pick)
+	tales.add_child(_button("Вызвать", func() -> void: _send(Net.ADMIN_TALE, pick.get_selected_id())))
 	# (v60.1) the ship's gear at once, built from Gear's own list
 	var head := Label.new()
 	head.text = "Снаряжение корабля сразу (без работы инженера)"

@@ -130,11 +130,11 @@ func loader() -> float:
 func jumped() -> void:
 	## (v62) After every jump: the welding drone mends the hull.
 	var n := welder()
-	if n <= 0 or server.ship.hull >= Net.HULL_MAX:
+	if n <= 0 or server.ship.hull >= server.ship.hull_max:
 		return
 	var was: int = server.ship.hull
-	server.ship.hull = mini(server.ship.hull + n, Net.HULL_MAX)
-	server.chat.say("Сварочный дрон прошёл по обшивке после прыжка: прочность %d из %d (+%d)." % [server.ship.hull, Net.HULL_MAX, server.ship.hull - was])
+	server.ship.hull = mini(server.ship.hull + n, server.ship.hull_max)
+	server.chat.say("Сварочный дрон прошёл по обшивке после прыжка: прочность %d из %d (+%d)." % [server.ship.hull, server.ship.hull_max, server.ship.hull - was])
 
 
 func phase_used() -> void:

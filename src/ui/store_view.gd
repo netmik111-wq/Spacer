@@ -31,7 +31,7 @@ const WARN := Color(0.95, 0.75, 0.3)
 const BAD := Color(0.95, 0.4, 0.35)
 # (the groups of cards are Items.CATEGORIES; anything the locker keeps that is in none goes last.
 # (v58) Ship weapons and gun parts show only what the cargo holds: there are too many kinds to show them all.)
-const ONLY_HELD: Array[String] = ["Корабельное оружие", "Детали орудий"]
+const ONLY_HELD: Array[String] = ["Корабельное оружие", "Детали орудий", "Семена", "Задания"]
 
 var client: GameClient
 var _gauges: Control
@@ -234,7 +234,7 @@ func _draw_gauges() -> void:
 		["Кредиты", str(client.credits), -1.0, INK],
 		["Топливо", "%d %s" % [fuel, _jumps(fuel)], -1.0, BAD if fuel == 0 else (WARN if fuel < 3 else INK)],
 		["Воздух установки", "%d из %d" % [int(round(client.store_air)), int(Net.STORE_AIR_FULL)], client.store_air / Net.STORE_AIR_FULL, Color()],
-		["Обшивка", "%d из %d" % [client.hull, Net.HULL_MAX], float(client.hull) / Net.HULL_MAX, Color()],
+		["Обшивка", "%d из %d" % [client.hull, client.hull_max], float(client.hull) / client.hull_max, Color()],
 		["Резерв экипажа", "%d из %d" % [client.reserve, Net.RESERVE_MAX], float(client.reserve) / Net.RESERVE_MAX, Color()],
 	]
 	for i in gauges.size():

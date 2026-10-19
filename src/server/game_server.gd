@@ -87,6 +87,8 @@ const Hazards := preload("res://src/server/hazards.gd")
 const Outside := preload("res://src/server/outside.gd")
 const Robots := preload("res://src/server/robots.gd")
 const Assault := preload("res://src/server/assault.gd")
+const Story := preload("res://src/server/story.gd")
+const Garden := preload("res://src/server/garden.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -171,6 +173,9 @@ var hazards := Hazards.new()
 var outside := Outside.new()
 var robots := Robots.new()             # (v62) our security robots
 var assault := Assault.new()           # (v62) teleported boarders and assault drones
+var story := Story.new()               # (v63) the comms console's calls, quests, SOS sectors, missions
+var garden := Garden.new()             # (v63) food and the hydroponic trays
+var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -236,7 +241,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		ship.store[item] = Items.stock(item)
 	ship.store_air = Net.STORE_AIR_FULL
 	ship.credits = Net.START_CREDITS
-	ship.hull = Net.HULL_MAX
+	ship.hull_max = Net.HULL_MAX
+	ship.hull = ship.hull_max
 	_next_ship_id = Net.CREW_SHIP + 1
 	_ships_told = PackedByteArray()
 	# the campaign
@@ -265,6 +271,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	director.setup(self)
 	stations.setup(self)
 	flagship.setup(self)
+	story.setup(self)
+	garden.setup(self)
 	hazards.setup(self)
 	power.setup(self)
 	outside.setup(self)
@@ -510,6 +518,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_LOOT:
 		if pkt.size() > 2:
 			looting.loot_asked(p, pkt[1] != 0, pkt[2])
+	elif kind == Net.C_COMMS:
+		if pkt.size() > 1:
+			story.answer_asked(p, pkt[1])
 	elif kind == Net.C_ADMIN:
 		admin.asked(p, pkt)
 
@@ -639,6 +650,8 @@ func _tick() -> void:
 	outside.tick()
 	derelict.update()
 	flagship.tick()
+	story.tick()
+	garden.tick()
 	assault.tick()
 	robots.tick()
 	stations.tick()

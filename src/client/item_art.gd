@@ -5,6 +5,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Plants := preload("res://src/shared/plants.gd")
 
 # the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
 const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0),
@@ -50,6 +51,36 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		var left := float(item - Net.ITEM_SUIT) / Net.SUIT_TANK_STEPS
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
+		return
+	if Plants.is_seed(item):
+		# (v63) a packet of seeds: a paper sachet with the plant's leaf on it; a mutated seed's packet has a gold corner
+		canvas.draw_rect(Rect2(at + Vector2(4, 3) * u, Vector2(9, 12) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(5, 4) * u, Vector2(7, 10) * u), Color(0.86, 0.8, 0.62))
+		var leaf: Color = Plants.KINDS[Plants.kind_of(item)]["leaf"]
+		canvas.draw_circle(at + Vector2(8.5, 9) * u, 2.6 * u, leaf)
+		canvas.draw_line(at + Vector2(8.5, 12) * u, at + Vector2(8.5, 9) * u, leaf.darkened(0.4), 0.8 * u)
+		if Plants.trait_of(item) != Plants.PLAIN:
+			canvas.draw_rect(Rect2(at + Vector2(10, 4) * u, Vector2(2, 2) * u), Color(0.95, 0.78, 0.25))
+		return
+	if item == Net.ITEM_FOOD:
+		# (v63) a ration: a foil pack with a label
+		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(9, 6) * u), Color(0.7, 0.72, 0.68))
+		canvas.draw_rect(Rect2(at + Vector2(5.5, 7.5) * u, Vector2(6, 3) * u), Color(0.85, 0.55, 0.25))
+		return
+	if item == Net.ITEM_CARGO:
+		# (v63) a quest's crate: a stencilled box
+		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.55, 0.42, 0.25))
+		canvas.draw_line(at + Vector2(3, 5) * u, at + Vector2(14, 13) * u, Color(0.35, 0.25, 0.14), 0.8 * u)
+		canvas.draw_line(at + Vector2(14, 5) * u, at + Vector2(3, 13) * u, Color(0.35, 0.25, 0.14), 0.8 * u)
+		return
+	if item == Net.ITEM_BLACKBOX:
+		# (v63) a black box (that is orange, as they are), with a blinking light
+		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(4, 5) * u, Vector2(9, 8) * u), Color(0.95, 0.5, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(4, 8) * u, Vector2(9, 1.2) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_circle(at + Vector2(11.5, 6.5) * u, 0.9 * u, Color(1.0, 0.25, 0.2))
 		return
 	if item == Net.ITEM_ROBOT:
 		# (v62) a security robot folded in its crate: a squat steel body, a green eye, a gun arm

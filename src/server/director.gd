@@ -149,7 +149,8 @@ func _watch_fuel(now: int) -> void:
 		_dry_until = now + int(RESCUE_SECONDS * Net.TICK_HZ)
 	elif now >= _dry_until:
 		_dry_until = -1
-		fire(FUEL_DRIFT)
+		if not server.story.dry_call():   # (v63, the author's R8) a passing ship calls, or as before a drifting can
+			fire(FUEL_DRIFT)
 
 
 func assess() -> Dictionary:
@@ -252,6 +253,8 @@ func _party() -> int:
 	var party := clampi(1 + crew / 2, 1, 4)
 	if server.supplies.weapons_aboard() == 0:
 		party = maxi(party - 1, 1)
+	if server.mode == Net.MODE_HARD:
+		party += 1                           # (v63) the hard mode: one boarder more
 	return party
 
 

@@ -184,6 +184,8 @@ var farthest := 0
 var jumps := 0
 var voyage_seconds := 0
 var won := false                     # (v57) the flagship is beaten: the game is won, the voyage goes on
+var hull_max := Net.HULL_MAX          # (v63) the hull's top strength (the easy mode lowers it)
+var mode := Net.MODE_NORMAL           # (v63) how hard this game is
 # our own job and skills (see Net.S_ME)
 var job := Net.JOB_CREWMAN
 var skills := PackedByteArray([0, 0, 0, 0])
@@ -192,6 +194,12 @@ var _backup := false                 # (v61) the ship is dark but the bridge's b
 var smes: Array = []                 # (v61) per SMES, as Net.S_SMES tells: {small, cell, charge, capacity, charging, output,
                                      # input, level, input_max, output_max, in_now, out_now, status}
 var power_mon := {}                  # (v61) the power monitor: {made, base, used, budget, flags, seconds, reactor}
+var comms := {}                      # (v63) the comms console's screen (Net.S_COMMS): {state, seconds, at (msec), title, text,
+                                     # choices: [[flags, text], ...]}
+var story := {}                      # (v63) Net.S_STORY: {flags, flagship (Vector2i), growth, grow_s, quests: [{kind, at,
+                                     # reward, title, text}], marks: [[kind, Vector2i]]}
+var garden := {}                     # (v63) the hydroponic trays (Net.S_GARDEN): cell -> [seed, stage, growth, flags]
+var comms_seen := 0                  # (v63) calls heard since joining (the HUD blinks while one waits)
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -545,6 +553,12 @@ func smes_at(cell: int) -> int:
 	return -1
 
 
+func send_comms(choice: int) -> void:
+	## (v63) Answers the call on the comms console our character stands at.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_COMMS, choice]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_holo(on: bool) -> void:
 	## Starts or stops watching the holomap our character stands at.
 	if _peer != null:
@@ -695,6 +709,79 @@ func send_suit(on: bool) -> void:
 		_peer.send(0, PackedByteArray([Net.C_SUIT, 1 if on else 0]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+static func _text_at(pkt: PackedByteArray, o: int) -> Array:
+	## [the text, where the next field starts] (u16 length, UTF-8), or ["", -1] if the packet is short.
+	if o + 2 > pkt.size():
+		return ["", -1]
+	var n := pkt.decode_u16(o)
+	if o + 2 + n > pkt.size():
+		return ["", -1]
+	return [pkt.slice(o + 2, o + 2 + n).get_string_from_utf8(), o + 2 + n]
+
+
+func _read_comms(pkt: PackedByteArray) -> void:
+	if pkt.size() < 4:
+		return
+	var got := {"state": pkt[1], "seconds": pkt.decode_u16(2), "at": Time.get_ticks_msec(), "choices": []}
+	var t := _text_at(pkt, 4)
+	if int(t[1]) < 0:
+		return
+	got["title"] = t[0]
+	t = _text_at(pkt, int(t[1]))
+	if int(t[1]) < 0:
+		return
+	got["text"] = t[0]
+	var o: int = t[1]
+	if o >= pkt.size():
+		return
+	var n := pkt[o]
+	o += 1
+	for i in n:
+		if o >= pkt.size():
+			return
+		var f := pkt[o]
+		t = _text_at(pkt, o + 1)
+		if int(t[1]) < 0:
+			return
+		got["choices"].append([f, t[0]])
+		o = t[1]
+	if got["state"] == Net.COMMS_CALL and comms.get("state", Net.COMMS_QUIET) != Net.COMMS_CALL:
+		comms_seen += 1
+	comms = got
+
+
+func _read_story(pkt: PackedByteArray) -> void:
+	if pkt.size() < 10:
+		return
+	var got := {"flags": pkt[1], "flagship": Vector2i(pkt.decode_s16(2), pkt.decode_s16(4)), "growth": pkt[6],
+		"grow_s": pkt.decode_u16(7), "quests": [], "marks": []}
+	var o := 10
+	for i in pkt[9]:
+		if o + 7 > pkt.size():
+			return
+		var q := {"kind": pkt[o], "at": Vector2i(pkt.decode_s16(o + 1), pkt.decode_s16(o + 3)), "reward": pkt.decode_u16(o + 5)}
+		var t := _text_at(pkt, o + 7)
+		if int(t[1]) < 0:
+			return
+		q["title"] = t[0]
+		t = _text_at(pkt, int(t[1]))
+		if int(t[1]) < 0:
+			return
+		q["text"] = t[0]
+		o = t[1]
+		got["quests"].append(q)
+	if o < pkt.size():
+		var n := pkt[o]
+		o += 1
+		for i in n:
+			if o + 5 > pkt.size():
+				break
+			got["marks"].append([pkt[o], Vector2i(pkt.decode_s16(o + 1), pkt.decode_s16(o + 3))])
+			o += 5
+	story = got
+	ship_changes += 1
+
+
 func use_target(facing: int = -1) -> int:
 	## What our character would use right now: 0 = nothing, 1 = a hole to mend,
 	## 2 = an oxygen station, 3 = the sector console, 4 = the ship's controls,
@@ -712,7 +799,8 @@ func use_target(facing: int = -1) -> int:
 	## 24 = the module bay with something else in hand,
 	## 25 = (v60) a gun mount where the gun in hand goes up (or, with empty hands, its gun comes down),
 	## 26 = an autodoc, 27 = the body scanner, 28 = (v61) an SMES's terminal,
-	## 29 = (v61) our hull from outside, out in space: its strength is mended with patches.
+	## 29 = (v61) our hull from outside, out in space: its strength is mended with patches,
+	## 30 = (v63) the comms console, 31 = a hydroponic tray, 32 = a cryopod.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -761,6 +849,12 @@ func use_target(facing: int = -1) -> int:
 			return 21
 		if map.bench.has(cell):
 			return 22
+		if map.comms.has(cell):
+			return 30
+		if map.trays.has(cell):
+			return 31
+		if map.cryo.has(cell):
+			return 32
 		var door := map.door_of[cell]
 		if door >= 0:
 			if doors.is_shut(door) and doors.held_by_partner(door):
@@ -1463,6 +1557,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				jumps = pkt.decode_u16(8)
 				voyage_seconds = pkt.decode_u32(10)
 				won = pkt.size() > 14 and pkt[14] == 1
+				if pkt.size() >= 17:
+					hull_max = maxi(pkt[15], 1)
+					mode = pkt[16]
 		Net.S_ME:
 			if pkt.size() >= 2 + Net.SKILLS:
 				job = pkt[1]
@@ -1501,6 +1598,21 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if o + 9 <= pkt.size():
 				power_mon = {"made": pkt[o], "base": pkt[o + 1], "used": pkt[o + 2], "budget": pkt[o + 3], "flags": pkt[o + 4],
 					"seconds": pkt.decode_u16(o + 5), "reactor": pkt.decode_u16(o + 7)}
+		Net.S_COMMS:
+			_read_comms(pkt)
+		Net.S_STORY:
+			_read_story(pkt)
+		Net.S_GARDEN:
+			if pkt.size() >= 2:
+				var got := {}
+				var o := 2
+				for i in pkt[1]:
+					if o + 6 > pkt.size():
+						break
+					got[pkt.decode_u16(o)] = [pkt[o + 2], pkt[o + 3], pkt[o + 4], pkt[o + 5]]
+					o += 6
+				garden = got
+				ship_changes += 1
 		Net.S_SHOT:
 			if pkt.size() >= 13:
 				shot.emit(pkt[1], pkt[2], Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,

@@ -218,9 +218,9 @@ func _services() -> void:
 		"Пополняет запас воздушной установки.")
 	_button(row, "Купить: %d кр." % Net.PRICE_AIR, client.credits >= Net.PRICE_AIR and client.store_air < Net.STORE_AIR_FULL,
 		func() -> void: client.send_store(Net.STORE_BUY_AIR))
-	row = _row(Net.ITEM_NONE, "Ремонт обшивки +%d" % Net.HULL_LOT, "прочность: %d из %d" % [client.hull, Net.HULL_MAX],
+	row = _row(Net.ITEM_NONE, "Ремонт обшивки +%d" % Net.HULL_LOT, "прочность: %d из %d" % [client.hull, client.hull_max],
 		"Латает обшивку корабля: прочность корпуса растёт.")
-	_button(row, "Купить: %d кр." % Net.PRICE_HULL, client.credits >= Net.PRICE_HULL and client.hull < Net.HULL_MAX,
+	_button(row, "Купить: %d кр." % Net.PRICE_HULL, client.credits >= Net.PRICE_HULL and client.hull < client.hull_max,
 		func() -> void: client.send_store(Net.STORE_BUY_HULL))
 	row = _row(Net.ITEM_NONE, "Нанять члена экипажа", "в резерве: %d из %d" % [client.reserve, Net.RESERVE_MAX],
 		"Ещё одна жизнь: погибший игрок вернётся новым членом экипажа из резерва.")

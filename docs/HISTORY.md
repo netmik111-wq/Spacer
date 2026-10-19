@@ -134,6 +134,20 @@ Open problems:
 
 ## Build notes
 
+### v63 (road and story, part 4 of the road plan)
+- The comms console on the bridge (`K`): 26 text events with 2–4 answers each, blue answers by job, skill or
+  thing, paid answers, the plain answer after 90 s (new server parts `src/server/story.gd`, data in
+  `src/server/tales.gd`; screen `src/ui/comms_view.gd`).
+- Quests (cargo, bounty, black box; marked on the chart), the chapter's two missions (convoy log, the courier with
+  the flagship's codes), SOS sectors, ships that help a ship dry of fuel.
+- Food (rations eaten at every jump, hunger down to 30 health) and hydroponics: 4 trays, 6 plants, mutations,
+  hybrids, bots tending (new part `src/server/garden.gd`, plants in `src/shared/plants.gd`). Cryopods for the reserve.
+- The flagship wakes near the goal, roams its area and grows every 3 min up to 4 steps.
+- Easy and hard modes (menu), `Ship.hull_max`. Admin: calls, growth, ripe trays. New test `tools/storytest.gd`
+  (25 tests). Protocol 42. Question page https://claude.ai/artifact/LJnEaFStDXqbZFq1xWPcQZ (my picks, all "A").
+- Left for v64: the cluster map (his 19 "A" answers), its regions, places inside a system with small secrets
+  (debris, containers, bodies, abandoned ships), pirate hunters.
+
 ### v62 (enemies, part 3 of the road plan)
 - The drone ship, a fifth pirate class with no crew (`Gunnery.crewless`): a control core (`Net.ESYS_DRONES`),
   repair drones, assault drones that cut in as robots (new server part `src/server/assault.gd`), no air inside,

@@ -367,6 +367,7 @@ const TASK_LOCKER := 2               # the supply locker: to take what it needs,
 const TASK_MOUNT := 3                # a gun mount: to put the gun it carries up, or take one down
 const TASK_OXYGEN := 4               # an oxygen station: to fill its suit's tank
 const TASK_HEAL := 5                 # an autodoc's bed: to be healed
+const TASK_GARDEN := 6               # (v63) a hydroponic tray: to plant, tend, harvest or clear it
 const TANK_LOW := 0.35               # (v60) a bot with less in its tank goes to fill it before it works on
 const TANK_FULL := 0.95
 const SUPPLY_AIR := 0.8              # a bot turns its suit's supply on in air thinner than this
@@ -491,7 +492,7 @@ func _plan(p: Player, here: int) -> void:
 
 func _doing(p: Player) -> int:
 	match p.bot_task:
-		TASK_MEND:
+		TASK_MEND, TASK_GARDEN:
 			return Net.DOING_WORK
 		TASK_LOCKER, TASK_MOUNT, TASK_OXYGEN:
 			return Net.DOING_CARRY
@@ -577,6 +578,12 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 			_add_spots(p, c, goals, taken)
 		if not goals.is_empty():
 			return TASK_MEND
+	# (v63) the hydroponic trays
+	for c: int in server.map.trays:
+		if server.garden.can(p, c) == "" and (server.garden.stage[server.garden.tray_of(c)] != Net.GROW_EMPTY or server.garden._best_seed() > 0):
+			_add_spots(p, c, goals, taken)
+	if not goals.is_empty():
+		return TASK_GARDEN
 	# the console's orders for the guns
 	var i := _haul_job(p)
 	p.haul = i
@@ -732,6 +739,13 @@ func _work(p: Player) -> void:
 			return
 		TASK_MOUNT:
 			_at_mount(p)
+			return
+		TASK_GARDEN:
+			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+			p.using = ahead >= 0 and server.garden.can(p, ahead) == ""
+			p.doing = Net.DOING_WORK
+			if not p.using:
+				p.bot_plan_tick = -1000          # done here: on to the next
 			return
 	match p.order:
 		Net.POST_GUNS:

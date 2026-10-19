@@ -9,6 +9,7 @@ extends Node2D
 ## whoever stands on them.
 
 const Net := preload("res://src/shared/net.gd")
+const Plants := preload("res://src/shared/plants.gd")
 const Sight := preload("res://src/shared/sight.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
@@ -1523,6 +1524,34 @@ func _draw_fx(d: int) -> void:
 			var phase := fposmod(now * (0.7 + seed_a * 0.5) + seed_a * 3.0, 1.0)
 			var from := mouth + Vector2((float(k) - 3.0) * 2.6, way * phase * 26.0)
 			pen.draw_line(from, from + Vector2(0.0, way * 4.0), Color(0.75, 0.9, 1.0, 0.5 * (1.0 - phase)), 1.0)
+	# (v63) the hydroponic trays: the plant in each, as far as it has grown; a drop blinks over one that wants tending
+	for cell: int in client.garden.keys():
+		if map.deck_of_cell(cell) != d:
+			continue
+		var t: Array = client.garden[cell]
+		var stage := int(t[1])
+		if stage == Net.GROW_EMPTY:
+			continue
+		var base := _on_deck(cell) * _tile + Vector2(16.0, 20.0)
+		var dead := stage == Net.GROW_DEAD
+		var leaf: Color = Color(0.45, 0.32, 0.18) if dead else (Plants.KINDS[Plants.kind_of(int(t[0]))]["leaf"] as Color)
+		var tall := 3.0 + 9.0 * (1.0 if stage == Net.GROW_RIPE or dead else float(t[2]) / 100.0)
+		for k in 3:
+			var x := float(k - 1) * 5.0
+			var tip := base + Vector2(x * (1.6 if dead else 1.0), -tall * (0.5 if dead else (1.0 - 0.2 * absf(k - 1))))
+			pen.draw_line(base + Vector2(x * 0.4, 0.0), tip, leaf.darkened(0.3), 1.5)
+			pen.draw_circle(tip, 2.0, leaf)
+		if stage == Net.GROW_RIPE:
+			for k in 3:
+				pen.draw_circle(base + Vector2(float(k - 1) * 5.0, -tall + 3.0), 1.5, Color(1.0, 0.85, 0.35))
+		if int(t[3]) & Net.GARDEN_CARE and fposmod(now + float(cell % 7) * 0.13, 1.0) < 0.6:
+			var drop := base + Vector2(9.0, -tall - 4.0)
+			pen.draw_circle(drop, 2.2, Color(0.3, 0.6, 1.0) if not (int(t[3]) & Net.GARDEN_NEGLECT) else Color(1.0, 0.4, 0.25))
+	# (v63) the comms console's lamp blinks while a call waits
+	if int(client.comms.get("state", Net.COMMS_QUIET)) == Net.COMMS_CALL and fposmod(now, 0.8) < 0.45:
+		for cell: int in map.comms.keys():
+			if map.deck_of_cell(cell) == d and client.power_at(cell):
+				pen.draw_rect(Rect2(_on_deck(cell) * _tile + Vector2(22.0, 6.0), Vector2(5, 5)), Color(0.35, 0.75, 1.0))
 	# emergency shutters that are down: a striped plate across the doorway and,
 	# on each side of it, a lamp showing the pressure there. This is the one
 	# place the ship shows where the air is (the author asked for exactly that).

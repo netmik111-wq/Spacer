@@ -1,7 +1,7 @@
 extends Control
 ## The first screen: pick a name, then create a game or join one.
 
-signal host_requested(player_name: String, port: int, bots: int, campaign: String)
+signal host_requested(player_name: String, port: int, bots: int, campaign: String, mode: String)
 signal join_requested(player_name: String, address: String, port: int)
 signal quit_requested
 
@@ -13,6 +13,7 @@ const OptionsPanel := preload("res://src/ui/options_panel.gd")
 var _name: LineEdit
 var _address: LineEdit
 var _bots: SpinBox
+var _mode: OptionButton               # (v63) a new campaign's mode
 var _job: OptionButton
 var _job_about: Label
 var _status: Label
@@ -96,6 +97,19 @@ func _ready() -> void:
 	_bots.value = 2
 	_bots.tooltip_text = "Боты — члены экипажа: бродят по кораблю, пока капитан не отдаст им приказ (окно «Экипаж», клавиша O)"
 	host_row.add_child(_bots)
+	var mode_row := HBoxContainer.new()
+	mode_row.add_theme_constant_override("separation", 10)
+	box.add_child(mode_row)
+	var mode_caption := Label.new()
+	mode_caption.text = "Режим новой кампании:"
+	mode_row.add_child(mode_caption)
+	_mode = OptionButton.new()
+	for n in Net.MODE_NAMES:
+		_mode.add_item(n)
+	_mode.select(Net.MODE_NORMAL)
+	_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_mode.tooltip_text = "Лёгкий: разбитая обшивка не губит корабль, а только снижает её наибольшую прочность (на 50).\nОбычный: как задумано.\nТяжёлый: пираты злее и платят меньше, на абордаж идёт на одного больше, флагман растёт быстрее."
+	mode_row.add_child(_mode)
 	var saved := Campaign.summary()
 	if saved != "":
 		var go_on := _button("Продолжить кампанию")
@@ -143,6 +157,7 @@ func _ready() -> void:
 		_name.text = str(cfg.get_value("player", "name", ""))
 		_address.text = str(cfg.get_value("player", "address", ""))
 		_bots.value = int(cfg.get_value("player", "bots", 2))
+		_mode.select(clampi(int(cfg.get_value("player", "mode", Net.MODE_NORMAL)), 0, Net.MODE_NAMES.size() - 1))
 		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)), 0, Net.JOBS - 1))
 	_show_job()
 	_name.grab_focus()
@@ -199,6 +214,7 @@ func _save() -> void:
 	cfg.set_value("player", "name", _name.text.strip_edges())
 	cfg.set_value("player", "address", _address.text.strip_edges())
 	cfg.set_value("player", "bots", int(_bots.value))
+	cfg.set_value("player", "mode", _mode.selected)
 	cfg.set_value("player", "job", job())
 	cfg.save(SETTINGS)
 
@@ -210,12 +226,12 @@ func _on_host() -> void:
 		return
 	_new_armed = false
 	_save()
-	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new")
+	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new", Net.MODE_KEYS[maxi(_mode.selected, 0)])
 
 
 func _on_continue() -> void:
 	_save()
-	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "continue")
+	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "continue", "")
 
 
 func _on_join() -> void:

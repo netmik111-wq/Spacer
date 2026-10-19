@@ -849,6 +849,7 @@ func _settle() -> bool:
 
 func _broken_off() -> void:
 	## Its boarding party is dead: with nobody to send over it gives up and goes.
+	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
 	_over = true
 	enemy_hull = 0
 	beam_left.fill(0)
@@ -1670,6 +1671,7 @@ func ransom_taken(p) -> void:
 		server.chat.tell(p, "Наши люди на борту пиратского корабля: пока они там, отпустить его нельзя.")
 		return
 	var ship = server.ship
+	server.story.pirates_beaten()           # (v63) paying us off counts as beaten
 	ship.credits += ransom
 	ship.store[Net.ITEM_FUEL] = int(ship.store.get(Net.ITEM_FUEL, 0)) + 1
 	var extra := ""
@@ -1685,6 +1687,7 @@ func ransom_taken(p) -> void:
 
 
 func _wrecked() -> void:
+	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
 	_over = true
 	var captured: bool = server.stations.ours_aboard and systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0 \
 		or (crewless and server.stations.ours_aboard and enemy_hull > 0 and systems.size() > Net.ESYS_DRONES and systems[Net.ESYS_DRONES] == 0)
@@ -1922,10 +1925,10 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		elif Weapons.klass(w) != Weapons.CLASS_ROCKET:
 			# (v59) it would have holed the hull, but our armour plating held
 			server.crew.hull_hit(_armoured(Net.HULL_PER_HOLE * damage))
-			said.append("Броня выдержала: пробоины нет, прочность %d из %d." % [ship.hull, Net.HULL_MAX])
+			said.append("Броня выдержала: пробоины нет, прочность %d из %d." % [ship.hull, server.ship.hull_max])
 		else:
 			server.crew.hull_hit(_armoured(Net.HULL_PER_HOLE * damage))
-			said.append("Ракета разорвалась на обшивке: прочность %d из %d." % [ship.hull, Net.HULL_MAX])
+			said.append("Ракета разорвалась на обшивке: прочность %d из %d." % [ship.hull, server.ship.hull_max])
 		if Weapons.pierce(w) > 0 or fx == Weapons.FX_HOLE:
 			# (v58) it goes on through, or tears a second hole: one more breach beside the crew
 			var past := _hull_near_crew()
