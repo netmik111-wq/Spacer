@@ -155,6 +155,20 @@ func _answer(event: String, choice: int) -> void:
 	st._answer(choice, "тест")
 
 
+func _calm() -> void:
+	## No pirates about and no call waiting: what a section before may have left (an SOS trap, a bounty).
+	server.story.quests.clear()
+	server.story.call = {}
+	server.story._due_at = -1
+	if server.derelict.here:
+		server.derelict._leave(true)
+	server.gunnery.enemy_gone()
+	for q in server.players:
+		if q != null and q.pirate:
+			server.crew.remove(q)
+	_run(2)
+
+
 func _arrive_at(cell: Vector2i) -> void:
 	## The ship is in that sector of space now, as if it had jumped there.
 	server.been[Sectors.key(cell)] = true
@@ -249,13 +263,14 @@ func _missions() -> void:
 	st.chapter = 0
 	st.m1_next = 0
 	# somewhere 4 jumps out that is quiet and not an SOS
+	st.quests.clear()
 	var at := Vector2i.MAX
-	for x in range(0, 5):
-		var c := Vector2i(x, -(4 - x))
-		if Sectors.kind_at(server.space_seed, c) == Sectors.TRADER and not Story.sos_at(server.space_seed, c):
-			at = c
-	if at == Vector2i.MAX:
-		at = Vector2i(4, 0)
+	for x in range(-4, 5):
+		for y: int in [4 - absi(x), absi(x) - 4]:
+			var c := Vector2i(x, y)
+			if at == Vector2i.MAX and Sectors.kind_at(server.space_seed, c) != Sectors.FLAGSHIP \
+					and not Story.sos_at(server.space_seed, c) and not server.flagship.is_at(c):
+				at = c
 	_arrive_at(at)
 	_expect(st._due_event == Tales.find("m1") and st._due_at > 0, "the first mission is offered %d jumps out" % server.sectors.far_from_start(server.ship.sector))
 	_run(5 * Net.TICK_HZ)
@@ -298,13 +313,15 @@ func _gear_in_locker() -> bool:
 func _sos() -> void:
 	print("  -- SOS sectors")
 	var st: Story = server.story
+	_calm()
 	var found := Vector2i.MAX
 	var n := 0
 	for x in range(-6, 7):
 		for y in range(-6, 7):
 			if Sectors.kind_at(server.space_seed, Vector2i(x, y)) == Sectors.EMPTY and Vector2i(x, y) != Vector2i.ZERO:
 				n += 1
-				if Story.sos_at(server.space_seed, Vector2i(x, y)):
+				if Story.sos_at(server.space_seed, Vector2i(x, y)) and not st.sos_done.has(Sectors.key(Vector2i(x, y))) \
+						and not server.flagship.is_at(Vector2i(x, y)):
 					found = Vector2i(x, y)
 	_expect(found != Vector2i.MAX, "some quiet sectors send an SOS (%d quiet near the start)" % n)
 	if found == Vector2i.MAX:
@@ -371,6 +388,7 @@ func _hold(p, seconds: float) -> void:
 
 func _trays() -> void:
 	print("  -- the hydroponic trays")
+	_calm()
 	var gd: Garden = server.garden
 	var p = server.crew.new_player("Агроном")
 	kept = [p]
@@ -463,6 +481,7 @@ func _hybrids() -> void:
 
 func _bots_tend() -> void:
 	print("  -- bots at the trays")
+	_calm()
 	var gd: Garden = server.garden
 	for t in 4:
 		gd.plants[t] = 0
