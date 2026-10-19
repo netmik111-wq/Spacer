@@ -220,14 +220,15 @@ func _pump_way(pump: int) -> int:
 	return PUMP_OUT if have > 0.5 else PUMP_IN
 
 
-func toggle_pump(p: Player, cell: int) -> void:
-	## The "use" key on a pump: start it the way the chamber needs, or stop it.
+func toggle_pump(p: Player, cell: int, way: int = 0) -> void:
+	## The "use" key on a pump: start it the way the chamber needs (or `way`), or stop it.
 	if server.ship.pumps.has(cell):
 		server.ship.pumps.erase(cell)
 	elif not server.powered() or not lock_shut(cell):
 		return
 	else:
-		var way := _pump_way(cell)
+		if way == 0:
+			way = _pump_way(cell)
 		if way == 0 or (way == PUMP_IN and server.ship.store_air <= 0.0):
 			return
 		server.ship.pumps[cell] = way
@@ -390,3 +391,95 @@ func update_doors() -> void:
 			server.door_sent[d] = server.doors.ready[d]
 			server.flags_sent[d] = server.doors.flags(d)
 			server.replication.door_record(d)
+
+
+# ------------------------------------------------- (v66) getting past an airlock
+
+func lock_door(door: int) -> bool:
+	## Is this a door of one of our airlocks?
+	return door >= 0 and door < server.doors.partner.size() and server.doors.partner[door] >= 0
+
+
+func lock_bars(door: int) -> bool:
+	## A shut airlock door that walking into does not open now: its shutter is
+	## down (the chamber's pressure differs from the other side) or the other door
+	## of the chamber is not shut.
+	var doors := server.doors
+	return lock_door(door) and doors.is_shut(door) and (doors.locked[door] == 1 or doors.held_by_partner(door))
+
+
+func call_lock(p: Player, door: int) -> bool:
+	## (v66, the author's answer to L1) The button by each airlock door, on both
+	## sides: a press on a shut airlock door held by its shutter runs the chamber's
+	## pump so that this door can open (in for the inner door, out for the outer
+	## one, or to a docked ship's pressure). True if the pump is at it.
+	var pump := _pump_of(door)
+	if pump < 0 or not lock_bars(door) or not _pump_helps(pump, door):
+		return false
+	if not server.ship.pumps.has(pump):
+		toggle_pump(p, pump, _way_through(pump, door))
+	return server.ship.pumps.has(pump)
+
+
+func get_past(p: Player, door: int, ours: bool) -> bool:
+	## (v66, the author's note "feels like bots cannot do it") One tick of a bot or a
+	## pirate whose way leads through an airlock door that will not open
+	## (`lock_bars`). Once it stands before the door, a bot presses the door's
+	## button (`call_lock`) and waits for the pump; when the pump cannot help (no
+	## power, no air in the reserve) it forces the door by hand (Repairs: the lock,
+	## then the shutter). It waits while the chamber's other door is merely open:
+	## that one shuts by itself. `ours`: one of our bots (it never overrides the
+	## lock while the other door is stuck open); pirates only force.
+	## False: nothing to do here yet (it walks on to the door).
+	var doors := server.doors
+	var at: Vector2i = server.map.doors[door]
+	var facing := 0
+	for d in range(1, 5):
+		if p.st.x + Net.DX[d] == at.x and p.st.y + Net.DY[d] == at.y:
+			facing = d
+	if facing == 0:
+		return false
+	var other: int = doors.partner[door]
+	p.using = false
+	p.st.dir = Net.DIR_NONE
+	if p.st.facing != facing:
+		p.st.facing = facing
+		p.self_dirty = true
+	if doors.held_by_partner(door) and (ours or doors.jammed[other] == 0 and doors.forced[other] == 0):
+		# the other door is in use and shuts after it; or it is stuck open, and a
+		# bot will not override the lock and let the ship's air out (a pirate will)
+		if doors.jammed[other] == 1 or doors.forced[other] == 1:
+			p.doing = Net.DOING_NO_WAY
+		return true
+	p.doing = Net.DOING_GOING
+	if ours and call_lock(p, door):
+		return true
+	p.using = true
+	return true
+
+
+func _pump_helps(pump: int, door: int) -> bool:
+	## Can the pump clear the way through that door now (rather than forcing it)?
+	if server.doors.locked[door] == 0 or not server.powered() or server.ship.broken.has(pump) or not lock_shut(pump) \
+			or not server.map.on_ship(server.map.fitting_front(pump)):
+		return false
+	if door == int(server.map.lock_pump[pump]["inner"]) and docked_air(pump) >= 0.0:
+		return false                         # the pump only matches the docked ship's air: the door is forced
+	var way := _way_through(pump, door)
+	return way != 0 and (way == PUMP_OUT or server.ship.store_air > 0.0)
+
+
+func _way_through(pump: int, door: int) -> int:
+	## Which way to pump to open that door: in for the inner one; out for the outer
+	## one, or toward the pressure of a ship docked there.
+	if door == int(server.map.lock_pump[pump]["inner"]):
+		return PUMP_IN
+	return _pump_way(pump) if docked_air(pump) >= 0.0 else PUMP_OUT
+
+
+func _pump_of(door: int) -> int:
+	for c: int in server.map.lock_pump.keys():
+		var lock: Dictionary = server.map.lock_pump[c]
+		if int(lock["inner"]) == door or int(lock["outer"]) == door:
+			return c
+	return -1

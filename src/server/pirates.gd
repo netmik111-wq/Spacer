@@ -211,6 +211,7 @@ func think(p) -> void:
 	## use what it holds; walking is the same as for anybody else.
 	if p.cond != Net.COND_OK or p.health <= 0.0:
 		return                               # (a wound that just felled it is taken account of this tick)
+	p.using = false                          # (v66) set again below while it forces an airlock door
 	var now: int = server.tick
 	# who to go after: keep the one it has while it can see them, else the nearest it can see
 	if (now + p.slot) % SEE_EVERY == 0 or p.ai_target < 0:
@@ -281,6 +282,11 @@ func think(p) -> void:
 			p.ai_goal = Vector2i(-1, -1)                  # nowhere to go from here: choose again
 	if p.st.cd > 0:
 		return
+	if p.ai_step > 0:
+		# (v66) an airlock door in the way that will not open: it is forced by hand
+		var door: int = server.map.door_at(p.st.x + Net.DX[p.ai_step], p.st.y + Net.DY[p.ai_step])
+		if server.systems.lock_bars(door) and server.systems.get_past(p, door, false):
+			return
 	if p.ai_step == -1:
 		_stop(p)
 		server.movement.climb(p)
@@ -317,12 +323,13 @@ func _step_away(p, from: Vector2) -> void:
 	p.st.dir = best
 
 
-func _passable(x: int, y: int) -> bool:
+func _passable(x: int, y: int, suited: bool = false) -> bool:
+	## (v66) Airlock doors are forced when need be; in a suit open space will do too.
 	var map = server.map
 	if not map.walkable(x, y):
-		return false
+		return suited and map.floats(x, y)
 	var d: int = map.door_at(x, y)
-	return d < 0 or not server.doors.is_sealed(d)
+	return d < 0 or not server.doors.is_sealed(d) or server.systems.lock_door(d)
 
 
 func _post(p) -> Vector2i:
@@ -358,6 +365,7 @@ func _first_step(p, goal: Vector2i) -> int:
 	var end: int = goal.y * map.width + goal.x
 	if goal.x < 0 or start == end:
 		return 0
+	var suited: bool = p.has_suit()
 	var first: Dictionary = {start: 0}
 	var queue: PackedInt32Array = PackedInt32Array([start])
 	var at := 0
@@ -368,9 +376,9 @@ func _first_step(p, goal: Vector2i) -> int:
 		var y: int = cell / map.width
 		var nexts: Array = []
 		for d in range(1, 5):
-			if _passable(x + Net.DX[d], y + Net.DY[d]):
+			if _passable(x + Net.DX[d], y + Net.DY[d], suited):
 				nexts.append([(y + Net.DY[d]) * map.width + x + Net.DX[d], d])
-		if map.climb[cell] >= 0:
+		if map.climb[cell] >= 0 and not map.floats(x, y):
 			nexts.append([map.climb[cell], -1])
 		for n: Array in nexts:
 			var to: int = n[0]

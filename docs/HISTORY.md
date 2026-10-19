@@ -142,6 +142,18 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v66 (airlocks; the author's note "feels like bots cannot do it", plus the simulator's fixes)
+- Bots could not use the airlock: a bot in an emptied chamber stood at the inner door forever, and «за мной» stopped at
+  our own hull. Now each airlock door has a button (E on the door, from either side, runs the pump: the author's answer),
+  bots press it (or raise the shutter by hand without power), follow through the
+  airlock, onto a docked ship and into space in a suit, and never lets the ship's air out. Pirates in suits cross space and
+  force airlock doors. New test `tools/airlocktest.gd` (27 scripts in `runtests.sh`).
+- Ships the fixes merged after v65 (PRs #34, #35, #37): quest cargo on the long jump, the roaming flagship stuck by a
+  station, a starving knocked-out crewman never waking, the raider undock loop, respawn away from boarders, hunters slower
+  after each escape.
+- Choices made (my picks, open to the author): https://claude.ai/artifact/KuZruvE1aMGdyMBR7yCLLK.
+  Build in `/mnt/project-files/builds/v66/`.
+
 ### v65 (storage window fixes; the author's request)
 - The supply locker's window was wider than the screen once the locker held many kinds. Its cards now sit under seven
   tabs, long groups wrap at 10 cards, and the window keeps one width (fits 1280×720).
