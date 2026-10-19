@@ -315,6 +315,10 @@ func _ship_tab() -> Control:
 		["Вызов на пульт связи (любой по сектору)", Net.ADMIN_TALE, 255],
 		["Флагман: проснуться и +1 шаг роста", Net.ADMIN_GROW],
 		["Гидропоника: всё созрело", Net.ADMIN_GARDEN],
+		["Охотник входит в скопление", Net.ADMIN_HUNTER],
+		["Открыть все тайники системы", Net.ADMIN_REVEAL],
+		["В следующее скопление (верхний выход)", Net.ADMIN_CLUSTER, 0],
+		["В следующее скопление (нижний выход)", Net.ADMIN_CLUSTER, 1],
 	]:
 		var command: int = b[1]
 		var argument: int = b[2] if b.size() > 2 else 0

@@ -34,7 +34,7 @@ const QUEST_NEAR := 2                # quests point this many jumps away...
 const QUEST_FAR := 4                 # ... up to this many
 const HUNT_DELAY := 6.0              # a bounty's pirate comes out this long after we arrive in its sector
 const M1_FROM := 3                   # the first mission is offered this many jumps out from the start...
-const M1_TO := 6                     # ... up to this many
+const M1_TO := 11                    # ... up to this many (v64: the second and third clusters)
 const M1_AGAIN := 3                  # turned down, it is offered again this many jumps later
 const DRY_DRIFT := 0.3               # out of fuel: this often it is still the drifting can (Director), not a call
 const PIRATE_NAMES: Array[String] = ["Ржавый Клык", "Мясник Орро", "Вдова Кесс", "Шрам", "Безносый Тибо", "Капитан Гарь", "Сестра Зола"]
@@ -79,9 +79,9 @@ func setup(p_server: GameServer) -> void:
 
 # --------------------------------------------------------------- places
 
-static func sos_at(seed_value: int, at: Vector2i) -> bool:
-	## Does that quiet sector send an SOS? (by lot from the game's seed; never the start)
-	if at == Vector2i.ZERO or Sectors.kind_at(seed_value, at) != Sectors.EMPTY:
+static func sos_at(seed_value: int, at: Vector2i, kind: int) -> bool:
+	## Does that quiet sector (of `kind`) send an SOS? (by lot from the game's seed; never the start)
+	if at == Vector2i.ZERO or kind != Sectors.EMPTY:
 		return false
 	var h := hash([seed_value, at.x, at.y, 63])
 	return float(h & 0xFFFF) / 65536.0 < SOS_SHARE
@@ -113,7 +113,7 @@ func entered_sector() -> void:
 			return
 	if kind == Sectors.FLAGSHIP or server.flagship.is_at(at):
 		return
-	if sos_at(server.space_seed, at) and not sos_done.has(Sectors.key(at)):
+	if sos_at(server.space_seed, at, kind) and not sos_done.has(Sectors.key(at)):
 		sos_done[Sectors.key(at)] = true
 		_dirty = true
 		_due(Tales.find("sos"), 4.0)
@@ -363,29 +363,31 @@ func _hurt(amount: float) -> void:
 # --------------------------------------------------------------- quests
 
 func _target(kinds: Array, near: int, far: int, toward_goal: bool = false) -> Vector2i:
-	## A sector of one of those kinds that far away, by lot (a little further if none is); Vector2i.MAX if none.
+	## A system of this cluster of one of those kinds that far away, by lot (any distance if none is); Vector2i.MAX if none.
 	var found := _targets(kinds, near, far, toward_goal)
 	if found.is_empty():
-		found = _targets(kinds, near, far + 2, toward_goal)
+		found = _targets(kinds, 1, 99, toward_goal)          # (v64) a cluster is small: nearer or further, then
+	if found.is_empty() and kinds == [Sectors.DERELICT]:
+		found = _targets(kinds, 0, 99, toward_goal)          # (its only wreck may be where we are: the box lies there)
 	if found.is_empty():
 		return Vector2i.MAX
 	return found[_rng.randi_range(0, found.size() - 1)]
 
 
 func _targets(kinds: Array, near: int, far: int, toward_goal: bool) -> Array:
-	var at := here()
-	var goal := Sectors.goal_of(server.space_seed)
+	## (v64, my V9) Only systems of this cluster: one left behind can never be reached again.
+	## `toward_goal`: further across the cluster than we are (toward its exits).
+	var s: Sectors = server.sectors
+	var d := s.distances(server.ship.sector)
 	var found: Array = []
-	for dx in range(-far, far + 1):
-		for dy in range(-far, far + 1):
-			var c := at + Vector2i(dx, dy)
-			var d := absi(dx) + absi(dy)
-			if d < near or d > far or c == Vector2i.ZERO or c == goal or server.flagship.in_area(c):
-				continue
-			if toward_goal and Sectors.jumps_between(c, goal) >= Sectors.jumps_between(at, goal):
-				continue
-			if kinds.has(Sectors.kind_at(server.space_seed, c)) and not _taken(c):
-				found.append(c)
+	for i in s.count:
+		var c: Vector2i = s.cell[i]
+		if d[i] < near or d[i] > far or c == Vector2i.ZERO or s.kind[i] == Sectors.FLAGSHIP or server.flagship.in_area(c):
+			continue
+		if toward_goal and s.pos[i].x <= s.pos[server.ship.sector].x:
+			continue
+		if kinds.has(s.kind[i]) and not _taken(c):
+			found.append(c)
 	return found
 
 
@@ -421,7 +423,7 @@ func _new_quest(kind: int) -> String:
 	if at == Vector2i.MAX:
 		return " Но подходящего сектора поблизости не нашлось."
 	q["at"] = at
-	var d := Sectors.jumps_between(here(), at)
+	var d: int = server.sectors.hops_between(here(), at)
 	q["reward"] = [30, 40, 30][kind] + 8 * d
 	quests.append(q)
 	_dirty = true
@@ -500,6 +502,7 @@ func derelict_arrived(cells: PackedInt32Array) -> void:
 
 func pirates_beaten() -> void:
 	## (Gunnery) The pirate ship alongside is wrecked, taken, broken off or paid us off.
+	server.road.pirates_beaten()             # (v64) a hunter among them
 	if _hunt >= 0:
 		_beaten = true
 
@@ -551,6 +554,46 @@ func _hunt_tick() -> void:
 		_hunt = -1
 		if not q.is_empty():
 			_done(q, "Цель уничтожена.")
+
+
+func left_cluster() -> void:
+	## (v64, my V9) The ship has left its cluster for good: the side quests there are lost,
+	## and a chapter's mission is offered again in the new one.
+	for q: Dictionary in quests.duplicate():
+		if int(q["kind"]) == Net.QUEST_MISSION:
+			quests.erase(q)
+			if int(q["part"]) == 1:
+				chapter = 0
+				m1_next = server.jumps
+			else:
+				_mission(2)
+		else:
+			_fail(q, "Его цель осталась в покинутом скоплении.")
+	if int(server.ship.store.get(Net.ITEM_CARGO, 0)) > 0:
+		server.ship.store[Net.ITEM_CARGO] = 0
+		server.supplies.tell_store()
+	_hunt = -1
+	_hunt_at = -1
+	_dirty = true
+
+
+func moved_to_clusters() -> void:
+	## (v64, my V11) A save from before the clusters: its side quests and SOS marks pointed at
+	## places that are gone. The chapter, its codes and a mission are kept (a mission is set anew).
+	sos_done = {}
+	for q: Dictionary in quests.duplicate():
+		if int(q["kind"]) != Net.QUEST_MISSION:
+			quests.erase(q)
+	if int(server.ship.store.get(Net.ITEM_CARGO, 0)) > 0:
+		server.ship.store[Net.ITEM_CARGO] = 0
+	for q: Dictionary in quests.duplicate():
+		quests.erase(q)
+		if int(q["part"]) == 1:
+			chapter = 0
+			m1_next = server.jumps
+		else:
+			_mission(2)
+	_dirty = true
 
 
 # --------------------------------------------------------------- the tick
@@ -688,7 +731,7 @@ func story_packet() -> PackedByteArray:
 	var marks: Array = []
 	for i in server.sectors.count:
 		var c: Vector2i = server.sectors.cell[i]
-		if sos_at(server.space_seed, c) and not sos_done.has(Sectors.key(c)):
+		if sos_at(server.space_seed, c, server.sectors.kind[i]) and not sos_done.has(Sectors.key(c)):
 			marks.append([Net.MARK_SOS, c])
 	out.append(marks.size())
 	for m: Array in marks:

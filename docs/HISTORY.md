@@ -134,6 +134,21 @@ Open problems:
 
 ## Build notes
 
+### v64 (the cluster map)
+- Space is a road of clusters (the author's 19 "A" answers): 10–14 systems on lanes, two exits on the far side, a long
+  jump (2 cans) into the next cluster of a kind shown in advance, no way back. Kinds: frontier, pirate territory, trade
+  worlds, storm belt, dead zone; nebulae over a few systems. Each cluster is 4 steps of danger harder. The flagship waits
+  in the 4th cluster and its jammer holds the exits until it is beaten; after it the road goes on.
+- Places inside a system, hidden until the sensors find them: debris, containers (1 in 5 a mine), bodies (now and then a
+  survivor), abandoned ships, battlefields, pirate ambushes (his notebook note page1016-07).
+- Pirate hunters on the chart that walk the lanes toward us; stations are safe harbours.
+- The chart: a cluster view and a road view; the helm shows the places found. Quests point inside the cluster.
+  Old saves go on at a fresh first cluster. New server part `src/server/road.gd`, test `tools/roadtest.gd` (26 tests).
+  Protocol 43. Follow-up questions https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVqN (all "A"). Build in
+  `/mnt/project-files/builds/v64/`.
+- Fix (found by the CI thread, the author said yes): while one of ours is aboard a pirate ship, a pirate that walks
+  across onto our ship is no longer announced as killed; the chat says it crossed over, and it stays a boarder.
+
 ### v63 (road and story, part 4 of the road plan)
 - The comms console on the bridge (`K`): 26 text events with 2–4 answers each, blue answers by job, skill or
   thing, paid answers, the plain answer after 90 s (new server parts `src/server/story.gd`, data in

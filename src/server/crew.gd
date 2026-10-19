@@ -105,6 +105,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.story.comms_packet(), ENetPacketPeer.FLAG_RELIABLE)     # (v63)
 	peer.send(0, server.story.story_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.garden.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	peer.send(0, server.road.packet(), ENetPacketPeer.FLAG_RELIABLE)        # (v64)
 	for q: Player in server.players:
 		if q != null and q != p:
 			peer.send(0, look_packet(q), ENetPacketPeer.FLAG_RELIABLE)

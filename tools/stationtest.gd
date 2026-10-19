@@ -165,6 +165,17 @@ func _initialize() -> void:
 			home += 1
 	_expect(home < n and g.boarders_left() == home and d._pirates_party == home and server.enemy_crew.count() == home,
 		"one dead: its crew count follows (%d, %d of %d on their ship)" % [g.boarders_left(), home, n])
+	# (v64) one walks over onto our ship: no longer its crew, but not counted dead either
+	var walker = null
+	for v in victims:
+		if walker == null and not v.corpse and v.cond != Net.COND_DEAD and map.is_other(v.st.y * map.width + v.st.x):
+			walker = v
+	if walker != null and home > 1:
+		var spot := server.crew.spawn_point()
+		walker.st.place(spot.x, spot.y)
+		_run(3)
+		_expect(walker.cond != Net.COND_DEAD and not walker.corpse and g.boarders_left() == home - 1 and server.enemy_crew.count() == home - 1
+			and server.enemy_crew.crossed == 0 and g.fighting(), "one walks over onto our ship: its crew count follows, and it is still a pirate aboard ours")
 	for v in victims:
 		server.combat.hurt(v, 999, null)
 	boarder.health = 100.0

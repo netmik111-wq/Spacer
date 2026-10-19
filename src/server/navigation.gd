@@ -8,6 +8,8 @@ const Player := preload("res://src/server/player.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Gear := preload("res://src/shared/gear.gd")
 
+const EXIT_CHARGE := 1.5             # (v64) the long jump out of a cluster charges this many times longer
+
 var server: GameServer
 
 
@@ -105,7 +107,12 @@ func jump_asked(p: Player, target: int) -> void:
 	## A player at the sector console asks for a jump.
 	if not server.systems.at_console(p, server.map.chart) or server.ship.jump_to != Net.NO_SECTOR or server.tick < server.ship.drive_ready or server.engine_down() or server.over != Net.OVER_NONE:
 		return
-	if target >= server.sectors.count or not server.sectors.linked(server.ship.sector, target):
+	if target == Sectors.EXIT_JUMP:
+		var why: String = server.road.can_leave()     # (v64) the long jump out of the cluster
+		if why != "":
+			server.chat.say(why)
+			return
+	elif target >= server.sectors.count or not server.sectors.linked(server.ship.sector, target):
 		return
 	if server.ship.fuel() < 1:
 		server.chat.say("Прыгнуть не на чем: в шкафу снабжения нет топлива.")
@@ -122,6 +129,8 @@ func jump_asked(p: Player, target: int) -> void:
 func start_jump(target: int, by: String) -> void:
 	server.ship.jump_to = target
 	var charge := roundi(Net.JUMP_TICKS * server.outfit.jump_share())      # (v59) a better engine charges it quicker
+	if target == Sectors.EXIT_JUMP:
+		charge = roundi(charge * EXIT_CHARGE)  # (v64) the long jump takes longer to charge
 	server.ship.jump_tick = server.tick + charge
 	tell_nav()
 	server.chat.say("%s задаёт курс: %s. Прыжок через %d секунд." % [by, server.sectors.describe(target), charge / Net.TICK_HZ])
@@ -151,29 +160,46 @@ func update_jump() -> void:
 		tell_nav()
 		server.chat.say("Прыжок отменён: %s" % server.derelict.holds_ship().to_lower())
 		return
-	if server.ship.fuel() < 1:
+	var long_jump := server.ship.jump_to == Sectors.EXIT_JUMP
+	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to] if not long_jump else Vector2i.ZERO
+	var burn := Sectors.EXIT_FUEL if long_jump else 1
+	if server.ship.fuel() < burn:
 		# somebody took the last can out of the locker while the drive was charging
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
 		server.chat.say("Прыжок сорван: в шкафу снабжения не осталось топлива.")
 		return
+	if long_jump and server.road.can_leave() != "":
+		server.ship.jump_to = Net.NO_SECTOR
+		tell_nav()
+		server.chat.say("Прыжок сорван: %s" % server.road.can_leave().to_lower())
+		return
 	if server.outfit.free_fuel() > 0.0 and server.rng.randf() < server.outfit.free_fuel():
+		burn -= 1
 		server.chat.say("Двигатель взял прыжок без топлива: канистра цела.")   # (v59) a better engine is thriftier
-	else:
-		server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() - 1      # the jump burns one can
+	server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() - burn      # the jump burns one can (the long jump two)
 	server.supplies.tell_store()
-	# The ship is somewhere else now: the chart is drawn anew around the new
-	# sector, which is how space goes on for ever without being kept anywhere.
-	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to]
 	server.ship.jump_to = Net.NO_SECTOR
 	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1
 	server.outfit.jumped()                   # (v62) the welding drone
+	if long_jump:
+		server.road.next_cluster(server.sectors.exit_of(server.ship.sector))   # (v64) into the next cluster
+		landed()
+		return
+	var target: int = server.sectors.cell.find(arrived)
 	if not server.been.has(Sectors.key(arrived)):
 		server.ship.credits += Net.EXPLORE_REWARD
 		server.chat.say("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)
 	server.been[Sectors.key(arrived)] = true
-	server.sectors.build(server.space_seed, arrived, server.been)
+	server.sectors.visited[target] = 1
+	server.ship.sector = target
+	server.sectors.here = target
+	landed()
+
+
+func landed() -> void:
+	## The ship has come out of a jump into server.sectors.here: everything that follows.
 	server.ship.sector = server.sectors.here
 	server.farthest = maxi(server.farthest, server.sectors.far_from_start(server.ship.sector))
 	server.save_campaign()

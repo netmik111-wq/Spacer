@@ -54,6 +54,7 @@ var _told := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
 var in_world := false                # (v55) they have come to life as pirates in the world
 var people: Array = []               # (in the world) per one of them, its Player, in the order of `at`
+var crossed := 0                     # (v64) of those gone from `people`, how many walked over onto our ship alive (Stations tells it once)
 const BOARDED_WOUND := 25            # (in the world) what a hit into the room does to each one wounded
 
 
@@ -73,6 +74,7 @@ func clear() -> void:
 	_next_step = PackedInt32Array()
 	probe_until = 0
 	in_world = false
+	crossed = 0
 	people = []
 
 
@@ -380,6 +382,8 @@ func _read_world() -> void:
 	for p in people:
 		if _alive(p) and server.players[p.slot] == p:
 			still.append(p)
+		elif p != null and server.players[p.slot] == p and not p.corpse and p.cond != Net.COND_DEAD:
+			crossed += 1                     # (v64) alive, but off its ship: a boarder of ours now, not a loss
 	people = still
 	var n := people.size()
 	at.resize(n)

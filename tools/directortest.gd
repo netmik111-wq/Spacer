@@ -40,6 +40,10 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 		if server.sectors.kind[i] == kind:
 			here = i
 	server.sectors.kind[here] = kind
+	server.sectors.fog[here] = 0                      # (v64: a nebula would halve the pirates' events)
+	if kind == Sectors.METEORS:                       # (a cluster may have no meteor stream: make this one)
+		server.sectors.spot[here] = server.sectors.entry[here]
+		server.sectors.reach[here] = 50
 	server.ship.sector = here
 	server.ship.pos = server.sectors.entry[here]      # in a meteor stream that is inside the stream
 	server.director.entered_sector()

@@ -114,7 +114,7 @@ func _quest_text() -> String:
 	var here: Vector2i = client.sectors.cell[client.sectors.here] if client.sectors.count > 0 else Vector2i.ZERO
 	var lines: Array[String] = ["Задания:"]
 	for q: Dictionary in qs:
-		var d := Sectors.jumps_between(here, q["at"])
+		var d: int = client.sectors.hops_between(here, q["at"])
 		lines.append("• %s (%s, %d кр.): %s Прыжков до цели: %d." % [q["title"], QUEST_NAMES[clampi(int(q["kind"]), 0, 3)],
 			int(q["reward"]), q["text"], d])
 	return "\n".join(lines)
@@ -125,8 +125,7 @@ func _where(at: Vector2i) -> String:
 	for i in sec.count:
 		if sec.cell[i] == at:
 			return "в секторе %s" % sec.names[i] + (" (мы здесь)" if i == sec.here else "")
-	var here: Vector2i = sec.cell[sec.here] if sec.count > 0 else Vector2i.ZERO
-	return "в %d прыжках отсюда" % Sectors.jumps_between(here, at)
+	return "в другом скоплении"
 
 
 func _flagship_text() -> String:
@@ -144,5 +143,5 @@ func _flagship_text() -> String:
 		lines.append("Флагман пиратов рыщет %s. Рост: %d из 4%s." % [_where(s["flagship"]), int(s["growth"]),
 			(", следующий шаг через %d:%02d" % [grow / 60, grow % 60]) if grow != 65535 else ""])
 	else:
-		lines.append("Флагман пиратов ждёт у цели. Он проснётся, когда мы подойдём ближе чем на 2 прыжка.")
+		lines.append("Флагман пиратов ждёт в своём логове, в %d-м скоплении пути. Он выйдет на охоту, когда мы войдём туда." % (Sectors.FLAG_DEPTH + 1))
 	return "\n".join(lines)

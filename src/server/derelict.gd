@@ -222,7 +222,7 @@ func update() -> void:
 		return
 	if not possible():
 		return
-	var want: bool = server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach
+	var want: bool = (server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach) or server.road.at_wreck()   # (v64) or an abandoned ship among the places
 	if want and not here:
 		_arrive()
 	elif not want and here and holds_ship() == "":
