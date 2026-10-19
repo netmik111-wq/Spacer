@@ -313,8 +313,8 @@ func _traders_and_loot() -> void:
 	var plain: int = server.shipyard.gear_upgrades()
 	ship.gear = PackedByteArray([3, 3, 3, 3])
 	ship.modules = PackedByteArray([Gear.ARMOUR_3, Gear.PHASE])
-	_expect(plain == 0 and server.shipyard.gear_upgrades() == 5 and server.outfit.tier_points() == 11,
-		"the flagship grows by half our gear's tier points (%d)" % server.outfit.tier_points())
+	_expect(plain == 0 and server.shipyard.gear_upgrades() == 0 and server.shipyard.upgrades() == 0 and server.outfit.tier_points() == 11,
+		"(v67) the flagship no longer grows with our gear (%d tier points)" % server.outfit.tier_points())
 
 
 func _save() -> void:

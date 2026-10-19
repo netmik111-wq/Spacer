@@ -45,7 +45,7 @@ const ONLY_HELD: Array[String] = ["Корабельное оружие", "Дет
 # Groups no tab names (and «Прочее») go to the last one.
 const TABS := [
 	["Всё", []],
-	["Припасы", ["Ремонт и топливо", "Провизия", "Медицина"]],
+	["Припасы", ["Ремонт и топливо", "Провизия", "Медицина", "Добыча"]],
 	["Снаряжение", ["Снаряжение", "Личное оружие"]],
 	["Орудия", ["Корабельное оружие", "Боеприпасы", "Детали орудий"]],
 	["Модули", ["Модули корабля"]],
@@ -247,7 +247,7 @@ func refresh() -> void:
 		if frame != null:
 			frame.reset_size()
 	var now := PackedByteArray([client.credits & 0xFF, client.credits >> 8, client.hull, client.reserve,
-		roundi(client.store_air), 1 if trading else 0, client.hand, _hover + 1, _hover_slot + 1])
+		roundi(client.store_air), 1 if trading else 0, client.hand, _hover + 1, _hover_slot + 1, client.fuel & 0xFF, client.fuel >> 8])
 	for item: int in client.store.keys():
 		now.append(client.stock(item) & 0xFF)
 	now.append_array(client.slots)
@@ -308,7 +308,9 @@ func _draw_gauges() -> void:
 	var fuel := client.stock(Net.ITEM_FUEL)
 	var gauges := [
 		["Кредиты", str(client.credits), -1.0, INK],
-		["Топливо", "%d %s" % [fuel, _jumps(fuel)], -1.0, BAD if fuel == 0 else (WARN if fuel < 3 else INK)],
+		# (v67) the tank, in units; how many lane jumps it holds, and cans in the locker
+		["Топливо: прыжков %d, %s" % [client.fuel / maxi(client.jump_cost, 1), "%d %s" % [fuel, _jumps(fuel)]],
+			"%d из %d" % [client.fuel, client.fuel_max], float(client.fuel) / maxf(client.fuel_max, 1.0), Color()],
 		["Воздух установки", "%d из %d" % [int(round(client.store_air)), int(Net.STORE_AIR_FULL)], client.store_air / Net.STORE_AIR_FULL, Color()],
 		["Обшивка", "%d из %d" % [client.hull, client.hull_max], float(client.hull) / client.hull_max, Color()],
 		["Резерв экипажа", "%d из %d" % [client.reserve, Net.RESERVE_MAX], float(client.reserve) / Net.RESERVE_MAX, Color()],

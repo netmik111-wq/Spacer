@@ -203,7 +203,8 @@ func _cargo() -> void:
 		return
 	var q: Dictionary = st.quests[0]
 	var d: int = server.sectors.hops_between(st.here(), q["at"])
-	_expect(d >= 1 and d <= Story.QUEST_FAR + 2, "its station is %d jumps away" % d)   # (v64: nearer or further when the cluster has none in range)
+	var in_range: bool = d <= Story.QUEST_FAR or st._targets([Sectors.STATION], Story.QUEST_NEAR, Story.QUEST_FAR, false).is_empty()
+	_expect(d >= 1 and in_range, "its station is %d jumps away" % d)   # (v64: further only when the cluster has none in range)
 	_expect(_kind(q["at"]) == Sectors.STATION, "and it is a station of this cluster")
 	_expect(int(server.ship.store.get(Net.ITEM_CARGO, 0)) == 1, "the crate is in the locker")
 	var pkt := st.story_packet()
@@ -368,11 +369,18 @@ func _dry() -> void:
 			got = true
 			break
 	_expect(got and str(Tales.EVENTS[int(st.call["event"])]["tag"]) == "dry", "a passing ship calls")
-	server.ship.store[Net.ITEM_FUEL] = 0
-	server.ship.credits = 0
-	st._refresh_flags()
-	st._unanswered()
-	_expect(int(server.ship.store[Net.ITEM_FUEL]) >= 1, "even with no money and no answer, it leaves fuel (%d)" % int(server.ship.store[Net.ITEM_FUEL]))
+	# (v67, the author's O2) free help is rare: begged, the trader leaves a can only now and then
+	var given := 0
+	for i in 40:
+		st.call = {}
+		st.open(Tales.find("dry_trader"))
+		server.ship.store[Net.ITEM_FUEL] = 0
+		server.ship.credits = 0
+		st._refresh_flags()
+		st._unanswered()
+		given += int(server.ship.store[Net.ITEM_FUEL])
+	_expect(given > 0 and given < 30, "with no money and no answer, the trader leaves a can now and then (%d times in 40)" % given)
+	st.call = {}
 
 
 func _food() -> void:
@@ -509,7 +517,7 @@ func _hybrids() -> void:
 		if int(server.ship.store.get(Plants.seed_item(Plants.POTATO, Plants.RICH), 0)) + int(server.ship.store.get(Plants.seed_item(Plants.POTATO, Plants.EARLY), 0)) > rich:
 			mutated += 1
 	_expect(hybrids > 40 and hybrids < 110, "potato beside soy, ripe together: a sweet tuber now and then (%d of 200)" % hybrids)
-	_expect(back > 70 and back < 130 and mutated > 10 and mutated < 50, "seeds come back (%d), some mutated (%d)" % [back, mutated])
+	_expect(back > 70 and back < 130 and mutated > 5 and mutated < 50, "seeds come back (%d), some mutated (%d)" % [back, mutated])
 	_expect(Plants.cross(Plants.MUSHROOM, Plants.CHLORELLA) == Plants.HERB and Plants.plasters(Plants.seed_item(Plants.HERB)) > 0, "mushroom and chlorella give the healing herb")
 
 

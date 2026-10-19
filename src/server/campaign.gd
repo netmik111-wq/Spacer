@@ -105,7 +105,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"seed": server.space_seed, "been": been,
 		"at": [server.sectors.cell[server.ship.sector].x, server.sectors.cell[server.ship.sector].y],
 		"pos": [server.ship.pos.x, server.ship.pos.y],
-		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits,
+		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits, "tank": server.ship.tank,
 		"reserve": server.reserve, "hull": server.ship.hull, "voyage": server.voyage_ticks,
 		"jumps": server.jumps, "farthest": server.farthest, "won": server.won, "dead_names": server.dead_names.keys(),
 		"holes": holes, "broken": broken,
@@ -183,6 +183,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.ship.store[Net.ITEM_FOOD] = Items.stock(Net.ITEM_FOOD)   # (v63) a save from before food: the start's rations
 	server.ship.store_air = float(data["store_air"])
 	server.ship.credits = int(data["credits"])
+	server.ship.tank = float(data.get("tank", Net.FUEL_START))     # (v67; an older save: a fresh tank)
 	server.reserve = int(data["reserve"])
 	server.mode = int(data.get("mode", Net.MODE_NORMAL))           # (v63; older saves: the normal mode)
 	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))

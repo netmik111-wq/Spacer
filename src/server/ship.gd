@@ -15,6 +15,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 var id := Net.CREW_SHIP
 var kind := Net.SHIP_CREW             # Net.SHIP_*
@@ -45,6 +46,8 @@ var backup_told := false              # (v61) and of the bridge's backup SMES
 var store := {}                       # thing (Net.ITEM_*) -> how many
 var store_air := 0.0                  # air the air plant still has to give, in cells' worth
 var credits := 0
+var tank := float(Net.FUEL_START)     # (v67) fuel in the tank, in units (Net.FUEL_MAX at most)
+var jump_cost := 40                   # (v67) what a lane jump burns from it (Outfit sets it by the engine's tier)
 var store_told := PackedByteArray()   # the supplies as clients were last told
 var hull := Net.HULL_MAX              # strength of the hull, 0..hull_max
 var hull_max := Net.HULL_MAX          # (v63) its top strength: Net.HULL_MAX, less what the easy mode took for each wreck
@@ -86,8 +89,13 @@ func powered(tick: int) -> bool:
 
 
 func fuel() -> int:
-	## Cans of fuel in the supply locker: a jump burns one from there.
+	## Cans of fuel in the supply locker (v67: each holds Net.CAN_FUEL; a jump burns from the tank, see `tank`).
 	return int(store.get(Net.ITEM_FUEL, 0))
+
+
+func can_jump(long_jump: bool = false) -> bool:
+	## (v67) Is there fuel in the tank for a jump (the long jump burns twice as much)?
+	return tank + 0.001 >= jump_cost * (Sectors.EXIT_FUEL if long_jump else 1)
 
 
 # ---------------------------------------------------------------- packets
@@ -169,4 +177,9 @@ func store_packet() -> PackedByteArray:
 		out.resize(o + 3)
 		out.encode_u8(o, item)
 		out.encode_u16(o + 1, store[item])
+	var o := out.size()                   # (v67) the tank
+	out.resize(o + 5)
+	out.encode_u16(o, floori(tank))
+	out.encode_u8(o + 2, jump_cost)
+	out.encode_u16(o + 3, Net.FUEL_MAX)
 	return out

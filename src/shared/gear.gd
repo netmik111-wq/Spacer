@@ -71,7 +71,7 @@ const REACTOR_POWER: Array[int] = [0, 8, 10, 12]
 const SHIELD_REGEN: Array[float] = [0.0, 2.5, 3.5, 4.5]   # points a second (the top one also stops rockets)
 const ENGINE_DODGE: Array[float] = [0.0, 0.0, 0.05, 0.10] # added to our dodge while somebody flies the ship
 const ENGINE_JUMP: Array[float] = [0.0, 1.0, 0.75, 0.5]   # share of the jump's charge and the drive's rest
-const ENGINE_FREE_FUEL: Array[float] = [0.0, 0.0, 0.25, 0.5]   # chance a jump burns no fuel
+const JUMP_FUEL: Array[int] = [40, 40, 35, 30]             # (v67, the author's numbers) fuel a lane jump burns (the long jump twice)
 const SENSOR_SECONDS: Array[float] = [0.0, 7.0, 4.0, 2.5]      # our sensors make out one of its rooms this often
 const COIL_CAPACITY: Array[float] = [0.0, 1.0, 1.5, 2.0]      # (v61) the SMES holds this many times its built-in charge
 const COIL_CHARGE: Array[int] = [0, 0, 2, 4]                  # and charges this much faster a second
@@ -106,9 +106,9 @@ const INFO := {
 	REACTOR_3: {"name": "Реактор «Солнце»", "sys": SYS_REACTOR, "tier": 3, "price": 240,
 		"about": "Даёт орудиям и щиту 12 энергии вместо 8."},
 	ENGINE_2: {"name": "Двигатель «Стриж»", "sys": SYS_ENGINE, "tier": 2, "price": 90,
-		"about": "Уклонение от выстрелов +5% (пока кто-то за штурвалом), прыжок заряжается на четверть быстрее, каждый четвёртый прыжок в среднем без топлива."},
+		"about": "Уклонение от выстрелов +5% (пока кто-то за штурвалом), прыжок заряжается на четверть быстрее и берёт 35 единиц топлива вместо 40."},
 	ENGINE_3: {"name": "Двигатель «Сокол»", "sys": SYS_ENGINE, "tier": 3, "price": 180,
-		"about": "Уклонение +10% (пока кто-то за штурвалом), прыжок заряжается вдвое быстрее, половина прыжков в среднем без топлива."},
+		"about": "Уклонение +10% (пока кто-то за штурвалом), прыжок заряжается вдвое быстрее и берёт 30 единиц топлива вместо 40."},
 	SENSORS_2: {"name": "Сканеры «Око»", "sys": SYS_SENSORS, "tier": 2, "price": 60,
 		"about": "Отсеки пиратского корабля распознаются раз в 4 с вместо 7."},
 	SENSORS_3: {"name": "Сканеры «Всевидящее око»", "sys": SYS_SENSORS, "tier": 3, "price": 120,

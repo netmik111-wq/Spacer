@@ -149,7 +149,7 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 	var weapons := PackedByteArray(info["pool"])
 	var extra: Array = info["extra"]
 	for i in mini(upgrades(), extra.size()):
-		weapons.append(extra[i])
+		weapons.append(extra[i])            # (v67: none; see upgrades)
 	var fx := PackedByteArray()
 	for w in weapons:
 		fx.append(Weapons.roll_fx(w, _rng))
@@ -167,9 +167,10 @@ func flagship(kind: int, fits: Array) -> Dictionary:
 
 func upgrades() -> int:
 	## (v57) How many guns the flagship adds for how far our ship is armed past its
-	## start. (v58, the author: it grows by half of our tier points) A mounted gun
-	## of tier 2 is one point, of tier 3 two; spares in the cargo do not count.
-	return tier_points() / 2
+	## start. (v58, the author: it grows by half of our tier points) (v67, the author's O1:
+	## the flagship grows only with time, never with our guns or gear, so upgrading is
+	## never a trap.) Nothing now; kept for the guns `extra` a later rule may give.
+	return 0
 
 
 const HARD_REWARD := 0.75            # (v63) on the hard mode a pirate ship pays this much of its reward
@@ -180,9 +181,9 @@ const GEAR_REGEN := 0.1              # ... and its shield refills this much fast
 
 
 func gear_upgrades() -> int:
-	## (v59) Our gear grows the flagship too, by half its tier points (Outfit.tier_points),
-	## as more hull and a quicker shield, not more guns (my default, put to the author).
-	return server.outfit.tier_points() / 2
+	## (v59) Our gear grew the flagship too, by half its tier points (Outfit.tier_points).
+	## (v67, the author's O1) No more: it grows only with time (Flagship.growth).
+	return 0
 
 
 func tier_points() -> int:

@@ -1,7 +1,7 @@
 extends RefCounted
 ## (v61, moved here from v60; my V15/V16 picks) Mending the hull from outside.
 ## Anybody in a suit, out in space and facing a whole cell of our hull, holds
-## "use" with a hull patch in hand and gives the hull HULL_PER_PATCH back
+## "use" with a hull patch in pockets and gives the hull HULL_PER_PATCH back (v67: or a piece of scrap, HULL_PER_SCRAP)
 ## (MEND_SECONDS, quicker with the repair skill), up to full: patches that close
 ## holes from inside can also mend the hull's strength from outside.
 ##
@@ -16,7 +16,8 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 
-const HULL_PER_PATCH := 10
+const HULL_PER_PATCH := 15          # (v67, the author's H2: the hull comes back mostly from our own work; was 10)
+const HULL_PER_SCRAP := 10          # (v67) a piece of scrap welded on, when there is no patch in pockets
 const MEND_SECONDS := 10.0
 const BOT_GOES_BELOW := 0.8          # the share of the hull below which a bot goes out to mend it
 const BOT_PATCHES := 3               # the most patches it takes along
@@ -52,7 +53,7 @@ func can_mend(p: Player, cell: int) -> bool:
 	## Is the character out in space, facing a whole cell of our hull, with a
 	## patch, and the hull short of full?
 	var map = server.map
-	return cell >= 0 and server.ship.hull < server.ship.hull_max and p.count(Net.ITEM_PATCH) > 0 and map.floats(p.st.x, p.st.y) \
+	return cell >= 0 and server.ship.hull < server.ship.hull_max and (p.count(Net.ITEM_PATCH) > 0 or p.count(Net.ITEM_SCRAP) > 0) and map.floats(p.st.x, p.st.y) \
 		and not server.air.holes.has(cell) and not map.is_other(cell) and map.hull.has(cell)
 
 
@@ -61,9 +62,11 @@ func mend_ticks(p: Player) -> int:
 
 
 func mended(p: Player) -> void:
-	p.remove(Net.ITEM_PATCH)
+	## A patch if it has one, else a piece of scrap welded on (v67).
+	var patch := p.count(Net.ITEM_PATCH) > 0
+	p.remove(Net.ITEM_PATCH if patch else Net.ITEM_SCRAP)
 	p.train(Net.SKILL_REPAIR)
-	server.ship.hull = mini(server.ship.hull + HULL_PER_PATCH, server.ship.hull_max)
+	server.ship.hull = mini(server.ship.hull + (HULL_PER_PATCH if patch else HULL_PER_SCRAP), server.ship.hull_max)
 	server.chat.say("%s латает обшивку снаружи: прочность %d из %d." % [p.name, server.ship.hull, server.ship.hull_max])
 
 

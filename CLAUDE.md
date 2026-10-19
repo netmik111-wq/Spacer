@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v66 (version 0.59, bots and pirates use the airlock, plus the simulator's fixes) is the latest. Plans one to four are done except the darkness front (the
+Build v67 (version 0.60, work and money on the road) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -45,9 +45,11 @@ v63 road and story (comms console, events, quests, missions, SOS, food, hydropon
 modes); v64 the cluster map (his 19 cluster answers and 11 follow-ups, all "A"): a road of clusters with lanes and exits,
 cluster kinds and nebulae, places inside systems, pirate hunters; v65 fixes (the locker window's tabs, the admin
 refill fills every kind, seed names, robots and pirates hold fire past their own side); v66 airlocks (a button by each
-airlock door, bots use it, follow out into space; pirates cross space) and the simulator's fixes. Several reactors is a later
+airlock door, bots use it, follow out into space; pirates cross space) and the simulator's fixes; v67 began the "every part
+interesting" plan (`/mnt/project-files/plans/every-part-plan.md`): fuel in units, scrap cut off dark ships, finds floating
+outside, work places, traders' wants, the refinery, the parting volley. Several reactors is a later
 question round (it breaks the one-engine rule).
-The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
+Next in that plan: v68 fights for the whole crew, v69 people over bots, v70 upkeep, v71 fear, then a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -78,7 +80,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 27 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 28 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -106,6 +108,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/storytest.gd (since v63: calls, quests, missions, SOS, food, trays, cryo, roaming flagship, modes)
     godot --headless --path . --script res://tools/roadtest.gd (since v64: places, hunters, the long jump, the road packet, saves)
     godot --headless --path . --script res://tools/airlocktest.gd (since v66: bots and pirates through the airlock, follow outside)
+    godot --headless --path . --script res://tools/salvagetest.gd (since v67: fuel units, pouring, scrap, floating finds, work places, refinery)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -129,7 +132,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 27 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 28 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -159,7 +162,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   power, `hazards`: the ion storm and hazards hitting pirates, `outside`: mending the hull from outside; since v62 `assault`:
   teleported boarders and assault drones, `robots`: our security robots; since v63 `story`: the comms console's
   calls (data in `tales.gd`), quests, missions, SOS, and `garden`: food, hunger and the hydroponic trays; since v64 `road`:
-  the road of clusters, places inside a system and pirate hunters).
+  the road of clusters, places inside a system and pirate hunters; since v67 `salvage`: cutting scrap off dark ships and
+  things floating outside).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -305,6 +309,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - (v66) Bot and pirate routes may pass airlock doors whose shutter is down (`Systems.lock_door`); whoever walks a route
   must call `Systems.get_past` when the next door `lock_bars`, or it pushes on a shut door forever. E on such a door is its
   button (`Systems.call_lock`); the client's hint finds the pump with `GameScreen._lock_pump_of`.
+- (v67) The ship's fuel is `Ship.tank` in units (client `GameClient.fuel`, `fuel_max`, `jump_cost`); the player's `tank` and
+  the client's `tank` are the oxygen tank. Ask `Ship.can_jump(long_jump)` before a jump, never count cans in the store. Things
+  floating in space are floor things on space cells (`Salvage.floating()`), cleared on every jump; a test that lets a derelict
+  leave must bring its players back aboard first (`crew.spawn_point()`), or the derelict stays.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

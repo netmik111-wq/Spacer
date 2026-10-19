@@ -158,7 +158,7 @@ func _initialize() -> void:
 		server._tick()
 	_expect(not server.ship.moving and server.ship.pos == server.sectors.entry[server.ship.sector], "it comes out of the jump standing still at its place of arrival")
 	server.ship.credits = Net.START_CREDITS
-	server.ship.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
+	server.ship.tank = Net.FUEL_MAX                       # the walk below is about the chart, not about fuel
 	var s: Sectors = server.sectors
 	var credits := server.ship.credits
 	var fresh := 0
@@ -188,13 +188,15 @@ func _initialize() -> void:
 	var into: int = s.beyond[0]
 	var was_kind: int = s.ckind
 	var old_cells := s.cell.duplicate()
-	var fuel := server.ship.fuel()
+	server.ship.tank = Net.FUEL_MAX
+	var fuel: float = server.ship.tank
 	server.ship.drive_ready = 0
 	server.navigation.start_jump(Sectors.EXIT_JUMP, "Проверка")
 	_expect(server.ship.jump_to == Sectors.EXIT_JUMP and server.ship.jump_tick - server.tick > Net.JUMP_TICKS, "the long jump charges longer than a plain one")
 	for t in Net.JUMP_TICKS * 2:
 		server._tick()
-	_expect(server.ship.fuel() == fuel - Sectors.EXIT_FUEL, "the long jump burns %d cans" % Sectors.EXIT_FUEL)
+	_expect(is_equal_approx(server.ship.tank, fuel - Sectors.EXIT_FUEL * server.ship.jump_cost), "the long jump burns %d units (%d lane jumps' worth)" % [
+		Sectors.EXIT_FUEL * server.ship.jump_cost, Sectors.EXIT_FUEL])
 	_expect(s.depth == 1 and s.ckind == into and s.road == PackedByteArray([was_kind]) and server.ship.sector == s.start,
 		"and the ship comes into the next cluster at its start, of the kind the exit showed (%s)" % Sectors.CLUSTER_NAMES[into])
 	var shared := false

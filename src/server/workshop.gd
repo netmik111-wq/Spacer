@@ -11,6 +11,8 @@ extends RefCounted
 ## (v60, the author's W4) It also makes ammunition of a spare part from the
 ## locker: AMMO_MADE shells, rockets or EMP rockets (never cheaper than a
 ## trader's, so traders stay worth a visit; it is for when none is near).
+## (v67, the author's R3) It also refines a can of fuel from scrap or ore (REFINE):
+## dearer than buying the fuel, so it is for when no trader is near.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
@@ -24,6 +26,10 @@ const UPGRADE_TICKS := 15 * Net.TICK_HZ
 const AMMO_TICKS := 6 * Net.TICK_HZ
 # (v60) what one spare part makes: shells 3 x 3 cr, rockets 2 x 4 cr, an EMP rocket 6 cr (a part costs 10)
 const AMMO_MADE := {Net.BENCH_SHELLS: [Net.ITEM_SHELL, 3], Net.BENCH_ROCKETS: [Net.ITEM_ROCKET, 2], Net.BENCH_EMP: [Net.ITEM_EMP_ROCKET, 1]}
+# (v67, the author's R3: "a refinery that costs more than finding or buying fuel") what a can of fuel takes:
+# 4 scrap (sold, 16 cr) or 3 ore (18 cr), against 12 cr for a can's worth at a trader
+const REFINE := {Net.BENCH_FUEL_SCRAP: [Net.ITEM_SCRAP, 4], Net.BENCH_FUEL_ORE: [Net.ITEM_ORE, 3]}
+const REFINE_TICKS := 10 * Net.TICK_HZ
 
 var server: GameServer
 var _rng := RandomNumberGenerator.new()   # only for the effect a tier 3 gun gets: the game's own lots stay as they were
@@ -36,13 +42,17 @@ func setup(p_server: GameServer) -> void:
 
 static func ticks_for(action: int) -> int:
 	return {Net.BENCH_APART: APART_TICKS, Net.BENCH_MEND: MEND_TICKS, Net.BENCH_UPGRADE: UPGRADE_TICKS,
-		Net.BENCH_SHELLS: AMMO_TICKS, Net.BENCH_ROCKETS: AMMO_TICKS, Net.BENCH_EMP: AMMO_TICKS}.get(action, 0)
+		Net.BENCH_SHELLS: AMMO_TICKS, Net.BENCH_ROCKETS: AMMO_TICKS, Net.BENCH_EMP: AMMO_TICKS,
+		Net.BENCH_FUEL_SCRAP: REFINE_TICKS, Net.BENCH_FUEL_ORE: REFINE_TICKS}.get(action, 0)
 
 
 func can(action: int, item: int) -> String:
 	## "" if that work may start on that gun from the locker now, or why not (in the player's words).
 	if AMMO_MADE.has(action):
 		return "" if int(server.ship.store.get(Net.ITEM_PART, 0)) > 0 else "Нужна запчасть в шкафу снабжения."
+	if REFINE.has(action):
+		var need: Array = REFINE[action]
+		return "" if int(server.ship.store.get(need[0], 0)) >= int(need[1]) else "Нужно в шкафу снабжения: %s ×%d." % [Items.name_of(need[0]).to_lower(), int(need[1])]
 	var w := Weapons.of_item(item)
 	if w == Weapons.NONE or int(server.ship.store.get(item, 0)) <= 0:
 		return "Этого орудия нет в шкафу снабжения."
@@ -125,6 +135,12 @@ func _finish(p: Player, action: int, item: int) -> void:
 		store[Net.ITEM_PART] = int(store[Net.ITEM_PART]) - 1
 		store[made[0]] = int(store.get(made[0], 0)) + int(made[1])
 		server.chat.say("%s делает на верстаке из запчасти: %s ×%d." % [p.name, Items.name_of(made[0]).to_lower(), int(made[1])])
+		return
+	if REFINE.has(action):
+		var need: Array = REFINE[action]
+		store[need[0]] = int(store[need[0]]) - int(need[1])
+		store[Net.ITEM_FUEL] = int(store.get(Net.ITEM_FUEL, 0)) + 1
+		server.chat.say("%s перегоняет на верстаке %s ×%d в канистру топлива." % [p.name, Items.name_of(need[0]).to_lower(), int(need[1])])
 		return
 	var w := Weapons.of_item(item)
 	store[item] = int(store[item]) - 1

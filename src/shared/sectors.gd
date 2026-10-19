@@ -3,7 +3,7 @@ extends RefCounted
 ## C1..C19) Space is a road of clusters: each cluster is 10 to 14 star systems
 ## ("sectors" in the code and on older screens) joined by lanes, with the ship
 ## coming in on its left side and two exits on its right. A long jump from an
-## exit system (EXIT_FUEL cans) leaves the cluster for good and comes into the
+## exit system (EXIT_FUEL jumps' fuel) leaves the cluster for good and comes into the
 ## next one; each exit leads to a cluster of its own kind, shown before one
 ## goes. The pirates' flagship waits in the fourth cluster (FLAG_DEPTH); its
 ## exits open only once it is beaten. After it, the road goes on, harder.
@@ -26,6 +26,8 @@ extends RefCounted
 ## a dropped container, bodies, an abandoned ship, a battlefield, a pirate
 ## ambush (places_of).
 
+const Net := preload("res://src/shared/net.gd")
+const Items := preload("res://src/shared/items.gd")
 const EMPTY := 0                     # nothing in particular
 const METEORS := 1                   # a meteor stream: the hull takes hits
 const TRADER := 2                    # a trader: sells supplies
@@ -51,6 +53,10 @@ const DEAL_ABOUT: Array[String] = ["продаёт корабельное ору
 const DEAL_ARMS_NEAR := 2            # every trader up to this many cells from the start is an arms dealer
 # what each buys a thing of ours back at: [plain things, ship guns, ammunition and gun parts]
 const DEAL_SELL: Array = [[0.2, 0.5, 0.5], [0.2, 0.2, 0.2], [0.3, 0.3, 0.3]]
+const WANTS: Array[int] = [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA, Net.ITEM_FOOD, Net.ITEM_PART, Net.ITEM_PATCH,
+	Net.ITEM_MEDKIT + Net.MEDKIT_USES, Net.ITEM_SHELL]       # (v67, the author's M3) what a trader may be looking for, two at a time
+const WANT_PAYS := 1.5               # it pays this much of the price for what it looks for
+const LOOT_PAYS := 1.0               # (v67) and this much for scrap, ore and scan data it does not look for
 const JUNK_PRICES := 0.8             # a junk dealer's prices for plain things, against the usual
 
 const NAMES: Array[String] = [
@@ -90,7 +96,7 @@ const EXTRA_LANE := 0.4              # of two neighbouring systems not joined al
 const DIAGONAL_LANE := 0.15          # and now and then a lane across a corner
 const FLAG_DEPTH := 3                # (the author's C3) the flagship waits in the fourth cluster
 const LEVEL_STEP := 4                # (the author's C13) each cluster is this many steps of danger harder
-const EXIT_FUEL := 2                 # (the author's C11) a long jump out of the cluster burns this many cans
+const EXIT_FUEL := 2                 # (the author's C11) a long jump out of the cluster burns this many lane jumps' fuel (v67: was cans)
 const EXIT_JUMP := 254               # the jump target that means "the long jump out by this exit"
 const NO_GOAL := Vector2i(-32768, -32768)   # `goal` when the flagship is not in this cluster
 
@@ -101,9 +107,14 @@ const P_BODIES := 2                  # bodies: what they carried, now and then a
 const P_WRECK := 3                   # an abandoned ship: comes alongside to be searched, as a derelict
 const P_BATTLEFIELD := 4             # (the author's notebook) a battlefield: debris and bodies, more of everything
 const P_AMBUSH := 5                  # (the author's notebook) a pirate ship lying in wait: seen from afar, avoidable
-const PLACE_NAMES: Array[String] = ["обломки", "контейнер", "тела", "брошенный корабль", "поле боя", "засада пиратов"]
-const PLACE_WEIGHTS: Array[int] = [30, 25, 20, 10, 8, 7]
+const P_ANOMALY := 6                 # (v67, the author's R1: work that pays only if you stay) an anomaly: scanned from a holomap
+const P_ASTEROID := 7                # (v67) an asteroid: ore breaks off for whoever of ours is outside
+const P_GAS := 8                     # (v67) a gas cloud: the fuel scoop fills the tank while somebody is at the engine
+const PLACE_NAMES: Array[String] = ["обломки", "контейнер", "тела", "брошенный корабль", "поле боя", "засада пиратов",
+	"аномалия", "астероид", "газовое облако"]
+const PLACE_WEIGHTS: Array[int] = [24, 20, 16, 10, 8, 7, 10, 12, 10]
 const PLACE_REACH := 6               # how close the ship must come to take a place
+const WORK_REACH := 10               # (v67) how close it must hold still to work at an anomaly, an asteroid or a gas cloud
 const WRECK_REACH := DOCK_RANGE      # an abandoned ship: as close as to a derelict
 const AMBUSH_REACH := 25             # coming this close to an ambush, the pirates come out
 
@@ -126,6 +137,7 @@ var spot := PackedVector2Array()     # where its main thing is: the middle of th
 var reach := PackedByteArray()       # how far that thing reaches: the stream's radius, or DOCK_RANGE; 0 = nothing there
 var entry := PackedVector2Array()    # where a ship arriving by jump appears
 var goal := NO_GOAL                  # (v57) the flagship's system, if it is in this cluster
+var wants := PackedByteArray()       # (v67) per system two things its trader looks for (Net.ITEM_*; 0 for no trader)
 var deal := PackedByteArray()        # (v58) per system: what its trader deals in (DEAL_*; for a trader only)
 
 # (v64) the cluster
@@ -168,6 +180,20 @@ static func deal_at(seed_value: int, at: Vector2i) -> int:
 		return DEAL_ARMS
 	var roll := _unit(seed_value, at.x, at.y, 12)
 	return DEAL_ARMS if roll < 0.4 else (DEAL_JUNK if roll < 0.75 else DEAL_BLACK)
+
+
+static func wants_at(seed_value: int, at: Vector2i) -> PackedByteArray:
+	## (v67) The two things a trader in that system looks for and pays well for.
+	var a := _mix(seed_value, at.x, at.y, 13) % WANTS.size()
+	var b := (a + 1 + _mix(seed_value, at.x, at.y, 14) % (WANTS.size() - 1)) % WANTS.size()
+	return PackedByteArray([WANTS[a], WANTS[b]])
+
+
+func wanted(id: int) -> PackedByteArray:
+	## What the trader of that system looks for (empty for any other system).
+	if id < 0 or id >= count or kind[id] != TRADER or wants.size() < id * 2 + 2:
+		return PackedByteArray()
+	return wants.slice(id * 2, id * 2 + 2)
 
 
 static func name_at(seed_value: int, at: Vector2i) -> String:
@@ -261,6 +287,7 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary, p_depth: int = 0
 	reach.resize(count)
 	entry.resize(count)
 	deal.resize(count)
+	wants.resize(count * 2)
 	level.resize(count)
 	fog.resize(count)
 	fog.fill(0)
@@ -272,6 +299,9 @@ func build(seed_value: int, centre: Vector2i, been: Dictionary, p_depth: int = 0
 		names[i] = name_at(seed_value, c)
 		visited[i] = 1 if been.has(key(c)) else 0
 		deal[i] = deal_at(seed_value, c)
+		var w := wants_at(seed_value, c)
+		wants[i * 2] = w[0]
+		wants[i * 2 + 1] = w[1]
 		level[i] = mini(depth * LEVEL_STEP + l.x / 2, 255)
 		pos[i] = Vector2(
 			10.0 + l.x * 80.0 / (COLS - 1) + (_unit(seed_value, c.x, c.y, 8) - 0.5) * 9.0,
@@ -454,6 +484,10 @@ static func places_of(seed_value: int, at: Vector2i, of_kind: int, of_ckind: int
 		weights[P_AMBUSH] *= 3
 	if of_ckind == C_TRADE:
 		weights[P_AMBUSH] = 2
+	if of_ckind == C_DEAD:
+		weights[P_GAS] = 0                   # (v67) nothing to scoop in a dead zone ("little fuel")
+	if of_ckind == C_STORM:
+		weights[P_ANOMALY] *= 2
 	var out: Array = []
 	for k in n:
 		var p := _roll(weights, rng)
@@ -554,7 +588,9 @@ func describe(id: int) -> String:
 		var k := exit_of(here)
 		return "соседнее скопление «%s»" % CLUSTER_NAMES[beyond[k]] if k >= 0 else "соседнее скопление"
 	if kind[id] == TRADER and deal.size() > id:
-		return "«%s», %s: %s" % [names[id], KIND_NAMES[kind[id]], DEAL_NAMES[deal[id]]]     # (v58)
+		var w := wanted(id)
+		return "«%s», %s: %s%s" % [names[id], KIND_NAMES[kind[id]], DEAL_NAMES[deal[id]],      # (v58)
+			"; ищет: %s, %s" % [Items.name_of(w[0]).to_lower(), Items.name_of(w[1]).to_lower()] if w.size() == 2 else ""]   # (v67)
 	return "«%s», %s" % [names[id], KIND_NAMES[kind[id]]]
 
 
@@ -563,7 +599,7 @@ func pack() -> PackedByteArray:
 	## u8 x, u8 y on the chart, u8 spot x, u8 spot y, u8 reach, u8 entry x, u8 entry y,
 	## u8 name length, name; u8 links; pairs u8, u8; (v57) s16 goal x, s16 goal y; (v58) per sector u8 deal;
 	## (v64) u8 depth, u8 kind of cluster, u8 start, u8 locked, u8 exits, per exit u8 system, u8 kind beyond;
-	## per sector u8 level, u8 fog; u8 clusters behind, their kinds.
+	## per sector u8 level, u8 fog; u8 clusters behind, their kinds; (v67) per sector two u8 things its trader looks for.
 	var out := PackedByteArray([count, here])
 	for i in count:
 		var name_bytes := names[i].to_utf8_buffer()
@@ -599,6 +635,7 @@ func pack() -> PackedByteArray:
 	out.append_array(fog)
 	out.append(mini(road.size(), 255))
 	out.append_array(road.slice(maxi(road.size() - 255, 0)))
+	out.append_array(wants)                  # (v67) per sector two u8 things its trader looks for
 	return out
 
 
@@ -653,3 +690,5 @@ func unpack(data: PackedByteArray, at: int) -> void:
 	at += count
 	var behind := data[at]
 	road = data.slice(at + 1, at + 1 + behind)
+	at += 1 + behind
+	wants = data.slice(at, at + count * 2)

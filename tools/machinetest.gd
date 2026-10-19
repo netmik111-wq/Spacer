@@ -356,37 +356,44 @@ func _initialize() -> void:
 	_run(2)
 	target = server.sectors.neighbours(server.ship.sector)[0]
 	var target_cell: Vector2i = server.sectors.cell[target]
+	var tank_before: float = server.ship.tank
 	server.navigation.start_jump(target, "Проверка")
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.sectors.cell[server.ship.sector] == target_cell and server.ship.credits == Net.EXPLORE_REWARD, "the first visit to a sector earns %d credits" % Net.EXPLORE_REWARD)
+	_expect(server.sectors.cell[server.ship.sector] == target_cell and server.ship.credits == Net.EXPLORE_REWARD, "(v67) the first visit to a sector pays %d credits" % Net.EXPLORE_REWARD)
 
 	print("fuel")
-	_expect(server.ship.fuel() == Items.stock(Net.ITEM_FUEL) - 1, "the jump burned one can of fuel (%d left)" % server.ship.fuel())
+	_expect(absf(server.ship.tank - (tank_before - server.ship.jump_cost)) < 1.0,
+		"(v67) the jump burned %d units from the tank (%d left)" % [server.ship.jump_cost, floori(server.ship.tank)])
 	_run(Net.DRIVE_REST_TICKS + 2)
 	_face(q, map.chart.keys()[0])
 	target = server.sectors.neighbours(server.ship.sector)[0]
 	var stayed := server.ship.sector
-	server.ship.store[Net.ITEM_FUEL] = 0
+	server.ship.tank = server.ship.jump_cost - 1
 	server.navigation.jump_asked(q, target)
-	_expect(server.ship.jump_to == Net.NO_SECTOR, "no jump with no fuel in the locker")
-	server.ship.store[Net.ITEM_FUEL] = 1
+	_expect(server.ship.jump_to == Net.NO_SECTOR, "no jump with too little fuel in the tank")
+	server.ship.tank = server.ship.jump_cost
 	server.navigation.jump_asked(q, target)
-	_expect(server.ship.jump_to == target, "with a can in the locker the jump starts")
-	server.ship.store[Net.ITEM_FUEL] = 0                  # somebody takes it out while the drive charges
+	_expect(server.ship.jump_to == target, "with a jump's worth in the tank the jump starts")
+	server.ship.tank = 1.0                       # (it drained away while the drive charged)
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.ship.jump_to == Net.NO_SECTOR and server.ship.sector == stayed, "a jump whose last can was taken out of the locker fails")
+	_expect(server.ship.jump_to == Net.NO_SECTOR and server.ship.sector == stayed, "a jump whose fuel ran out while charging fails")
+	server.ship.store[Net.ITEM_FUEL] = 0
 	server.director._watch_fuel(server.tick)
 	_expect(server.ship.fuel() == 0, "a ship with no fuel aboard does not find some at once")
 	server.director._watch_fuel(server.tick + int(Director.RESCUE_SECONDS * Net.TICK_HZ))
-	_expect(server.ship.fuel() == Director.RESCUE_FUEL, "but after %d s a drifting container brings %d cans" % [int(Director.RESCUE_SECONDS), Director.RESCUE_FUEL])
+	_expect(server.ship.fuel() == Director.RESCUE_FUEL or not server.story.call.is_empty(),
+		"but after %d s a drifting container brings %d can, or a passing ship calls" % [int(Director.RESCUE_SECONDS), Director.RESCUE_FUEL])
+	server.story.call = {}
 	server.ship.store[Net.ITEM_FUEL] = 0
+	server.ship.tank = 10.0
 	here = server.ship.sector
 	server.sectors.kind[here] = Sectors.STATION
 	server.sectors.spot[here] = server.ship.pos
 	server.sectors.reach[here] = Sectors.DOCK_RANGE
 	server.ship.in_reach = false
 	_run(2)
-	_expect(server.ship.fuel() == Net.STATION_FUEL, "a supply station tops the fuel up to %d cans" % Net.STATION_FUEL)
+	_expect(is_equal_approx(server.ship.tank, Net.STATION_FUEL), "a supply station tops the tank up to %d units" % Net.STATION_FUEL)
+	server.ship.tank = Net.FUEL_START
 	server.sectors.kind[here] = Sectors.EMPTY
 	server.sectors.reach[here] = 0
 	_run(2)

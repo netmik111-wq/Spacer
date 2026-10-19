@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 43
+const PROTOCOL := 44
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -144,6 +144,9 @@ const ITEM_SEED := 204              # (v63) a packet of seeds: ITEM_SEED + Plant
 const ITEM_FOOD := 230              # (v63) a ration: the crew eats them from the supply locker at every jump (see Garden)
 const ITEM_CARGO := 231             # (v63) a quest's crate of cargo, for a station (cargo: kept in the locker)
 const ITEM_BLACKBOX := 232          # (v63) a wreck's black box, carried home to the supply locker for a quest
+const ITEM_SCRAP := 233             # (v67) scrap cut off a wreck or a derelict: carried, kept in the locker, sold, welded onto the hull
+const ITEM_ORE := 234               # (v67) a chunk of ore from an asteroid: carried, kept in the locker, sold, refined into fuel
+const ITEM_DATA := 235              # (v67) scan data of an anomaly: cargo, sold to traders
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
@@ -264,6 +267,8 @@ const BENCH_UPGRADE := 3            # make it the next gun of its line (parts of
 const BENCH_SHELLS := 4             # (v60) make shells of a spare part (the thing byte is not used)
 const BENCH_ROCKETS := 5            # (v60) make rockets of a spare part
 const BENCH_EMP := 6                # (v60) make an EMP rocket of a spare part
+const BENCH_FUEL_SCRAP := 7         # (v67, the author's R3) refine a can of fuel from scrap
+const BENCH_FUEL_ORE := 8           # (v67) refine a can of fuel from ore
 const C_BLAST := 29                 # (v60) u8 door of the ship (BLAST_ALL / BLAST_NONE: every door): lock it as a blast
                                     # door, or unlock it, from the holomap the player watches
 const BLAST_ALL := 255
@@ -457,7 +462,8 @@ const EASY_HULL_LEAST := 50         # ... and below this top strength the ship i
 const S_SOUND := 24                 # u8 kind (SOUND_*), s16 x, s16 y: something was heard there
 const S_STORE := 22                 # the ship's supplies: u16 air for the air plant in tenths of a cell's
                                     # worth, u16 credits, u8 count, then pairs: u8 thing (ITEM_*), u16 how
-                                    # many of it the locker holds
+                                    # many of it the locker holds; (v67) then u16 fuel in the tank, u8 a lane jump's
+                                    # cost, u16 the tank's size
 
 # what a player may ask of the supply locker (C_STORE)
 const STORE_TAKE := 1               # one of the thing named
@@ -470,22 +476,36 @@ const STORE_BUY_HULL := 8           # have the hull patched up by HULL_LOT (from
 const STORE_SELL := 10              # sell one of the thing named from the locker to a trader (at its share: Sectors.DEAL_SELL)
 const STORE_HARDEN := 11            # buy the shield hardening from a trader who offers it
 const STORE_BUY_BACK := 12          # (v58) buy back from a trader a thing we sold it, at the price it paid
+const STORE_BUY_FUEL := 13          # (v67) have the trader pour FUEL_LOT units of fuel straight into the tank
 const S_TRADE := 32                 # what the trader alongside offers (sent when it changes): u8 count, then per thing
                                     # u8 ITEM_*, u16 price; then u8 TRADE_* flags. Count 0 = no trader. (v58) Then, with
                                     # a trader: u8 deal (Sectors.DEAL_*), u8 x3 % it pays (plain, guns, ammunition),
                                     # u8 count of things it sells back, pairs u8 ITEM_*, u16 price (see Supplies.trade_packet).
+                                    # (v67) Then u8 count, the things (u8 ITEM_*) it looks for and pays Sectors.WANT_PAYS for.
 const TRADE_HARDEN := 1             # it offers the shield hardening
 
 # supplies. Mending a hole takes a patch; mending a machine or a door takes a
 # spare part, or three times as long without one.
-const START_CREDITS := 30           # (what the locker starts with, and prices of things: see Items)
+const START_CREDITS := 80           # (what the locker starts with, and prices of things: see Items; v67: was 30,
+                                    # with visits paying nothing now)
 const STORE_AIR_FULL := 60.0        # air the air plant can give out before it must be restocked, in cells' worth
 const PRICE_AIR := 5                # for AIR_LOT cells' worth
 const AIR_LOT := 10.0
-const EXPLORE_REWARD := 15          # credits for the first visit to a sector
+const EXPLORE_REWARD := 0           # credits for the first visit to a sector (v67, the author's M1: nothing, "so people
+                                    # roam around and don't rush"; it was 15)
 const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
-const STATION_FUEL := 3             # a supply station tops the fuel in the locker up to this many cans
+const STATION_FUEL := 300           # (v67) a supply station tops the fuel tank up to this many units
 const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirate ship
+# (v67, the author's R3: fuel in units, "like litres") The ship's fuel tank. A lane jump burns
+# Gear.JUMP_FUEL by the engine's tier, the long jump twice that; flying inside a system burns
+# FLIGHT_FUEL per unit of distance. A can of fuel (ITEM_FUEL) holds CAN_FUEL and is poured in at the engine.
+const FUEL_MAX := 1000
+const FUEL_START := 600
+const CAN_FUEL := 100
+const FLIGHT_FUEL := 0.1
+const POUR_TICKS := 60               # pouring a can into the tank at the engine: 3 s
+const FUEL_LOT := 100               # a trader pours this much straight into the tank...
+const PRICE_FUEL := 12              # ... for this
 
 # The campaign: what is at stake. The ship carries a reserve of crew: a dead
 # player comes back only by taking one of them. The hull has a strength that

@@ -42,6 +42,7 @@ const HUNTER_MOST_FLAG := 2          # ... in the flagship's cluster (it is the 
 const BIG_CREW := 5
 const HUNTER_STEP := 75.0            # each moves one lane this often
 const HUNTER_SLOWER := 0.5           # (the author's pick, 2026-10-19) each time we escape one, its step is this much of HUNTER_STEP longer
+const ESCAPE_SOONER := 60.0          # (v67, the author's O3) jumping out of a fight brings the next hunter this much sooner
 const HUNTER_WARN := 20.0            # coming into our system, it is seen this long before it comes out
 const HUNTER_COME := 6.0             # we jump into its system: it comes out this much later
 const HUNTER_LEVEL := 3              # a hunter is this many steps of danger harder than the system it meets us in
@@ -54,6 +55,19 @@ const CONTAINER_GEAR := 0.3          # a container that holds a crate of ship ge
 const CONTAINER_THINGS: Array[int] = [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_FUEL, Net.ITEM_FOOD,
 	Net.ITEM_SHELL, Net.ITEM_ROCKET, Net.ITEM_PROBE]
 const POCKET_THINGS: Array[int] = [Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_FOOD, Net.ITEM_PATCH]
+const BATTLEFIELD_GUN := 0.3         # a battlefield leaves a damaged ship gun this often
+const ANOMALY_SECONDS := 30          # (v67) at a holomap, ship holding still, to scan an anomaly
+const ORE_SECONDS := 12.0            # (v67) an asteroid gives a piece of ore this often to one of ours outside
+const ORE_MIN := 4
+const ORE_MAX := 8
+const GAS_MIN := 60 * Net.TICK_HZ    # (v67) a gas cloud gives fuel for this many ticks with somebody at the engine...
+const GAS_MAX := 120 * Net.TICK_HZ
+const GAS_PER_TICK := 2.5 / Net.TICK_HZ   # ... this much a tick (150..300 units in all)
+const WORK_START: Array[String] = [
+	"Корабль у аномалии. Пока он стоит, её можно изучить с голокарты (около 30 с).",
+	"Корабль у астероида. Пока он стоит, выйдите в скафандре: от него будут откалываться куски руды.",
+	"Корабль в газовом облаке. Пока он стоит и кто-то у двигателя, топливозаборник наполняет бак.",
+]
 const NOTES: Array[String] = [
 	"В кармане записка: «Если кто найдёт — мы шли к выходу из скопления, охотники сели на хвост».",
 	"Бортовой жетон и фотография. Имени не разобрать.",
@@ -72,6 +86,8 @@ var found := {}                      # Sectors.key * 8 + place -> true: places t
 var taken := {}                      # the same: places taken (an abandoned ship: one that has come alongside)
 var auto := true                     # (tests) false: no hunters come by themselves
 var _fight := {}                     # the hunter we fight: {"at", "id" (the pirate ship's id)}
+var work := {}                       # (v67) the same: what an anomaly, asteroid or gas cloud still has to give
+var _haul: Array = []                # (v67) what the place being taken gives, before it floats out
 var _here_places: Array = []         # the places of the ship's system: [kind, where]
 var _places_for := -1                # the system they are for
 var _last_system := -1
@@ -88,6 +104,7 @@ func setup(p_server: GameServer) -> void:
 	hunters = []
 	found = {}
 	taken = {}
+	work = {}
 	_fight = {}
 	_rng.randomize()
 	_restart_clock()
@@ -161,8 +178,8 @@ func can_leave() -> String:
 		return "Отсюда нет выхода из скопления: долгий прыжок делается из выходного сектора (стрелки на карте)."
 	if s.locked and not server.won:
 		return "Глушилка флагмана пиратов держит выходы из скопления: пока он не разбит, отсюда не уйти."
-	if server.ship.fuel() < Sectors.EXIT_FUEL:
-		return "Для долгого прыжка нужно %d канистры топлива в шкафу снабжения." % Sectors.EXIT_FUEL
+	if not server.ship.can_jump(true):
+		return "Для долгого прыжка нужно %d единиц топлива в баке." % server.outfit.jump_fuel(true)
 	return ""
 
 
@@ -239,6 +256,8 @@ func _places_tick() -> void:
 				_dirty = true
 				server.chat.say("Засада! Пиратский корабль выходит из тени.")
 				server.derelict.pirates_come(server.director._party(), true)
+		elif kind >= Sectors.P_ANOMALY:
+			_work_tick(i, kind, d)
 		elif d <= Sectors.PLACE_REACH:
 			taken[k] = true
 			_dirty = true
@@ -258,8 +277,11 @@ func at_wreck() -> bool:
 
 
 func _take(kind: int) -> void:
+	## (v67, the author's R2) What the ship picks up at a place floats out by one of our
+	## airlocks for the crew to fetch in suits (Salvage.float_out); a tractor beam pulls it in.
 	var lv: int = server.sectors.far_from_start(server.ship.sector)
 	var got := PackedStringArray()
+	_haul = []
 	match kind:
 		Sectors.P_DEBRIS:
 			got.append(_debris())
@@ -270,7 +292,7 @@ func _take(kind: int) -> void:
 				server.crew.hull_hit(MINE_HULL)
 				return
 			if _rng.randf() < CONTAINER_GEAR:
-				_store(server.outfit.loot(lv, _rng), 1)
+				_haul.append(server.outfit.loot(lv, _rng))
 				got.append("ящик корабельного снаряжения")
 			for i in _rng.randi_range(2, 3):
 				got.append(_thing(CONTAINER_THINGS))
@@ -280,25 +302,36 @@ func _take(kind: int) -> void:
 			got.append(_debris())
 			got.append(_debris())
 			got.append(_bodies())
-			_store(Net.ITEM_GUN_PARTS + _rng.randi_range(0, Weapons.KINDS - 1), 1)
+			_haul.append(Net.ITEM_GUN_PARTS + _rng.randi_range(0, Weapons.KINDS - 1))
 			got.append("детали орудия")
-			if _rng.randf() < 0.3:
+			if _rng.randf() < BATTLEFIELD_GUN:
+				# (the author's B2: guns come as a rare event) a battlefield is one
 				var t: int = Weapons.tiers_for(lv, 1, _rng)[0]
 				var choice: Array = Weapons.OURS.filter(func(w: int) -> bool: return Weapons.tier(w) == t and not Weapons.unique(w) and w != Weapons.GUARD)
 				if not choice.is_empty():
-					_store(Weapons.item_of(choice[_rng.randi_range(0, choice.size() - 1)], 0, true), 1)
+					_haul.append(Weapons.item_of(choice[_rng.randi_range(0, choice.size() - 1)], 0, true))
 					got.append("повреждённое корабельное орудие")
 	var what := ", ".join(got).strip_edges()
-	server.chat.say("Подобрали: %s. Всё в шкафу снабжения." % what if what != "" else "Ничего ценного.")
+	if _haul.is_empty():
+		server.chat.say("Ничего ценного.")
+		return
+	var out: int = server.salvage.float_out(_haul)
+	if out == _haul.size():
+		server.chat.say("Найдено: %s. Всё плавает за бортом у шлюза: выйдите в скафандре и заберите (или включите захватный луч). После прыжка оно останется здесь." % what)
+	else:
+		server.chat.say("Найдено: %s. Часть плавает за бортом у шлюза, остальное подобрано в шкаф снабжения." % what)
 	server.supplies.tell_store()
 
 
 func _debris() -> String:
-	var parts := _rng.randi_range(1, 2)
-	var money := _rng.randi_range(5, 15)
-	_store(Net.ITEM_PART, parts)
-	server.ship.credits += money
-	return "%d запчаст%s и лом на %d кредитов" % [parts, "ь" if parts == 1 else "и", money]
+	## (v67, the author's M1: no money lying about) scrap and maybe a spare part
+	var scrap := _rng.randi_range(2, 4)
+	for i in scrap:
+		_haul.append(Net.ITEM_SCRAP)
+	var part := _rng.randf() < 0.5
+	if part:
+		_haul.append(Net.ITEM_PART)
+	return "лом ×%d%s" % [scrap, " и запчасть" if part else ""]
 
 
 func _bodies() -> String:
@@ -314,12 +347,82 @@ func _bodies() -> String:
 
 func _thing(pool: Array[int]) -> String:
 	var item: int = pool[_rng.randi_range(0, pool.size() - 1)]
-	_store(item, 1)
+	_haul.append(item)
 	return Items.name_of(item)
 
 
 func _store(item: int, n: int) -> void:
 	server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)) + n, 0)
+
+
+# --------------------------------------------------------------- work at a place (v67, the author's R1)
+
+func _work_tick(i: int, kind: int, d: float) -> void:
+	## An anomaly, an asteroid or a gas cloud pays only while the ship holds still near it
+	## and somebody works: at a holomap, outside in a suit, or at the engine.
+	if d > Sectors.WORK_REACH or server.ship.moving or server.ship.jump_to != Net.NO_SECTOR:
+		return
+	var k := _key(i)
+	if not work.has(k):
+		var amount := 0
+		match kind:
+			Sectors.P_ANOMALY: amount = ANOMALY_SECONDS * Net.TICK_HZ
+			Sectors.P_ASTEROID: amount = _rng.randi_range(ORE_MIN, ORE_MAX)
+			Sectors.P_GAS: amount = _rng.randi_range(GAS_MIN, GAS_MAX)
+		work[k] = amount
+		server.chat.say(WORK_START[kind - Sectors.P_ANOMALY])
+	var left: int = work[k]
+	match kind:
+		Sectors.P_ANOMALY:
+			if _someone_at(server.map.holo) == null:
+				return
+			left -= 1
+			if left <= 0:
+				var n := _rng.randi_range(1, 2)
+				_store(Net.ITEM_DATA, n)
+				server.supplies.tell_store()
+				server.chat.say("Аномалия изучена: данные сканирования ×%d в шкафу снабжения. Торговцы их покупают." % n)
+		Sectors.P_ASTEROID:
+			if server.tick % roundi(ORE_SECONDS * Net.TICK_HZ) != 0:
+				return
+			var miner := _outside_one()
+			if miner == null:
+				return
+			left -= 1
+			if not server.put_on_floor(miner.st.y * server.map.width + miner.st.x, Net.ITEM_ORE):
+				return
+			server.chat.tell(miner, "От астероида откололся кусок руды: он у вас под ногами. Осталось примерно %d." % left)
+			if left <= 0:
+				server.chat.say("Астероид выработан.")
+		Sectors.P_GAS:
+			var at_engine := _someone_at(server.map.engine)
+			if at_engine == null or server.ship.tank >= Net.FUEL_MAX or server.engine_down():
+				return
+			left -= 1
+			server.ship.tank = minf(server.ship.tank + GAS_PER_TICK, Net.FUEL_MAX)
+			if server.tick % (5 * Net.TICK_HZ) == 0:
+				server.supplies.tell_store()
+			if left <= 0:
+				server.supplies.tell_store()
+				server.chat.say("Газовое облако выбрано: топлива в баке %d." % floori(server.ship.tank))
+	work[k] = left
+	if left <= 0:
+		taken[k] = true
+		_dirty = true
+
+
+func _someone_at(cells: Dictionary) -> Player:
+	for p: Player in server.players:
+		if p != null and not p.pirate and not p.corpse and server.systems.at_console(p, cells):
+			return p
+	return null
+
+
+func _outside_one() -> Player:
+	for p: Player in server.players:
+		if p != null and not p.pirate and not p.corpse and p.cond == Net.COND_OK and server.map.floats(p.st.x, p.st.y):
+			return p
+	return null
 
 
 # --------------------------------------------------------------- hunters
@@ -418,6 +521,12 @@ func _watch_fight() -> void:
 	_dirty = true
 
 
+func escaped() -> void:
+	## (v67, the author's O3) We jumped out of a fight: the next hunter comes sooner.
+	next_hunter = maxi(ticks_here, next_hunter - roundi(ESCAPE_SOONER * Net.TICK_HZ))
+	_dirty = true
+
+
 func pirates_beaten() -> void:
 	## (Story) The pirate ship alongside is wrecked, taken, broken off or paid us off: a hunter among them is gone.
 	if not _fight.is_empty():
@@ -503,7 +612,7 @@ func save() -> Dictionary:
 		hs.append(int(_fight["at"]))
 		esc.append(int(_fight.get("escaped", 0)))
 	return {"depth": depth, "entry": [entry.x, entry.y], "history": Array(history), "ticks": ticks_here, "next": next_hunter,
-		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys()}
+		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys(), "work": work}
 
 
 func load_from(d: Dictionary) -> void:
@@ -522,6 +631,10 @@ func load_from(d: Dictionary) -> void:
 	taken = {}
 	for k in d.get("taken", []):
 		taken[int(k)] = true
+	work = {}
+	var w: Dictionary = d.get("work", {})
+	for k in w:
+		work[int(k)] = int(w[k])
 	_fight = {}
 	_places_for = -1
 	_last_system = -1

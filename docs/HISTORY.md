@@ -119,8 +119,8 @@ After that: engines and complex atmosphere (only after asking). With each step a
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
 crew member was accepted by the author ("excellent"), but he has not called it final.
-What's still missing and suggests itself: other ways to earn credits besides exploration;
-new items for slots (tools, medkit, spare tank).
+The plan under way (accepted 2026-10-19): `/mnt/project-files/plans/every-part-plan.md`, v67 done; next v68 fights
+for the whole crew, v69 people over bots, v70 upkeep, v71 fear, then a question round on fire.
 
 The darkness front (the fourth plan's item 3) is postponed: the author is still thinking it through.
 The author's idea (VISION): "Fear of dark space", an entropy enemy ("the ship of darkness"), fighting it
@@ -141,6 +141,18 @@ Open problems:
 - Fixes the runs found (go into the next build; update the Claude Docs mechanics document then): the long jump with
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
+
+### v67 (work and money on the road; the author's "every part interesting" answers, and "40 35 30")
+- Fuel in units: a tank of 1000 (600 at the start), jumps 40/35/30 by the engine tier, flying in a system burns 0.1 a unit
+  of distance, cans of 100 are poured at the engine (bots pour below 400), stations top the tank up to 300.
+- Visiting pays nothing now; money comes from scrap (cut off dark ships' walls), ore and scan data, sold at full price,
+  half as much again to a trader who wants them (each wants two things). Finds float outside near an airlock (a suit or the
+  tractor beam brings them in). New places: anomaly, asteroid, gas cloud. The workbench refines scrap or ore into a can;
+  scrap welds the hull from outside. Captured guns come as parts. Escaping a fight costs a parting volley and brings the
+  next hunter sooner. Pirates no longer scale with our upgrades. Start money 80.
+- New part `src/server/salvage.gd`, test `tools/salvagetest.gd` (28 scripts), protocol 44. The simulator's captain does not
+  salvage yet, so the sims were not rerun.
+  Build in `/mnt/project-files/builds/v67/`.
 
 ### v66 (airlocks; the author's note "feels like bots cannot do it", plus the simulator's fixes)
 - Bots could not use the airlock: a bot in an emptied chamber stood at the inner door forever, and «за мной» stopped at

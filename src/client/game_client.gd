@@ -91,6 +91,7 @@ var broken := {}                     # things out of order (bridge consoles, the
 var slots := PackedByteArray()       # what our character carries: one item per slot (Net.ITEM_*)
 var hand := 0                        # the slot whose thing is in the hand (we choose it; the server follows)
 var patches := 0                     # of that, hull patches
+var scrap := 0                       # (v67) and scrap
 var parts := 0                       # and spare parts
 var search_id := -1                  # the lying character whose pockets we are going through (-1 = nobody)
 var search_hurt := 0                 # how hurt they look (see Combat.hurt_level)
@@ -156,6 +157,7 @@ var trade_flags := 0                 # Net.TRADE_*
 var trade_deal := 0                  # (v58) what the trader alongside deals in (Sectors.DEAL_*)
 var trade_shares := PackedByteArray([50, 50, 50])   # (v58) % it pays for plain things, guns, ammunition and parts
 var trade_back: Array = []           # (v58) [thing, price] it would sell back to us (what we sold it)
+var trade_wants := PackedByteArray() # (v67) the things it looks for and pays Sectors.WANT_PAYS for
 var enemy_hull := 0                  # hits the pirate ship off the airlock can still take (0 = none)
 var enemy_full := 0
 var volleys: Array = []              # (v56) ship's shots for the gun console's plan: [whose, kind, how it ends, room,
@@ -175,6 +177,9 @@ var holo_changes := 0                # goes up with every holomap the server sen
 var pumps := {}                     # airlock pumps at work: wall cell -> Systems.PUMP_OUT or PUMP_IN
 var store_air := 0.0                 # air left for the air plant, in cells' worth
 var credits := 0
+var fuel := Net.FUEL_START           # (v67) fuel in the ship's tank, in units
+var jump_cost := 40                  # (v67) what a lane jump burns from it
+var fuel_max := Net.FUEL_MAX
 # the campaign (see Net.S_CAMPAIGN)
 var hull := Net.HULL_MAX
 var reserve := 0
@@ -341,6 +346,7 @@ func close() -> void:
 	broken.clear()
 	_power = true
 	patches = 0
+	scrap = 0
 	parts = 0
 	slots = PackedByteArray()
 	slots.resize(Net.SLOTS)
@@ -833,7 +839,8 @@ func use_target(facing: int = -1) -> int:
 	## 25 = (v60) a gun mount where the gun in hand goes up (or, with empty hands, its gun comes down),
 	## 26 = an autodoc, 27 = the body scanner, 28 = (v61) an SMES's terminal,
 	## 29 = (v61) our hull from outside, out in space: its strength is mended with patches,
-	## 30 = (v63) the comms console, 31 = a hydroponic tray, 32 = a cryopod.
+	## 30 = (v63) the comms console, 31 = a hydroponic tray, 32 = a cryopod,
+	## 33 = (v67) the engine with a can of fuel in hand, 34 = a wall of a dark ship alongside (scrap to cut).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -858,8 +865,12 @@ func use_target(facing: int = -1) -> int:
 			return 4
 		if map.smes.has(cell) or map.smes_small.has(cell):
 			return 28
+		if map.engine.has(cell) and hand < slots.size() and slots[hand] == Net.ITEM_FUEL:
+			return 33
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
+		if map.is_other(cell) and other_dark() and map.walk[cell] == 0 and map.door_of[cell] < 0:
+			return 34
 		if map.locker.has(cell):
 			return 12
 		if map.lock_pump.has(cell):
@@ -1544,6 +1555,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				ecrew_flags.append(pkt[7 + i * 3])
 		Net.S_TRADE:
 			trade.clear()
+			trade_wants = PackedByteArray()
 			for i in pkt[1]:
 				trade[pkt[2 + i * 3]] = pkt.decode_u16(3 + i * 3)
 			var at := 2 + pkt[1] * 3
@@ -1555,6 +1567,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				for i in pkt[at + 5]:
 					var o := at + 6 + i * 3
 					trade_back.append([pkt[o], pkt.decode_u16(o + 1)])
+				var w := at + 6 + pkt[at + 5] * 3
+				trade_wants = pkt.slice(w + 1, w + 1 + pkt[w]) if pkt.size() > w else PackedByteArray()
 		Net.S_HOLO:
 			if not _ours(pkt):
 				return
@@ -1580,6 +1594,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			store.clear()
 			for i in pkt[7]:
 				store[pkt[8 + i * 3]] = pkt.decode_u16(9 + i * 3)
+			var t := 8 + pkt[7] * 3
+			if pkt.size() >= t + 5:
+				fuel = pkt.decode_u16(t)
+				jump_cost = maxi(pkt[t + 2], 1)
+				fuel_max = pkt.decode_u16(t + 3)
 		Net.S_CAMPAIGN:
 			if pkt.size() >= 14:
 				hull = pkt[1]
@@ -1789,6 +1808,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
 			worn = pkt.slice(pos + 5 + Net.SLOTS, pos + 5 + Net.SLOTS + Net.WORN)
 			patches = carried(Net.ITEM_PATCH)
+			scrap = carried(Net.ITEM_SCRAP)
 			parts = carried(Net.ITEM_PART)
 			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:

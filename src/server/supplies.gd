@@ -10,6 +10,8 @@ const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
 
+const LOOT: Array[int] = [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA]   # (v67) what is found, not bought
+
 var server: GameServer
 var _offers := {}                    # what the trader alongside sells: thing -> price ("harden" -> true if it offers that)
 var _offers_for := -1                # the place in space (Sectors.key) _offers were made for
@@ -81,6 +83,8 @@ func offers() -> Dictionary:
 			continue
 		if item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS:
 			continue                         # (parts come from guns taken apart, not from traders)
+		if LOOT.has(item):
+			continue                         # (v67) scrap, ore and scan data are found, never sold
 		if is_ammo(item):
 			if kind != Sectors.DEAL_JUNK:
 				_offers[item] = Items.price(item)
@@ -128,8 +132,20 @@ func offers() -> Dictionary:
 	return _offers
 
 
+func wanted() -> PackedByteArray:
+	## (v67, the author's M3) The two things the trader alongside looks for.
+	if server.navigation.sector_kind() != Sectors.TRADER:
+		return PackedByteArray()
+	return server.sectors.wanted(server.ship.sector)
+
+
 func sell_share(item: int) -> float:
 	## What the trader alongside pays for one of that thing, against its price.
+	## (v67) What it looks for: WANT_PAYS; scrap, ore and scan data otherwise: LOOT_PAYS.
+	if wanted().has(Items.kind_of(item)):
+		return Sectors.WANT_PAYS
+	if LOOT.has(item):
+		return Sectors.LOOT_PAYS
 	var shares: Array = Sectors.DEAL_SELL[deal()]
 	if Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
 		return shares[1]                     # (v59: gear goes as guns do)
@@ -167,6 +183,9 @@ func trade_packet() -> PackedByteArray:
 		out.resize(o + 3)
 		out.encode_u8(o, int(e[0]))
 		out.encode_u16(o + 1, int(e[1]))
+	var w := wanted()                        # (v67) u8 count, the things it looks for (paid at WANT_PAYS)
+	out.append(w.size())
+	out.append_array(w)
 	return out
 
 
@@ -199,7 +218,7 @@ func find_fuel(cans: int) -> bool:
 	## A drifting container of fuel is picked up: the cans go straight into the locker.
 	server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() + cans
 	tell_store()
-	server.chat.say("Радар засёк дрейфующий контейнер. Его подобрали: в шкафу снабжения %d канистры топлива." % cans)
+	server.chat.say("Радар засёк дрейфующий контейнер. Его подобрали: канистр топлива в шкафу снабжения +%d. Залейте её у двигателя." % cans)
 	return true
 
 
@@ -258,6 +277,11 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.ship.hardened = true
 				_gone(-1)
 				server.chat.say("%s покупает закалку щита: теперь щит останавливает и ракеты." % p.name)
+		Net.STORE_BUY_FUEL:
+			# (v67) fuel straight into the tank
+			if can_trade() and server.ship.credits >= Net.PRICE_FUEL and server.ship.tank <= Net.FUEL_MAX - Net.FUEL_LOT:
+				server.ship.credits -= Net.PRICE_FUEL
+				server.ship.tank += Net.FUEL_LOT
 		Net.STORE_BUY_AIR:
 			if can_trade() and server.ship.credits >= Net.PRICE_AIR and server.ship.store_air < Net.STORE_AIR_FULL:
 				server.ship.credits -= Net.PRICE_AIR
