@@ -110,6 +110,7 @@ func _initialize() -> void:
 	server.sectors.build(server.space_seed, server.sectors.cell[server.ship.sector], server.been)
 	server.ship.credits = Net.START_CREDITS
 	server.ship.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
+	server.story.auto = false                             # (no comms calls: their outcomes may pay credits)
 	for t in Net.DRIVE_REST_TICKS:
 		server._tick()
 	var start_cell: Vector2i = server.sectors.cell[server.ship.sector]
@@ -117,11 +118,14 @@ func _initialize() -> void:
 	var fresh := 0
 	var path: Array[Vector2i] = [start_cell]
 	var ok := server.ship.sector == server.sectors.here and server.sectors.visited[server.ship.sector] == 1
+	var walked := {}                      # cell -> times this walk came there (to get out of dead ends)
 	for jump in 12:
-		# go on to a sector not yet visited if there is one, else anywhere
+		# go on to a sector not yet visited if there is one, else to the one the walk came to least
 		var next := -1
 		for n in server.sectors.neighbours(server.ship.sector):
-			if next < 0 or (server.sectors.visited[n] == 0 and server.sectors.visited[next] == 1):
+			if next < 0 or (server.sectors.visited[n] == 0 and server.sectors.visited[next] == 1) \
+					or (server.sectors.visited[n] == server.sectors.visited[next] \
+					and int(walked.get(server.sectors.cell[n], 0)) < int(walked.get(server.sectors.cell[next], 0))):
 				next = n
 		var to: Vector2i = server.sectors.cell[next]
 		if server.sectors.visited[next] == 0:
@@ -130,6 +134,7 @@ func _initialize() -> void:
 		for t in Net.JUMP_TICKS + 2:
 			server._tick()
 		path.append(to)
+		walked[to] = int(walked.get(to, 0)) + 1
 		ok = ok and server.ship.sector == server.sectors.here and server.sectors.cell[server.ship.sector] == to \
 			and server.sectors.visited[server.ship.sector] == 1 and server.ship.jump_to == Net.NO_SECTOR
 	_expect(ok, "after every jump the chart is centred on the sector the ship jumped to")
