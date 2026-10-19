@@ -534,7 +534,8 @@ The boarding ship:
 - Their ship has light, air and power; on the floor 2–4 items: magazines, plasters, patches,
   a pistol, a baton.
 - You can't dock with it of your own will. You can undock from the ship-control console: then
-  it leaves, taking with it the pirates and bodies remaining on it. The broken-open airlock then vents
+  it leaves, taking with it the pirates and bodies remaining on it. (v66) The same goes for a raider (or a hunter) that docked by force: until then it
+  stayed alongside, fought on, and 30 s later docked and boarded again with a fresh party. The broken-open airlock then vents
   air into space until the doors are repaired.
 - Either ship is left behind if our ship jumps to another sector before it is done with us.
 
@@ -1190,6 +1191,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   **6 s** later. Its ship is a pirate ship **3 steps** of danger harder than the place, with the hunter's temper, named
   «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
   our trail from where we left it.
+  (v66) Each time we escape the same hunter it is slower: a lane takes it **75 s × (1 + 0.5 per escape)** (113 s after
+  one escape, 150 s after two, 188 s after three).
 
 ### The chart (v64)
 
@@ -1290,6 +1293,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   - A dead player can press **R** after 5 s and return as a new person of the same job
     (skills from zero, own job's skill from 50). This costs **one from the reserve**; the body with its items
     remains.
+  - (v66) Whoever comes back (a player or a bot) takes a spawn tile with **no pirate in its room or within 6 tiles**;
+    if every free tile is watched, the least watched one.
   - Reserve empty — you can't return until your crewmates hire people at a trader.
   - A dead player who left the game also takes one from the reserve when returning under the same name.
     If the reserve is empty and someone of the crew is alive, they won't be let in.

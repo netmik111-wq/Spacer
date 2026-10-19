@@ -374,6 +374,8 @@ func _pirates_board() -> void:
 	if _anyone_in_way(from, to):
 		return                               # it waits until the way is clear
 	_pirates_dock_at = -1
+	raid = false                             # (2026-10-19) boarded: undocking now sends it away, as the boarding ship (it used to
+	                                         # stay alongside, fight again and board with a fresh party every 30 s)
 	_move(from, to)
 	_set_docked(true)
 	var lock: Dictionary = map.lock_pump.values()[0]

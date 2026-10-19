@@ -272,6 +272,19 @@ func _hunters() -> void:
 	_arrive_at(s.cell[s.neighbours(fought_at)[0]])
 	_run(2)
 	_expect(r.hunters.size() == 1 and int(r.hunters[0]["at"]) == fought_at, "jumped away from, it stays on our trail")
+	# (2026-10-19, the author's pick) each escape makes it slower to catch up
+	var slow: Dictionary = r.hunters[0]
+	s.kind[server.ship.sector] = s.kind[fought_at]   # (a hunter never comes into a station's system: pin where we are)
+	_expect(int(slow.get("escaped", 0)) == 1, "it remembers it was escaped once")
+	var plain_step := roundi(Road.HUNTER_STEP * Net.TICK_HZ)
+	slow["move"] = plain_step - Net.TICK_HZ
+	_run(Net.TICK_HZ + 1)
+	var held := int(slow["at"]) == fought_at
+	slow["move"] = roundi(Road.HUNTER_STEP * (1.0 + Road.HUNTER_SLOWER) * Net.TICK_HZ) - Net.TICK_HZ
+	_run(Net.TICK_HZ + 1)
+	_expect(held and int(slow["at"]) != fought_at, "escaped once, it takes %d s a lane, not %d" % [
+		roundi(Road.HUNTER_STEP * (1.0 + Road.HUNTER_SLOWER)), roundi(Road.HUNTER_STEP)])
+	slow["coming"] = -1
 	s.kind = kinds_were
 	s.fog = fog_were
 	_calm()
@@ -415,6 +428,14 @@ func _saved() -> void:
 	_expect(problem == "", "it restores (%s)" % problem)
 	_expect(other.sectors.depth == server.sectors.depth and other.sectors.cell == server.sectors.cell and other.sectors.kind == server.sectors.kind
 		and other.ship.sector == server.ship.sector, "the cluster and where we are in it")
+	r.hunters[0]["escaped"] = 2
+	data = Campaign.snapshot(server)
+	json = JSON.parse_string(JSON.stringify(data))
+	other.stop()
+	other.free()
+	other = _new_server(26503)
+	problem = Campaign.restore(other, json)
+	_expect(int(other.road.hunters[0].get("escaped", 0)) == 2, "a hunter keeps how often it was escaped")
 	_expect(other.road.hunters.size() == r.hunters.size() and other.road.found.size() == r.found.size() and other.road.history == r.history,
 		"the hunters, the places found, the road behind")
 	other.stop()

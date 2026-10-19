@@ -41,6 +41,19 @@ func _initialize() -> void:
 	for spot: Vector2i in map.spawns:
 		spots_ok = spots_ok and not _restricted_rooms().has(spot.y * map.width + spot.x)
 	_expect(spots_ok, "nobody comes aboard inside a restricted room")
+	# (2026-10-19) a boarder waiting at a spawn tile: those coming back wake elsewhere
+	var watched: Vector2i = map.spawns[0]
+	var guard = server.pirates.spawn(watched.x, watched.y + 1 if map.walkable(watched.x, watched.y + 1) else watched.y - 1, false)
+	var room0: int = map.room_of[watched.y * map.width + watched.x]
+	var safe_tile := false
+	for s in map.spawns:
+		safe_tile = safe_tile or server.crew._danger_at(s) <= 0.0
+	var away := true
+	for i in 30:
+		var at := server.crew.spawn_point()
+		away = away and (not safe_tile or server.crew._danger_at(at) <= 0.0)
+	_expect(away, "nobody comes back at a spawn tile a boarder is waiting at (%s)" % ("there is a safe one" if safe_tile else "none is safe"))
+	server.crew.remove(guard)
 
 	print("the crew reserve")
 	_expect(server.reserve == Net.START_RESERVE, "the ship sets out with %d in reserve" % Net.START_RESERVE)

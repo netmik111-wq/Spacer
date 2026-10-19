@@ -303,8 +303,11 @@ func roster_entry(p: Player) -> PackedByteArray:
 
 
 func spawn_point() -> Vector2i:
-	# prefer a spawn tile nobody is standing on
+	# prefer a spawn tile nobody is standing on, and (2026-10-19) none a boarder waits at:
+	# one who comes back must not be shot down before he can take a step
 	var start := server.rng.randi_range(0, server.map.spawns.size() - 1)
+	var best := Vector2i(-1, -1)
+	var best_risk := INF
 	for i in server.map.spawns.size():
 		var s: Vector2i = server.map.spawns[(start + i) % server.map.spawns.size()]
 		var taken := false
@@ -312,9 +315,34 @@ func spawn_point() -> Vector2i:
 			if q != null and q.st.x == s.x and q.st.y == s.y:
 				taken = true
 				break
-		if not taken:
+		if taken:
+			continue
+		var risk := _danger_at(s)
+		if risk <= 0.0:
 			return s
+		if risk < best_risk:
+			best = s
+			best_risk = risk
+	if best.x >= 0:
+		return best                          # (every free one is watched: the least watched)
 	return server.map.spawns[start]
+
+
+func _danger_at(s: Vector2i) -> float:
+	## How close living pirates are to a tile: 0 when none is in its room or within SPAWN_SAFE tiles.
+	var map = server.map
+	var room: int = map.room_of[s.y * map.width + s.x]
+	var risk := 0.0
+	for q: Player in server.players:
+		if q == null or not q.pirate or q.corpse or q.cond == Net.COND_DEAD:
+			continue
+		var d := maxi(absi(q.st.x - s.x), absi(q.st.y - s.y))
+		if d <= SPAWN_SAFE or (room >= 0 and map.room_of[q.st.y * map.width + q.st.x] == room):
+			risk += 1.0 / (1.0 + d)
+	return risk
+
+
+const SPAWN_SAFE := 6                # (2026-10-19) a pirate this near a spawn tile, or in its room, makes it unsafe
 
 
 func cryo_spot() -> Vector2i:

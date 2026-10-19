@@ -876,3 +876,20 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
   the author asked for "everything"; a black box can finish a quest at once (admin only).
 - **Seed names**: `Items.name_of` had no case for seeds (their name lives in `Plants`), so it read a missing "name"
   and showed "<null>" in the locker, the trader and the hands.
+
+### Fixes found by the game simulator (for v66)
+
+- **Respawn away from boarders** (the author's pick on 2026-10-19, "Safe spawn"): a bot came back on a spawn tile beside a
+  boarder and was shot down the same second (two pistol hits, with starving crew capped at 30 health).
+  `Crew.spawn_point` now skips free tiles with a living pirate in the same room or within `SPAWN_SAFE` (6) tiles, and if
+  all are watched takes the least watched (risk = sum of 1/(1+distance)). The rng draw is unchanged, so with no
+  pirates aboard the tile picked is the same as before.
+- **Undocking from a raider that boarded sends it away** (my call, a bug): `_pirates_board` left `raid` set, so after the
+  crew undocked it stayed alongside, the fight went on, and with our guns still silent it docked again 30 s later with a
+  full new party (careful-06: 12 boardings by one hunter). Boarding now clears `raid`, so it behaves like the boarding
+  ship, which MECHANICS already described: undocked, it leaves.
+- **Hunters slow down each time we escape them** (the author's pick on 2026-10-19, "Slower each time"; my recommendation was
+  "give up after 3 escapes"): in the simulator one hunter attacked up to 10 times in a game because the script captain
+  always jumped away, and it caught up again ~95 s later every time. Now each hunter counts how often we escaped it
+  (`escaped`, kept in saves) and its lane step is `HUNTER_STEP * (1 + HUNTER_SLOWER * escaped)`, `HUNTER_SLOWER` 0.5.
+  The warning (20 s) is unchanged.

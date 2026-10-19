@@ -256,6 +256,17 @@ func _initialize() -> void:
 		if who != null and who.pirate and not who.corpse:
 			boarders += 1
 	_expect(d.docked and boarders > 0, "otherwise it docks by force and its crew comes aboard (%d)" % boarders)
+	# (2026-10-19) undocking from it sends it away; it used to stay, fight on and board again every 30 s
+	for who in server.players:
+		if who != null and who.pirate and not who.corpse:
+			server.crew.remove(who)
+	_expect(d.dock(false) == "", "(we undock from it)")
+	_run(Derelict.RAID_BOARD_TICKS + 10)
+	var again := 0
+	for who in server.players:
+		if who != null and who.pirate and not who.corpse:
+			again += 1
+	_expect(not d.here and not g.fighting() and again == 0, "undocked, it goes and does not board again (%d aboard)" % again)
 
 	print("DRONETEST %s" % ("OK" if failed == 0 else "FAILED: %d" % failed))
 	quit(0 if failed == 0 else 1)
