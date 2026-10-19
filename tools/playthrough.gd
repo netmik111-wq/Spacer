@@ -739,7 +739,7 @@ func _watch() -> void:
 			_known_corpses[q.get_instance_id()] = true
 			if q.pirate:
 				rec["pirates_killed"] += 1
-			elif not q.ally:
+			elif not q.ally and not q.corpse:   # (a body left behind on a respawn is not another death)
 				rec["crew"]["deaths"] += 1
 				if q.bot:
 					rec["crew"]["bot_deaths"] += 1
