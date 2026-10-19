@@ -193,6 +193,8 @@ static func name_of(item: int) -> String:
 		return ("Повреждённое орудие: " + Weapons.lower_name(int(INFO[item]["gun"]))) if INFO[item].has("damaged") else n
 	if INFO[item].has("gear"):
 		return Gear.name_of(int(INFO[item]["gear"]))
+	if INFO[item].has("seed"):
+		return Plants.name_of(item)          # ((v65) was shown as "<null>")
 	return str(INFO[item]["name"])
 
 

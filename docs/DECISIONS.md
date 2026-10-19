@@ -854,3 +854,16 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
 - **A pirate crossing over during our boarding** (the CI thread's find, the author's "yes"): `EnemyCrew._read_world` counts
   those gone from its crew alive and off their ship (`crossed`); `Gunnery.crew_lost` then says it crossed over instead of
   "killed". It still leaves the enemy's crew count (it is a boarder aboard ours, counted by `Pirates.aboard`).
+
+### Storage window fixes (v65)
+
+- **Tabs, not folding sections** (my pick, asked at https://claude.ai/artifact/SwbHwmKZcdbPV1yVFB8VsK): seven tabs fit
+  1280×720 and keep the window one size; folding sections would change its height with every click. «Всё» stays first.
+- **Width**: 10 cards a row (`PER_ROW`); a group longer than that wraps, so the window never grows past ~870 px. The
+  cards' area is as high as the window allows (400 px at most, 220 at least).
+- **«Всё» hides ship gear at ×0**: 19 empty cards were most of the screen. The Модули tab shows every kind, as a catalogue.
+- **Refill amounts**: the starting stock where there is one; ship gear, seeds and the black box 1 each, security robots 2
+  (as many as may stand aboard); ship guns 1, ammunition, parts and quest cargo 10. Quest things are included because
+  the author asked for "everything"; a black box can finish a quest at once (admin only).
+- **Seed names**: `Items.name_of` had no case for seeds (their name lives in `Plants`), so it read a missing "name"
+  and showed "<null>" in the locker, the trader and the hands.

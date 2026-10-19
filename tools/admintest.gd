@@ -148,6 +148,18 @@ func _initialize() -> void:
 	server.ship.store.clear()
 	_admin(host, Net.ADMIN_RESTOCK)
 	_expect(int(server.ship.store.get(Net.ITEM_FUEL, 0)) == Items.stock(Net.ITEM_FUEL), "the locker filled again")
+	# (v65) the refill leaves no kind the locker keeps empty (gear, robots and seeds stayed at 0 before),
+	# and every one of them has a name (seeds were shown as "<null>")
+	var empty := PackedStringArray()
+	var nameless := PackedStringArray()
+	for item in Items.kept_in_locker():
+		if int(server.ship.store.get(item, 0)) <= 0:
+			empty.append("%d %s" % [item, Items.name_of(item)])
+		var named := Items.name_of(item)
+		if named == "" or named.contains("null"):
+			nameless.append(str(item))
+	_expect(empty.is_empty(), "«refill the locker» fills every kind it keeps%s" % ("" if empty.is_empty() else " (empty: %s)" % ", ".join(empty)))
+	_expect(nameless.is_empty(), "every kind the locker keeps has a name%s" % ("" if nameless.is_empty() else " (no name: %s)" % ", ".join(nameless)))
 	server.reserve = 0
 	_admin(host, Net.ADMIN_RESERVE)
 	_expect(server.reserve == 1, "one more in reserve")

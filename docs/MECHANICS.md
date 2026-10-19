@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v64 (version 0.57).
+Last updated: build v65 (version 0.58).
 
 Contents:
 
@@ -307,7 +307,12 @@ Contents:
     crew reserve (bar);
   - every item the locker keeps as a card with its picture, how many are in the locker and how many you
     carry, grouped: repair and fuel, equipment, medicine, personal weapons, ship weapons, ammunition
-    (the last two are cargo: they can't be taken into the hands). Left click on a card takes one
+    (the last two are cargo: they can't be taken into the hands). (v65) The groups sit under **tabs**:
+    Всё (everything), Припасы (repair, fuel, food, medicine), Снаряжение (equipment, personal weapons),
+    Орудия (ship guns, ammunition, gun parts), Модули (ship gear: all its kinds, even at ×0), Разведка и охрана
+    (probe, drone, security robot), Семена и задания (seeds, quest things). A group longer than a row (10 cards)
+    wraps onto more rows, so the window keeps one width (fits 1280×720); the cards scroll. Ship guns, gun parts,
+    seeds and quest things show only when held; in «Всё» ship gear too. Long names go on two lines. Left click on a card takes one
     (into the hand if it is empty); right click buys one when a trader is in reach (the price shows on
     the card); hovering shows what the item does;
   - your own slots underneath: click one to put that item back (only whole items; the frame is green
@@ -1053,7 +1058,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   100), needs no air, wears nothing, does no work, cannot be ordered and is **not crew** (it fills no crew place). At
   most **2** stand aboard. Broken, it leaves a spare part half the time. A save puts those still standing back into the
   locker in their crates.
-- (after v63) A robot or a pirate **holds fire** while one of its own side stands within 0.8 of a cell of the line of
+- (v65) A robot or a pirate **holds fire** while one of its own side stands within 0.8 of a cell of the line of
   fire, and moves toward its target instead. Before this our robot kept shooting the crewman standing between it and
   a pirate.
 - Supply stations now have a small shop at the supply locker: the extender (while the bay has 2 slots) and robots.
@@ -1241,7 +1246,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   The host also makes and unmakes admins here.
 - **Ship** tab: mend everything (breaches, machines, doors, shutters, power), seal breaches, breach
   the hull near me, normal air in every cell and a full air plant store, fill the supply locker up to
-  its starting stock, +100 credits, hull to 100, +1 in the reserve, save the campaign, (v60.1) charge
+  its starting stock ((v65) and every other kind it keeps: ship gear and seeds 1 each, security robots 2, the black box 1;
+  ship guns 1 each, rockets, shells, parts and quest cargo 10), +100 credits, hull to 100, +1 in the reserve, save the campaign, (v60.1) charge
   everything (shield full, armed guns charged, jump drive and phase drive ready), (v61) SMES full or empty,
   an ion surge now. (v60.1) **Ship gear at
   once**, without an engineer's work: each system's tier (1 = built in, 2, 3) from a list that shows the

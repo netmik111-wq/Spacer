@@ -134,6 +134,16 @@ Open problems:
 
 ## Build notes
 
+### v65 (storage window fixes; the author's request)
+- The supply locker's window was wider than the screen once the locker held many kinds. Its cards now sit under seven
+  tabs, long groups wrap at 10 cards, and the window keeps one width (fits 1280×720).
+- «Пополнить шкаф снабжения» left ship gear, security robots, seeds and the black box at ×0; it now fills every kind
+  the locker keeps. `admintest` fails if it ever misses one, or if a kept kind has no name.
+- Seed packets were named "<null>" everywhere (locker, trader, hands): `Items.name_of` now asks `Plants`.
+- Friendly fire fix from the CI thread: robots and pirates hold fire while one of their own side is in the way.
+- Choices made (all my picks, open to the author): https://claude.ai/artifact/SwbHwmKZcdbPV1yVFB8VsK.
+  Build in `/mnt/project-files/builds/v65/`.
+
 ### v64 (the cluster map)
 - Space is a road of clusters (the author's 19 "A" answers): 10–14 systems on lanes, two exits on the far side, a long
   jump (2 cans) into the next cluster of a kind shown in advance, no way back. Kinds: frontier, pirate territory, trade
