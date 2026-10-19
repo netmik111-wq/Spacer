@@ -990,7 +990,8 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   engine down together = surrender; wrecked = nothing), 15% courier (1×, flees in 40 s instead of the usual). My numbers.
 - **Alert levels** (his J4): `Stations.set_alert`. Red reuses "all to posts" and the holomap's "lock every door"; it
   locks only with power, as blast doors do. A pirate ship raises yellow by itself (my pick C1) and it drops back only if
-  it was raised by itself. The client dims the light by 0.3 on red and plays a chime or siren where there is air.
+  it was raised by itself. Calling it off frees only the bots still on the alert's order: one the captain
+  ordered since keeps that order. The client dims the light by 0.3 on red and plays a chime or siren where there is air.
 - **No breakdowns out of nothing** (his E1: "they should not come from nothing but create more danger"): the six fault
   events have weight 0 (the host can still fire them). `Systems.knock_on` breaks something within 6 cells of a pirate hull
   hit at 30% (45% heavy): door, shutter, air plant, console, or an engine stall if it is near. The "never two obstacles to

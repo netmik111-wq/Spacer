@@ -75,7 +75,7 @@ var evade_ready := 0                 # and the tick it can be pressed again
 var alert := Net.ALERT_GREEN         # (v68, the author's J4) the alert level
 var _alert_auto := false             # it went to yellow by itself when a pirate ship came
 var _fight_seen := false
-var _alert_bots := {}                # slots of the bots the alert gave an order (freed when it is called off)
+var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
 
 
 func setup(p_server: GameServer) -> void:
@@ -343,8 +343,9 @@ func set_alert(level: int, by: Player = null) -> void:
 			server.doors.blast[d] = 0
 		server.blast.cut.clear()
 	for slot: int in _alert_bots.keys():
+		# (only those still at what the alert told them: a later order from the captain stands)
 		var q: Player = server.players[slot] if slot < server.players.size() else null
-		if q != null and q.bot and not q.corpse:
+		if q != null and q.bot and not q.corpse and q.order == int(_alert_bots[slot]):
 			_set_order(q, Net.POST_FREE, by)
 	_alert_bots = {}
 	match level:
@@ -354,12 +355,12 @@ func set_alert(level: int, by: Player = null) -> void:
 			for q: Player in _bots():
 				if q.order == Net.POST_FREE:
 					_set_order(q, Net.POST_REPAIR, by)
-					_alert_bots[q.slot] = true
+					_alert_bots[q.slot] = Net.POST_REPAIR
 			server.chat.say("%sЖёлтая тревога! Всем быть наготове.%s" % [who, " (Пиратский корабль рядом.)" if by == null else ""])
 		Net.ALERT_RED:
-			for q: Player in _bots():
-				_alert_bots[q.slot] = true
 			_all_to_posts(by, true)
+			for q: Player in _bots():
+				_alert_bots[q.slot] = q.order
 			if server.powered():
 				for d in server.map.other_first_door:
 					server.doors.blast[d] = 1
@@ -397,6 +398,11 @@ func order_asked(p: Player, id: int, post: int) -> void:
 	if not may_order(p):
 		server.chat.tell(p, "Приказы экипажу отдаёт капитан.")
 		return
+	# (v68) the captain's own order stands when the alert is called off
+	if id == Net.NOBODY:
+		_alert_bots = {}
+	else:
+		_alert_bots.erase(id)
 	if id == Net.NOBODY:
 		if post == Net.POST_ALL:
 			_all_to_posts(p)
