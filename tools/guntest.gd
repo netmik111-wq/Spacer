@@ -208,10 +208,10 @@ func _initialize() -> void:
 	_expect(server.reserve == mini(reserve + 2, Net.RESERVE_MAX), "survivors who give up join the reserve")
 	server.crew.remove(boarder)
 	d.dock(false)
-	server.ship.dest = server.ship.pos + Vector2(50, 0)
-	server.ship.moving = true
+	server.ship.pos = d.wreck_at + Vector2(Sectors.WRECK_REACH + 5, 0)    # (v69) out of its reach: a little way is not enough
 	_run(2)
 	_expect(not d.here and server.pirates.aboard() == 0, "when the ship moves on the wreck stays behind, with its dead")
+	server.road.hulks = {}                   # (v69) it stays on the chart there: not wanted back in this test
 	server.ship.moving = false
 
 	_v49(p)

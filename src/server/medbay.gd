@@ -42,16 +42,21 @@ func works(doc: int) -> bool:
 	return server.powered() and not server.ship.broken.has(doc)
 
 
-func in_bed(doc: int) -> Player:
-	## Who lies or stands on that autodoc's bed (the living only), or null.
+func in_bed(doc: int, but: Player = null) -> Player:
+	## Who lies or stands on that autodoc's bed (the living only, never `but`), or null.
+	## (v69, the author's note: two on one bed) Of several, the worst off that needs it:
+	## a healthy bot standing there no longer keeps the autodoc from the wounded.
 	var bed: int = server.map.autodoc.get(doc, -1)
 	if bed < 0:
 		return null
 	var w := server.map.width
+	var best: Player = null
 	for q: Player in server.players:
-		if q != null and not q.corpse and q.cond != Net.COND_DEAD and q.st.y * w + q.st.x == bed:
-			return q
-	return null
+		if q == null or q == but or q.corpse or q.cond == Net.COND_DEAD or q.st.y * w + q.st.x != bed:
+			continue
+		if best == null or (needs_doc(q) and not needs_doc(best)) or (needs_doc(q) == needs_doc(best) and q.health - q.wounds < best.health - best.wounds):
+			best = q
+	return best
 
 
 func free_beds(for_whom: Player) -> Array:
@@ -69,9 +74,10 @@ func needs_doc(q: Player) -> bool:
 
 
 func tending(p: Player, doc: int) -> bool:
-	## `p` holds "use" at that autodoc: true if there is somebody in it to tend.
-	var q := in_bed(doc)
-	if q == null or q == p or not works(doc) or not needs_doc(q):
+	## `p` holds "use" at that autodoc: true if there is somebody in it to tend
+	## (v69: somebody else, even when `p` stands on the bed too).
+	var q := in_bed(doc, p)
+	if q == null or not works(doc) or not needs_doc(q):
 		return false
 	_tended[doc] = server.tick
 	var n: int = _lesson.get(p.slot, 0) + 1

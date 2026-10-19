@@ -142,6 +142,20 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v69 (bug fixes and two ideas; the author's notebook)
+- Fixes: plasters and medkits treat yourself with a click anywhere on you or Z, and say why when nothing happens; the
+  autodoc heals the worst off and can be tended from its bed; finds no longer vanish inside a docking ship's wall;
+  people show at once when you turn; a hunter no longer waits forever while a ship is alongside (it pushes it off, or
+  shells the hull while someone is outside), and a second hunter waits 45 s after a fight; no docking on the move; a
+  supply station no longer trades like a trader; anyone can leave a locked room, and a hacked lock stays broken until
+  mended.
+- Wrecked pirate ships stay on the chart as places (moved a little away from traders and other places), and come back
+  alongside when you return (the author's request in the thread).
+- His two ideas: one press of an airlock door's button does the whole trip, and a vent in every room refills it from
+  the air reserve (not while there is a hole).
+- New test `tools/fixtest.gd` (30 scripts), protocol 46. Questions: https://claude.ai/artifact/9DBk13CrtNCfmyFPdQoL1N.
+  Build in `/mnt/project-files/builds/v69/`.
+
 ### v68 (fights for the whole crew; the author's F1–F4, J4, E1 and G3 answers)
 - The pilot's evade at the helm (button or space bar: 1.5–2.5 s of their shots hitting half as often, 40 SMES, 12 s rest).
   The engineer's power panel at the SMES: guns, point defence and shield switches (moved off the gun console), power for

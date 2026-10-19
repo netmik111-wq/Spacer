@@ -439,7 +439,7 @@ const EXIT := Color(0.55, 0.95, 1.0)       # (v64) a way out of the cluster
 const HUNTER := Color(1.0, 0.3, 0.45)      # (v64) a pirate hunter
 const FOG := Color(0.55, 0.5, 0.65, 0.22)  # (v64) a nebula
 const PLACE_COLOURS: Array[Color] = [Color(0.75, 0.7, 0.6), Color(0.95, 0.75, 0.3), Color(0.85, 0.85, 0.95), Color(0.7, 0.7, 0.72),
-	Color(1.0, 0.6, 0.4), Color(1.0, 0.3, 0.45), Color(0.75, 0.5, 1.0), Color(0.65, 0.55, 0.45), Color(0.4, 0.85, 0.75)]   # (v64) per Sectors.P_* (v67: and work places)
+	Color(1.0, 0.6, 0.4), Color(1.0, 0.3, 0.45), Color(0.75, 0.5, 1.0), Color(0.65, 0.55, 0.45), Color(0.4, 0.85, 0.75), Color(0.85, 0.5, 0.45)]   # (v64) per Sectors.P_* (v67: and work places; v69: our wrecks)
 const CLUSTER_COLOURS: Array[Color] = [Color(0.55, 0.62, 0.75), Color(0.95, 0.35, 0.3), Color(0.95, 0.85, 0.35), Color(0.4, 0.55, 1.0),
 	Color(0.6, 0.6, 0.55)]                 # (v64) per kind of cluster
 
@@ -541,7 +541,7 @@ func _draw_helm() -> void:
 				chart.draw_circle(at, Sectors.AMBUSH_REACH * scale, Color(HUNTER, 0.12 if not gone else 0.04))
 				chart.draw_arc(at, Sectors.AMBUSH_REACH * scale, 0.0, TAU, 40, Color(colour, 0.7), 1.0)
 				chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -6), at + Vector2(5, 0), at + Vector2(0, 6), at + Vector2(-5, 0)]), colour)
-			Sectors.P_WRECK:
+			Sectors.P_WRECK, Sectors.P_HULK:
 				chart.draw_arc(at, Sectors.WRECK_REACH * scale, 0.0, TAU, 24, Color(colour, 0.6), 1.0)
 				chart.draw_rect(Rect2(at - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
 			Sectors.P_ANOMALY, Sectors.P_ASTEROID, Sectors.P_GAS:

@@ -7,7 +7,8 @@ extends RefCounted
 ##
 ## Characters go out differently: each client is told only about those its
 ## character can actually see (the same rules of sight the client draws by:
-## a cone ahead, walls and shut doors in the way, the dark), those right next
+## walls and shut doors in the way, the dark; since v69 all round, not only the
+## cone ahead, which the client applies itself so a turn shows at once), those right next
 ## to it (felt, if not seen: needed to search or drag somebody), and those
 ## holding a lit flashlight on its deck (the beam gives them away). Anybody
 ## else is not sent at all, so a client cannot peek at what its player should
@@ -36,6 +37,7 @@ const MARGIN_DEG := 12.0            # the cone is judged this much wider each si
 
 var server: GameServer
 var see_all := false                # tests: send every character in view, as before v39
+var all_round := true               # (v69) send those behind us too; the client hides them (see set_round)
 
 var _cw := 1                        # chunks across
 var _ch := 1                        # chunk rows of one deck
@@ -83,9 +85,18 @@ func setup(p_server: GameServer) -> void:
 	_ship_sums.resize(chunks)
 	_ship_sums_tick = -1
 	_air_sent = server.air.level.duplicate()
-	_arcs_light = _widen(Sight.eye_arcs(false))
-	_arcs_dark = _widen(Sight.eye_arcs(true))
+	set_round(all_round)
 	index_doors()
+
+
+func set_round(on: bool) -> void:
+	## (v69, the author's video: people turned to appeared only after a ping) With `on`,
+	## everyone our character could see by turning (walls, doors and the dark still
+	## hide them) is sent, and the client hides those behind it by its own facing at
+	## once. Off: only the cone ahead, as before v69.
+	all_round = on
+	_arcs_light = [[-180.0, 180.0]] if on else _widen(Sight.eye_arcs(false))
+	_arcs_dark = [[-180.0, 180.0]] if on else _widen(Sight.eye_arcs(true))
 
 
 func _widen(arcs: Array) -> Array:

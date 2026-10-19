@@ -721,6 +721,7 @@ def resolve_ship(name, lines, ids):
     if not spawns and not name.startswith("derelict") and not name.startswith("pirate"):
         raise MapError(f"{name}: no spawn points ('s')")
     door_access = [0] * len(doors)
+    access_rooms = []                    # (v69) a floor cell of each restricted room and its access: leaving it is free
     for l in lines:
         if not l.startswith("@"):
             continue
@@ -728,6 +729,7 @@ def resolve_ship(name, lines, ids):
         if len(parts) != 4 or parts[3] not in ACCESS_BITS:
             raise MapError(f"{name}: bad access line '{l}'")
         d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        access_rooms.append([x0, y0 + d * stride, ACCESS_BITS[parts[3]]])
         rows = [r.ljust(w) for r in decks[d][1]]
         def at(x, y):
             return rows[y][x] if 0 <= y < len(rows) and 0 <= x < w else " "
@@ -768,7 +770,7 @@ def resolve_ship(name, lines, ids):
         zones.append([SYSTEMS.index(parts[3]), sorted((y + d * stride) * w + x for x, y in seen)])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
-            "door_access": door_access, "zones": zones}
+            "door_access": door_access, "access_rooms": access_rooms, "zones": zones}
 
 
 def build_maps(images, ids):

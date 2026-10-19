@@ -190,9 +190,15 @@ func trade_packet() -> PackedByteArray:
 
 
 func can_trade() -> bool:
-	## Docked with a trader, with power for the link.
+	## Docked with a trader (or a supply station: it sells its few things), with power for the link.
 	return server.powered() and (server.navigation.sector_kind() == Sectors.TRADER or server.navigation.sector_kind() == Sectors.STATION) \
 		and server.ship.in_reach
+
+
+func trader_here() -> bool:
+	## (v69, the author's note "the supply station works like a trade post") Selling, buying
+	## back, services and hiring are a trader's: a station only sells what offers() lists.
+	return can_trade() and server.navigation.sector_kind() == Sectors.TRADER
 
 
 func aboard(item: int) -> int:
@@ -253,7 +259,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 					server.chat.say("%s покупает у торговца: %s." % [p.name, Items.name_of(item).to_lower()])
 		Net.STORE_SELL:
 			var price := sell_price(item)
-			if can_trade() and int(server.ship.store.get(item, 0)) > 0 and price > 0:
+			if trader_here() and int(server.ship.store.get(item, 0)) > 0 and price > 0:
 				server.ship.store[item] -= 1
 				server.ship.credits = mini(server.ship.credits + price, 65535)
 				var back: Array = sold.get(_key(), [])
@@ -262,7 +268,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.chat.say("%s продаёт торговцу: %s, +%d кр." % [p.name, Items.name_of(item).to_lower(), price])
 		Net.STORE_BUY_BACK:
 			# (v58) what we sold this trader comes back at the price it paid
-			var back: Array = sold.get(_key(), []) if can_trade() else []
+			var back: Array = sold.get(_key(), []) if trader_here() else []
 			for i in range(back.size() - 1, -1, -1):
 				var e: Array = back[i]
 				if int(e[0]) == item and server.ship.credits >= int(e[1]):
@@ -279,20 +285,20 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.chat.say("%s покупает закалку щита: теперь щит останавливает и ракеты." % p.name)
 		Net.STORE_BUY_FUEL:
 			# (v67) fuel straight into the tank
-			if can_trade() and server.ship.credits >= Net.PRICE_FUEL and server.ship.tank <= Net.FUEL_MAX - Net.FUEL_LOT:
+			if trader_here() and server.ship.credits >= Net.PRICE_FUEL and server.ship.tank <= Net.FUEL_MAX - Net.FUEL_LOT:
 				server.ship.credits -= Net.PRICE_FUEL
 				server.ship.tank += Net.FUEL_LOT
 		Net.STORE_BUY_AIR:
-			if can_trade() and server.ship.credits >= Net.PRICE_AIR and server.ship.store_air < Net.STORE_AIR_FULL:
+			if trader_here() and server.ship.credits >= Net.PRICE_AIR and server.ship.store_air < Net.STORE_AIR_FULL:
 				server.ship.credits -= Net.PRICE_AIR
 				server.ship.store_air = minf(server.ship.store_air + Net.AIR_LOT, Net.STORE_AIR_FULL)
 		Net.STORE_HIRE:
-			if can_trade() and server.ship.credits >= Net.PRICE_CREW and server.reserve < Net.RESERVE_MAX and server.over == Net.OVER_NONE:
+			if trader_here() and server.ship.credits >= Net.PRICE_CREW and server.reserve < Net.RESERVE_MAX and server.over == Net.OVER_NONE:
 				server.ship.credits -= Net.PRICE_CREW
 				server.reserve += 1
 				server.chat.say("%s нанимает у торговца нового члена экипажа. В резерве: %d." % [p.name, server.reserve])
 		Net.STORE_BUY_HULL:
-			if can_trade() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < server.ship.hull_max and server.over == Net.OVER_NONE:
+			if trader_here() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < server.ship.hull_max and server.over == Net.OVER_NONE:
 				server.ship.credits -= Net.PRICE_HULL
 				server.ship.hull = mini(server.ship.hull + Net.HULL_LOT, server.ship.hull_max)
 	tell_store()

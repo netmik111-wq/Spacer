@@ -45,6 +45,9 @@ const HUNTER_SLOWER := 0.5           # (the author's pick, 2026-10-19) each time
 const ESCAPE_SOONER := 60.0          # (v67, the author's O3) jumping out of a fight brings the next hunter this much sooner
 const HUNTER_WARN := 20.0            # coming into our system, it is seen this long before it comes out
 const HUNTER_COME := 6.0             # we jump into its system: it comes out this much later
+const HUNTER_BREATHER := 45.0        # (v69, the author's note) after a fight, a hunter waiting in our system comes out no sooner than this
+const SHELL_SECONDS := 8             # (v69) a hunter kept off by our people outside shells the hull this often...
+const SHELL_HULL := 4                # ... this hard
 const HUNTER_LEVEL := 3              # a hunter is this many steps of danger harder than the system it meets us in
 const PACE: Array[float] = [1.0, 0.7, 1.4, 1.0, 1.0]   # per kind of cluster: how long they take to come (pirates sooner, traders later)
 const MODE_PACE: Array[float] = [2.0, 1.0, 0.75]       # per mode (easy, normal, hard)
@@ -86,7 +89,12 @@ var found := {}                      # Sectors.key * 8 + place -> true: places t
 var taken := {}                      # the same: places taken (an abandoned ship: one that has come alongside)
 var auto := true                     # (tests) false: no hunters come by themselves
 var _fight := {}                     # the hunter we fight: {"at", "id" (the pirate ship's id)}
+var busy_tick := -1000000            # (v69) the last tick a pirate ship was alongside: the breather counts from it
+var breather := HUNTER_BREATHER      # (tests set 0)
+var _shelled := -1                   # the tick a hunter last shelled us from range (see _meet)
 var work := {}                       # (v67) the same: what an anomaly, asteroid or gas cloud still has to give
+var hulks := {}                      # (v69) Sectors.key of a system -> pirate ships wrecked there: each {"pos", "layout", "name",
+                                     # "id", "things", "air", "outcome", "party", "boarded", "design"}; see Derelict.hulk_*
 var _haul: Array = []                # (v67) what the place being taken gives, before it floats out
 var _here_places: Array = []         # the places of the ship's system: [kind, where]
 var _places_for := -1                # the system they are for
@@ -105,6 +113,7 @@ func setup(p_server: GameServer) -> void:
 	found = {}
 	taken = {}
 	work = {}
+	hulks = {}
 	_fight = {}
 	_rng.randomize()
 	_restart_clock()
@@ -150,6 +159,7 @@ func next_cluster(exit_k: int) -> void:
 	depth += 1
 	history.append(gone_kind)
 	hunters = []
+	hulks = {}                               # (the wrecks stay behind with the cluster)
 	_fight = {}
 	server.been[Sectors.key(entry)] = true
 	build(entry)
@@ -442,6 +452,8 @@ func _hunters_second() -> void:
 		if hunters.size() + (1 if not _fight.is_empty() else 0) < _most():
 			spawn_hunter()
 	var d := s.distances(ours)
+	if server.gunnery.fighting() or (server.derelict.here and server.derelict.kind == Net.OTHER_PIRATE):
+		busy_tick = server.tick
 	for h: Dictionary in hunters:
 		var at: int = h["at"]
 		if at == ours:
@@ -493,11 +505,31 @@ func spawn_hunter() -> bool:
 func _meet(h: Dictionary) -> void:
 	if int(h["coming"]) < 0:
 		h["coming"] = server.tick + roundi(HUNTER_COME * Net.TICK_HZ)
-	if server.tick < int(h["coming"]) or not _fight.is_empty():
+	if not _fight.is_empty():
+		return
+	var after := busy_tick + roundi(breather * Net.TICK_HZ)
+	if server.tick < after and int(h["coming"]) < after:
+		# (v69, the author's note: "it retreats and at once attacks again with full hull")
+		# another hunter that waited in our system gives the crew a breather first
+		h["coming"] = after
+		_dirty = true
+		server.chat.say("Ещё один охотник поджидает в этом секторе: он выйдет на нас через %d с." % ceili((after - server.tick) / float(Net.TICK_HZ)))
+		return
+	if server.tick < int(h["coming"]):
 		return
 	var der = server.derelict
-	if server.pirates.aboard() > 0 or not der.pirates_can_come() or server.gunnery.fighting():
+	if server.pirates.aboard() > 0 or server.gunnery.fighting():
 		h["coming"] = server.tick + Net.TICK_HZ
+		return
+	if not der.pirates_can_come():
+		# (v69, the author's note: docked, the hunter never came) a derelict alongside is
+		# let go; while anybody of ours is outside, it shells the hull from range instead
+		if not der.cast_off():
+			h["coming"] = server.tick + Net.TICK_HZ
+			if der.someone_outside() and server.tick - _shelled >= SHELL_SECONDS * Net.TICK_HZ:
+				_shelled = server.tick
+				server.crew.hull_hit(SHELL_HULL)
+				server.chat.say("Охотник бьёт по нам издалека! Пока кто-то снаружи, мы не можем принять бой: всем на борт.")
 		return
 	var design: Dictionary = server.shipyard.make(server.director._party(), true, der._pirate_spots(), HUNTER_LEVEL, Net.TEMPER_HUNTER)
 	if design.is_empty():
@@ -591,14 +623,80 @@ func packet() -> PackedByteArray:
 	for i in _here_places.size():
 		if found.has(_key(i)):
 			shown.append(i)
-	out.append(shown.size())
+	var wrecks: Array = hulks_here()
+	out.append(shown.size() + wrecks.size())
 	for i: int in shown:
 		var pl: Array = _here_places[i]
 		out.append(int(pl[0]))
 		out.append(roundi((pl[1] as Vector2).x))
 		out.append(roundi((pl[1] as Vector2).y))
 		out.append(1 if taken.has(_key(i)) else 0)
+	for h: Dictionary in wrecks:
+		out.append(Sectors.P_HULK)
+		out.append(roundi((h["pos"] as Vector2).x))
+		out.append(roundi((h["pos"] as Vector2).y))
+		out.append(0)
 	return out
+
+
+# --------------------------------------------------------------- (v69) our wrecks
+
+func hulks_here() -> Array:
+	## The pirate ships wrecked in our system (not the one alongside now).
+	if server.sectors.count == 0:
+		return []
+	return hulks.get(Sectors.key(server.sectors.cell[server.ship.sector]), [])
+
+
+func add_hulk(at_key: int, h: Dictionary) -> void:
+	var list: Array = hulks.get(at_key, [])
+	list.append(h)
+	hulks[at_key] = list
+	_dirty = true
+
+
+func take_hulk(h: Dictionary) -> void:
+	for k: int in hulks.keys():
+		(hulks[k] as Array).erase(h)
+	_dirty = true
+
+
+func at_hulk() -> Dictionary:
+	## A wreck of ours the ship is within reach of (it comes alongside then), or {}.
+	for h: Dictionary in hulks_here():
+		if server.ship.pos.distance_to(h["pos"]) <= Sectors.WRECK_REACH:
+			return h
+	return {}
+
+
+func hulk_spot(at: Vector2) -> Vector2:
+	## (v69, the author: "if you are too close to another event or trader, make it appear a
+	## little further") Where a ship wrecked at `at` stays on the chart: there, or the nearest
+	## spot clear of the system's other places, its trader or station, and other wrecks.
+	var s: Sectors = server.sectors
+	var keep: Array = []                     # [where, how far off to stay]
+	var sys: int = server.ship.sector
+	if s.count > 0 and s.reach[sys] > 0:
+		keep.append([s.spot[sys], float(s.reach[sys]) + Sectors.WRECK_REACH + Sectors.HULK_APART])
+	for pl: Array in _here_places:
+		keep.append([pl[1], Sectors.WORK_REACH + Sectors.WRECK_REACH + Sectors.HULK_APART])
+	for h: Dictionary in hulks_here():
+		keep.append([h["pos"], 2.0 * Sectors.WRECK_REACH + Sectors.HULK_APART])
+	var clear := func(p: Vector2) -> bool:
+		for k: Array in keep:
+			if p.distance_to(k[0]) < float(k[1]):
+				return false
+		return true
+	var edge := Vector2(10.0, 10.0)
+	var far := Vector2(Sectors.SPAN - 10.0, Sectors.SPAN - 10.0)
+	if clear.call(at.clamp(edge, far)):
+		return at.clamp(edge, far).round()
+	for r in range(4, 120, 4):
+		for k in 24:
+			var p := (at + Vector2.from_angle(TAU * k / 24.0) * r).clamp(edge, far)
+			if clear.call(p):
+				return p.round()
+	return at.clamp(edge, far).round()
 
 
 # --------------------------------------------------------------- saving
@@ -613,7 +711,21 @@ func save() -> Dictionary:
 		hs.append(int(_fight["at"]))
 		esc.append(int(_fight.get("escaped", 0)))
 	return {"depth": depth, "entry": [entry.x, entry.y], "history": Array(history), "ticks": ticks_here, "next": next_hunter,
-		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys(), "work": work}
+		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys(), "work": work, "hulks": _hulks_saved()}
+
+
+func _hulks_saved() -> Dictionary:
+	var out := {}
+	for k: int in hulks.keys():
+		var list: Array = []
+		for h: Dictionary in hulks[k]:
+			var things: Array = []
+			for e: Array in h["things"]:
+				things.append([int(e[0]), Array(e[1] as PackedByteArray)])
+			list.append({"x": (h["pos"] as Vector2).x, "y": (h["pos"] as Vector2).y, "layout": h["layout"], "name": h["name"],
+				"things": things, "outcome": h["outcome"], "party": h["party"], "boarded": h["boarded"], "classic": (h["design"] as Dictionary).has("classic")})
+		out[str(k)] = list
+	return out
 
 
 func load_from(d: Dictionary) -> void:
@@ -636,6 +748,17 @@ func load_from(d: Dictionary) -> void:
 	var w: Dictionary = d.get("work", {})
 	for k in w:
 		work[int(k)] = int(w[k])
+	hulks = {}
+	var hd: Dictionary = d.get("hulks", {})
+	for k in hd:
+		for e: Dictionary in hd[k]:
+			var things: Array = []
+			for t: Array in e.get("things", []):
+				things.append([int(t[0]), PackedByteArray(t[1])])
+			add_hulk(int(k), {"pos": Vector2(float(e["x"]), float(e["y"])), "layout": int(e["layout"]), "name": str(e["name"]),
+				"id": server.new_ship_id(), "things": things, "air": {}, "outcome": str(e.get("outcome", "dead")),
+				"party": int(e.get("party", 0)), "boarded": bool(e.get("boarded", true)),
+				"design": {"layout": int(e["layout"]), "classic": true} if e.get("classic", false) else {"layout": int(e["layout"])}})
 	_fight = {}
 	_places_for = -1
 	_last_system = -1

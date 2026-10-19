@@ -85,6 +85,7 @@ static func snapshot(server: Node) -> Dictionary:
 	var own_doors: int = map.other_first_door if map.other_kind >= 0 else map.doors.size()
 	var jammed: PackedByteArray = server.doors.jammed.slice(0, own_doors)
 	var faulty: PackedByteArray = server.doors.faulty.slice(0, own_doors)
+	var picked: PackedByteArray = server.doors.picked.slice(0, own_doors)
 	var floor := {}
 	for cell: int in server.floor_things:
 		if not map.is_other(cell):
@@ -110,7 +111,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"jumps": server.jumps, "farthest": server.farthest, "won": server.won, "dead_names": server.dead_names.keys(),
 		"holes": holes, "broken": broken,
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
-		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty),
+		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty), "picked": Marshalls.raw_to_base64(picked),
 		"floor": floor, "crew": crew, "admins": server.admin.names.keys(),
 		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
@@ -264,6 +265,9 @@ static func restore(server: Node, data: Dictionary) -> String:
 		server.doors.faulty[d] = faulty[d] if d < faulty.size() else 0
 		if jammed[d] == 1:
 			server.doors.ready[d] = 0                # stuck open
+	var picked := Marshalls.base64_to_raw(str(data.get("picked", "")))    # (v69)
+	for d in mini(picked.size(), server.doors.picked.size()):
+		server.doors.picked[d] = picked[d]
 	server.floor_things.clear()
 	for cell: String in data["floor"]:
 		server.floor_things[int(cell)] = PackedByteArray(data["floor"][cell])

@@ -110,9 +110,11 @@ const P_AMBUSH := 5                  # (the author's notebook) a pirate ship lyi
 const P_ANOMALY := 6                 # (v67, the author's R1: work that pays only if you stay) an anomaly: scanned from a holomap
 const P_ASTEROID := 7                # (v67) an asteroid: ore breaks off for whoever of ours is outside
 const P_GAS := 8                     # (v67) a gas cloud: the fuel scoop fills the tank while somebody is at the engine
+const P_HULK := 9                    # (v69, the author) a pirate ship we wrecked: it stays on the chart where it died (see Road.hulks)
 const PLACE_NAMES: Array[String] = ["обломки", "контейнер", "тела", "брошенный корабль", "поле боя", "засада пиратов",
-	"аномалия", "астероид", "газовое облако"]
-const PLACE_WEIGHTS: Array[int] = [24, 20, 16, 10, 8, 7, 10, 12, 10]
+	"аномалия", "астероид", "газовое облако", "разбитый пират"]
+const PLACE_WEIGHTS: Array[int] = [24, 20, 16, 10, 8, 7, 10, 12, 10, 0]   # (a wreck is never rolled: our guns make it)
+const HULK_APART := 6.0              # (v69) a wreck lies at least this much further from another place than both reaches
 const PLACE_REACH := 6               # how close the ship must come to take a place
 const WORK_REACH := 10               # (v67) how close it must hold still to work at an anomaly, an asteroid or a gas cloud
 const WRECK_REACH := DOCK_RANGE      # an abandoned ship: as close as to a derelict

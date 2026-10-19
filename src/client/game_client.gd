@@ -932,7 +932,9 @@ func use_target(facing: int = -1) -> int:
 				return 11
 			if doors.is_sealed(door):
 				return 9
-			if doors.barred(door, map.door_access[door], pred.access):
+			if doors.picked[door] == 1:
+				return 40
+			if doors.barred(door, map.door_access[door], pred.access) and not map.leaving(pred.x, pred.y, door):
 				return 18
 	if lying_near(f) >= 0:
 		return 13
@@ -1144,9 +1146,14 @@ func send_store(action: int, item: int = Net.ITEM_NONE) -> void:
 
 
 func can_trade() -> bool:
-	## Docked with a trader, with power for the link (the same rule as Supplies.can_trade).
-	return powered() and sectors.count > 0 and sectors.kind[sector] == Sectors.TRADER \
+	## Docked with a trader or (v69) a supply station, with power for the link (the same rule as Supplies.can_trade).
+	return powered() and sectors.count > 0 and (sectors.kind[sector] == Sectors.TRADER or sectors.kind[sector] == Sectors.STATION) \
 		and sectors.within_reach(sector, ship_pos())
+
+
+func at_station() -> bool:
+	## (v69) Trading with a supply station: it only sells its few things (see Supplies.trader_here).
+	return sectors.count > 0 and sectors.kind[sector] == Sectors.STATION
 
 
 func powered() -> bool:

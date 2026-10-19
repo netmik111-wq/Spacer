@@ -102,13 +102,22 @@ func update(p: Player) -> void:
 			server.doors.locked[door] = 0
 			server.forced_until[door] = server.tick + Net.FORCED_OPEN_TICKS
 			server.chat.say("%s вручную поднимает аварийный шлюз." % p.name)
-	elif door >= 0 and server.doors.barred(door, server.map.door_access[door], p.st.access):
-		# no access: the lock can still be broken, slowly and for all to hear
+	elif door >= 0 and server.doors.barred(door, server.map.door_access[door], p.st.access) and not server.map.leaving(p.st.x, p.st.y, door):
+		# no access: the lock can still be broken, slowly and for all to hear;
+		# (v69) broken, it opens for anybody until somebody mends it
 		if _work_done(p, cell, Net.HACK_TICKS):
+			server.doors.picked[door] = 1
 			server.doors.ready[door] = server.tick + Doors.OPEN_TICKS
 			server.door_hold[door] = server.tick + Doors.OPEN_TICKS + Doors.HOLD_TICKS
 			server.chat.sound(Net.SOUND_BLOW, cell % server.map.width, cell / server.map.width, p.slot)
 			server.chat.say("%s взламывает замок двери: %s." % [p.name, Net.ACCESS_NAMES.get(server.map.door_access[door], "отсек")])
+	elif door >= 0 and server.doors.picked[door] == 1:
+		# (v69) a broken lock mended: the door asks for its access again
+		if _work_done(p, cell, mend_ticks):
+			p.train(Net.SKILL_REPAIR)
+			p.remove(Net.ITEM_PART)
+			server.doors.picked[door] = 0
+			server.chat.say("%s чинит взломанный замок: %s." % [p.name, Net.ACCESS_NAMES.get(server.map.door_access[door], "отсек")])
 	elif cell >= 0 and server.map.oxygen.has(cell) and server.powered() and p.has_suit():
 		p.work = 0
 		p.tank = minf(p.tank + Net.TICK_SEC / Vitals.REFILL_SECONDS, 1.0)
@@ -164,7 +173,8 @@ func usable_ahead(p: Player) -> bool:
 		return true
 	var door := map.door_of[cell]
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
-		or server.doors.faulty[door] == 1 or server.doors.is_sealed(door) or server.doors.barred(door, map.door_access[door], p.st.access))
+		or server.doors.faulty[door] == 1 or server.doors.is_sealed(door) or server.doors.picked[door] == 1
+		or server.doors.barred(door, map.door_access[door], p.st.access) and not map.leaving(p.st.x, p.st.y, door))
 
 
 func _lying_near(p: Player) -> bool:
