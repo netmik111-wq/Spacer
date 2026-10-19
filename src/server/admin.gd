@@ -107,7 +107,8 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 		Net.ADMIN_RESTOCK:
 			for item in Items.kept_in_locker():
 				server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)), restock_least(item))
-			server.chat.say("Администратор: шкаф снабжения пополнен: всё, что он хранит, хотя бы по одному.")
+			server.ship.tank = Net.FUEL_MAX                  # (v67) and the fuel tank
+			server.chat.say("Администратор: шкаф снабжения пополнен: всё, что он хранит, хотя бы по одному; бак топлива полон.")
 		Net.ADMIN_CREDITS:
 			server.ship.credits = mini(server.ship.credits + Net.ADMIN_CREDITS_GIVEN, 60000)
 		Net.ADMIN_HULL:

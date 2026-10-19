@@ -40,10 +40,10 @@ const Tales := preload("res://src/server/tales.gd")
 
 const BOTS := 3
 const KIND_NAMES := ["quiet", "meteors", "trader", "station", "derelict", "flagship", "ion storm"]
-const WANT_FUEL := 8                  # cans the captain keeps in the locker when it can buy
+const WANT_FUEL := 3                  # cans the captain keeps in the locker when it can buy (v67: each 100 units)
 const WANT_FOOD := 8
 const WANT_PATCHES := 4
-const LOW_FUEL := 4                   # under this (on top of a long jump's) it goes out of its way to a trader
+const LOW_FUEL := 4                   # (v67: jumps' worth of fuel, tank and cans) under this (on top of a long jump's) it goes out of its way to a trader
 const LOW_HULL := 0.5                 # under this share of the hull, likewise
 const EXPLORE_SHARE := 0.6            # it looks round this share of a cluster's systems before leaving it...
 const EXPLORE_TICKS := 20 * 60 * 20   # ... or for this long at most (the flagship's cluster: straight to it)
@@ -132,7 +132,7 @@ func _run(number: int, mode: int) -> void:
 	}
 	_credits = server.ship.credits
 	_hull = server.ship.hull
-	_fuel = server.ship.fuel()
+	_fuel = _jumps_left()
 	_food = int(server.ship.store.get(Net.ITEM_FOOD, 0))
 	_last_sector = server.ship.sector
 	_last_depth = 0
@@ -157,7 +157,7 @@ func _run(number: int, mode: int) -> void:
 		elif server.tick - stuck_since > 25 * 60 * Net.TICK_HZ:
 			rec["outcome"] = "stuck (no jump for 25 min)"
 			var sh = server.ship
-			rec["stuck_why"] = {"target": _target(), "here": sh.sector, "fuel": sh.fuel(), "engine_down": server.engine_down(),
+			rec["stuck_why"] = {"target": _target(), "here": sh.sector, "fuel": _jumps_left(), "engine_down": server.engine_down(),
 				"powered": server.powered(), "holds_ship": server.derelict.holds_ship(), "holds_jump": server.flagship.holds_jump(),
 				"cannot_jump": str(server.navigation.cannot_jump()), "broken": str(sh.broken), "credits": sh.credits,
 				"fighting": server.gunnery.fighting(), "here_kind": server.navigation.sector_kind(), "drive_wait": sh.drive_ready - server.tick,
@@ -212,8 +212,9 @@ func _think() -> void:
 	if server.tick % (5 * Net.TICK_HZ) == 0:
 		_arm_guns()
 		_fetch(Net.ITEM_FUEL, 2)
+		_pour()
 		_fetch(Net.ITEM_FOOD, 2)
-	if server.derelict.docked and server.ship.fuel() > 0 and server.tick >= _leave_at:
+	if server.derelict.docked and _jumps_left() > 0 and server.tick >= _leave_at:
 		server.derelict.dock(false)          # (a pirate ship that docked by force, or its wreck: draw off to jump on)
 	if server.ship.jump_to != Net.NO_SECTOR:
 		return
@@ -251,11 +252,11 @@ func _unstick() -> bool:
 	## something it does not handle. Note what it was (once), give up on this
 	## system's trader and jump to a neighbour. True if a jump was set.
 	var sh = server.ship
-	if server.gunnery.fighting() or cap.cond != Net.COND_OK or sh.fuel() < 1 or sh.jump_to != Net.NO_SECTOR:
+	if server.gunnery.fighting() or cap.cond != Net.COND_OK or _jumps_left() < 1 or sh.jump_to != Net.NO_SECTOR:
 		return false
 	if not rec.has("first_stall"):
 		rec["first_stall"] = {"t": snappedf(server.voyage_ticks / float(Net.TICK_HZ) / 60.0, 0.1), "target": _target(), "here": sh.sector,
-			"kind": server.navigation.sector_kind(), "fuel": sh.fuel(), "credits": sh.credits, "in_reach": sh.in_reach,
+			"kind": server.navigation.sector_kind(), "fuel": _jumps_left(), "credits": sh.credits, "in_reach": sh.in_reach,
 			"moving": sh.moving, "shopped": _shopped == server.jumps * 1000 + server.road.depth, "wants_shopping": _wants_shopping(),
 			"call_open": not server.story.call.is_empty(), "holds_ship": server.derelict.holds_ship(),
 			"holds_jump": server.flagship.holds_jump(), "derelict_here": server.derelict.here, "leave_wait": _leave_at - server.tick,
@@ -301,7 +302,7 @@ func _fetch(item: int, want: int) -> void:
 		var k := "fuel" if item == Net.ITEM_FUEL else "food"
 		rec[k]["fetched"] = int(rec[k].get("fetched", 0)) + got
 		_food = int(ship.store.get(Net.ITEM_FOOD, 0))
-		_fuel = ship.fuel()
+		_fuel = _jumps_left()
 
 
 func _fight_tick() -> void:
@@ -493,11 +494,26 @@ func _note_buy(what: String, price: int) -> void:
 	s[what] = int(s.get(what, 0)) + price
 
 
+func _jumps_left() -> int:
+	## (v67) Jumps' worth of fuel aboard: in the tank, and in cans in the locker.
+	var ship = server.ship
+	return floori((ship.tank + ship.fuel() * Net.CAN_FUEL) / maxi(ship.jump_cost, 1))
+
+
+func _pour() -> void:
+	## (v67) The crew pour a can into the tank when it runs low (as a bot on work does, at once).
+	var ship = server.ship
+	while ship.tank < ship.jump_cost * 2 and ship.fuel() > 0 and ship.tank <= Net.FUEL_MAX - Net.CAN_FUEL:
+		ship.store[Net.ITEM_FUEL] = ship.fuel() - 1
+		ship.tank += Net.CAN_FUEL
+	server.supplies.tell_store()
+
+
 func _travel() -> void:
 	var ship = server.ship
 	if server.tick < ship.drive_ready or server.engine_down() or server.derelict.holds_ship() != "" or server.flagship.holds_jump() != "":
 		return
-	if ship.fuel() < 1 or server.tick < _leave_at:
+	if _jumps_left() < 1 or server.tick < _leave_at:
 		return
 	var s = server.sectors
 	var here: int = ship.sector
@@ -524,12 +540,12 @@ func _target() -> int:
 	var here: int = ship.sector
 	var dist: PackedInt32Array = s.distances(here)
 	# short of something: the nearest trader or station, if one is near enough
-	var short: bool = ship.fuel() < LOW_FUEL + Sectors.EXIT_FUEL or ship.hull < ship.hull_max * LOW_HULL \
+	var short: bool = _jumps_left() < LOW_FUEL + Sectors.EXIT_FUEL or ship.hull < ship.hull_max * LOW_HULL \
 		or int(ship.store.get(Net.ITEM_FOOD, 0)) < 2
 	if short and ship.credits >= 10:
 		var best := -1
 		for i in s.count:
-			var reach := 3 if ship.fuel() >= LOW_FUEL else 99      # (nearly dry: any trader at all)
+			var reach := 3 if _jumps_left() >= LOW_FUEL else 99      # (nearly dry: any trader at all)
 			if s.kind[i] == Sectors.TRADER and dist[i] >= 0 and dist[i] <= reach and (best < 0 or dist[i] < dist[best]) \
 					and not (i == here and _shopped == server.jumps * 1000 + server.road.depth):
 				best = i
@@ -675,12 +691,12 @@ func _watch() -> void:
 	rec["hull"]["lowest"] = mini(int(rec["hull"]["lowest"]), ship.hull)
 	_hull = ship.hull
 	# fuel and food
-	var df: int = ship.fuel() - _fuel
+	var df: int = _jumps_left() - _fuel
 	if df < 0 and _cause != "trade":
 		rec["fuel"]["used"] += -df
 	elif df > 0 and _cause != "trade":
 		rec["fuel"]["found"] += df
-	_fuel = ship.fuel()
+	_fuel = _jumps_left()
 	var food := int(ship.store.get(Net.ITEM_FOOD, 0))
 	var dfo := food - _food
 	if dfo < 0:
@@ -759,7 +775,7 @@ func _watch() -> void:
 		_count_kind(server.navigation.sector_kind())
 		timeline.append({"t": snappedf(server.voyage_ticks / float(Net.TICK_HZ) / 60.0, 0.1), "jump": server.jumps,
 			"cluster": server.road.depth + 1, "kind": KIND_NAMES[server.navigation.sector_kind()],
-			"credits": ship.credits, "hull": ship.hull, "fuel": ship.fuel(),
+			"credits": ship.credits, "hull": ship.hull, "fuel": _jumps_left(),
 			"food": int(ship.store.get(Net.ITEM_FOOD, 0)), "reserve": server.reserve,
 			"flagship_growth": server.flagship.growth})
 

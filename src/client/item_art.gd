@@ -68,6 +68,31 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(9, 6) * u), Color(0.7, 0.72, 0.68))
 		canvas.draw_rect(Rect2(at + Vector2(5.5, 7.5) * u, Vector2(6, 3) * u), Color(0.85, 0.55, 0.25))
 		return
+	if item == Net.ITEM_SCRAP:
+		# (v67) scrap: a bent plate of hull and a torn strip
+		canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(2, 9) * u, at + Vector2(9, 5) * u, at + Vector2(14, 8) * u,
+			at + Vector2(12, 14) * u, at + Vector2(4, 13) * u]), Color(0.12, 0.12, 0.15))
+		canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(3, 9.5) * u, at + Vector2(9, 6) * u, at + Vector2(13, 8.5) * u,
+			at + Vector2(11.5, 13) * u, at + Vector2(4.5, 12) * u]), Color(0.5, 0.48, 0.45))
+		canvas.draw_line(at + Vector2(5, 10) * u, at + Vector2(11, 11) * u, Color(0.65, 0.35, 0.2), 0.9 * u)
+		canvas.draw_rect(Rect2(at + Vector2(10, 3) * u, Vector2(2, 4) * u), Color(0.38, 0.4, 0.46))
+		return
+	if item == Net.ITEM_ORE:
+		# (v67) a lump of ore with glinting veins
+		canvas.draw_circle(at + Vector2(8.5, 9.5) * u, 5.5 * u, Color(0.12, 0.12, 0.15))
+		canvas.draw_circle(at + Vector2(8.5, 9.5) * u, 4.6 * u, Color(0.42, 0.33, 0.28))
+		canvas.draw_circle(at + Vector2(6.5, 8) * u, 1.0 * u, Color(0.4, 0.85, 0.8))
+		canvas.draw_circle(at + Vector2(10.5, 11) * u, 0.8 * u, Color(0.4, 0.85, 0.8))
+		canvas.draw_circle(at + Vector2(9.5, 7) * u, 0.6 * u, Color(0.95, 0.8, 0.4))
+		return
+	if item == Net.ITEM_DATA:
+		# (v67) a data core: a chip with a glowing stripe
+		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(4, 5) * u, Vector2(9, 8) * u), Color(0.2, 0.3, 0.38))
+		canvas.draw_rect(Rect2(at + Vector2(5, 8) * u, Vector2(7, 1.4) * u), Color(0.75, 0.5, 1.0))
+		for k in 4:
+			canvas.draw_rect(Rect2(at + Vector2(4.5 + k * 2.4, 14) * u, Vector2(1, 1.5) * u), Color(0.8, 0.7, 0.3))
+		return
 	if item == Net.ITEM_CARGO:
 		# (v63) a quest's crate: a stencilled box
 		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.12, 0.12, 0.15))

@@ -45,11 +45,13 @@ func update_chart() -> void:
 		lines.append("Корабль в секторе %s. Двигатель перезаряжается: ещё %d с." % [sectors.describe(client.sector), int(ceil(wait))])
 	else:
 		lines.append("Корабль в секторе %s. Двигатель готов. Куда прыгаем?" % sectors.describe(client.sector))
-	var fuel := client.stock(Net.ITEM_FUEL)
-	if fuel > 0:
-		lines.append("Топливо в шкафу снабжения: %d. Прыжок сжигает одну канистру, долгий прыжок из скопления %d." % [fuel, Sectors.EXIT_FUEL])
-	else:
-		lines.append("Топлива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях и в тайниках.")
+	# (v67) fuel in units: a lane jump burns jump_cost from the tank, the long jump EXIT_FUEL times that
+	var fuel := client.fuel
+	var cans := client.stock(Net.ITEM_FUEL)
+	lines.append("Топливо в баке: %d из %d. Прыжок сжигает %d, долгий прыжок из скопления %d; полёт внутри сектора тоже расходует топливо.%s" % [
+		fuel, client.fuel_max, client.jump_cost, client.jump_cost * Sectors.EXIT_FUEL,
+		(" Канистр в шкафу: %d (по %d, заливать у двигателя)." % [cans, Net.CAN_FUEL]) if cans > 0 else
+		(" Топлива на прыжок нет! Его продаёт торговец, оно бывает в газовых облаках, на брошенных кораблях и в тайниках." if fuel < client.jump_cost else "")])
 	var k := sectors.exit_of(client.sector)
 	if k >= 0:
 		lines.append(("Это выход из скопления: долгим прыжком отсюда в скопление «%s» (%s). Назад в это скопление уже не вернуться." %
@@ -83,7 +85,7 @@ func update_chart() -> void:
 		lines.append("Цель пути, флагман пиратов, ждёт в %d-м скоплении: впереди ещё %d скоплени%s до него." % [Sectors.FLAG_DEPTH + 1, left, "е" if left == 1 else ("я" if left < 5 else "й")])
 	text.text = "\n".join(lines)
 	# one button per sector a lane leads to, the long jump at an exit, and the road; rebuilt when they change
-	var place_key := hash([sectors.cell[client.sector], client.road.get("known", PackedByteArray()), k, sectors.locked and not client.won, show_road])
+	var place_key := hash([sectors.cell[client.sector], client.road.get("known", PackedByteArray()), k, sectors.locked and not client.won, show_road, client.jump_cost])
 	if buttons_for != place_key:
 		buttons_for = place_key
 		for old in buttons.get_children():
@@ -93,11 +95,11 @@ func update_chart() -> void:
 			go.text = "Прыжок: %s" % (sectors.describe(id) if client.knows_sector(id) else "«%s», неизвестно" % sectors.names[id])
 			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			go.pressed.connect(client.send_jump.bind(id))
-			go.set_meta("fuel", 1)
+			go.set_meta("fuel", 1)              # (lane jumps' worth)
 			buttons.add_child(go)
 		if k >= 0:
 			var out := Button.new()
-			out.text = "Долгий прыжок: в скопление «%s» (%d топлива)" % [Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.EXIT_FUEL]
+			out.text = "Долгий прыжок: в скопление «%s» (%d топлива)" % [Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.EXIT_FUEL * client.jump_cost]
 			out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			out.pressed.connect(client.send_jump.bind(Sectors.EXIT_JUMP))
 			out.set_meta("fuel", Sectors.EXIT_FUEL)
@@ -114,7 +116,7 @@ func update_chart() -> void:
 		chart.queue_redraw()
 	for go in buttons.get_children():
 		if go is Button and go.has_meta("fuel"):
-			(go as Button).disabled = jumping or wait > 0.0 or fuel < int(go.get_meta("fuel")) \
+			(go as Button).disabled = jumping or wait > 0.0 or fuel < int(go.get_meta("fuel")) * client.jump_cost \
 				or (go.has_meta("exit") and sectors.locked and not client.won)
 	if jumping:
 		chart.queue_redraw()
@@ -401,7 +403,7 @@ const EXIT := Color(0.55, 0.95, 1.0)       # (v64) a way out of the cluster
 const HUNTER := Color(1.0, 0.3, 0.45)      # (v64) a pirate hunter
 const FOG := Color(0.55, 0.5, 0.65, 0.22)  # (v64) a nebula
 const PLACE_COLOURS: Array[Color] = [Color(0.75, 0.7, 0.6), Color(0.95, 0.75, 0.3), Color(0.85, 0.85, 0.95), Color(0.7, 0.7, 0.72),
-	Color(1.0, 0.6, 0.4), Color(1.0, 0.3, 0.45)]   # (v64) per Sectors.P_*
+	Color(1.0, 0.6, 0.4), Color(1.0, 0.3, 0.45), Color(0.75, 0.5, 1.0), Color(0.65, 0.55, 0.45), Color(0.4, 0.85, 0.75)]   # (v64) per Sectors.P_* (v67: and work places)
 const CLUSTER_COLOURS: Array[Color] = [Color(0.55, 0.62, 0.75), Color(0.95, 0.35, 0.3), Color(0.95, 0.85, 0.35), Color(0.4, 0.55, 1.0),
 	Color(0.6, 0.6, 0.55)]                 # (v64) per kind of cluster
 
@@ -506,6 +508,10 @@ func _draw_helm() -> void:
 			Sectors.P_WRECK:
 				chart.draw_arc(at, Sectors.WRECK_REACH * scale, 0.0, TAU, 24, Color(colour, 0.6), 1.0)
 				chart.draw_rect(Rect2(at - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
+			Sectors.P_ANOMALY, Sectors.P_ASTEROID, Sectors.P_GAS:
+				# (v67) work places: the ship must hold still inside the ring
+				chart.draw_circle(at, 4.0, colour)
+				chart.draw_arc(at, Sectors.WORK_REACH * scale, 0.0, TAU, 24, Color(colour, 0.5), 1.0)
 			_:
 				chart.draw_rect(Rect2(at - Vector2(3, 3), Vector2(6, 6)), colour)
 				chart.draw_arc(at, Sectors.PLACE_REACH * scale, 0.0, TAU, 16, Color(colour, 0.4), 1.0)

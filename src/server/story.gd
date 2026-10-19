@@ -36,7 +36,7 @@ const HUNT_DELAY := 6.0              # a bounty's pirate comes out this long aft
 const M1_FROM := 3                   # the first mission is offered this many jumps out from the start...
 const M1_TO := 11                    # ... up to this many (v64: the second and third clusters)
 const M1_AGAIN := 3                  # turned down, it is offered again this many jumps later
-const DRY_DRIFT := 0.3               # out of fuel: this often it is still the drifting can (Director), not a call
+const DRY_DRIFT := 0.1               # out of fuel: this often it is still the drifting can (Director), not a call (v67: was 0.3)
 const PIRATE_NAMES: Array[String] = ["Ржавый Клык", "Мясник Орро", "Вдова Кесс", "Шрам", "Безносый Тибо", "Капитан Гарь", "Сестра Зола"]
 
 var server: GameServer

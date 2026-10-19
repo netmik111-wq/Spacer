@@ -22,6 +22,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Items := preload("res://src/shared/items.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Player := preload("res://src/server/player.gd")
 
@@ -66,8 +67,9 @@ func jump_share() -> float:
 	return Gear.ENGINE_JUMP[tier(Gear.SYS_ENGINE)]
 
 
-func free_fuel() -> float:
-	return Gear.ENGINE_FREE_FUEL[tier(Gear.SYS_ENGINE)]
+func jump_fuel(long_jump: bool = false) -> int:
+	## (v67) Fuel a lane jump burns, by the engine's tier; the long jump out of a cluster twice that.
+	return Gear.JUMP_FUEL[tier(Gear.SYS_ENGINE)] * (Sectors.EXIT_FUEL if long_jump else 1)
 
 
 func scan_seconds() -> float:
@@ -146,6 +148,7 @@ func refresh() -> void:
 	## guns cut if the power no longer feeds them all (a weaker reactor went in).
 	var ship = server.ship
 	ship.armour = Gear.ARMOUR_RICOCHET[armour_tier()]
+	ship.jump_cost = jump_fuel()             # (v67)
 	if server.power != null:
 		server.power.coils_changed()
 	fit_power()

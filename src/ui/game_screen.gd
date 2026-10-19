@@ -1264,13 +1264,20 @@ func _process(delta: float) -> void:
 		if k >= 0:
 			share = roundi(100.0 * float(client.smes[k]["charge"]) / maxf(float(client.smes[k]["capacity"]), 1.0))
 		_hint.text = "E: терминал %s (заряд %d%%)" % ["резервного СМЭС" if k >= 0 and client.smes[k]["small"] else "СМЭС", share]
+	elif target == 33:
+		if client.fuel > client.fuel_max - Net.CAN_FUEL:
+			_hint.text = "Бак полон (%d из %d): канистра не войдёт" % [client.fuel, client.fuel_max]
+		else:
+			_hint.text = "Заливаю топливо…" if (_use_held and client.work > 0) else "Бак: %d из %d. Держите E, чтобы залить канистру (+%d)" % [client.fuel, client.fuel_max, Net.CAN_FUEL]
+	elif target == 34:
+		_hint.text = "Срезаю лом…" if (_use_held and client.work > 0) else "Обшивка мёртвого корабля. Держите E, чтобы срезать кусок лома"
 	elif target == 29:
 		if client.hull >= client.hull_max:
 			_hint.text = "Обшивка цела"
-		elif client.patches <= 0:
-			_hint.text = "Обшивка %d из %d: латать снаружи можно заплатками из шкафа снабжения" % [client.hull, client.hull_max]
+		elif client.patches <= 0 and client.scrap <= 0:
+			_hint.text = "Обшивка %d из %d: латать снаружи можно заплатками или ломом из шкафа снабжения" % [client.hull, client.hull_max]
 		else:
-			_hint.text = "Латаю обшивку…" if (_use_held and client.work > 0) else "Обшивка %d из %d. Держите E, чтобы залатать снаружи (+10 за заплатку)" % [client.hull, client.hull_max]
+			_hint.text = "Латаю обшивку…" if (_use_held and client.work > 0) else "Обшивка %d из %d. Держите E, чтобы залатать снаружи (+%d за заплатку, +%d за лом)" % [client.hull, client.hull_max, 15, 10]
 	elif target == 23:
 		var gear_why := client.gear_here(client.use_cell())
 		var item: int = client.slots[client.hand]

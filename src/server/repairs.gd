@@ -55,6 +55,14 @@ func update(p: Player) -> void:
 			server.to_all(server.ship.devices_packet())
 			server.chat.say("%s заканчивает ремонт: %s снова работает." % [p.name, server.map.device_name(cell)])
 			server.systems.power_changed()
+	elif cell >= 0 and can_pour(p, cell):
+		# (v67) a can of fuel poured into the tank at the engine
+		if _work_done(p, cell, Net.POUR_TICKS):
+			pour(p)
+	elif cell >= 0 and server.salvage.can_cut(p, cell) == "":
+		# (v67, the author's B2) scrap cut off a wreck or a derelict alongside (see Salvage)
+		if _work_done(p, cell, server.salvage.cut_ticks(p)):
+			server.salvage.cut(p, cell)
 	elif cell >= 0 and server.outfit.can(p, cell) == "":
 		# (v59) an engineer installs the crate of gear in hand (or takes a module out of the bay)
 		if _work_done(p, cell, server.outfit.ticks(p)):
@@ -108,6 +116,19 @@ func update(p: Player) -> void:
 		p.work = 0
 
 
+func can_pour(p: Player, cell: int) -> bool:
+	## (v67) A can of fuel in hand, facing a working engine, with room in the tank for it?
+	return p.in_hand() == Net.ITEM_FUEL and server.map.engine.has(cell) and not server.ship.broken.has(cell) \
+		and server.ship.tank <= Net.FUEL_MAX - Net.CAN_FUEL
+
+
+func pour(p: Player) -> void:
+	p.slots[p.hand] = Net.ITEM_NONE
+	server.ship.tank = minf(server.ship.tank + Net.CAN_FUEL, Net.FUEL_MAX)
+	server.supplies.tell_store()
+	server.chat.say("%s заливает канистру в бак: топлива %d из %d." % [p.name, floori(server.ship.tank), Net.FUEL_MAX])
+
+
 func _work_done(p: Player, cell: int, ticks: int) -> bool:
 	## One more tick of work on the thing in that cell. True when the job is finished.
 	if p.work_cell != cell or p.work_total != ticks:
@@ -133,6 +154,8 @@ func usable_ahead(p: Player) -> bool:
 		return true                          # (v59) a crate of gear where it goes, or the module bay
 	if server.outside.can_mend(p, cell) or map.smes.has(cell) or map.smes_small.has(cell):
 		return true                          # (v61) the hull from outside; an SMES's terminal
+	if server.salvage.can_cut(p, cell) != server.salvage.NOT_HERE:
+		return true                          # (v67) a wreck's wall to cut scrap off (or why not)
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
@@ -173,6 +196,10 @@ func press(p: Player) -> void:
 		pass                                 # (v66) the airlock door's button: the pump is at work
 	elif gear_why != "" and gear_why != server.outfit.NOT_HERE and not server.ship.broken.has(ahead):
 		server.chat.tell(p, gear_why)        # (v59) why that crate cannot go in here
+	elif ahead >= 0 and server.salvage.can_cut(p, ahead) != "" and server.salvage.can_cut(p, ahead) != server.salvage.NOT_HERE:
+		server.chat.tell(p, server.salvage.can_cut(p, ahead))     # (v67) why nothing can be cut off here
+	elif ahead >= 0 and server.map.engine.has(ahead) and p.in_hand() == Net.ITEM_FUEL and not can_pour(p, ahead):
+		server.chat.tell(p, "Бак полон: канистра не войдёт." if not server.ship.broken.has(ahead) else "Двигатель сломан: сначала почините его.")
 	elif gun_why != "" and gun_why != server.mounts.NOT_HERE:
 		server.chat.tell(p, gun_why)         # (v60) why that gun cannot go up here
 	elif ahead >= 0 and server.map.scanner.has(ahead):

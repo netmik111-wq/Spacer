@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v66 (version 0.59).
+Last updated: build v67 (version 0.60).
 
 Contents:
 
@@ -33,6 +33,7 @@ Contents:
 23. [Campaign: hull, end, saving](#23-campaign-hull-end-saving)
 24. [Controls](#24-controls)
 25. [The road: comms console, quests, food, hydroponics, modes (v63)](#25-the-road-comms-console-quests-food-hydroponics-modes-v63)
+26. [Work and money on the road (v67)](#26-work-and-money-on-the-road-v67)
 
 ---
 
@@ -264,7 +265,8 @@ Contents:
   over a cell shows its pressure in kPa and what is there. Updated twice a second; needs power.
   This is the only place the game shows air in rooms you are not in (the author asked for it).
 - **Mending the hull from outside** (v61): in a suit, out in space, face a whole cell of our hull with a
-  **patch** and hold E: **+10** hull per patch, **10 s** (the repair skill cuts it to half), up to 200.
+  **patch** and hold E: **+15** hull per patch (v67, the author's H2; was 10), **10 s** (the repair skill cuts it to
+  half), up to 200. (v67) With no patch in pockets, a piece of **scrap** is welded on: **+10**.
   A bot on «Работы» does it by itself when the hull is below **80%** with nothing to mend aboard and no
   fight: it takes up to 3 patches and a suit from the locker, fills its tank, pumps an airlock out, floats
   out, mends, comes back and pumps the chamber full. A pirate showing up calls it back.
@@ -297,7 +299,7 @@ Contents:
 |---|---|---|---|
 | Patch | seal a breach | 8 | 5 |
 | Radio | talk with «;» — everyone with a radio hears | 4 | 6 |
-| Fuel | a canister for one jump | 8 | 6 |
+| Fuel | a can of **100 units**, poured into the tank at the engine (v67) | 2 | 12 |
 | Spare part | repair three times faster | 5 | 10 |
 | Flashlight | soft round pool, 6 cells | 4 | 8 |
 | Pistol | 8 rounds, damage 30 | 1 (empty) | 25 |
@@ -308,12 +310,15 @@ Contents:
 | Spacesuit | helmet and oxygen tank | 2 (full) | 40 |
 | Jumpsuit | 2 pockets | 2 | 8 |
 | Backpack | 4 places | 2 | 15 |
+| Scrap («Лом», v67) | cut off wrecks; sold (4), welded onto the hull outside, refined into fuel | 0 | 4 |
+| Ore («Руда», v67) | from asteroids; sold (6), refined into fuel | 0 | 6 |
+| Scan data («Данные сканирования», v67, cargo) | from anomalies; sold (25) | 0 | 25 |
 
 ## 10. Supply locker, trader, credits
 
 - The **supply locker** is a yellow locker in a lower-deck wall. E opens the **ship's store** window
   (the locker doesn't need power):
-  - across the top: credits, fuel canisters, air for the plant (bar), hull integrity (bar),
+  - across the top: credits, (v67) the fuel tank (bar, units, jumps it holds and cans in the locker), air for the plant (bar), hull integrity (bar),
     crew reserve (bar);
   - every item the locker keeps as a card with its picture, how many are in the locker and how many you
     carry, grouped: repair and fuel, equipment, medicine, personal weapons, ship weapons, ammunition
@@ -330,8 +335,9 @@ Contents:
   - at a trader, the button "Торговля" opens the trader's window.
 - Only whole items go back: a used medkit can't be swapped for a new one, a loaded
   pistol goes back empty, a spacesuit only with a full tank.
-- The ship sets out with **30 credits** and a full air reserve for the plant.
-- **Credits**: **15** for the first jump into each new sector (no other income yet).
+- The ship sets out with **80 credits** (v67: was 30), **600** units of fuel in its tank, **2** cans and a full air reserve for the plant.
+- **Credits** (v67, the author's M1): visiting a new system pays **nothing**, "so people roam around and don't rush". Money
+  comes from work: selling scrap, ore and scan data, wanted goods, pirate rewards, quests (section 26).
 - **Trader**: fly the ship up to it; trading is done at the locker, power is needed.
   The **trader's window** (v49) sorts its goods into categories on the left: all, repair and fuel, equipment,
   medicine, personal weapons, ship weapons, ammunition, scouting (v53: the probe), services and upgrades. Each row shows the item, how many
@@ -348,10 +354,10 @@ Contents:
   bought it is gone from that trader. A gun of tier 3 is offered with its effect already rolled. Whatever you
   sold a trader can be **bought back** at the price it paid (a guard against a mistaken click; the list shows
   under "Выкуп"). What each trader sold and bought is saved with the campaign.
-  Services: air for the plant (10 cells for 5 credits), **hire a person into the crew reserve** (**30** credits,
+  Services: (v67) **fuel straight into the tank** (+**100** units for **12** credits), air for the plant (10 cells for 5 credits), **hire a person into the crew reserve** (**30** credits,
   no more than 9 in reserve), **patch the hull** (+**20** integrity for **10** credits).
 - **Supply station**: when docked, free of charge it restores air in the compartments and the plant's reserve,
-  tops fuel up to **3** canisters and patches the hull completely.
+  tops the fuel tank up to **300** units (v67) and patches the hull completely.
 
 ## 11. Light and darkness
 
@@ -682,7 +688,8 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 - While any of ours is aboard it **can't jump away** and a ransom **can't be taken**. Our own guns hitting a room
   may wound our boarders there too (25 health, 60% each).
 - When its whole crew is dead the ship is **captured** and salvaged: **150%** of its reward, **2 spare parts** and
-  a **can of fuel** into the hold. It stays alongside dead and dark, to be searched like a wreck.
+  a **can of fuel** into the hold. It stays alongside dead and dark, to be searched like a wreck (v67: and **14** pieces
+  of scrap can be cut off it, against 8 off a wreck).
 
 - (v64) A pirate of its crew that walks across onto our ship while ours are aboard leaves its crew count but is not
   dead: the chat says it crossed over, and it fights on aboard our ship.
@@ -724,8 +731,8 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   of its crew is at it; our guns can aim at it, and the gun console shows its room.
 - **Capture**: if every one of our crew is down (unconscious or dead) while its boarders are aboard,
   for **10 s**, the ship is taken and the campaign ends. Anyone getting back on their feet stops it.
-- **It grows with our gear**: for every mounted gun other than a plain laser it gets one more gun from its
-  list (battleship: ion, laser, heavy laser; carrier: laser, neural, heavy laser), up to 3.
+- (v67, the author's O1) **It no longer grows with our guns or gear**, only with time (below). (Before v67: one more
+  gun for every mounted gun past a plain laser, and more hull for our gear.)
 - **Winning**: wreck it, or board it and kill its whole crew. Everyone sees «ПОБЕДА» for 15 s and the chart
   says the flagship is beaten; its reward is **200** credits and the wreck can be searched. The voyage
   goes on after that; the flagship does not come back.
@@ -862,8 +869,7 @@ The author's tiers plan, part 1 (part 2, ship gear and its tiers, comes in v59).
   tier 3. The flagship's guns are all tier 3. Pirates use the new guns too (not the beams or the point defence).
   As a result the first pirate ships are weaker than before v58 (the rapid laser and the ion cannon are no longer
   tier 1 guns).
-- **The flagship grows** by half our tier points: each mounted gun of tier 2 counts 1, of tier 3 counts 2;
-  every 2 points add one more gun to it (spares in the cargo do not count).
+- (v67) The flagship no longer grows with our guns (it did, by half our tier points, from v58 to v66).
 - **Effects of tier 3 guns**, rolled for each gun found, bought or made, shown in its name and on its card:
   | Effect | What it does |
   |---|---|
@@ -884,9 +890,11 @@ The author's tiers plan, part 1 (part 2, ship gear and its tiers, comes in v59).
   the same way, and our scouting drone on its way in (60%). The console tells whether the enemy has one.
 - **Shells** (снаряды) are cargo like rockets: the autocannon and the Hammer spend one a shot; arms dealers and the
   black market sell them at 3.
-- **Rare gun drops** (the author: a reward, not routine). A wrecked pirate ship leaves one of its guns in its wreck
-  **30%** of the time; one taken by boarding always leaves one. Such a gun is one tier higher 10% of the time and
-  **damaged** 40% of the time. A derelict hides a ship gun 25% of the time (damaged 60%). The flagship's wreck
+- **Rare gun drops** (the author: a reward, not routine). (v67, the author's B2: "no full guns from ships; guns come
+  as a rare event") A pirate ship no longer leaves a whole gun: a wreck leaves **1** part of one of its guns' kind
+  **30%** of the time (or, half of those times, a crate of gear lying aboard), and one taken by boarding always leaves
+  **2** parts, into the hold. Rare events still bring whole guns: a derelict hides a ship gun 25% of the time (damaged
+  60%), a battlefield holds a damaged one 30% of the time. The flagship's wreck
   holds its own unique gun, the **«Сверхновая»**. A gun found lies on the floor: pick it up and carry it home
   through the airlock to the supply locker (it goes back like anything else). A damaged gun can't be mounted and
   is worth a third; mend it at the workbench.
@@ -922,7 +930,7 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
   |---|---|---|---|
   | Генератор щита (shield) | refills 2.5/s | «Бастион» 100 cr: 3.5/s | «Эгида» 200 cr: 4.5/s, and stops rockets and EMP rockets |
   | Реактор (reactor) | 8 power | «Факел» 120 cr: 10 | «Солнце» 240 cr: 12 |
-  | Двигатель (engine) | – | «Стриж» 90 cr: dodge +5% (while someone flies), jump charges in ¾ the time, 1 jump in 4 burns no fuel | «Сокол» 180 cr: dodge +10%, jump in half the time, 1 jump in 2 burns no fuel |
+  | Двигатель (engine) | – (a jump burns 40) | «Стриж» 90 cr: dodge +5% (while someone flies), jump charges in ¾ the time, a jump burns **35** (v67) | «Сокол» 180 cr: dodge +10%, jump in half the time, a jump burns **30** (v67) |
   | Сканеры (sensors) | a room every 7 s | «Око» 60 cr: every 4 s | «Всевидящее око» 120 cr: every 2.5 s, and the gun console shows each pirate gun's charge |
   The jump drive's rest after a jump shortens like its charge. A weaker reactor going in cuts guns (then the point
   defence, then the shield) until the power fits.
@@ -947,9 +955,7 @@ numbers what it does. Prices go ×1 / ×2.5 / ×5 by tier. Tiers come by distanc
   (`phase`, replaceable).
 - **Finding gear.** A wreck that leaves loot (see "Gun tiers") leaves a crate of gear instead of a gun **half** the
   time; a derelict's hidden find is a crate half the time. Traders sell crates (see the trader table).
-- **The flagship grows** with our gear too: half our gear's tier points (each system of tier 2 counts 1, of tier 3
-  counts 2; armour the same; the focusing array and the phase drive 1 each), each step giving it **+2 hull** and
-  a **10%** quicker shield.
+- (v67) The flagship no longer grows with our gear (from v59 to v66 it got +2 hull and a 10% quicker shield per step).
 - Gear is saved with the campaign.
 
 ### Crew at work (v60)
@@ -1122,8 +1128,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   systems** (up to **16** with a crew of 5 or more players; bots don't count) joined by **lanes**. The ship comes in on
   its left side and leaves by one of **two exits** on its right side. Everything follows from the game's seed: the
   same game always has the same clusters.
-- **Jumps go only along lanes** and burn **1** canister. Any system of the current cluster can be visited again.
-- **The long jump**: from an exit system, the sector console has «Долгий прыжок» (**2** canisters, a charge 1.5×
+- **Jumps go only along lanes** and burn fuel from the tank: **40** units (v67; **35** with the «Стриж» engine, **30** with the «Сокол»). Any system of the current cluster can be visited again.
+- **The long jump**: from an exit system, the sector console has «Долгий прыжок» (twice a lane jump's fuel, **80**, a charge 1.5×
   longer). It takes the ship into the **next cluster**, at its start; a cluster left behind can never be entered
   again. Each exit shows the **kind of cluster** it leads to (two exits never lead to the same kind).
 - **Kinds of cluster** (the first is always the frontier):
@@ -1147,7 +1153,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 - **What the chart shows** (the author's C7): the systems we have been to, those within **1/2/3 lanes** (by the sensors'
   tier), and the traders, stations and the flagship (they call out). The rest are «?» until we come near. A system
   inside a nebula shows only once visited.
-- **Exploring pays**: the first visit to a system pays **15** credits.
+- (v67) **Exploring pays nothing** (it paid 15 credits before): the author's M1.
 - **Old saves** (from before v64) go on at the start of a fresh first cluster; the reserve, the hull, the locker and the
   gear are kept; side quests are dropped, the chapter is kept (a mission under way is set anew in the new space).
 
@@ -1161,15 +1167,19 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 - **Hazards and pirates** (v61): pirate ships come in meteor showers and ion storms as often as in calm space.
   A meteor that strikes our hull in a fight strikes the pirate ship too: **1** off its hull and wear on a room.
 - **Jump**: 8 s of preparation, then 15 s for the engine to recharge.
-- **Fuel**: a jump burns **1** canister from the supply locker at the moment of the jump. Without fuel
-  in the locker a jump can't be set; if the last canister is taken out while the jump is charging, it is aborted.
-  The ship sets out with **8** canisters. Other sources: the trader (**6** credits), loot
-  on derelict and pirate ships, the supply station (up to **3**), a wrecked pirate ship (**1**).
-- If there isn't a single canister on board (in the locker, in pockets, on bodies or on the floor), after
-  **2 minutes** help comes. (v63) Most often a ship calls on the comms console: a passing trader sells **2** cans for
-  **20** credits, or leaves **1** for nothing if asked (also what happens when nobody answers), or kind people give
-  **2**. Three times in ten it is still the «Дрейфующее топливо» ("Drifting fuel") event: **2** canisters into the
-  locker. So there's no dead end without fuel, but time passes.
+- **Fuel** (v67, the author's R3 and his numbers): the ship has a **tank of 1000 units**. A lane jump burns **40/35/30**
+  by the engine's tier, the long jump twice that, at the moment of the jump; **flying inside a system burns 0.1 a unit of
+  distance** (crossing a whole system about 20). With an empty tank the ship drifts to a stop and the helm will not
+  move it. Without a jump's worth in the tank a jump can't be set, and one whose fuel ran out while charging is aborted.
+  Fuel comes as **cans of 100**: hold E at the engine with a can in hand (**3 s**) and it goes into the tank (not
+  past 1000, not into a broken engine). A bot on «Работы» pours cans from the locker while the tank is below **400**.
+  Sources: a trader's cans (**12**) or fuel straight into the tank (**100 for 12**), a gas cloud (section 26), the
+  refinery (section 26), loot, a supply station (tops the tank up to **300**), a wrecked pirate ship (**1** can).
+- If the ship cannot jump and has no can aboard (in the locker, in pockets, on bodies or on the floor), after
+  **4 minutes** (v67, the author's O2: was 2) help comes. Usually a ship calls on the comms console: nine times in ten a
+  passing trader sells **2** cans for **48** credits (double the price); begged, it leaves **1** only one time in four
+  (also when nobody answers); one time in ten kind people give **2**. One time in ten it is still the «Дрейфующее
+  топливо» ("Drifting fuel") event: **1** can into the locker. No dead end, but help is dear and slow.
 
 ### Places inside a system (v64)
 
@@ -1177,11 +1187,14 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   flagship): 0 (30%), 1 (40%), 2 (22%) or 3 (8%). The kind is shown before arrival only as the system's kind; the
   places themselves are **hidden until the sensors come within 35/50/70** (by their tier; 15 inside a nebula). Then the
   chat says so and they appear on the ship-control console. Fly onto one (within **6**) to take it, once.
-- **Обломки** (debris, 30%): 1–2 spare parts and 5–15 credits of scrap.
-- **Контейнер** (a dropped container, 25%): 2–3 things (patches, parts, medpatches, magazines, fuel, rations, shells,
+  (v67, the author's R2) **What a place gives floats out in space** 2–6 cells from one of our airlocks: somebody
+  in a suit goes out and brings it in. An armed **tractor beam** pulls one floating thing into the airlock every **5 s**.
+  A jump leaves whatever still floats behind. (A ship gear crate or a gun from a place floats too.)
+- **Обломки** (debris, 24%): (v67) **2–4 scrap** and, half the time, a spare part; no money.
+- **Контейнер** (a dropped container, 20%): 2–3 things (patches, parts, medpatches, magazines, fuel, rations, shells,
   rockets, a probe) and, 30% of the time, a crate of ship gear of the place's tier. **One in five is a pirate mine**:
   **12** off the hull and a breach.
-- **Тела** (bodies, 20%): one thing from their pockets and a note; **25%** of the time one of them still breathes:
+- **Тела** (bodies, 16%): one thing from their pockets and a note; **25%** of the time one of them still breathes:
   **+1 to the reserve**.
 - **Брошенный корабль** (an abandoned ship, 10%): it comes alongside like a derelict when the ship is within **10**, to
   be searched (never in a derelict system: one alongside at a time).
@@ -1190,6 +1203,14 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 - **Засада пиратов** (a pirate ambush, 7%; three times as often in pirate territory, rare in trade worlds): **seen from
   anywhere in the system** and drawn with its circle. Coming within **25** brings its pirate ship out (a raid). It can
   be flown around.
+- (v67, the author's R1: work that pays only if you stay) **Work places**, shown with a ring of **10**: the ship must
+  stop inside it, and somebody must work.
+  - **Аномалия** (anomaly, 10%; twice as often in a storm belt): somebody at a holomap for **30 s** scans it: **1–2 scan
+    data** into the locker.
+  - **Астероид** (asteroid, 12%): every **12 s** a piece of **ore** breaks off at the feet of one of ours out in space,
+    **4–8** in all.
+  - **Газовое облако** (gas cloud, 10%; never in a dead zone): while somebody stands at the engine the fuel scoop adds
+    **2.5 units a second** to the tank, **150–300** in all.
 
 ### Pirate hunters (v64)
 
@@ -1203,6 +1224,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   **6 s** later. Its ship is a pirate ship **3 steps** of danger harder than the place, with the hunter's temper, named
   «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
   our trail from where we left it.
+  (v67, the author's O3) Jumping out of any pirate fight: every pirate gun charged at least half fires a **parting
+  volley** as we go (it lands at once), and the next hunter comes **60 s** sooner.
   (v66) Each time we escape the same hunter it is slower: a lane takes it **75 s × (1 + 0.5 per escape)** (113 s after
   one escape, 150 s after two, 188 s after three).
 
@@ -1232,7 +1255,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 | Boarding | large | everywhere except a station |
 | Pirate ship: boarding | large | calm space, trader, derelict ship, (v61) meteor shower, ion storm |
 | Pirate ship: fight | large | calm space, trader, derelict ship, (v61) meteor shower, ion storm |
-| Drifting fuel (2 canisters) | small | by itself, only when there is no fuel on board |
+| Drifting fuel (1 can, v67) | small | by itself, only when the ship cannot jump and has no can aboard |
 | Flagship: battleship, Flagship: carrier (v57) | catastrophe | only on an admin's command |
 
 - Pace: once every 3–6 minutes in a calm sector, at a trader and (v61) in an ion storm (its surges come on
@@ -1491,3 +1514,27 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   «Гидропоника: всё созрело».
 - (v64) «Охотник входит в скопление», «Открыть все тайники системы», «В следующее скопление (верхний выход)» and
   «(нижний выход)».
+
+## 26. Work and money on the road (v67)
+
+The author's "make every part interesting" answers (`/mnt/project-files/plans/every-part-plan.md`): money comes from
+work, not from visiting; fuel is counted in units; places need a trip outside.
+
+- **Fuel in units**: section 19. A tank of 1000; jumps 40/35/30 by the engine; flying burns 0.1 a unit of distance;
+  cans of 100 poured at the engine.
+- **Scrap** («Лом»): hold E at a wall of a **dark ship alongside** (a derelict or a wreck), from inside it or from space
+  in a suit: **8 s** a piece (the repair skill cuts it to half), into the hand or a free slot (else at your feet). A
+  derelict gives **8** pieces (remembered for its system), a wreck **8**, a ship taken by boarding **14**; then «С этого
+  корабля больше нечего срезать». Debris and battlefields give scrap too (floating outside).
+- **What scrap, ore and scan data are for**: traders buy them at their **full price** (4, 6, 25), half as much again
+  when wanted; scrap welds the hull from outside (+10, section 8); the refinery makes fuel of scrap or ore.
+- **Traders want things** (the author's M3): each trader looks for **two** things among scrap, ore, scan data, rations,
+  spare parts, patches, medkits and shells, and pays **1.5×** their price for them. The chart's line for a trader
+  says «ищет: …», the chat says it on arrival, and the trader's window marks them. Nobody sells scrap, ore or scan data.
+- **The refinery** (the workbench, an engineer, **10 s**): a can of fuel from **4 scrap** or **3 ore**. It costs more
+  than buying (4 scrap sell for 16, 3 ore for 18, a can's worth costs 12 at a trader): it is for when no trader is near.
+- **Work places** (anomaly, asteroid, gas cloud) and **floating finds** with the tractor beam: section 19, "Places".
+- **Escaping a fight** costs a parting volley and brings the next hunter sooner (section 19, "Pirate hunters").
+- **No fuel**: help is slower and dearer (section 19, "Fuel").
+- The flagship grows **only with time** (section 17).
+

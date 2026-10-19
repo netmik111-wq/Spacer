@@ -215,8 +215,15 @@ func _loot() -> void:
 	var g: Gunnery = server.gunnery
 	_fight(g)
 	var before := _guns_on_floor()
+	var parts := 0
+	for k in Weapons.KINDS:
+		parts += int(server.ship.store.get(Items.gun_parts(k), 0))
 	var told := g._loot_gun(true)
-	_expect(told != "" and _guns_on_floor() == before + 1, "a ship taken by boarding always leaves one of its guns")
+	var after := 0
+	for k in Weapons.KINDS:
+		after += int(server.ship.store.get(Items.gun_parts(k), 0))
+	_expect(told != "" and _guns_on_floor() == before and after == parts + Gunnery.CAPTURE_GUN_PARTS,
+		"(v67, the author's B2) a ship taken by boarding leaves no whole gun: one is broken down into %d parts" % Gunnery.CAPTURE_GUN_PARTS)
 	g._drop_nova()
 	var nova := false
 	for things: PackedByteArray in server.floor_things.values():
@@ -286,7 +293,12 @@ func _traders() -> void:
 			guns += 1
 	_expect(guns == 0 and not junk.has(Net.ITEM_ROCKET) and int(junk[Net.ITEM_PATCH]) < Items.price(Net.ITEM_PATCH),
 		"a junk dealer has no guns and no ammunition, and its things are cheaper")
-	_expect(server.supplies.sell_price(Net.ITEM_PATCH) == Weapons.sell_price(Items.price(Net.ITEM_PATCH), 0.2), "it buys at a fifth")
+	var plain := Net.ITEM_PATCH
+	for item: int in [Net.ITEM_PATCH, Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_PART]:
+		if not server.supplies.wanted().has(item):
+			plain = item                     # (v67: not one it looks for, which it pays well for)
+			break
+	_expect(server.supplies.sell_price(plain) == Weapons.sell_price(Items.price(plain), 0.2), "it buys at a fifth")
 	sectors.deal[at] = Sectors.DEAL_BLACK
 	server.supplies._offers_for = -1
 	var black: Dictionary = server.supplies.offers()

@@ -87,6 +87,18 @@ func refresh() -> void:
 	_button(ammo, "2 ракеты", Net.BENCH_ROCKETS, 0, engineer and spare)
 	_button(ammo, "1 ЭМИ-ракета", Net.BENCH_EMP, 0, engineer and spare)
 	_rows.add_child(ammo)
+	# (v67) the refinery: a can of fuel from scrap or ore (dearer than buying fuel)
+	var fuel := HBoxContainer.new()
+	fuel.add_theme_constant_override("separation", 8)
+	var fwhat := _label(14, INK)
+	fwhat.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var scrap := int(client.store.get(Net.ITEM_SCRAP, 0))
+	var ore := int(client.store.get(Net.ITEM_ORE, 0))
+	fwhat.text = "Канистра топлива: лома %d, руды %d, канистр %d" % [scrap, ore, int(client.store.get(Net.ITEM_FUEL, 0))]
+	fuel.add_child(fwhat)
+	_button(fuel, "Из 4 лома", Net.BENCH_FUEL_SCRAP, 0, engineer and scrap >= 4)
+	_button(fuel, "Из 3 руды", Net.BENCH_FUEL_ORE, 0, engineer and ore >= 3)
+	_rows.add_child(fuel)
 	if guns.is_empty():
 		_rows.add_child(_label(14, DIM))
 		(_rows.get_child(-1) as Label).text = "В шкафу снабжения нет корабельных орудий. Снятые с пульта орудия и добыча попадают туда."

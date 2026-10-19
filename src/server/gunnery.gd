@@ -1712,6 +1712,7 @@ func _wrecked() -> void:
 			server.flagship.won(captured)
 			return
 		server.derelict.becomes_wreck()
+		server.salvage.captured()            # (v67) more scrap to cut off a ship taken whole
 		if crewless:
 			server.chat.say("Ядро дрон-корабля разбито: машина мертва, корабль наш! Он разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать.%s" % [paid, CAPTURE_PARTS + parts, gun])
 		else:
@@ -1744,19 +1745,23 @@ func _wrecked() -> void:
 const WRECK_GUN := 0.3               # the share of wrecks that leave one of their guns aboard (the author: rare, a reward)
 const LOOT_HIGHER := 0.1             # a looted gun is one tier higher this often (the next gun of its line)
 const WRECK_GEAR := 0.5              # (v59) of those, the share that leave a crate of gear instead of a gun
-const LOOT_DAMAGED := 0.4            # and damaged this often: mended at the workbench before it can be mounted
+const LOOT_DAMAGED := 0.4            # and damaged this often: mended at the workbench before it can be mounted (v67: wrecks leave no guns)
+const CAPTURE_GUN_PARTS := 2         # (v67) gun parts from a ship taken by boarding
 var wreck_gun_chance := WRECK_GUN    # (tests set it)
 var wreck_gear_chance := WRECK_GEAR  # (tests set it)
 
 
 func _loot_gun(captured: bool) -> String:
-	## One of its guns left lying in its wreck: always when we took it by boarding,
-	## at WRECK_GUN otherwise. It must be carried home through the airlock. What to tell ("" = none).
+	## What survives of its guns. (v67, the author's B2: "you can salvage part of the ship for more
+	## resources, but no full guns; guns come to you as a rare event") A wreck no longer leaves a whole
+	## gun: one of its guns is broken down into parts of its kind, into the hold (CAPTURE_GUN_PARTS when
+	## we took it by boarding, always; one part from a wreck, at WRECK_GUN), and a wreck may leave a crate
+	## of ship gear lying aboard instead (to be carried home through the airlock). What to tell ("" = none).
 	var guns: Array = Array(enemy_weapons).filter(func(w: int) -> bool: return Weapons.OURS.has(w))
 	if not captured and _rng.randf() >= wreck_gun_chance:
 		return ""
 	if not captured and (guns.is_empty() or _rng.randf() < wreck_gear_chance):
-		# (v59, the author: the wreck's chance holds for gear too) a crate of ship gear instead of a gun
+		# (v59, the author: the wreck's chance holds for gear too) a crate of ship gear
 		var far: int = server.sectors.far_from_start(server.ship.sector)
 		var crate: int = server.outfit.loot(far, _rng, _rng.randf() < LOOT_HIGHER)
 		if not server.derelict.drop_thing(crate):
@@ -1764,18 +1769,11 @@ func _loot_gun(captured: bool) -> String:
 		return " Среди обломков уцелел ящик с корабельным модулем: %s. Его можно забрать и отнести в шкаф снабжения." % Items.name_of(crate).to_lower()
 	if guns.is_empty():
 		return ""
-	var k: int = _rng.randi_range(0, guns.size() - 1)
-	var w: int = guns[k]
-	var fx: int = enemy_fx[enemy_weapons.find(w)] if enemy_weapons.find(w) < enemy_fx.size() else Weapons.FX_NONE
-	if _rng.randf() < LOOT_HIGHER and Weapons.next_of(w) != Weapons.NONE:
-		w = Weapons.next_of(w)
-		fx = Weapons.roll_fx(w, _rng)
-	var item := Weapons.item_of(w, fx)
-	if _rng.randf() < LOOT_DAMAGED:
-		item = Weapons.item_of(w, Weapons.FX_NONE, true)
-	if not server.derelict.drop_thing(item):
-		return ""
-	return " Среди обломков уцелело орудие: %s. Его можно забрать и отнести в шкаф снабжения." % Items.name_of(item).to_lower()
+	var w: int = guns[_rng.randi_range(0, guns.size() - 1)]
+	var n := CAPTURE_GUN_PARTS if captured else 1
+	var item := Items.gun_parts(Weapons.kind(w))
+	server.ship.store[item] = int(server.ship.store.get(item, 0)) + n
+	return " Орудие «%s» разобрано на детали: %s ×%d в трюм." % [Weapons.name_of(w), Items.name_of(item).to_lower(), n]
 
 
 func _drop_nova() -> void:
@@ -1786,6 +1784,31 @@ func _drop_nova() -> void:
 
 
 # ---------------------------------------------------------------- the enemy's guns
+
+const PARTING_READY := 0.5           # (v67) its guns charged this far fire a parting volley when we jump away
+
+
+func parting_volley() -> void:
+	## (v67, the author's O3) Our ship jumps out of a fight: escaping is still always
+	## possible, but every gun of the pirates' charged PARTING_READY or more fires once
+	## as we go, landing at once, and the next hunter comes sooner (Road.escaped).
+	if not fighting():
+		return
+	server.road.escaped()
+	if down(Net.ESYS_WEAPONS) or ransom > 0:
+		return
+	var was := flies
+	flies = false
+	var fired := 0
+	for k in enemy_weapons.size():
+		if enemy_charge[k] >= PARTING_READY:
+			enemy_charge[k] = 0.0
+			fired += 1
+			_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE)
+	flies = was
+	if fired > 0:
+		server.chat.say("Уходя прыжком, корабль попал под прощальный залп пиратов (%d орудий)." % fired)
+
 
 func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 	## A shot (or burst) of one of the pirate ship's guns. It goes for our guns

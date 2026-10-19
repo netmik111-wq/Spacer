@@ -23,6 +23,7 @@ const DIM := Color(0.58, 0.62, 0.7)
 const GOOD := Color(0.45, 0.85, 0.55)
 const WARN := Color(0.95, 0.75, 0.3)
 
+const LOOT: Array[int] = [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA]   # (v67) what traders pay full price for
 var client: GameClient
 var back: Callable                   # set by GameScreen: back to the store's screen
 var _credits: Label
@@ -91,12 +92,14 @@ func _cat_button(k: int, text: String) -> void:
 
 func refresh() -> void:
 	## Called every frame while the screen is shown: rebuilt only when something changed.
-	var sig := "%d|%d|%s|%s|%d|%s|%d|%d|%d|%d|%d" % [_cat, client.credits, str(client.store), str(client.trade), client.trade_flags, str(client.trade_back),
-		client.hull, client.reserve, roundi(client.store_air), client.shield_flags, 1 if client.can_trade() else 0]
+	var sig := "%d|%d|%s|%s|%d|%s|%d|%d|%d|%d|%d|%s|%d" % [_cat, client.credits, str(client.store), str(client.trade), client.trade_flags, str(client.trade_back),
+		client.hull, client.reserve, roundi(client.store_air), client.shield_flags, 1 if client.can_trade() else 0, str(client.trade_wants), client.fuel]
 	if sig == _shown:
 		return
 	_shown = sig
 	_credits.text = "Торговец: %s · Кредиты: %d" % [Sectors.DEAL_NAMES[client.trade_deal], client.credits]
+	if client.trade_wants.size() == 2:
+		_credits.text += " · Ищет: %s, %s" % [Items.name_of(client.trade_wants[0]).to_lower(), Items.name_of(client.trade_wants[1]).to_lower()]
 	for k: int in _cat_buttons.keys():
 		(_cat_buttons[k] as Button).set_pressed_no_signal(k == _cat)
 	for old in _rows.get_children():
@@ -200,8 +203,13 @@ func _thing_row(item: int) -> void:
 	var price: int = client.trade.get(item, 0)
 	var w := Weapons.of_item(item)
 	var share := client.trade_shares[1] if w != Weapons.NONE else (client.trade_shares[2] if _ammo(item) else client.trade_shares[0])
+	var wanted := client.trade_wants.has(item)
+	if wanted:
+		share = roundi(Sectors.WANT_PAYS * 100.0)          # (v67) what it looks for
+	elif LOOT.has(item):
+		share = roundi(Sectors.LOOT_PAYS * 100.0)          # (v67) scrap, ore, scan data
 	var sell := Weapons.sell_price(Items.price(item), share / 100.0)
-	var detail := "в шкафу: %d" % have
+	var detail := "в шкафу: %d%s" % [have, " · торговец ищет это, платит в полтора раза больше" if wanted else ""]
 	if w != Weapons.NONE:
 		detail = "в трюме: %d · энергия %d · заряд %d с · урон %d" % [have, Weapons.power(w), int(Weapons.info(w)["charge"]), int(Weapons.info(w)["damage"])]
 		if Weapons.fx_of(item) != Weapons.FX_NONE:
@@ -214,6 +222,10 @@ func _thing_row(item: int) -> void:
 
 
 func _services() -> void:
+	var tank := _row(Net.ITEM_NONE, "Топливо в бак +%d" % Net.FUEL_LOT, "в баке: %d из %d" % [client.fuel, client.fuel_max],
+		"Заливает топливо прямо в бак корабля.")
+	_button(tank, "Купить: %d кр." % Net.PRICE_FUEL, client.credits >= Net.PRICE_FUEL and client.fuel <= client.fuel_max - Net.FUEL_LOT,
+		func() -> void: client.send_store(Net.STORE_BUY_FUEL))
 	var row := _row(Net.ITEM_NONE, "Воздух для установки +%d" % int(Net.AIR_LOT), "запас: %d из %d" % [roundi(client.store_air), int(Net.STORE_AIR_FULL)],
 		"Пополняет запас воздушной установки.")
 	_button(row, "Купить: %d кр." % Net.PRICE_AIR, client.credits >= Net.PRICE_AIR and client.store_air < Net.STORE_AIR_FULL,

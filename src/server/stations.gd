@@ -368,6 +368,8 @@ const TASK_MOUNT := 3                # a gun mount: to put the gun it carries up
 const TASK_OXYGEN := 4               # an oxygen station: to fill its suit's tank
 const TASK_HEAL := 5                 # an autodoc's bed: to be healed
 const TASK_GARDEN := 6               # (v63) a hydroponic tray: to plant, tend, harvest or clear it
+const TASK_FUEL := 7                 # (v67) the engine: to pour a can of fuel into the tank
+const BOT_POURS_BELOW := 400.0       # (v67) a bot on work pours cans from the locker while the tank is below this
 const TANK_LOW := 0.35               # (v60) a bot with less in its tank goes to fill it before it works on
 const TANK_FULL := 0.95
 const SUPPLY_AIR := 0.8              # a bot turns its suit's supply on in air thinner than this
@@ -506,7 +508,7 @@ func _plan(p: Player, here: int) -> void:
 
 func _doing(p: Player) -> int:
 	match p.bot_task:
-		TASK_MEND, TASK_GARDEN:
+		TASK_MEND, TASK_GARDEN, TASK_FUEL:
 			return Net.DOING_WORK
 		TASK_LOCKER, TASK_MOUNT, TASK_OXYGEN:
 			return Net.DOING_CARRY
@@ -598,6 +600,18 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 			_add_spots(p, c, goals, taken)
 	if not goals.is_empty():
 		return TASK_GARDEN
+	# (v67) fuel: a can from the locker into the tank at the engine
+	if server.ship.tank < BOT_POURS_BELOW:
+		if p.count(Net.ITEM_FUEL) > 0:
+			for c: int in map.engine.keys():
+				if not server.ship.broken.has(c):
+					_add_spots(p, c, goals, taken)
+			if not goals.is_empty():
+				return TASK_FUEL
+		elif int(server.ship.store.get(Net.ITEM_FUEL, 0)) > 0 and not map.engine.is_empty():
+			_locker_goals(p, goals, taken)
+			if not goals.is_empty():
+				return TASK_LOCKER
 	# the console's orders for the guns
 	var i := _haul_job(p)
 	p.haul = i
@@ -756,6 +770,16 @@ func _work(p: Player) -> void:
 		TASK_MOUNT:
 			_at_mount(p)
 			return
+		TASK_FUEL:
+			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+			var k := p.slots.find(Net.ITEM_FUEL)
+			if k >= 0:
+				p.hand = k
+			p.using = ahead >= 0 and k >= 0 and server.repairs.can_pour(p, ahead)
+			p.doing = Net.DOING_WORK
+			if not p.using:
+				p.bot_plan_tick = -1000
+			return
 		TASK_GARDEN:
 			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
 			p.using = ahead >= 0 and server.garden.can(p, ahead) == ""
@@ -810,6 +834,9 @@ func _at_locker(p: Player) -> void:
 		for n in (2 if item == Net.ITEM_PATCH else 1):
 			if int(server.ship.store.get(item, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
 				sup.store_asked(p, Net.STORE_TAKE, item)
+	if server.ship.tank < BOT_POURS_BELOW and p.count(Net.ITEM_FUEL) == 0 and int(server.ship.store.get(Net.ITEM_FUEL, 0)) > 0 \
+			and p.count(Net.ITEM_NONE) > 0 and not server.map.engine.is_empty():
+		sup.store_asked(p, Net.STORE_TAKE, Net.ITEM_FUEL)        # (v67) a can for the tank
 	if not p.has_suit() and _store_suit() >= 0 and p.count(Net.ITEM_NONE) > 0:
 		sup.store_asked(p, Net.STORE_TAKE, _store_suit())
 		var k := p.slots.find(_store_suit())

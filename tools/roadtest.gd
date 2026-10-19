@@ -125,9 +125,19 @@ func _off(from: Vector2, d: float) -> Vector2:
 
 
 func _locker() -> int:
+	## What the ship has: in the locker, and (v67) floating outside by the airlock, to be fetched.
 	var n := 0
 	for item in server.ship.store:
 		n += int(server.ship.store[item])
+	for c: int in server.salvage.floating():
+		n += Net.FLOOR_STACK - (server.floor_things[c] as PackedByteArray).count(Net.ITEM_NONE)
+	return n
+
+
+func _scrap_out() -> int:
+	var n := 0
+	for c: int in server.salvage.floating():
+		n += (server.floor_things[c] as PackedByteArray).count(Net.ITEM_SCRAP)
 	return n
 
 
@@ -157,7 +167,7 @@ func _places() -> void:
 		_run(1)
 		_expect(hidden and r.found.has(key) and not r.taken.has(key),
 			"%s: hidden until the sensors come within %.0f, then marked" % [Sectors.PLACE_NAMES[kind], r.scan_range()])
-		var parts := int(server.ship.store.get(Net.ITEM_PART, 0))
+		var scrap := _scrap_out()
 		var things := _locker()
 		var hull := server.ship.hull
 		var reserve := server.reserve
@@ -167,7 +177,7 @@ func _places() -> void:
 		_expect(r.taken.has(key), "flown onto, it is taken")
 		match kind:
 			Sectors.P_DEBRIS:
-				_expect(int(server.ship.store.get(Net.ITEM_PART, 0)) > parts, "debris: spare parts in the locker")
+				_expect(_scrap_out() >= scrap + 2, "(v67) debris: scrap floating outside by the airlock")
 			Sectors.P_CONTAINER:
 				_expect(_locker() > things or server.ship.hull < server.ship.hull_max, "a container: things in the locker, or a mine went off")
 			Sectors.P_BODIES:
@@ -342,9 +352,9 @@ func _long_jump() -> void:
 	_enter_cluster(0)
 	_expect(r.can_leave() != "", "not from the start: only from an exit")
 	_arrive_at(s.cell[s.exits[1]])
-	server.ship.store[Net.ITEM_FUEL] = 1
-	_expect(r.can_leave().contains("топлива"), "from an exit, but it needs %d cans" % Sectors.EXIT_FUEL)
-	server.ship.store[Net.ITEM_FUEL] = 5
+	server.ship.tank = server.ship.jump_cost * Sectors.EXIT_FUEL - 1
+	_expect(r.can_leave().contains("топлива"), "from an exit, but it needs %d units" % (server.ship.jump_cost * Sectors.EXIT_FUEL))
+	server.ship.tank = Net.FUEL_MAX
 	_expect(r.can_leave() == "", "with them, it can be set")
 	_enter_cluster(Sectors.FLAG_DEPTH)
 	_arrive_at(s.cell[s.exits[0]])

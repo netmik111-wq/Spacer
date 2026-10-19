@@ -83,8 +83,8 @@ const PACE := {
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
 const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector
 const STREAM_GRACE_SECONDS := 8.0    # quiet after flying into or out of a meteor stream
-const RESCUE_SECONDS := 120.0        # a ship with no fuel aboard at all finds some after this long
-const RESCUE_FUEL := 2               # cans in that find
+const RESCUE_SECONDS := 240.0        # a ship with no fuel aboard at all finds some after this long (v67, the author's O2: was 120)
+const RESCUE_FUEL := 1               # cans in that find (v67: was 2)
 
 var server: Node                     # the GameServer: the director reads it and calls its methods
 var auto := true                     # false: only events fired by hand happen
@@ -143,7 +143,7 @@ func _watch_fuel(now: int) -> void:
 	## A ship with not a single can of fuel left could be stuck for good: no
 	## jump, and no trader or nothing to pay one with. Space is cruel, but not
 	## a dead end: after a while a drifting container of fuel turns up.
-	if server.supplies.fuel_aboard() > 0:
+	if server.supplies.fuel_aboard() > 0 or server.ship.can_jump():      # (v67: not enough in the tank for a jump, and no cans)
 		_dry_until = -1
 	elif _dry_until < 0:
 		_dry_until = now + int(RESCUE_SECONDS * Net.TICK_HZ)

@@ -923,3 +923,46 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
 - The pump a button runs must be our own (`on_ship` of the pump's front): `Ship.pumps` is our ship's.
 - The author's other answers: L3 A (follow as built), L4 A (pirates use the airlock), L5 D (a question round on making
   every part of the game interesting comes before the next plan).
+
+### Work and money on the road (v67, the author's "every part" answers)
+
+Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.ai/artifact/1mLabQSBdQ7TskVPLU586r.
+- **Visiting pays nothing** (the author's M1: "so people roam around and don't rush"). `Net.EXPLORE_REWARD` = 0. Money comes
+  from work. To keep the first cluster alive the ship starts with **80** credits (was 30): my pick, put to him.
+- **Fuel in units** (his R3 and his numbers): a tank of 1000 (`Ship.tank`, server only, sent at the end of `S_STORE`); a
+  lane jump 40/35/30 by the engine's tier (`Gear.JUMP_FUEL`, his "40 35 30"), the long jump `Sectors.EXIT_FUEL` (2) times
+  that; flying inside a system 0.1 a unit of distance (his "fuel per inner movement, more like STtE"; my reading, which he
+  agreed to: lanes stay one price). The engine's "free jump" chance (v59) is gone: a better engine now simply burns less.
+  The old can stays as an item of 100 units (12 credits, my pick) poured at the engine with E (3 s), so finds and loot keep
+  working; traders also pour 100 straight into the tank for 12 (`STORE_BUY_FUEL`). Start: 600 in the tank and 2 cans.
+  A station tops the tank up to 300. `Ship.can_jump()` is the one question "is there fuel for a jump".
+- **Bots pour cans** (`Stations.TASK_FUEL`, `BOT_POURS_BELOW` 400): without it a crew of bots would strand the ship with
+  cans in the locker. Players do it by hand.
+- **Scrap** (`Salvage`, his B2: "salvage part of the ship for more resources, but no full guns"): cut by hand off a dark
+  ship's walls, 8 s, a budget per ship (derelict 8 per system, wreck 8, captured 14: my numbers) so a wreck is a trip, not
+  a mine. Scrap sells at 4, welds +10 onto the hull outside (his H2: the hull comes back from the crew's work; patches
+  now +15), and refines into fuel.
+- **No whole guns from pirate ships** (his B2): `_loot_gun` gives parts of a gun's kind (1 from a wreck at 30%, 2 from a
+  capture). Derelicts' hidden guns (25%) and the battlefield's damaged gun (30%) stay: they are the "rare event".
+- **Places float** (his R2: places need a crew trip outside; a tractor beam pulls small things in): `Salvage.float_out`
+  puts finds in space 2–6 cells from an airlock that opens to space; an armed tractor beam brings one into the chamber
+  every 5 s; a jump leaves them behind (otherwise jumping first and fetching later would undo the trip). Debris gives
+  scrap, no credits.
+- **Work places** (his R1: "work that pays only if you stay"): anomaly (holomap 30 s → 1–2 scan data, sold at 25),
+  asteroid (ore every 12 s to one of ours outside, 4–8), gas cloud (2.5 units a second with somebody at the engine,
+  150–300). Not taken on arrival; the ship must stop within `Sectors.WORK_REACH`. They take weight from the old places
+  (debris 30→24, container 25→20, bodies 20→16). No gas in dead zones ("little fuel"), anomalies twice in storm belts.
+- **Traders want things** (his M3): two of `Sectors.WANTS` per trader by the seed (`Sectors.wants`, packed after the road),
+  paid at 1.5×; scrap, ore and data at full price otherwise; nobody sells them.
+- **The refinery** (his R3: "costs more than finding or buying fuel"): 4 scrap (16 cr) or 3 ore (18 cr) → a can (12 cr).
+- **The flagship grows only with time** (his O1): `Shipyard.upgrades()` and `gear_upgrades()` return 0, so buying guns
+  and gear is never a trap.
+- **Out of fuel** (his O2): the wait is 240 s (was 120); the passing trader's 2 cans cost 48 (double); begged, it gives a
+  can one time in four; kind people and the drifting can are one in ten each. "Dry" now means "cannot jump and no can
+  aboard".
+- **Escaping a fight** (his O3: always possible, but it costs): `Gunnery.parting_volley` fires every pirate gun charged
+  half or more as the jump lands (at once, since flying shots are dropped when a ship leaves), and `Road.escaped` brings
+  the next hunter 60 s sooner. The v66 slower-hunter rule stays.
+- Not in v67 (later builds in the plan): deckhand/sailor removal, injuries, alert levels, fights with goals, hunger that
+  kills. The simulator's captain (`tools/playthrough.gd`) only learned to count fuel in units and pour cans; it does not
+  salvage or work places yet, so its money numbers undercount a real crew.

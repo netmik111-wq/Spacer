@@ -182,6 +182,22 @@ the top right), make the dark "deep dark" as in the SS13 screenshot, and make th
 around the main character look like SS13 (there the player stands in a small soft pool of light, and
 everything else is black with only faint outlines).
 
+## Every part interesting (19 October 2026)
+
+The author's answers to 34 questions on making each part of the game worth playing
+(`/mnt/project-files/plans/every-part-plan.md`), the parts that are vision rather than a single build:
+- Every job always has small work waiting. Bots do the work, but a person at a post is clearly better.
+- Money comes from work, never from just visiting a system: "so people roam around and don't rush".
+- Ship guns are not salvaged whole from ships: "you can salvage part of the ship for more resources, but no full
+  guns; guns come to you as a rare event".
+- Difficulty settings add **mechanics, not enemy health**: hard mode means more systems to look after (for example
+  toolboxes and part kinds for repairs).
+- Breakdowns should come from causes in fights, "not from nothing, but create more danger".
+- Hunger can kill after a long time, and slows people down before that.
+- Something unknown lives in dark places and hunts by sound; a second chapter follows the flagship, and
+  **entropy is a hidden threat** that grows.
+- Later, several reactors spread over the ship, "so a dead reactor is not a dead ship". Fire gets its own question round.
+
 ## What of this is already in the game
 
 - Air without hints, the author's instruments, bodies of the dead.

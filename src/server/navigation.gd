@@ -7,6 +7,7 @@ const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Items := preload("res://src/shared/items.gd")
 
 const EXIT_CHARGE := 1.5             # (v64) the long jump out of a cluster charges this many times longer
 
@@ -37,6 +38,9 @@ func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 	if go and held != "":
 		server.chat.say(held)
 		return
+	if go and server.ship.tank <= 0.0:
+		server.chat.say("Баки пусты: своим ходом корабль не пойдёт. Залейте канистру топлива у двигателя.")   # (v67)
+		return
 	server.ship.moving = go
 	server.ship.dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else server.ship.pos
 	server.to_all(server.ship.helm_packet(server.tick))
@@ -44,7 +48,14 @@ func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 
 func update() -> void:
 	if server.ship.moving:
+		var was := server.ship.pos
 		server.ship.pos = server.ship.pos.move_toward(server.ship.dest, Sectors.SHIP_SPEED * Net.TICK_SEC)
+		if server.ship.jump_to == Net.NO_SECTOR:
+			# (v67, the author's R3) flying inside a system burns fuel by the distance (not coasting into a jump)
+			server.ship.tank = maxf(server.ship.tank - was.distance_to(server.ship.pos) * Net.FLIGHT_FUEL, 0.0)
+			if server.ship.tank <= 0.0:
+				server.ship.dest = server.ship.pos
+				server.chat.say("Баки опустели: корабль лёг в дрейф. Залейте канистру топлива у двигателя.")
 		if server.ship.pos.is_equal_approx(server.ship.dest):
 			server.ship.moving = false
 			server.to_all(server.ship.helm_packet(server.tick))
@@ -63,20 +74,24 @@ func update() -> void:
 			if now_in:
 				server.air.refill()
 				server.ship.store_air = Net.STORE_AIR_FULL
-				var topped := server.ship.fuel() < Net.STATION_FUEL
+				var topped := server.ship.tank < Net.STATION_FUEL
 				if topped:
-					server.ship.store[Net.ITEM_FUEL] = Net.STATION_FUEL
+					server.ship.tank = Net.STATION_FUEL
 				var patched := server.ship.hull < server.ship.hull_max
 				server.ship.hull = server.ship.hull_max
 				server.supplies.tell_store()
 				server.chat.say("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %
-					[", топлива в шкафу теперь %d канистры" % Net.STATION_FUEL if topped else "",
+					[", топлива в баке теперь %d единиц" % Net.STATION_FUEL if topped else "",
 					", обшивка залатана" if patched else ""])
 				server.chat.say("Станция продаёт охранных роботов%s: покупки у шкафа снабжения." % (
 					" и расширитель модульной стойки" if server.ship.modules.size() < Gear.MODULE_SLOTS_MAX else ""))
 		Sectors.TRADER:
 			if now_in:
 				server.chat.say("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
+				var w: PackedByteArray = server.supplies.wanted()
+				if w.size() == 2:
+					server.chat.say("Торговец ищет: %s и %s. За них он платит в полтора раза дороже обычного." % [
+						Items.name_of(w[0]).to_lower(), Items.name_of(w[1]).to_lower()])
 
 
 func sectors_packet() -> PackedByteArray:
@@ -95,7 +110,7 @@ func tell_nav() -> void:
 func cannot_jump() -> bool:
 	## (v54) Is the way out by jump closed: the engine out, no fuel, or every
 	## sector console broken? (Pirates who see us so, with our guns silent, board.)
-	if server.engine_down() or server.ship.fuel() <= 0:
+	if server.engine_down() or not server.ship.can_jump():
 		return true
 	for cell: int in server.map.chart.keys():
 		if not server.ship.broken.has(cell):
@@ -114,8 +129,9 @@ func jump_asked(p: Player, target: int) -> void:
 			return
 	elif target >= server.sectors.count or not server.sectors.linked(server.ship.sector, target):
 		return
-	if server.ship.fuel() < 1:
-		server.chat.say("Прыгнуть не на чем: в шкафу снабжения нет топлива.")
+	if not server.ship.can_jump(target == Sectors.EXIT_JUMP):
+		server.chat.say("Прыгнуть не на чем: для прыжка нужно %d единиц топлива в баке, а там %d. Залейте канистры у двигателя." % [
+			server.outfit.jump_fuel(target == Sectors.EXIT_JUMP), floori(server.ship.tank)])
 		return
 	var held := server.derelict.holds_ship()
 	if held == "":
@@ -162,33 +178,36 @@ func update_jump() -> void:
 		return
 	var long_jump := server.ship.jump_to == Sectors.EXIT_JUMP
 	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to] if not long_jump else Vector2i.ZERO
-	var burn := Sectors.EXIT_FUEL if long_jump else 1
-	if server.ship.fuel() < burn:
-		# somebody took the last can out of the locker while the drive was charging
+	var burn: int = server.outfit.jump_fuel(long_jump)
+	if not server.ship.can_jump(long_jump):
+		# the tank ran low while the drive was charging
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
-		server.chat.say("Прыжок сорван: в шкафу снабжения не осталось топлива.")
+		server.chat.say("Прыжок сорван: в баке не хватает топлива.")
 		return
 	if long_jump and server.road.can_leave() != "":
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
 		server.chat.say("Прыжок сорван: %s" % server.road.can_leave().to_lower())
 		return
-	if server.outfit.free_fuel() > 0.0 and server.rng.randf() < server.outfit.free_fuel():
-		burn -= 1
-		server.chat.say("Двигатель взял прыжок без топлива: канистра цела.")   # (v59) a better engine is thriftier
-	server.ship.store[Net.ITEM_FUEL] = server.ship.fuel() - burn      # the jump burns one can (the long jump two)
+	server.gunnery.parting_volley()          # (v67) running from a fight costs a volley
+	if server.over != Net.OVER_NONE:
+		server.ship.jump_to = Net.NO_SECTOR
+		tell_nav()
+		return
+	server.ship.tank = maxf(server.ship.tank - burn, 0.0)          # (v67) by the engine's tier; the long jump twice
 	server.supplies.tell_store()
 	server.ship.jump_to = Net.NO_SECTOR
 	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1
 	server.outfit.jumped()                   # (v62) the welding drone
+	server.salvage.jumped()                  # (v67) what floats outside stays behind
 	if long_jump:
 		server.road.next_cluster(server.sectors.exit_of(server.ship.sector))   # (v64) into the next cluster
 		landed()
 		return
 	var target: int = server.sectors.cell.find(arrived)
-	if not server.been.has(Sectors.key(arrived)):
+	if not server.been.has(Sectors.key(arrived)) and Net.EXPLORE_REWARD > 0:
 		server.ship.credits += Net.EXPLORE_REWARD
 		server.chat.say("За разведку нового сектора начислено %d кредитов." % Net.EXPLORE_REWARD)
 	server.been[Sectors.key(arrived)] = true
