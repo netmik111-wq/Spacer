@@ -106,10 +106,8 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			server.chat.say("Администратор: воздух во всём корабле восстановлен.")
 		Net.ADMIN_RESTOCK:
 			for item in Items.kept_in_locker():
-				# the ship's weapons: one of each in the cargo; rockets: ten (for trying the guns out)
-				var least := Items.stock(item) if not Items.cargo(item) else (1 if Items.price(item) >= 20 else 10)
-				server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)), least)
-			server.chat.say("Администратор: шкаф снабжения пополнен (в трюме по одному корабельному орудию каждого вида и ракеты).")
+				server.ship.store[item] = maxi(int(server.ship.store.get(item, 0)), restock_least(item))
+			server.chat.say("Администратор: шкаф снабжения пополнен: всё, что он хранит, хотя бы по одному.")
 		Net.ADMIN_CREDITS:
 			server.ship.credits = mini(server.ship.credits + Net.ADMIN_CREDITS_GIVEN, 60000)
 		Net.ADMIN_HULL:
@@ -334,3 +332,14 @@ func fight(klass: int, temper: int, at_range: bool) -> void:
 		server.chat.say("Администратор: пиратский корабль сейчас подойти не может (рядом другой корабль или кто-то снаружи).")
 	server.shipyard.force_class = -1
 	server.shipyard.force_temper = -1
+
+
+static func restock_least(item: int) -> int:
+	## (v65) How many of a thing «refill the locker» leaves at least: what the ship sets out
+	## with; of the ship's weapons and gear one each, rockets and parts ten, security robots two
+	## (as many as may stand aboard), and one of anything else the locker keeps (seeds, a black box).
+	if Items.stock(item) > 0:
+		return Items.stock(item)
+	if Items.cargo(item):
+		return 1 if Items.price(item) >= 20 else 10
+	return 2 if item == Net.ITEM_ROBOT else 1

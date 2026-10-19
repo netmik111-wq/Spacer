@@ -64,7 +64,8 @@ extends Node
 ## pirateship_after=SECONDS (a pirate ship comes then, and docks by force 15 s later).
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
-## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside).
+## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside),
+## restock_after=SECONDS (v65: the admin's «refill the supply locker»).
 ## (v62, --inproc only) enemy_after=SECONDS with enemy_class=K (a pirate ship of that class, Net.ECLASS_*,
 ## comes to fight at a distance), assault_after=SECONDS (an assault drone lands aboard at once),
 ## robot_after=SECONDS (one of our security robots is set down beside the character).
@@ -144,6 +145,7 @@ var _steer_at := 0.0
 var _dropped := false
 var _picked := false
 var _given := false
+var _restocked := false
 var _boarded := false
 var _goto_at := 0
 var _next_volley := 0.0
@@ -576,6 +578,10 @@ func _process(_delta: float) -> void:
 	if _opt.has("give_after") and not _given and _server != null and _screen != null and t >= float(_opt["give_after"]):
 		_given = true
 		_server.players[_client.my_id].add(int(_opt.get("give", Net.ITEM_FLASHLIGHT)), true)
+	if _opt.has("restock_after") and not _restocked and _server != null and _screen != null and t >= float(_opt["restock_after"]):
+		_restocked = true
+		var pkt := PackedByteArray([Net.C_ADMIN, Net.ADMIN_RESTOCK, 0, 0, 0])
+		_server.admin.asked(_server.players[_client.my_id], pkt)
 	if _opt.has("click_after") and not _clicked and _screen != null and t >= float(_opt["click_after"]):
 		_clicked = true
 		var at := str(_opt.get("click", "0,0")).split(",")

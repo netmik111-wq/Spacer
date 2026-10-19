@@ -19,6 +19,7 @@ const PLAN_EVERY := 10               # ticks between working out the way
 const SHOOT_FROM := 8                # cells: close enough to shoot
 const AIM_SPREAD := 0.7              # cells: how far off the mark a shot may go
 const FIRE_GAP := [14, 26]           # ticks between its shots
+const FRIEND_CLEAR := 0.8            # cells: one of its own side this close to the line of fire stops it shooting
 const FLEE_BELOW := 30.0             # health under which it falls back
 const MAX_ABOARD := 4
 # (v62, the author's K12) boarders who come over by docking or by teleport are not all in sealed suits:
@@ -183,6 +184,28 @@ func _sees(p, q) -> bool:
 	return lit and Sight.clear_cached(map, server.doors, Vector2i(p.st.x, p.st.y), to, server.replication.lines)
 
 
+func _friend_in_way(p, there: Vector2) -> bool:
+	## Would a shot at `there` pass through one of its own side first? Then it
+	## holds fire and moves (a bullet hits whoever it meets first: our robot kept
+	## shooting the crewman who stood between it and a pirate).
+	var from := Vector2(p.st.x, p.st.y)
+	var way: Vector2 = there - from
+	var dist := way.length()
+	if dist < 0.1:
+		return false
+	way /= dist
+	for q in server.players:
+		if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or foe(p, q):
+			continue
+		if server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
+			continue
+		var pos := Vector2(q.st.x, q.st.y)
+		var along: float = (pos - from).dot(way)
+		if along > 0.2 and along < dist and (pos - (from + way * along)).length() <= FRIEND_CLEAR:
+			return true
+	return false
+
+
 func think(p) -> void:
 	## One tick of a pirate's mind. It only chooses where to go and when to
 	## use what it holds; walking is the same as for anybody else.
@@ -229,7 +252,7 @@ func think(p) -> void:
 			_stop(p)
 			server.combat.use_at(p, now, there)                  # reload
 			return
-		if rounds > 0 and dist <= SHOOT_FROM:
+		if rounds > 0 and dist <= SHOOT_FROM and not _friend_in_way(p, there):
 			_stop(p)
 			_face(p, there)
 			if now >= p.ai_fire_tick and now >= p.ready_tick:

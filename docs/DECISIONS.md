@@ -743,6 +743,11 @@ build time; change them if the author answers otherwise.
 - **Security robots** (R1, the author's K11): `Player.ally` (not crew, not pirate), moved by `Pirates.think` with
   the sides turned (`Pirates.foe`). Up to 2, toughness 1.4, set down on a cell beside its carrier; a save puts them
   back into the locker. Every check that counts the crew skips `ally` too (new pitfall).
+- **Hold fire past a friend** (2026-10-19, mine, found by a flaky enemytest check): a bullet hits whoever it meets
+  first, and `Pirates.think` shot without looking, so our robot emptied magazines into the crewman beside it and
+  pirates shot each other. `Pirates._friend_in_way` stops the shot when one of its own side stands within
+  `FRIEND_CLEAR` (0.8 cells: the hit radius 0.45 plus about half the aim spread) of the line short of the target;
+  it then walks toward the target, which usually clears the line.
 
 ### The road and its story (v63)
 
@@ -849,3 +854,16 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
 - **A pirate crossing over during our boarding** (the CI thread's find, the author's "yes"): `EnemyCrew._read_world` counts
   those gone from its crew alive and off their ship (`crossed`); `Gunnery.crew_lost` then says it crossed over instead of
   "killed". It still leaves the enemy's crew count (it is a boarder aboard ours, counted by `Pirates.aboard`).
+
+### Storage window fixes (v65)
+
+- **Tabs, not folding sections** (my pick, asked at https://claude.ai/artifact/SwbHwmKZcdbPV1yVFB8VsK): seven tabs fit
+  1280×720 and keep the window one size; folding sections would change its height with every click. «Всё» stays first.
+- **Width**: 10 cards a row (`PER_ROW`); a group longer than that wraps, so the window never grows past ~870 px. The
+  cards' area is as high as the window allows (400 px at most, 220 at least).
+- **«Всё» hides ship gear at ×0**: 19 empty cards were most of the screen. The Модули tab shows every kind, as a catalogue.
+- **Refill amounts**: the starting stock where there is one; ship gear, seeds and the black box 1 each, security robots 2
+  (as many as may stand aboard); ship guns 1, ammunition, parts and quest cargo 10. Quest things are included because
+  the author asked for "everything"; a black box can finish a quest at once (admin only).
+- **Seed names**: `Items.name_of` had no case for seeds (their name lives in `Plants`), so it read a missing "name"
+  and showed "<null>" in the locker, the trader and the hands.

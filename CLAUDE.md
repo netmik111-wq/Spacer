@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v64 (version 0.57, the cluster map) is the latest. Plans one to four are done except the darkness front (the
+Build v65 (version 0.58, storage window fixes and friendly fire) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -43,7 +43,8 @@ v61 power (SMES, bridge backup, ion storm, hazards hit pirates, hull mending out
 teleporters, suitless boarders, bombs, Shrapnel, flagship phase two, passive modules, bay extender, security robots);
 v63 road and story (comms console, events, quests, missions, SOS, food, hydroponics, cryopods, the roaming flagship,
 modes); v64 the cluster map (his 19 cluster answers and 11 follow-ups, all "A"): a road of clusters with lanes and exits,
-cluster kinds and nebulae, places inside systems, pirate hunters. Several reactors is a later
+cluster kinds and nebulae, places inside systems, pirate hunters; v65 fixes (the locker window's tabs, the admin
+refill fills every kind, seed names, robots and pirates hold fire past their own side). Several reactors is a later
 question round (it breaks the one-engine rule).
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -294,6 +295,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a test in another cluster set `server.road.depth` and `server.road.entry` (`Vector2i(6 * depth, 0)`) and call
   `server.road.build(cell)`. The long jump's target is `Sectors.EXIT_JUMP`. Hunters come only while `road.auto` and
   `director.auto`. Tests that need places, wrecks or ambushes use `ship02` (`ship01` has no spots for a ship alongside).
+- (v65) The supply locker window has a fixed width (`StoreView.WIDTH`, 10 cards) and tabs (`StoreView.TABS`, by
+  `Items.CATEGORIES` captions); a new category goes into a tab there or lands in the last one. The admin refill
+  (`Admin.restock_least`) gives every kind `Items.kept_in_locker()` lists; `admintest` checks none stays at 0 and all have names.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
