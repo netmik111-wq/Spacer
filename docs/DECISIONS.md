@@ -835,6 +835,10 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
 - (Fix, found by the playthrough simulator) The long jump with quest cargo aboard read the old system's index
   in the new cluster (a script error that cut `Story.left_cluster` short): `Road.next_cluster` now sets the ship's
   system before the story is told.
+- (Fix, found by the playthrough simulator) Hunger took up to 70 off the health a person can recover to, on top of
+  wounds, so a starving crewman with 20+ wounds who got knocked out could never come round (the wake-up line is 10),
+  and with nobody to carry him to the autodoc the game never ended. `Garden.hunger_of` now takes off at most what
+  leaves 30 above the wounds, the same floor the hunger keeps anyway; heavy wounds still need treatment.
 - **Danger by level** (C13): `far_from_start` now returns `depth*4 + column/2`, so each cluster is 4 steps harder and
   everything that read "distance from the start" (pirate classes, loot tiers, trader stock, gear tiers) follows.
 - **Cluster kinds** (C12): weights per kind (`SYSTEM_WEIGHTS`), a storm band of 3–5 storms (`_patch`, a breadth-first

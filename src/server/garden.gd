@@ -110,9 +110,11 @@ func starving() -> bool:
 
 func hunger_of(p: Player) -> float:
 	## What hunger takes off the health this one can have (Crew passes it to Vitals with the wounds).
+	## Never below STARVE_FLOOR on top of the wounds: hunger alone must not keep someone out cold
+	## for good (the playthrough found a starving crewman with light wounds who could never wake).
 	if p.pirate or p.ally or p.robot:
 		return 0.0
-	return hunger
+	return minf(hunger, maxf(Net.HEALTH_FULL - p.wounds - STARVE_FLOOR, 0.0))
 
 
 func _feed_tick() -> void:
@@ -130,7 +132,7 @@ func _feed_tick() -> void:
 		for p: Player in server.players:
 			if p == null or p.corpse or p.cond == Net.COND_DEAD or hunger_of(p) <= 0.0:
 				continue
-			var cap := Net.HEALTH_FULL - p.wounds - hunger
+			var cap := Net.HEALTH_FULL - p.wounds - hunger_of(p)
 			if p.health > cap and p.health > STARVE_FLOOR:
 				p.health = maxf(cap, STARVE_FLOOR)
 				p.self_dirty = true

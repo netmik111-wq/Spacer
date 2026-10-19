@@ -138,8 +138,9 @@ Open problems:
 - `tools/playthrough.gd` plays whole campaigns with a script captain and three bots; `tools/simreport.py` makes tables.
   Records in `/mnt/project-files/sims/2026-10-19/` (20 games: 10 careful, 10 hurried) and on the page "Spacer game sims"
   (https://claude.ai/artifact/1n6gfKcFtVKwPS9CtGi5xi). 3 of 20 won, all against a flagship grown 0 or 1 steps.
-- Fixes the runs found (go into the next build): the long jump with quest cargo aboard hit a script error; the roaming
-  flagship could stay stuck in a dead end beside a station.
+- Fixes the runs found (go into the next build; update the Claude Docs mechanics document then): the long jump with
+  quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
+  lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
 ### v65 (storage window fixes; the author's request)
 - The supply locker's window was wider than the screen once the locker held many kinds. Its cards now sit under seven
