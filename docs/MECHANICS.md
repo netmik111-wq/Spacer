@@ -1191,6 +1191,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   **6 s** later. Its ship is a pirate ship **3 steps** of danger harder than the place, with the hunter's temper, named
   «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
   our trail from where we left it.
+  (v66) Each time we escape the same hunter it is slower: a lane takes it **75 s × (1 + 0.5 per escape)** (113 s after
+  one escape, 150 s after two, 188 s after three).
 
 ### The chart (v64)
 

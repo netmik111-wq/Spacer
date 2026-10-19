@@ -888,3 +888,8 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
   crew undocked it stayed alongside, the fight went on, and with our guns still silent it docked again 30 s later with a
   full new party (careful-06: 12 boardings by one hunter). Boarding now clears `raid`, so it behaves like the boarding
   ship, which MECHANICS already described: undocked, it leaves.
+- **Hunters slow down each time we escape them** (the author's pick on 2026-10-19, "Slower each time"; my recommendation was
+  "give up after 3 escapes"): in the simulator one hunter attacked up to 10 times in a game because the script captain
+  always jumped away, and it caught up again ~95 s later every time. Now each hunter counts how often we escaped it
+  (`escaped`, kept in saves) and its lane step is `HUNTER_STEP * (1 + HUNTER_SLOWER * escaped)`, `HUNTER_SLOWER` 0.5.
+  The warning (20 s) is unchanged.

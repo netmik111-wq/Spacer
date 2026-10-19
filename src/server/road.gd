@@ -41,6 +41,7 @@ const HUNTER_MOST_BIG := 4           # ... with a crew of BIG_CREW and more
 const HUNTER_MOST_FLAG := 2          # ... in the flagship's cluster (it is the pressure there)
 const BIG_CREW := 5
 const HUNTER_STEP := 75.0            # each moves one lane this often
+const HUNTER_SLOWER := 0.5           # (the author's pick, 2026-10-19) each time we escape one, its step is this much of HUNTER_STEP longer
 const HUNTER_WARN := 20.0            # coming into our system, it is seen this long before it comes out
 const HUNTER_COME := 6.0             # we jump into its system: it comes out this much later
 const HUNTER_LEVEL := 3              # a hunter is this many steps of danger harder than the system it meets us in
@@ -343,7 +344,7 @@ func _hunters_second() -> void:
 			_meet(h)
 			continue
 		h["move"] = int(h["move"]) + Net.TICK_HZ
-		if int(h["move"]) < roundi(HUNTER_STEP * Net.TICK_HZ):
+		if int(h["move"]) < roundi(HUNTER_STEP * (1.0 + HUNTER_SLOWER * int(h.get("escaped", 0))) * Net.TICK_HZ):
 			continue
 		h["move"] = 0
 		var ways: Array = []
@@ -400,7 +401,7 @@ func _meet(h: Dictionary) -> void:
 	design["name"] = "Охотник «%s»" % str(design["name"]).get_slice("«", 1).trim_suffix("»")
 	if der.pirates_come(server.director._party(), true, design):
 		hunters.erase(h)
-		_fight = {"at": server.ship.sector, "id": der.ship.id}
+		_fight = {"at": server.ship.sector, "id": der.ship.id, "escaped": int(h.get("escaped", 0))}
 		_dirty = true
 
 
@@ -411,7 +412,7 @@ func _watch_fight() -> void:
 	if der.ship != null and der.ship.id == int(_fight["id"]):
 		return
 	if server.ship.sector != int(_fight["at"]):
-		hunters.append({"at": int(_fight["at"]), "move": 0, "coming": -1})
+		hunters.append({"at": int(_fight["at"]), "move": 0, "coming": -1, "escaped": int(_fight.get("escaped", 0)) + 1})
 		server.chat.say("Охотник остался позади, но он пойдёт по нашему следу.")
 	_fight = {}
 	_dirty = true
@@ -494,12 +495,15 @@ func packet() -> PackedByteArray:
 
 func save() -> Dictionary:
 	var hs: Array = []
+	var esc: Array = []
 	for h: Dictionary in hunters:
 		hs.append(int(h["at"]))
+		esc.append(int(h.get("escaped", 0)))
 	if not _fight.is_empty():
 		hs.append(int(_fight["at"]))
+		esc.append(int(_fight.get("escaped", 0)))
 	return {"depth": depth, "entry": [entry.x, entry.y], "history": Array(history), "ticks": ticks_here, "next": next_hunter,
-		"hunters": hs, "found": found.keys(), "taken": taken.keys()}
+		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys()}
 
 
 func load_from(d: Dictionary) -> void:
@@ -509,8 +513,9 @@ func load_from(d: Dictionary) -> void:
 	ticks_here = int(d.get("ticks", 0))
 	next_hunter = int(d.get("next", roundi(HUNTER_FIRST * Net.TICK_HZ)))
 	hunters = []
-	for at in d.get("hunters", []):
-		hunters.append({"at": int(at), "move": 0, "coming": -1})
+	var esc: Array = d.get("escaped", [])
+	for i in d.get("hunters", []).size():
+		hunters.append({"at": int(d["hunters"][i]), "move": 0, "coming": -1, "escaped": int(esc[i]) if i < esc.size() else 0})
 	found = {}
 	for k in d.get("found", []):
 		found[int(k)] = true
