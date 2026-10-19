@@ -893,3 +893,28 @@ and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVq
   always jumped away, and it caught up again ~95 s later every time. Now each hunter counts how often we escaped it
   (`escaped`, kept in saves) and its lane step is `HUNTER_STEP * (1 + HUNTER_SLOWER * escaped)`, `HUNTER_SLOWER` 0.5.
   The warning (20 s) is unchanged.
+
+### Bots and pirates at the airlock (v66, the author's note "feels like bots cannot do it")
+
+- **What was wrong** (found by `tools/airlocktest.gd`): bot routes skipped any door whose shutter was down, and an
+  airlock chamber that differs from its side always has one down, so a bot in an emptied chamber stood at the inner door
+  forever («не может пройти»); the follow order only worked aboard our own ship, so bots never followed anyone out; pirates
+  could not cross space at all and also stopped at a downed shutter.
+- **How a bot gets past** (`Systems.get_past`, my pick L1 at https://claude.ai/artifact/KuZruvE1aMGdyMBR7yCLLK): routes may
+  run through our airlock doors (`Systems.lock_door`). When the next door will not open (`lock_bars`), a bot inside the
+  chamber walks to the pump and runs it, out for the outer door and in for the inner one (`_way_through`), as a careful
+  player does; anywhere else, with no power, with an empty air reserve, or at the inner door while a ship with air is docked
+  (the pump only matches the docked ship's pressure there), it raises the shutter by hand like a player (Repairs, 3 s).
+  Forcing can only cost the chamber's air: a shutter is forced only while the chamber's other door is shut.
+- **A bot never overrides the interlock** (my pick L2): while the other door is merely open it waits for it to shut; while
+  it is stuck open (jammed or forced) the bot waits with «не может пройти» rather than open the ship to space. Pirates
+  (`ours` = false) never pump and do override it.
+- **`Player.bot_lock`** keeps the door a bot is getting past, so that walking to the pump does not hand control back to the
+  route (which points at the door) mid-way; it clears once the door gives or the bot leaves the chamber and the doorway.
+- **`Movement._would_vent`** lets a bot step into an airlock door whose other door is shut: only the chamber fills or empties.
+- **Follow** (my pick L3, B offered: fetch a suit first): goals are the cells beside the leader anywhere walkable (a docked
+  ship too) or in open space if the bot wears a suit, never a doorway, never a cell it cannot breathe in without a suit.
+  `Stations._route` gets `wide` (follow, or the bot is off our ship) and `suited`; ordinary posts stay aboard.
+- **Pirates** (my pick L4): `_first_step` crosses open space in a suit and treats airlock doors as passable; at one that
+  will not open they force it (`think`, `using` is reset each tick).
+- The pump the bot runs must be our own (`on_ship` of the pump's front): `Ship.pumps` is our ship's.

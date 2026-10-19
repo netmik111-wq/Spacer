@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v65 (version 0.58).
+Last updated: build v66 (version 0.59).
 
 Contents:
 
@@ -133,13 +133,20 @@ Contents:
   - (v54) With a ship **docked** at the outer door that holds air, the pump brings the chamber to **that ship's
     pressure** instead (in or out), so the outer door opens onto it; the inner door then follows the usual rule.
 - An open outer door vents the air in its doorway into space.
+- (v66) **Bots and pirates get through the airlock too.** A bot of ours whose way leads through a door that will not
+  open stands at the pump inside the chamber and runs it (out to open the outer door, in to open the inner one),
+  exactly as a player would; outside the chamber (or with no power, or no air in the reserve) it raises the shutter
+  by hand (3 s, as above). It waits while the chamber's other door is merely open (that one shuts by itself), and it
+  never releases the interlock while the other door is stuck open, so a bot never lets the ship's air out.
+  Pirates don't pump: they force the shutter or the interlock by hand.
 
 ### Open space
 
 - From the airlock you can **go out into open space** and move around the ship. A step there takes twice
   as long (0.4 s), there is no air: you need the oxygen supply, the pressure lamps light as in a vacuum.
   In a vacuum it is silent.
-- Bots and pirates don't go out into space.
+- (v66) Bots go out into space only in a suit: when following a player who is out there (or to mend the hull, v61),
+  and they find their way back in. Pirates in suits cross space too.
 
 ## 4. Air and breaches
 
@@ -653,8 +660,10 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   **shields**, **repair**, **follow me**. «Все по местам» sends every bot to a post no player mans (controls, guns,
   shields, engine; the rest repair); «Отбой» frees them all.
 - Orders come from the **captain**; while no captain is aboard, from anybody.
-- Bots walk the ship by the shortest way (ladders included), never go out into space, and avoid rooms with
-  under half the normal air. A **repair** bot goes to the nearest broken machine, jammed or faulty door, or hole
+- Bots walk the ship by the shortest way (ladders included), and avoid rooms with under half the normal air.
+  (v66) Their way may lead through the airlock (they cycle it, see "Two-door airlock"). A bot told to **follow**
+  goes after its player anywhere it can: through the airlock, onto a ship docked alongside, and out into space
+  if it wears a suit; without a suit it does not follow into a vacuum. It stands beside the player, never in a doorway. A **repair** bot goes to the nearest broken machine, jammed or faulty door, or hole
   (if a patch is to be had), taking a **spare part** or **patch** from the hold; it mends like a player.
   A **gun** bot fires every ready gun where the guns aim, but holds fire while a ransom is offered.
 

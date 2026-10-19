@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v65 (version 0.58, storage window fixes and friendly fire) is the latest. Plans one to four are done except the darkness front (the
+Build v66 (version 0.59, bots and pirates use the airlock, plus the simulator's fixes) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -44,7 +44,8 @@ teleporters, suitless boarders, bombs, Shrapnel, flagship phase two, passive mod
 v63 road and story (comms console, events, quests, missions, SOS, food, hydroponics, cryopods, the roaming flagship,
 modes); v64 the cluster map (his 19 cluster answers and 11 follow-ups, all "A"): a road of clusters with lanes and exits,
 cluster kinds and nebulae, places inside systems, pirate hunters; v65 fixes (the locker window's tabs, the admin
-refill fills every kind, seed names, robots and pirates hold fire past their own side). Several reactors is a later
+refill fills every kind, seed names, robots and pirates hold fire past their own side); v66 airlocks (bots pump or force
+airlock doors, follow out into space; pirates cross space) and the simulator's fixes. Several reactors is a later
 question round (it breaks the one-engine rule).
 The next plan comes from new questions to the author (see "What may come next" in `docs/HISTORY.md`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -77,7 +78,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 26 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 27 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -104,6 +105,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/enemytest.gd (since v62: drone ship, teleport, suitless boarders, bombs, phase two, modules, robots)
     godot --headless --path . --script res://tools/storytest.gd (since v63: calls, quests, missions, SOS, food, trays, cryo, roaming flagship, modes)
     godot --headless --path . --script res://tools/roadtest.gd (since v64: places, hunters, the long jump, the road packet, saves)
+    godot --headless --path . --script res://tools/airlocktest.gd (since v66: bots and pirates through the airlock, follow outside)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -127,7 +129,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 26 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 27 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -300,6 +302,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - (v65) The supply locker window has a fixed width (`StoreView.WIDTH`, 10 cards) and tabs (`StoreView.TABS`, by
   `Items.CATEGORIES` captions); a new category goes into a tab there or lands in the last one. The admin refill
   (`Admin.restock_least`) gives every kind `Items.kept_in_locker()` lists; `admintest` checks none stays at 0 and all have names.
+- (v66) Bot and pirate routes may pass airlock doors whose shutter is down (`Systems.lock_door`); whoever walks a route
+  must call `Systems.get_past` when the next door `lock_bars`, or it pushes on a shut door forever. Bots keep the door in
+  `Player.bot_lock` while walking to the pump.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

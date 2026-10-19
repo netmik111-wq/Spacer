@@ -410,6 +410,8 @@ func bot_think(p: Player) -> bool:
 		server.movement.climb(p)
 		p.bot_plan_tick = -1000
 		return true
+	if _through_lock(p, here):
+		return true
 	if p.bot_step > 0:
 		p.using = false
 		p.st.dir = Net.DIR_NONE if server.movement._would_vent(p.st.x, p.st.y, p.bot_step) else p.bot_step
@@ -423,6 +425,25 @@ func bot_think(p: Player) -> bool:
 	elif p.bot_goal < 0 and p.order == Net.POST_FREE:
 		return false
 	return true
+
+
+func _through_lock(p: Player, here: int) -> bool:
+	## (v66) Its way leads through an airlock door that will not open: it pumps the
+	## chamber or forces the door (Systems.get_past) until the door gives.
+	if p.st.cd > 0:
+		return p.bot_lock >= 0               # mid-step on its way to the pump: keep going
+	var sys := server.systems
+	if p.bot_step > 0:
+		var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
+		if sys.lock_bars(ahead):
+			p.bot_lock = ahead
+	if p.bot_lock >= 0:
+		var pump: int = sys._pump_of(p.bot_lock)
+		var near: bool = pump >= 0 and (server.map.lock_pump[pump]["chamber"] as PackedInt32Array).has(here) \
+			or server.map.doors[p.bot_lock].distance_squared_to(Vector2i(p.st.x, p.st.y)) == 1
+		if not sys.lock_bars(p.bot_lock) or not near:
+			p.bot_lock = -1
+	return p.bot_lock >= 0 and sys.get_past(p, p.bot_lock, true)
 
 
 func _wants_healing(p: Player) -> void:
@@ -463,11 +484,13 @@ func _plan(p: Player, here: int) -> void:
 				p.bot_task = _work_goals(p, goals)
 			Net.POST_FOLLOW:
 				var lead: Player = server.players[p.order_by] if p.order_by >= 0 and p.order_by < server.players.size() else null
-				if lead != null and not lead.corpse and lead.cond != Net.COND_DEAD and server.map.on_ship(lead.st.y * server.map.width + lead.st.x):
+				if lead != null and not lead.corpse and lead.cond != Net.COND_DEAD:
+					# (v66) anywhere it can go: aboard, onto a ship alongside, and out into space in a suit
 					var w := server.map.width
 					for o: int in [1, -1, w, -w]:
 						var c := lead.st.y * w + lead.st.x + o
-						if server.map.walkable(c % w, c / w) and server.map.on_ship(c):
+						if server.map.door_of[c] < 0 and (server.map.walkable(c % w, c / w) or p.has_suit() and server.map.floats(c % w, c / w)) \
+								and _breathable(p, c):
 							goals[c] = 0
 	if goals.is_empty():
 		p.bot_goal = -1
@@ -481,7 +504,8 @@ func _plan(p: Player, here: int) -> void:
 		p.bot_step = 0
 		p.doing = _doing(p)
 		return
-	var r := _route(here, goals)
+	var wide: bool = p.order == Net.POST_FOLLOW or not server.map.on_ship(here)
+	var r := _route(here, goals, wide, p.has_suit())
 	p.bot_step = r[0]
 	p.bot_goal = r[1]
 	p.bot_face = int(goals.get(r[1], 0))
@@ -682,10 +706,12 @@ func _taken(p: Player) -> Dictionary:
 	return out
 
 
-func _route(start: int, goals: Dictionary) -> Array:
+func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = false) -> Array:
 	## [the first step of a shortest way to the nearest of the goals (a direction,
 	## -1 = the ladder underfoot, 0 = none), that goal (-1 = none reachable)].
-	## Our own ship only, ladders included, around shutters that are down.
+	## Our own ship only, ladders included, around shutters that are down; (v66)
+	## through our airlocks (the bot pumps or forces their doors, see _through_lock),
+	## and with `wide` onto a ship alongside too, and out into space in a suit.
 	var map := server.map
 	var w := map.width
 	var first := {start: 0}
@@ -701,13 +727,13 @@ func _route(start: int, goals: Dictionary) -> Array:
 			var nx: int = x + Net.DX[d]
 			var ny: int = y + Net.DY[d]
 			var j := ny * w + nx
-			if not map.walkable(nx, ny) or not map.on_ship(j):
+			if not (map.walkable(nx, ny) and (wide or map.on_ship(j)) or wide and suited and map.floats(nx, ny)):
 				continue
 			var door := map.door_of[j]
-			if door >= 0 and server.doors.is_sealed(door):
+			if door >= 0 and server.doors.is_sealed(door) and not server.systems.lock_door(door):
 				continue
 			nexts.append([j, d])
-		if map.climb[cell] >= 0:
+		if map.climb[cell] >= 0 and not map.floats(x, y):
 			nexts.append([map.climb[cell], -1])
 		for n: Array in nexts:
 			var to: int = n[0]

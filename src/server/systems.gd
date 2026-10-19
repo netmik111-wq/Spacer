@@ -220,14 +220,15 @@ func _pump_way(pump: int) -> int:
 	return PUMP_OUT if have > 0.5 else PUMP_IN
 
 
-func toggle_pump(p: Player, cell: int) -> void:
-	## The "use" key on a pump: start it the way the chamber needs, or stop it.
+func toggle_pump(p: Player, cell: int, way: int = 0) -> void:
+	## The "use" key on a pump: start it the way the chamber needs (or `way`), or stop it.
 	if server.ship.pumps.has(cell):
 		server.ship.pumps.erase(cell)
 	elif not server.powered() or not lock_shut(cell):
 		return
 	else:
-		var way := _pump_way(cell)
+		if way == 0:
+			way = _pump_way(cell)
 		if way == 0 or (way == PUMP_IN and server.ship.store_air <= 0.0):
 			return
 		server.ship.pumps[cell] = way
@@ -390,3 +391,116 @@ func update_doors() -> void:
 			server.door_sent[d] = server.doors.ready[d]
 			server.flags_sent[d] = server.doors.flags(d)
 			server.replication.door_record(d)
+
+
+# ------------------------------------------------- (v66) getting past an airlock
+
+func lock_door(door: int) -> bool:
+	## Is this a door of one of our airlocks?
+	return door >= 0 and door < server.doors.partner.size() and server.doors.partner[door] >= 0
+
+
+func lock_bars(door: int) -> bool:
+	## A shut airlock door that walking into does not open now: its shutter is
+	## down (the chamber's pressure differs from the other side) or the other door
+	## of the chamber is not shut.
+	var doors := server.doors
+	return lock_door(door) and doors.is_shut(door) and (doors.locked[door] == 1 or doors.held_by_partner(door))
+
+
+func get_past(p: Player, door: int, ours: bool) -> bool:
+	## (v66, the author's note "feels like bots cannot do it") One tick of a bot or a
+	## pirate whose way leads through an airlock door that will not open
+	## (`lock_bars`). A bot inside the chamber, with power, cycles the chamber with
+	## its pump the way a player does; otherwise it forces the door by hand once it
+	## stands before it (Repairs: the lock, then the shutter). It waits there while
+	## the chamber's other door is merely open: that one shuts by itself.
+	## `ours`: one of our bots (it pumps, and never overrides the lock while the other
+	## door is stuck open). False: nothing to do here yet (it walks on to the door).
+	var doors := server.doors
+	var map := server.map
+	var w := map.width
+	var other: int = doors.partner[door]
+	var at: Vector2i = map.doors[door]
+	var here := p.st.y * w + p.st.x
+	var facing := 0
+	for d in range(1, 5):
+		if p.st.x + Net.DX[d] == at.x and p.st.y + Net.DY[d] == at.y:
+			facing = d
+	p.using = false
+	if doors.held_by_partner(door) and (ours or doors.jammed[other] == 0 and doors.forced[other] == 0):
+		# the other door is in use and shuts after it; or it is stuck open, and a
+		# bot will not override the lock and let the ship's air out (a pirate will)
+		if facing == 0:
+			return false
+		p.st.dir = Net.DIR_NONE
+		if doors.jammed[other] == 1 or doors.forced[other] == 1:
+			p.doing = Net.DOING_NO_WAY
+		return true
+	var pump := _pump_of(door)
+	if ours and pump >= 0 and _pump_helps(pump, door) and (map.lock_pump[pump]["chamber"] as PackedInt32Array).has(here):
+		var chamber: PackedInt32Array = map.lock_pump[pump]["chamber"]
+		var spots := {}
+		for s: Array in server.stations._spots_for(pump):
+			spots[int(s[0])] = int(s[1])
+		if spots.has(here):
+			p.st.dir = Net.DIR_NONE
+			if p.st.facing != spots[here]:
+				p.st.facing = spots[here]
+				p.self_dirty = true
+			if not server.ship.pumps.has(pump):
+				toggle_pump(p, pump, _way_through(pump, door))
+			p.doing = Net.DOING_GOING
+			return true
+		# a step toward the pump, inside the chamber
+		var first := {here: 0}
+		var queue := PackedInt32Array([here])
+		var i := 0
+		while i < queue.size():
+			var c := queue[i]
+			i += 1
+			for d in range(1, 5):
+				var n := c + Net.DX[d] + Net.DY[d] * w
+				if first.has(n) or not chamber.has(n):
+					continue
+				first[n] = d if c == here else first[c]
+				if spots.has(n):
+					p.st.dir = first[n]
+					return true
+				queue.append(n)
+	if facing == 0:
+		return false
+	p.st.dir = Net.DIR_NONE
+	if p.st.facing != facing:
+		p.st.facing = facing
+		p.self_dirty = true
+	p.using = true
+	p.doing = Net.DOING_GOING
+	return true
+
+
+func _pump_helps(pump: int, door: int) -> bool:
+	## Can the pump clear the way through that door now (rather than forcing it)?
+	if server.doors.locked[door] == 0 or not server.powered() or server.ship.broken.has(pump) or not lock_shut(pump) \
+			or not server.map.on_ship(server.map.fitting_front(pump)):
+		return false
+	if door == int(server.map.lock_pump[pump]["inner"]) and docked_air(pump) >= 0.0:
+		return false                         # the pump only matches the docked ship's air: the door is forced
+	var way := _way_through(pump, door)
+	return way != 0 and (way == PUMP_OUT or server.ship.store_air > 0.0)
+
+
+func _way_through(pump: int, door: int) -> int:
+	## Which way to pump to open that door: in for the inner one; out for the outer
+	## one, or toward the pressure of a ship docked there.
+	if door == int(server.map.lock_pump[pump]["inner"]):
+		return PUMP_IN
+	return _pump_way(pump) if docked_air(pump) >= 0.0 else PUMP_OUT
+
+
+func _pump_of(door: int) -> int:
+	for c: int in server.map.lock_pump.keys():
+		var lock: Dictionary = server.map.lock_pump[c]
+		if int(lock["inner"]) == door or int(lock["outer"]) == door:
+			return c
+	return -1

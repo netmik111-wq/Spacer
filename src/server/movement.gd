@@ -112,6 +112,8 @@ func _would_vent(x: int, y: int, dir: int) -> bool:
 	var fy: int = dy + Net.DY[dir]
 	if not server.map.walkable(fx, fy):
 		return false
+	if server.systems.lock_door(d) and server.doors.is_shut(server.doors.partner[d]):
+		return false                # (v66) an airlock's door: only its own chamber fills or empties
 	var here := server.air.air[y * server.map.width + x]
 	if here < Vitals.BREATH_MIN:
 		return false                # it is suffocating: getting out matters more
