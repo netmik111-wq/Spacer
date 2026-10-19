@@ -286,6 +286,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a fight with a grown flagship (growth 3+) can capture the ship (it teleports boarders). The hull's top strength is
   `Ship.hull_max` (the easy mode lowers it), never `Net.HULL_MAX` for our ship. Food is eaten in `Garden.jumped`: a test
   that jumps many times may starve its crew (health down to 30).
+- Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
+  this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
+  `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
+  place, give more tries, look at everybody a lot may pick) rather than widening bounds blindly.
 - Ships' shots land later than they are fired (v56, `Gunnery._flying`). A test that checks a hit right after
   `fire` or `_enemy_fires` must set `server.gunnery.flies = false` (the gun, ship, drone and station tests do).
   Effects that are only drawn take their lots from `Gunnery._fx`, so the game's own rng sequence is unchanged.

@@ -249,12 +249,16 @@ func _bombs() -> void:
 	for c: int in Array(server.map.guns) + server.map.chart.keys() + server.map.helm.keys() + server.map.smes.keys() + [g.shield_cell()]:
 		if c >= 0:
 			server.ship.broken[c] = true
+	# (it then picks one of our people by lot, bots too, so look at everybody aboard)
 	for i in 10:
-		var h: float = crewman.health
+		for p in server.players:
+			if p != null and not p.pirate and not p.corpse:
+				p.health = 100.0
+				p.wounds = 0.0
 		g._enemy_bomb(Weapons.THERMITE, Weapons.FX_NONE)
-		hurt = hurt or crewman.health < h
-		crewman.health = 100.0
-		crewman.wounds = 0.0
+		for p in server.players:
+			if p != null and not p.pirate and not p.corpse:
+				hurt = hurt or p.health < 100.0
 	_expect(server.ship.hull < our_hull, "their «Термит» burns our hull from inside (%d -> %d)" % [our_hull, server.ship.hull])
 	_expect(hurt, "and hurts whoever is in the room it bursts in")
 	server.ship.broken = was_broken
@@ -365,12 +369,24 @@ func _robots() -> void:
 	for d in [Vector2i(2, 0), Vector2i(-2, 0), Vector2i(0, 2), Vector2i(0, -2), Vector2i(3, 0), Vector2i(-3, 0)]:
 		var c: Vector2i = Vector2i(robot.st.x, robot.st.y) + d
 		if map.walkable(c.x, c.y) and map.on_ship(c.y * map.width + c.x) and map.door_at(c.x, c.y) < 0:
+			# (in sight: facing it and in the same room, else it may never notice an unarmed one)
+			server.pirates._face(robot, Vector2(c))
 			foe = server.pirates.spawn(c.x, c.y, false)
-			break
+			if server.pirates._sees(robot, foe):
+				break
+			server.crew.remove(foe)
+			foe = null
+	_expect(foe != null, "(a pirate set down in its sight)")
 	if foe != null:
 		foe.slots.fill(Net.ITEM_NONE)                     # (unarmed: it is the robot we watch)
 		var h: float = foe.health
-		_run(Net.TICK_HZ * 15)
+		var at := Vector2i(foe.st.x, foe.st.y)
+		for t in Net.TICK_HZ * 15:
+			if foe.corpse or foe.health < h:
+				break
+			if Vector2i(foe.st.x, foe.st.y) != at:
+				foe.st.place(at.x, at.y)                  # (kept where it was set down: a shot may miss, and it would wander off)
+			server._tick()
 		_expect(foe.corpse or foe.health < h or foe.cond != Net.COND_OK, "it shoots a pirate it sees (%.0f -> %.0f)" % [h, foe.health])
 		if not foe.corpse:
 			server.crew.remove(foe)

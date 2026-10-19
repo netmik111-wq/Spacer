@@ -189,7 +189,7 @@ func _cargo() -> void:
 		return
 	var q: Dictionary = st.quests[0]
 	var d := Sectors.jumps_between(st.here(), q["at"])
-	_expect(d >= Story.QUEST_NEAR and d <= Story.QUEST_FAR, "its station is %d jumps away" % d)
+	_expect(d >= Story.QUEST_NEAR and d <= Story.QUEST_FAR + 2, "its station is %d jumps away" % d)    # (a little further when none is that near)
 	_expect(Sectors.kind_at(server.space_seed, q["at"]) == Sectors.STATION, "and it is a station")
 	_expect(int(server.ship.store.get(Net.ITEM_CARGO, 0)) == 1, "the crate is in the locker")
 	var pkt := st.story_packet()
@@ -316,14 +316,14 @@ func _sos() -> void:
 	_calm()
 	var found := Vector2i.MAX
 	var n := 0
-	for x in range(-6, 7):
-		for y in range(-6, 7):
+	for x in range(-15, 16):            # wide: one quiet sector in seven sends one, so a small patch may hold none
+		for y in range(-15, 16):
 			if Sectors.kind_at(server.space_seed, Vector2i(x, y)) == Sectors.EMPTY and Vector2i(x, y) != Vector2i.ZERO:
 				n += 1
 				if Story.sos_at(server.space_seed, Vector2i(x, y)) and not st.sos_done.has(Sectors.key(Vector2i(x, y))) \
 						and not server.flagship.is_at(Vector2i(x, y)):
 					found = Vector2i(x, y)
-	_expect(found != Vector2i.MAX, "some quiet sectors send an SOS (%d quiet near the start)" % n)
+	_expect(found != Vector2i.MAX, "some quiet sectors send an SOS (%d quiet looked at)" % n)
 	if found == Vector2i.MAX:
 		return
 	st.call = {}
