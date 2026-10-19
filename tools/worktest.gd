@@ -35,6 +35,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	_expect(server.map.autodoc.size() == 2 and server.map.scanner.size() == 1, "the medbay has two autodocs and a body scanner")
 	_gunners()
 	_carrying()

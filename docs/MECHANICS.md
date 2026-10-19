@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v67 (version 0.60).
+Last updated: build v68 (version 0.61).
 
 Contents:
 
@@ -34,6 +34,7 @@ Contents:
 24. [Controls](#24-controls)
 25. [The road: comms console, quests, food, hydroponics, modes (v63)](#25-the-road-comms-console-quests-food-hydroponics-modes-v63)
 26. [Work and money on the road (v67)](#26-work-and-money-on-the-road-v67)
+27. [Fights for the whole crew (v68)](#27-fights-for-the-whole-crew-v68)
 
 ---
 
@@ -252,6 +253,9 @@ Contents:
   air to its compartment, not above normal, and uses up the **ship's air reserve** (60 cells).
   When the reserve runs out, it stops.
 - **Bridge consoles** break (short circuit): dark screen and sparks.
+- (v68, the author's E1) **Breakdowns never come out of nothing** any more: the eventer no longer picks a console fault,
+  engine fault, air plant fault, jammed door, shutter fault or power glitch by chance (the host can still fire them). They
+  come from **pirate hits** near the thing (section 27) and from **overcharging** the reactor.
 - The "not both at once" rule: while a console is broken, the engine doesn't break, and vice versa. So the
   crew always has a way to escape.
 - **Drone monitor** (v54) — the fifth console, on the bridge's top wall between the helm and the holomap: the
@@ -1538,3 +1542,49 @@ work, not from visiting; fuel is counted in units; places need a trip outside.
 - **No fuel**: help is slower and dearer (section 19, "Fuel").
 - The flagship grows **only with time** (section 17).
 
+## 27. Fights for the whole crew (v68)
+
+The author's F1 to F4, J4, E1 and G3 answers (`/mnt/project-files/plans/every-part-plan.md`): in a ship fight every
+seat has a job, not only the gunner's.
+
+- **The pilot's evade** (F1): at the ship's controls, in a fight, the button «Уклонение!» or the **space bar**. For
+  **1.5 s** (+1 s with the best piloting skill) the pirates' shots fired hit **50% less often** (never below 5%). It costs
+  **40** from the SMES and rests **12 s**; it needs the engine running and no manoeuvre going on. The helm shows how charged
+  their guns are (as our sensors see them), so the evade can be timed to their volley.
+- **The power panel** (F2): the SMES terminal in the engine room got a second half, «Щит питания». From it, and only
+  from it, the guns, the point defence and the shield are switched on and off (the gun console shows their state and
+  points to the panel). Also there:
+  - **Engines**: 0 to 2 levels of power, **2** energy each, each **+5%** to our dodge while somebody is at the controls.
+  - **Breakers**: the lights, the air plant and the hydroponic trays each take **1** of the ship's own draw of 4 (consoles,
+    doors and pumps take the last 1 and are never switched off). Switched off, that energy goes to the guns and the
+    shield. Lights off: the ship is dark as without power except the bridge (the consoles still work); air off: the air
+    plant adds no air; trays off: the plants do not grow.
+  - **Overcharge**: the reactor gives **+4** for **20 s**, then cools **40 s**. Each second of it the engine burns out with a
+    **3%** chance (mend it as usual; the SMES carries the ship meanwhile).
+  - A **bot at the engine post** minds the panel for a lone player: it switches the shield, the guns and the point defence
+    back on as far as the reactor allows. It never touches the breakers, the engines or the overcharge.
+- **Loaded mounts** (F3): shells and rockets can now be taken out of the supply locker. Facing a gun mount with a round for
+  its gun in hand, hold E: **2 s** a round, up to **4** in its breech. While a round is loaded the gun charges **1.3×**
+  faster, and it fires the loaded rounds first. An empty breech still takes rounds from the locker as before. A gun taken
+  down gives its loaded rounds back to the locker. In a fight bots on «Работы» bring rounds (2 at a time) and load them.
+- **Fights with goals** (F4): a pirate ship the eventer or a road ambush sends may come with a goal (20% cargo, 15% bounty,
+  15% courier); the chat says it and the gun console shows it.
+  - **Cargo pod**: it sits in one room of their ship (marked on the plan with a crate). A hit there smashes it. Whole when
+    the ship is wrecked, taken or pays a ransom: **+1×** its usual reward.
+  - **Bounty**: knock out its **weapons and engine together** (with none of ours aboard) and it surrenders: **2×** the
+    reward, and it goes off under guard. Wrecked, the bounty is lost.
+  - **Courier**: it charges its jump at once and is gone in **40 s**. Stop it (engine or jump drive) and wreck or take it:
+    **+1×** the reward.
+- **Alert levels** (J4), set by the captain (anybody, with no captain aboard) at the ship's controls:
+  - **Green**: as usual.
+  - **Yellow**: the free bots go to «Ремонт». A pirate ship coming raises yellow by itself, and when the fight is over
+    and no pirate is aboard it goes back to green.
+  - **Red**: every bot to a post, every door locked as a blast door (while there is power), the lights dimmed, a siren.
+    Leaving red unlocks the doors and frees the bots the alert sent.
+  - Everyone hears the chime or the siren (where there is air) and sees the level at the top of the screen.
+- **Hits break things** (E1): a pirate shot that hits our hull breaks something within **6 cells** of it with a **30%**
+  chance (**45%** for a heavy one): a door jams, a shutter fails, the air plant or a console shorts out, or the engine
+  stalls for a moment if it is near.
+- **The fight's details on the bridge only** (G3 B): who fired what, the shield taking it, beams, repairs, manoeuvres,
+  the evade and the drone's reports reach only those standing in a bridge room. Warnings (hull hits, breaches, boarders,
+  the alert) still reach everyone.

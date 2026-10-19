@@ -31,6 +31,7 @@ const BAD := Color(0.92, 0.32, 0.28)
 const AIM := Color(1.0, 0.92, 0.35)
 const SHIELD := Color(0.4, 0.65, 1.0)
 const ION := Color(0.45, 0.7, 1.0)
+const PANEL_NOTE := "Питание орудий и щита включают на щите питания у СМЭС в машинном отделении."
 const GUN_PLACES: Array[String] = ["левый борт у носа", "правый борт у носа", "днище"]
 const SYSTEM_ABOUT: Array[String] = [
 	"Выбить орудия: пираты перестанут стрелять. Повреждённые орудия стреляют реже.",
@@ -92,8 +93,8 @@ func setup(p_client: GameClient) -> void:
 	_shield_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_shield_button = Button.new()
 	_shield_button.focus_mode = Control.FOCUS_NONE
-	_shield_button.pressed.connect(func() -> void:
-		client.send_gunset(Net.GUNSET_SHIELD, 0, 0 if client.shield_flags & Net.SHF_ON else 1))
+	_shield_button.disabled = true   # (v68) the switches moved to the power panel in the engine room
+	_shield_button.tooltip_text = PANEL_NOTE
 	shield_head.add_child(_shield_button)
 	_shield_bar = _bar(left, SHIELD)
 	_label(left, 13).text = "Наши орудия"
@@ -114,8 +115,7 @@ func setup(p_client: GameClient) -> void:
 	_guard_box.add_child(guard_buttons)
 	_guard_power = Button.new()
 	_guard_power.focus_mode = Control.FOCUS_NONE
-	_guard_power.pressed.connect(func() -> void:
-		client.send_gunset(Net.GUNSET_ARM, Net.GUARD_MOUNT, 0 if client.guard_flags & Net.GUNF_ARMED else 1))
+	_guard_power.tooltip_text = PANEL_NOTE
 	guard_buttons.add_child(_guard_power)
 	_guard_mount = Button.new()
 	_guard_mount.focus_mode = Control.FOCUS_NONE
@@ -254,6 +254,8 @@ func refresh(delta: float) -> void:
 		_enemy_line.text = ""
 		_fill(_enemy_shield, 0.0)
 	_target.text = ("Цель: %s (щёлкните по отсеку, чтобы навести орудия)" % _enemy_name()) if fighting else "Цель: нет"
+	if fighting and client.goal != Net.GOAL_NONE:
+		_target.text += "\n" + goal_line(client.goal, client.goal_flags, client.goal_pay)
 	var unknown := client.enemy_rooms.count(Net.ROOM_UNKNOWN)
 	_probe.disabled = not fighting or client.probes <= 0 or client.ecrew_probe > 0
 	_probe.text = "Запустить зонд-сканер (в трюме: %d)%s" % [client.probes,
@@ -309,6 +311,22 @@ func refresh(delta: float) -> void:
 	_plan.queue_redraw()
 
 
+static func goal_line(goal: int, flags: int, pay: int) -> String:
+	## (v68, the author's F4) what this fight is for, in one line
+	var lost := flags & Net.GOALF_LOST != 0
+	match goal:
+		Net.GOAL_CARGO:
+			return "Задача: груз разбит, награды не будет." if lost else \
+				"Задача: у него грузовой контейнер (отсек отмечен). Не бейте по нему: целый груз даст %d кр." % pay
+		Net.GOAL_BOUNTY:
+			return "Задача: награда пропала, корабль разбит." if lost else \
+				"Задача: за него назначена награда %d кр. Выбейте орудия и двигатель, не разбивая корпус: он сдастся." % pay
+		Net.GOAL_RUNNER:
+			return "Задача: курьер ушёл." if lost else \
+				"Задача: курьер пытается уйти. Выбейте двигатель или рубку, пока он не прыгнул: %d кр." % pay
+	return ""
+
+
 func _update_power() -> void:
 	_power.text = "Реактор: занято %d из %d энергии" % [client.power_used, client.power_max]
 	var mon: Dictionary = client.power_mon
@@ -325,7 +343,7 @@ func _update_power() -> void:
 		_fill(_shield_bar, 0.0)
 		return
 	_shield_button.visible = true
-	_shield_button.text = "Выключить щит" if f & Net.SHF_ON else "Включить щит (%d эн.)" % Weapons.SHIELD_POWER
+	_shield_button.text = "Щит: вкл" if f & Net.SHF_ON else "Щит: выкл (%d эн.)" % Weapons.SHIELD_POWER
 	var state := "%d из 100" % client.shield
 	if not (f & Net.SHF_ON):
 		state = "выключен"
@@ -385,8 +403,7 @@ func _update_guns(fighting: bool) -> void:
 			buttons.add_child(fire)
 			var power := Button.new()
 			power.focus_mode = Control.FOCUS_NONE
-			power.pressed.connect(func() -> void:
-				client.send_gunset(Net.GUNSET_ARM, which, 0 if client.gun_flags[which] & Net.GUNF_ARMED else 1))
+			power.tooltip_text = PANEL_NOTE
 			buttons.add_child(power)
 			var change := OptionButton.new()
 			change.focus_mode = Control.FOCUS_NONE
@@ -433,8 +450,10 @@ func _update_guns(fighting: bool) -> void:
 		elif want != 0:
 			order = "  [приказ: поставить %s]" % Items.name_of(want).to_lower()
 		var gunner: bool = i < client.mount_gunner.size() and client.mount_gunner[i] == 1
+		var loaded: int = client.mount_loaded[i] if i < client.mount_loaded.size() else 0
 		(row[0] as Label).text = "%d. %s (%s): %s%s%s%s" % [i + 1, Weapons.full_name(w, fx), place, state,
-			(", %s: %d" % ["снарядов" if ammo == Net.ITEM_SHELL else "ракет", client.stock(ammo)]) if ammo != 0 else "",
+			(", %s: %d%s" % ["снарядов" if ammo == Net.ITEM_SHELL else "ракет", client.stock(ammo),
+				(", в казённике %d" % loaded) if loaded > 0 else ""]) if ammo != 0 else "",
 			", у орудия канонир" if gunner else "", order]
 		var fill: ColorRect = row[1]
 		var share := 0.0 if c >= Net.GUN_JAMMED else c / 100.0
@@ -443,7 +462,7 @@ func _update_guns(fighting: bool) -> void:
 		var ready := c == 100 and flags & Net.GUNF_ARMED and not (flags & Net.GUNF_NO_AMMO) and not (flags & Net.GUNF_BEAM)
 		(row[2] as Button).disabled = not fighting or not ready
 		var power: Button = row[3]
-		power.disabled = w == Weapons.NONE
+		power.disabled = true
 		power.text = ("Питание: вкл" if flags & Net.GUNF_ARMED else "Питание: выкл (%d эн.)" % Weapons.power(w)) if w != Weapons.NONE else "Питание"
 		any = any or ready
 		# the list to change the weapon, rebuilt when the cargo or the gun changes
@@ -481,7 +500,7 @@ func _update_guard() -> void:
 	_guard_label.text = "Точечная оборона «Заслон»: %s" % state
 	_fill(_guard_bar, client.guard_charge / 100.0 if have else 0.0)
 	_guard_bar.color = GOOD if client.guard_charge >= 100 else WARN
-	_guard_power.disabled = not have
+	_guard_power.disabled = true
 	_guard_power.text = ("Питание: вкл" if armed else "Питание: выкл (%d эн.)" % Weapons.power(Weapons.GUARD)) if have else "Питание"
 	_guard_mount.text = "Снять в трюм" if have else "Поставить из трюма (%d)" % in_cargo
 

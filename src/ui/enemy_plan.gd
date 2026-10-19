@@ -131,6 +131,13 @@ static func draw(canvas: Control, client, size: Vector2, time: float, hover_room
 			DIM if z == Net.ROOM_EMPTY else INK)
 		if z < Net.ESYS_COUNT:
 			canvas.draw_string(font, box.position + Vector2(0, box.size.y / 2.0 + 14), state(client, z), HORIZONTAL_ALIGNMENT_CENTER, box.size.x, 11, INK)
+		if k == client.cargo_room and client.goal == Net.GOAL_CARGO:
+			# (v68) the cargo pod: a dashed frame and a crate in the corner, red once it is smashed
+			var pod := BAD if client.goal_flags & Net.GOALF_LOST else Color(0.95, 0.8, 0.4)
+			canvas.draw_rect(box.grow(-2.0), pod, false, 1.5)
+			var crate := Rect2(box.position + Vector2(3, 3), Vector2(8, 8))
+			canvas.draw_rect(crate, pod)
+			canvas.draw_line(crate.position, crate.end, Color(0, 0, 0, 0.6), 1.0)
 		if k == aimed:
 			var aim := Color(AIM, 0.5 + 0.5 * pulse)
 			canvas.draw_rect(box.grow(2.0), aim, false, 2.0)

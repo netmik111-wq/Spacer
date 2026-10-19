@@ -30,6 +30,7 @@ func _initialize() -> void:
 	server.road.auto = false
 	server.story.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	var map = server.map
 	pump = map.lock_pump.keys()[0]
 	chamber = map.lock_pump[pump]["chamber"]

@@ -34,6 +34,7 @@ func _initialize() -> void:
 		return
 	server.director.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	_carrying()
 	_backup()
 	_hit_and_charge()
@@ -145,7 +146,7 @@ func _terminal() -> void:
 	server.crew.remove(p)
 	kept = []
 	var pkt := pw.packet()
-	_expect(pkt[0] == Net.S_SMES and pkt[3] == pw.units.size() and pkt.size() == 4 + 15 * pw.units.size() + 9, "the terminals' packet (%d bytes)" % pkt.size())
+	_expect(pkt[0] == Net.S_SMES and pkt[3] == pw.units.size() and pkt.size() == 4 + 15 * pw.units.size() + 9 + 4, "the terminals' packet (%d bytes)" % pkt.size())
 
 
 func _coils() -> void:

@@ -35,6 +35,7 @@ func _initialize() -> void:
 	server.road.auto = false
 	server.story.auto = false
 	server.gunnery.flies = false
+	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	p = server.crew.new_player("Тест")
 	p.take_job(Net.JOB_ENGINEER)
 	p.slots.fill(Net.ITEM_NONE)
@@ -192,7 +193,7 @@ func _cut() -> void:
 	_expect(d.here and d.dark(), "a derelict lies alongside")
 	var wall := -1
 	for c: int in map.other_cells:
-		if map.walk[c] == 0 and map.door_of[c] < 0 and map.cells[c] >= 0:
+		if map.walk[c] == 0 and map.door_of[c] < 0 and map.cells[c] >= 0 and not server.air.holes.has(c):   # (a hole is mended first)
 			for o: int in [1, -1, map.width, -map.width]:
 				if map.is_other(c + o) and map.walkable((c + o) % map.width, (c + o) / map.width) and map.door_of[c + o] < 0:
 					wall = c

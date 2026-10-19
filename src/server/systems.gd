@@ -89,13 +89,28 @@ func _count(flags: PackedByteArray) -> int:
 	return n
 
 
-func jam_door() -> bool:
+func _close(cell: int, near: int) -> bool:
+	## (v68) Is `cell` within KNOCK_REACH of `near`, on its deck (near < 0: anywhere)?
+	if near < 0:
+		return true
+	var map := server.map
+	return map.deck_of_cell(cell) == map.deck_of_cell(near) \
+		and absi(cell % map.width - near % map.width) + absi(cell / map.width - near / map.width) <= KNOCK_REACH
+
+
+func _door_cell(d: int) -> int:
+	var at: Vector2i = server.map.doors[d]
+	return at.y * server.map.width + at.x
+
+
+func jam_door(near: int = -1) -> bool:
 	## A door slides open and sticks there: air passes freely until somebody mends it.
+	## (v68) `near`: only a door close to that cell (a hit that shook it).
 	if not can_break("door"):
 		return false
 	var choice := PackedInt32Array()
 	for d in server.map.other_first_door:
-		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0:
+		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0 and _close(_door_cell(d), near):
 			choice.append(d)
 	if choice.is_empty():
 		return false
@@ -109,14 +124,14 @@ func jam_door() -> bool:
 	return true
 
 
-func fault_shutter() -> bool:
+func fault_shutter(near: int = -1) -> bool:
 	## An emergency shutter stops working by itself. Half the time it also
 	## drops for no reason; otherwise it will simply not be there when needed.
 	if not can_break("shutter"):
 		return false
 	var choice := PackedInt32Array()
 	for d in server.map.other_first_door:
-		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0:
+		if server.doors.jammed[d] == 0 and server.doors.faulty[d] == 0 and _close(_door_cell(d), near):
 			choice.append(d)
 	if choice.is_empty():
 		return false
@@ -172,10 +187,12 @@ func break_engine() -> bool:
 	return true
 
 
-func break_air_plant() -> bool:
+func break_air_plant(near: int = -1) -> bool:
 	if not can_break("air_plant"):
 		return false
-	var cells: Array = server.map.air_plant.keys()
+	var cells: Array = server.map.air_plant.keys().filter(func(c: int) -> bool: return _close(c, near))
+	if cells.is_empty():
+		return false
 	var cell: int = cells[server.rng.randi_range(0, cells.size() - 1)]
 	server.ship.broken[cell] = true
 	server.to_all(server.ship.devices_packet())
@@ -271,20 +288,20 @@ func run_pumps() -> void:
 
 func feed_air() -> void:
 	## Every working air plant blows a little air into the room it faces, for as
-	## long as the ship has air in store for it.
-	if not server.powered():
+	## long as the ship has air in store for it. (v68) Not with its breaker off.
+	if not server.powered() or not server.power.air_on():
 		return
 	for cell: int in server.map.air_plant.keys():
 		if not server.ship.broken.has(cell) and server.ship.store_air > 0.0:
 			server.ship.store_air = maxf(server.ship.store_air - server.air.feed(server.map.air_plant[cell], minf(Air.PLANT_PER_STEP, server.ship.store_air)), 0.0)
 
 
-func break_console() -> bool:
+func break_console(near: int = -1) -> bool:
 	## A bridge console goes out of order. One at a time: while one is broken,
 	## the other stays whole, so the crew always has one way out left.
 	if not can_break("console"):
 		return false
-	var all: Array = server.map.chart.keys() + server.map.helm.keys()
+	var all: Array = (server.map.chart.keys() + server.map.helm.keys()).filter(func(c: int) -> bool: return _close(c, near))
 	if all.is_empty():
 		return false
 	var cell: int = all[server.rng.randi_range(0, all.size() - 1)]
@@ -292,6 +309,48 @@ func break_console() -> bool:
 	server.to_all(server.ship.devices_packet())
 	server.chat.say("Замыкание на мостике: %s не работает." % server.map.device_name(cell))
 	return true
+
+
+# (v68, the author's E1: "random breaks should happen in fights; they should not
+# come from nothing but create more danger") a pirate hit on the hull may break a
+# machine near where it lands, instead of the eventer breaking them out of nowhere
+const KNOCK_REACH := 6               # cells (along the grid) from the hit
+const KNOCK_CHANCE := 0.3            # the chance a hit breaks something near it...
+const KNOCK_HEAVY := 0.45            # ... a heavy one
+var knock_chance := -1.0             # (tests set it: 0 = never, 1 = always)
+
+
+func knock_on(cell: int, heavy: bool) -> String:
+	## A hit landed at `cell`: by lot something near it breaks. What broke, or "".
+	var chance := knock_chance if knock_chance >= 0.0 else (KNOCK_HEAVY if heavy else KNOCK_CHANCE)
+	if cell < 0 or server.rng.randf() >= chance:
+		return ""
+	var kinds: Array = ["door", "shutter", "air_plant", "console", "power"]
+	for i in range(kinds.size() - 1, 0, -1):
+		var j := server.rng.randi_range(0, i)
+		var t: String = kinds[i]
+		kinds[i] = kinds[j]
+		kinds[j] = t
+	for k: String in kinds:
+		match k:
+			"door":
+				if jam_door(cell):
+					return k
+			"shutter":
+				if fault_shutter(cell):
+					return k
+			"air_plant":
+				if break_air_plant(cell):
+					return k
+			"console":
+				if break_console(cell):
+					return k
+			"power":
+				# the engine shaken: it stalls a few seconds (it breaks only from an overcharge or a hit on it)
+				for e: int in server.map.engine.keys():
+					if _close(e, cell) and can_break("power") and power_glitch():
+						return k
+	return ""
 
 
 func breach(cell: int) -> bool:

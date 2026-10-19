@@ -50,6 +50,7 @@ func _new_server(port: int) -> GameServer:
 	s.story.auto = false
 	s.road.auto = false
 	s.gunnery.flies = false
+	s.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	return s
 
 

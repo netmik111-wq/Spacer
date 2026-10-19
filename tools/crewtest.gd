@@ -47,7 +47,10 @@ func _initialize() -> void:
 	var room0: int = map.room_of[watched.y * map.width + watched.x]
 	var safe_tile := false
 	for s in map.spawns:
-		safe_tile = safe_tile or server.crew._danger_at(s) <= 0.0
+		var free := true                     # (someone standing there is skipped by spawn_point)
+		for o in server.players:
+			free = free and (o == null or o.st.x != s.x or o.st.y != s.y)
+		safe_tile = safe_tile or (free and server.crew._danger_at(s) <= 0.0)
 	var away := true
 	for i in 30:
 		var at := server.crew.spawn_point()

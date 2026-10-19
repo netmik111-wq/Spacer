@@ -9,6 +9,12 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Stations := preload("res://src/server/stations.gd")    # only for its numbers
+const ALERT_ABOUT: Array[String] = [
+	"обычная служба.",
+	"боты без дела идут на посты ремонта.",
+	"все по постам, двери заперты, свет приглушён.",
+]
 
 var client: GameClient
 var chart: Control                   # the picture
@@ -186,7 +192,18 @@ func update_helm() -> void:
 		if client.battle_goal != Net.POS_NONE:
 			pos += " Манёвр на «%s»: ещё %d с, пока он идёт, мы не уклоняемся." % [Net.POS_NAMES[client.battle_goal].to_lower(), client.battle_left]
 		lines.append(pos + " Уклонение от их выстрелов: %d%% (пока здесь стоит пилот)." % client.our_dodge)
-		lines.append("Вплотную: как обычно, можно перейти к ним на абордаж. На дистанции: обе стороны попадают реже, пираты подходят к шлюзу вдвое медленнее. С фланга: мы попадаем лучше, но уклоняемся вдвое хуже. Держать позицию можно только с кем-то за штурвалом.")
+		lines.append("Вплотную: можно на абордаж. На дистанции: обе стороны попадают реже. С фланга: мы попадаем лучше, уклоняемся хуже. Позицию держит тот, кто за штурвалом.")
+		# (v68, the author's F1) the evade: press it as their guns are about to fire
+		var ready := PackedStringArray()
+		for c: int in client.enemy_charge:
+			if c != 255:
+				ready.append("%d%%" % c)
+		var evade := "Уклонение идёт: ещё %.1f с." % (client.evade_left / 10.0) if client.evade_left > 0 else \
+			("Уклонение перезаряжается: ещё %d с." % client.evade_rest if client.evade_rest > 0 else
+			"Уклонение готово (пробел): на миг их выстрелы попадают вдвое реже, %d заряда СМЭС." % int(Stations.EVADE_COST))
+		if not ready.is_empty():
+			evade += " Заряд их орудий: %s." % ", ".join(ready)
+		lines.append(evade)
 		if _has_phase():
 			# (v59) the phase drive
 			lines.append(("Фазовый привод готов: следующая смена позиции мгновенная, можно зайти в тыл (мы попадаем лучше, они хуже)."
@@ -213,7 +230,7 @@ func update_helm() -> void:
 				var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
 				lines.append("До брошенного корабля %d." % int(ceil(gap)))
 		_:
-			if client.road.get("places", []).is_empty():
+			if client.road.get("places", []).is_empty() and not client.fighting():
 				lines.append("Здесь нет ничего примечательного. Облетите сектор: сенсоры могут найти тайники.")
 	# (v64) the places found inside the sector
 	var found := PackedStringArray()
@@ -223,6 +240,7 @@ func update_helm() -> void:
 		lines.append("Сенсоры нашли: %s. Подлетите к метке, чтобы подобрать; засаду лучше облететь." % ", ".join(found))
 	if client.road.get("fog", false):
 		lines.append("Сектор в туманности: сенсоры видят только вблизи.")
+	lines.append("%s: %s" % [Net.ALERT_NAMES[client.alert], ALERT_ABOUT[client.alert]])
 	text.text = "\n".join(lines)
 	var buttons_key := Sectors.key(sectors.cell[here]) * 128 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
 		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0) \
@@ -252,13 +270,31 @@ func update_helm() -> void:
 				go.set_meta("pos", pos)
 				go.pressed.connect(func() -> void: client.send_position(pos))
 				buttons.add_child(go)
+			var dodge := Button.new()
+			dodge.text = "Уклонение!"
+			dodge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			dodge.set_meta("evade", true)
+			dodge.pressed.connect(func() -> void: client.send_evade())
+			buttons.add_child(dodge)
+		for level in [Net.ALERT_GREEN, Net.ALERT_YELLOW, Net.ALERT_RED]:
+			var al := Button.new()
+			al.text = Net.ALERT_NAMES[level]
+			al.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			al.set_meta("alert", level)
+			al.pressed.connect(func() -> void: client.send_alert(level))
+			buttons.add_child(al)
 	for b in buttons.get_children():
 		if b is Button:
+			(b as Button).focus_mode = Control.FOCUS_NONE   # (v68) the space bar is the evade, not "press the focused button"
 			(b as Button).disabled = leaving
 			if b.has_meta("pos"):
 				var pos: int = b.get_meta("pos")
 				(b as Button).disabled = pos == (client.battle_goal if client.battle_goal != Net.POS_NONE else client.battle_pos) \
 					or (pos == Net.POS_BEHIND and client.phase_left > 0)
+			elif b.has_meta("evade"):
+				(b as Button).disabled = leaving or client.evade_left > 0 or client.evade_rest > 0 or client.battle_goal != Net.POS_NONE
+			elif b.has_meta("alert"):
+				(b as Button).disabled = b.get_meta("alert") == client.alert
 	chart.queue_redraw()
 
 

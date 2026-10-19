@@ -77,7 +77,7 @@ func wants_care(t: int) -> bool:
 
 
 func _powered(t: int) -> bool:
-	return server.power.at(server.map.trays[t]) or Plants.dark(plants[t])
+	return server.power.at(server.map.trays[t]) and server.power.trays_on() or Plants.dark(plants[t])   # (v68) its breaker
 
 
 # --------------------------------------------------------------- food

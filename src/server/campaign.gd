@@ -115,6 +115,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
+		"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(),
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
 		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
 		"smes": server.power.save(),
@@ -188,6 +189,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.mode = int(data.get("mode", Net.MODE_NORMAL))           # (v63; older saves: the normal mode)
 	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))
 	server.ship.hull = int(data["hull"])
+	server.power.load_panel(data.get("panel", {}))          # (v68) the power panel's breakers and engines
 	if data.has("mounts"):
 		var mounts := PackedByteArray(data["mounts"])
 		var armed := PackedByteArray(data.get("armed", []))
@@ -202,6 +204,9 @@ static func restore(server: Node, data: Dictionary) -> String:
 			server.ship.mount_fx = fx
 		server.ship.guard = int(data.get("guard", 0))
 		server.ship.guard_armed = bool(data.get("guard_armed", false))
+		var loaded := PackedByteArray(data.get("loaded", []))   # (v68)
+		if loaded.size() == server.mounts.loaded.size():
+			server.mounts.loaded = loaded
 	else:
 		server.ship.hull = mini(server.ship.hull * 2, server.ship.hull_max)   # saved before v49, when the hull was 100
 	server.supplies.bought.clear()

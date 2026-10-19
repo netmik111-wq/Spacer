@@ -53,6 +53,12 @@ const LAPSE_SECONDS := 5.0           # far or flank, nobody at the controls this
 const SABOTAGE_SECONDS := 8.0        # one of our boarders in a system's room wrecks a point of it this often
 const BOT_PLAN_TICKS := 10           # how often a bot under orders looks again at where to go
 const BOT_AIR := 0.5                 # a bot does not go where the air is thinner than this
+# (v68, the author's F1) the pilot's evade: their shots fired in its moment hit EVADE_DODGE less often
+const EVADE_SECONDS := 1.5           # the moment, for one without piloting skill...
+const EVADE_SKILL := 1.0             # ... and this much longer with the best skill
+const EVADE_REST := 12.0             # before it can be pressed again
+const EVADE_COST := 40.0             # taken from the SMES each time
+const EVADE_DODGE := 0.5
 
 var server: GameServer
 var position := Net.POS_CLOSE
@@ -64,12 +70,24 @@ var _at := {}                        # Net.POST_* -> the Player at that post now
 var _lapse := 0
 var _sabotage := PackedFloat32Array()
 var _told := PackedByteArray()
+var evade_until := 0                 # (v68) the tick the pilot's evade ends
+var evade_ready := 0                 # and the tick it can be pressed again
+var alert := Net.ALERT_GREEN         # (v68, the author's J4) the alert level
+var _alert_auto := false             # it went to yellow by itself when a pirate ship came
+var _fight_seen := false
+var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
 
 
 func setup(p_server: GameServer) -> void:
 	server = p_server
 	position = Net.POS_CLOSE
 	goal = Net.POS_NONE
+	evade_until = 0
+	evade_ready = 0
+	alert = Net.ALERT_GREEN
+	_alert_auto = false
+	_fight_seen = false
+	_alert_bots = {}
 	_sabotage.resize(Net.ESYS_COUNT)
 	var map := server.map
 	spots = {}
@@ -151,7 +169,7 @@ func our_dodge() -> float:
 	if pilot == null:
 		return 0.0
 	var d := HELM_DODGE + PILOT_DODGE * pilot.skill(Net.SKILL_PILOT) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0) \
-		+ server.outfit.dodge_bonus()
+		+ server.outfit.dodge_bonus() + server.power.engine_dodge()
 	return d * (FLANK_DODGE if position == Net.POS_FLANK else 1.0)
 
 
@@ -206,7 +224,7 @@ func position_asked(p: Player, to: int) -> void:
 		position = to
 		goal = Net.POS_NONE
 		_lapse = 0
-		server.chat.say("%s включает фазовый привод: корабль мгновенно на позиции «%s». %s Привод перезаряжается %d с." % [
+		server.chat.say_bridge("%s включает фазовый привод: корабль мгновенно на позиции «%s». %s Привод перезаряжается %d с." % [
 			p.name, Net.POS_NAMES[to].to_lower(), _about(to), int(Gear.PHASE_SECONDS)])
 		server.chat.sound(Net.SOUND_PHASE, p.st.x, p.st.y)
 		return
@@ -218,7 +236,7 @@ func position_asked(p: Player, to: int) -> void:
 		return
 	goal = to
 	manoeuvre_until = server.tick + roundi(MANOEUVRE_SECONDS * Net.TICK_HZ)
-	server.chat.say("%s ведёт корабль на позицию «%s»: манёвр %d с, пока он идёт, мы не уклоняемся." % [
+	server.chat.say_bridge("%s ведёт корабль на позицию «%s»: манёвр %d с, пока он идёт, мы не уклоняемся." % [
 		p.name, Net.POS_NAMES[to].to_lower(), int(MANOEUVRE_SECONDS)])
 
 
@@ -231,15 +249,15 @@ func _position_tick() -> void:
 	if goal != Net.POS_NONE:
 		if server.engine_down() or not server.powered():
 			goal = Net.POS_NONE
-			server.chat.say("Манёвр сорван: двигатель стоит.")
+			server.chat.say_bridge("Манёвр сорван: двигатель стоит.")
 		elif goal != Net.POS_CLOSE and server.tick % 10 == 0 and server.derelict.someone_outside():
 			goal = Net.POS_NONE
-			server.chat.say("Манёвр сорван: кто-то из наших снаружи.")
+			server.chat.say_bridge("Манёвр сорван: кто-то из наших снаружи.")
 		elif server.tick >= manoeuvre_until:
 			position = goal
 			goal = Net.POS_NONE
 			_lapse = 0
-			server.chat.say("Корабль на позиции «%s». %s" % [Net.POS_NAMES[position].to_lower(), _about(position)])
+			server.chat.say_bridge("Корабль на позиции «%s». %s" % [Net.POS_NAMES[position].to_lower(), _about(position)])
 	if position == Net.POS_CLOSE:
 		return
 	if server.tick % 10 == 0 and server.derelict.someone_outside():
@@ -267,6 +285,100 @@ static func _about(pos: int) -> String:
 	return "Бой как обычно; к пиратам можно перейти через открытый космос."
 
 
+# ---------------------------------------------------------------- (v68) the pilot's evade
+
+func evading() -> bool:
+	return server.tick < evade_until and server.gunnery.fighting()
+
+
+func evade_asked(p: Player) -> void:
+	## The one at the ship's controls throws the ship aside: the pirates' shots fired in
+	## the next moment (longer with piloting skill) hit far less often. It costs the SMES.
+	if not server.systems.at_console(p, server.map.helm):
+		return
+	if not server.gunnery.fighting():
+		server.chat.tell(p, "Боя нет: уклоняться не от чего.")
+		return
+	if server.engine_down() or not server.power.engine_running():
+		server.chat.tell(p, "Двигатель не работает: уклонения не будет.")
+		return
+	if goal != Net.POS_NONE:
+		server.chat.tell(p, "Корабль в манёвре: уклониться можно после него.")
+		return
+	if server.tick < evade_ready:
+		server.chat.tell(p, "Уклонение будет готово через %d с." % ceili(float(evade_ready - server.tick) / Net.TICK_HZ))
+		return
+	if not server.power.spend(EVADE_COST):
+		server.chat.tell(p, "В СМЭС не хватает заряда на уклонение (нужно %d)." % int(EVADE_COST))
+		return
+	evade_until = server.tick + roundi((EVADE_SECONDS + EVADE_SKILL * p.skill(Net.SKILL_PILOT)) * Net.TICK_HZ)
+	evade_ready = server.tick + roundi(EVADE_REST * Net.TICK_HZ)
+	p.train(Net.SKILL_PILOT)
+	server.chat.say_bridge("%s бросает корабль в сторону: уклонение на %.1f с." % [p.name, float(evade_until - server.tick) / Net.TICK_HZ])
+
+
+# ---------------------------------------------------------------- (v68) the alert
+
+func alert_asked(p: Player, level: int) -> void:
+	## The captain (or anybody, with no captain aboard) sets the alert at the ship's controls.
+	if level < Net.ALERT_GREEN or level > Net.ALERT_RED or not server.systems.at_console(p, server.map.helm):
+		return
+	if not may_order(p):
+		server.chat.tell(p, "Тревогу объявляет капитан.")
+		return
+	set_alert(level, p)
+
+
+func set_alert(level: int, by: Player = null) -> void:
+	## Green: as usual. Yellow: the bots that were free go to work. Red: every bot to a
+	## post, every blast door locked, the lights dimmed to red, a siren. Everybody hears it.
+	if level == alert:
+		return
+	var was := alert
+	alert = level
+	_alert_auto = by == null and level == Net.ALERT_YELLOW
+	var who := "" if by == null else by.name + ": "
+	if was == Net.ALERT_RED and level != Net.ALERT_RED:
+		for d in server.map.other_first_door:
+			server.doors.blast[d] = 0
+		server.blast.cut.clear()
+	for slot: int in _alert_bots.keys():
+		# (only those still at what the alert told them: a later order from the captain stands)
+		var q: Player = server.players[slot] if slot < server.players.size() else null
+		if q != null and q.bot and not q.corpse and q.order == int(_alert_bots[slot]):
+			_set_order(q, Net.POST_FREE, by)
+	_alert_bots = {}
+	match level:
+		Net.ALERT_GREEN:
+			server.chat.say("%sОтбой тревоги. Зелёный уровень." % who)
+		Net.ALERT_YELLOW:
+			for q: Player in _bots():
+				if q.order == Net.POST_FREE:
+					_set_order(q, Net.POST_REPAIR, by)
+					_alert_bots[q.slot] = Net.POST_REPAIR
+			server.chat.say("%sЖёлтая тревога! Всем быть наготове.%s" % [who, " (Пиратский корабль рядом.)" if by == null else ""])
+		Net.ALERT_RED:
+			_all_to_posts(by, true)
+			for q: Player in _bots():
+				_alert_bots[q.slot] = q.order
+			if server.powered():
+				for d in server.map.other_first_door:
+					server.doors.blast[d] = 1
+			server.chat.say("%sКрасная тревога! Все по местам, бронедвери заблокированы." % who)
+
+
+func _alert_tick() -> void:
+	var fight: bool = server.gunnery.fighting()
+	if fight and not _fight_seen:
+		_fight_seen = true
+		if alert == Net.ALERT_GREEN:
+			set_alert(Net.ALERT_YELLOW)          # (my C1 pick) a pirate ship coming raises yellow by itself
+	elif not fight and _fight_seen and server.tick % 20 == 0 and server.pirates.aboard() == 0:
+		_fight_seen = false
+		if _alert_auto and alert == Net.ALERT_YELLOW:
+			set_alert(Net.ALERT_GREEN)
+
+
 # ---------------------------------------------------------------- orders
 
 func may_order(p: Player) -> bool:
@@ -286,6 +398,11 @@ func order_asked(p: Player, id: int, post: int) -> void:
 	if not may_order(p):
 		server.chat.tell(p, "Приказы экипажу отдаёт капитан.")
 		return
+	# (v68) the captain's own order stands when the alert is called off
+	if id == Net.NOBODY:
+		_alert_bots = {}
+	else:
+		_alert_bots.erase(id)
 	if id == Net.NOBODY:
 		if post == Net.POST_ALL:
 			_all_to_posts(p)
@@ -338,7 +455,7 @@ func _set_order(q: Player, post: int, by: Player) -> void:
 	q.st.dir = Net.DIR_NONE
 
 
-func _all_to_posts(by: Player) -> void:
+func _all_to_posts(by: Player, quiet: bool = false) -> void:
 	## Every bot to a post nobody of the players mans: the controls, the gun console,
 	## the shield, the engine, (v60) then the mounted guns; the rest go to work.
 	var wanted: Array = []
@@ -355,7 +472,8 @@ func _all_to_posts(by: Player) -> void:
 	var bots := _bots()
 	for i in bots.size():
 		_set_order(bots[i], wanted[i] if i < wanted.size() else Net.POST_REPAIR, by)
-	server.chat.say("%s: «Все по местам!»" % by.name)
+	if not quiet:
+		server.chat.say("%s: «Все по местам!»" % by.name)
 
 
 # ---------------------------------------------------------------- a bot under orders
@@ -369,6 +487,7 @@ const TASK_OXYGEN := 4               # an oxygen station: to fill its suit's tan
 const TASK_HEAL := 5                 # an autodoc's bed: to be healed
 const TASK_GARDEN := 6               # (v63) a hydroponic tray: to plant, tend, harvest or clear it
 const TASK_FUEL := 7                 # (v67) the engine: to pour a can of fuel into the tank
+const TASK_LOAD := 8                 # (v68) a gun mount: to push a round it carries into its breech
 const BOT_POURS_BELOW := 400.0       # (v67) a bot on work pours cans from the locker while the tank is below this
 const TANK_LOW := 0.35               # (v60) a bot with less in its tank goes to fill it before it works on
 const TANK_FULL := 0.95
@@ -594,6 +713,20 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 			_add_spots(p, c, goals, taken)
 		if not goals.is_empty():
 			return TASK_MEND
+	# (v68, my G1 pick) in a fight, rounds from the locker into the breeches of the guns that fire them
+	if server.gunnery.fighting():
+		var need := _mounts_wanting_rounds()
+		if not need.is_empty():
+			for i: int in need:
+				if p.count(mounts.ammo_of(i)) > 0:
+					_add_spots(p, map.guns[i], goals, taken)
+			if not goals.is_empty():
+				return TASK_LOAD
+			for i: int in need:
+				if int(server.ship.store.get(mounts.ammo_of(i), 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
+					_locker_goals(p, goals, taken)
+					if not goals.is_empty():
+						return TASK_LOCKER
 	# (v63) the hydroponic trays
 	for c: int in server.map.trays:
 		if server.garden.can(p, c) == "" and (server.garden.stage[server.garden.tray_of(c)] != Net.GROW_EMPTY or server.garden._best_seed() > 0):
@@ -624,6 +757,16 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 			return TASK_LOCKER
 		p.haul = -1                          # (somebody else carries that gun already)
 	return TASK_POST
+
+
+func _mounts_wanting_rounds() -> Array:
+	## (v68) The mounts whose gun fires shells or rockets and whose breech is not full.
+	var out: Array = []
+	var mounts = server.mounts
+	for i in server.map.guns.size():
+		if mounts.ammo_of(i) != 0 and mounts.loaded[i] < mounts.LOAD_MAX and not server.ship.broken.has(server.map.guns[i]):
+			out.append(i)
+	return out
 
 
 func _carried_gun(p: Player) -> int:
@@ -780,6 +923,17 @@ func _work(p: Player) -> void:
 			if not p.using:
 				p.bot_plan_tick = -1000
 			return
+		TASK_LOAD:
+			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
+			var i := server.map.guns.find(ahead)
+			var k := p.slots.find(server.mounts.ammo_of(i)) if i >= 0 and server.mounts.ammo_of(i) != 0 else -1
+			if k >= 0:
+				p.hand = k
+			p.using = k >= 0 and server.mounts.can(p, ahead) == ""
+			p.doing = Net.DOING_CARRY
+			if not p.using:
+				p.bot_plan_tick = -1000
+			return
 		TASK_GARDEN:
 			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
 			p.using = ahead >= 0 and server.garden.can(p, ahead) == ""
@@ -793,6 +947,10 @@ func _work(p: Player) -> void:
 			var g = server.gunnery
 			if g.fighting() and g.ransom == 0 and server.systems.at_console(p, server.map.gun_console) and _a_gun_ready():
 				g.fire(p, 255)
+		Net.POST_ENGINE:
+			p.doing = Net.DOING_POST
+			if server.tick % 40 == p.slot % 40:
+				_keep_powered()
 		Net.POST_REPAIR:
 			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 			var hole := server.air.holes.has(ahead)
@@ -837,6 +995,11 @@ func _at_locker(p: Player) -> void:
 	if server.ship.tank < BOT_POURS_BELOW and p.count(Net.ITEM_FUEL) == 0 and int(server.ship.store.get(Net.ITEM_FUEL, 0)) > 0 \
 			and p.count(Net.ITEM_NONE) > 0 and not server.map.engine.is_empty():
 		sup.store_asked(p, Net.STORE_TAKE, Net.ITEM_FUEL)        # (v67) a can for the tank
+	if server.gunnery.fighting():
+		for i: int in _mounts_wanting_rounds():          # (v68) rounds for the breeches, two at a time
+			var ammo: int = server.mounts.ammo_of(i)
+			while p.count(ammo) < 2 and int(server.ship.store.get(ammo, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
+				sup.store_asked(p, Net.STORE_TAKE, ammo)
 	if not p.has_suit() and _store_suit() >= 0 and p.count(Net.ITEM_NONE) > 0:
 		sup.store_asked(p, Net.STORE_TAKE, _store_suit())
 		var k := p.slots.find(_store_suit())
@@ -885,12 +1048,29 @@ func _at_mount(p: Player) -> void:
 	p.doing = Net.DOING_CARRY
 
 
+func _keep_powered() -> void:
+	## (v68, my E1 pick) A bot at the engine minds the power panel beside it for a solo
+	## player: the shield, then every mounted gun, powered as far as the reactor allows.
+	## It never overcharges and never touches the breakers or the engines.
+	var g = server.gunnery
+	var ship = server.ship
+	if not server.powered():
+		return
+	if not ship.shield_on:
+		g.switch_shield(null, true)
+	for i in ship.mounts.size():
+		if ship.mounts[i] != Weapons.NONE and ship.armed[i] == 0:
+			g.arm(null, i, true)
+	if ship.guard != Weapons.NONE and not ship.guard_armed:
+		g.arm_guard(null, true)
+
+
 func _a_gun_ready() -> bool:
 	var g = server.gunnery
 	var ship = server.ship
 	for i in g.charge.size():
 		if g.charge[i] >= 1.0 and ship.armed[i] == 1 and g.beam_left[i] == 0 and not ship.broken.has(server.map.guns[i]) \
-				and (Weapons.ammo(ship.mounts[i]) == 0 or int(ship.store.get(Weapons.ammo(ship.mounts[i]), 0)) > 0):
+				and server.mounts.has_round(i):
 			return true
 	return false
 
@@ -951,6 +1131,7 @@ func tick() -> void:
 	_scan()
 	_position_tick()
 	_boarding()
+	_alert_tick()
 	var now := packet()
 	if now != _told:
 		_told = now
@@ -973,4 +1154,8 @@ func packet() -> PackedByteArray:
 		out.append(q.slot >> 8)
 		out.append(q.order)
 		out.append(q.doing if q.cond == Net.COND_OK else Net.DOING_DOWN)
+	# (v68) u8 the alert (ALERT_*), u8 tenths of a second of the evade left, u8 seconds until it is ready again
+	out.append(alert)
+	out.append(clampi(ceili(float(evade_until - server.tick) * 10.0 / Net.TICK_HZ), 0, 255) if evading() else 0)
+	out.append(clampi(ceili(float(evade_ready - server.tick) / Net.TICK_HZ), 0, 255))
 	return out

@@ -159,7 +159,7 @@ func give(p: Player, item: int) -> void:
 	## (v60.1) Cargo that is never carried (rockets, shells, probes, parts) goes into the locker.
 	if not Items.INFO.has(item) or p.corpse:
 		return
-	if Items.cargo(item) and not Items.carried_gun(item):
+	if Items.cargo(item) and not Items.carried(item):
 		store(item)
 		return
 	if p.add(item, true):

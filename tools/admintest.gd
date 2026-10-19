@@ -85,10 +85,10 @@ func _initialize() -> void:
 	_admin(host, Net.ADMIN_GIVE, hammer)
 	_expect(host.slots[0] == hammer, "a ship gun with its effect comes into the hand")
 	server.ship.store.clear()
-	_admin(host, Net.ADMIN_GIVE, Net.ITEM_SHELL)
+	_admin(host, Net.ADMIN_GIVE, Net.ITEM_PROBE)   # (v68: shells may be carried now)
 	_admin(host, Net.ADMIN_STORE, Weapons.item_of(Weapons.LASER, Weapons.FX_NONE, true))
 	_admin(host, Net.ADMIN_STORE, Gear.item_of(Gear.PHASE))
-	_expect(int(server.ship.store.get(Net.ITEM_SHELL, 0)) == 1, "cargo that is never carried goes into the locker")
+	_expect(int(server.ship.store.get(Net.ITEM_PROBE, 0)) == 1, "cargo that is never carried goes into the locker")
 	_expect(int(server.ship.store.get(Weapons.item_of(Weapons.LASER, Weapons.FX_NONE, true), 0)) == 1
 		and int(server.ship.store.get(Gear.item_of(Gear.PHASE), 0)) == 1, "and anything else may be sent there")
 

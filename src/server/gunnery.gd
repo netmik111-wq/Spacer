@@ -102,6 +102,15 @@ const RANSOM_PRISONER := 0.3         # and one of its crew is handed over with i
 const ENEMY_EDGE := 0.05             # (v55, the author: "a little stronger" now that our pilot dodges) added to its hit chance
 const CAPTURE_SHARE := 1.5           # (v55) a ship taken by boarding is salvaged: this much of its reward...
 const CAPTURE_PARTS := 2             # ... and spare parts and fuel stripped from it
+# (v68, the author's F4) fights with other goals, besides wrecking it
+const GOAL_CARGO := 0.2              # of raids: it tows a cargo pod
+const GOAL_BOUNTY := 0.15            # it is wanted (alive)
+const GOAL_RUNNER := 0.15            # a courier that runs from the start
+const CARGO_SHARE := 1.0             # the whole pod is worth this much of its reward
+const BOUNTY_SHARE := 2.0            # the bounty, of its reward (and nothing else: it goes off under guard)
+const RUNNER_SHARE := 1.0            # the courier's contraband, besides its reward, when it is stopped
+const RUNNER_FLEE := 40.0            # seconds the courier needs to charge its jump with the drive whole
+const RUNNER_PACE := 0.5             # its guns charge this much slower (it is no warship)
 const SABOTAGE_TEXT := "Наши на борту пиратов ломают: %s (%d из %d)."
 
 var enemy_hit_chance := -1.0         # (tests set it to 0 or 1: their shots always miss or always hit)
@@ -154,6 +163,12 @@ var _flying: Array = []              # (v56) shots on their way: [the tick they 
 var _fx := RandomNumberGenerator.new()   # (v56) for what is only drawn (so the game's own lots stay as they were)
 var _aim_bonus := 0.0                # (v60) added to our hit chance while the console's volley is rolled (the gunnery skill)
 const GUNNER_HIT := 0.05             # (v60) the most the gunnery skill of the one at the console adds to our hit chance
+var goal := Net.GOAL_NONE            # (v68) what this fight is for besides wrecking it (Net.GOAL_*)
+var goal_lost := false               # the cargo is smashed, the bounty lost or the courier gone
+var goal_pay := 0                    # credits the goal brings when it is met
+var cargo_room := -1                 # the room of its drawing the cargo pod is in
+var goal_for_test := -1              # (tests: the goal of the next raid, instead of a roll)
+var goal_next := false               # the next raid may roll a goal (only those the eventer or the road send)
 var boss := 0                        # (v57) the flagship at the goal point: 1 battleship, 2 carrier (0 = an ordinary pirate)
 const STUN_FLOOR := -10.0           # (v57) a neural shot takes health no lower than this: down for a while, not dead
 const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what it means to hit this often (else the hull near the crew)
@@ -239,9 +254,99 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	_mend_part.resize(Net.ESYS_COUNT)
 	ransom = 0
 	_offered = false
+	_roll_goal()
 	server.enemy_crew.board(boarders, int(design["layout"]))
 	if server.assault != null:
 		server.assault.enemy_arrives()
+
+
+# ---------------------------------------------------------------- (v68) fights with goals
+
+func _roll_goal() -> void:
+	goal = Net.GOAL_NONE
+	goal_lost = false
+	goal_pay = 0
+	cargo_room = -1
+	var may := goal_next
+	goal_next = false
+	if not raid or boss > 0 or crewless:
+		goal_for_test = -1
+		return
+	var g := goal_for_test
+	goal_for_test = -1
+	if g < 0 and not may:
+		return
+	if g < 0:
+		var r := _rng.randf()
+		g = Net.GOAL_CARGO if r < GOAL_CARGO else (Net.GOAL_BOUNTY if r < GOAL_CARGO + GOAL_BOUNTY
+			else (Net.GOAL_RUNNER if r < GOAL_CARGO + GOAL_BOUNTY + GOAL_RUNNER else Net.GOAL_NONE))
+	match g:
+		Net.GOAL_CARGO:
+			var empty: Array = range(room_sys.size()).filter(func(r: int) -> bool: return room_sys[r] == Net.ROOM_EMPTY)
+			if empty.is_empty():
+				# a small ship with no spare room: the pod sits beside one of its systems, never its guns or shield
+				empty = range(room_sys.size()).filter(func(r: int) -> bool:
+					return room_sys[r] != Net.ESYS_WEAPONS and room_sys[r] != Net.ESYS_SHIELDS)
+			if empty.is_empty():
+				return
+			cargo_room = empty[_rng.randi_range(0, empty.size() - 1)]
+			revealed[cargo_room] = 1
+			goal = g
+			goal_pay = roundi(reward * CARGO_SHARE)
+			server.chat.say("Пират тянет грузовой контейнер (его отсек отмечен на плане пульта орудий): целым он стоит %d кредитов. Попадание в этот отсек разобьёт груз." % goal_pay)
+		Net.GOAL_BOUNTY:
+			goal = g
+			goal_pay = roundi(reward * BOUNTY_SHARE)
+			server.chat.say("Этот пират в розыске: %d кредитов, если взять его живым. Выбейте ему орудия и двигатель разом, и он сдастся. Разбитый, он награды не принесёт." % goal_pay)
+		Net.GOAL_RUNNER:
+			goal = g
+			goal_pay = roundi(reward * RUNNER_SHARE)
+			flee = 0.0
+			server.chat.say("Курьер контрабандистов! Он уже заряжает прыжок: через %d с уйдёт. Выбейте ему двигатель или гипердвигатель, и его груз (%d кредитов) наш." % [int(RUNNER_FLEE), goal_pay])
+
+
+func _flee_seconds() -> float:
+	return RUNNER_FLEE if goal == Net.GOAL_RUNNER else FLEE_SECONDS
+
+
+func _cargo_hit(room: int) -> String:
+	## A blow in the room of its cargo pod smashes it.
+	if goal != Net.GOAL_CARGO or goal_lost or room != cargo_room or room < 0:
+		return ""
+	goal_lost = true
+	return "Грузовой контейнер разбит!"
+
+
+func _surrenders() -> void:
+	## (v68) The wanted pirate with its guns and engine out gives itself up: the bounty, and it goes off under guard.
+	goal_lost = true
+	server.story.pirates_beaten()
+	server.ship.credits += goal_pay
+	server.chat.say("Пират в розыске сдаётся: орудия и двигатель выбиты. Награда за голову: +%d кредитов. Его уводит конвой." % goal_pay)
+	ransom = 0
+	enemy_hull = 0
+	beam_left.fill(0)
+	server.supplies.tell_store()
+	server.derelict.pirates_escaped()
+
+
+func _goal_paid() -> String:
+	## It was wrecked or taken: what its goal brings now (said after the reward).
+	if goal_lost:
+		return ""
+	match goal:
+		Net.GOAL_CARGO:
+			goal_lost = true
+			server.ship.credits += goal_pay
+			return " Грузовой контейнер цел: +%d кредитов." % goal_pay
+		Net.GOAL_RUNNER:
+			goal_lost = true
+			server.ship.credits += goal_pay
+			return " Груз контрабандиста наш: +%d кредитов." % goal_pay
+		Net.GOAL_BOUNTY:
+			goal_lost = true
+			return " Награда за голову пропала: его хотели живым."
+	return ""
 
 
 func room_of_system(which: int) -> int:
@@ -263,7 +368,7 @@ func reveal(room: int, why: String = "") -> bool:
 	revealed[room] = 1
 	var system := system_in(room)
 	if why != "" and system >= 0:
-		server.chat.say("%s: %s." % [why, Net.ESYS_NAMES[system].to_lower()])
+		server.chat.say_bridge("%s: %s." % [why, Net.ESYS_NAMES[system].to_lower()])
 	return true
 
 
@@ -325,6 +430,9 @@ func hull_full() -> int:
 
 func enemy_gone() -> void:
 	enemy_hull = 0
+	goal = Net.GOAL_NONE
+	goal_lost = false
+	cargo_room = -1
 	boss = 0
 	crewless = false
 	teleport = false
@@ -409,7 +517,7 @@ func jump_seconds_left() -> int:
 	var rate := _jump_rate()
 	if rate <= 0.0:
 		return 65535
-	return int(ceil((FLEE_SECONDS * Net.TICK_HZ - flee) / rate / Net.TICK_HZ))
+	return int(ceil((_flee_seconds() * Net.TICK_HZ - flee) / rate / Net.TICK_HZ))
 
 
 # ---------------------------------------------------------------- our guns and shield
@@ -446,6 +554,8 @@ func power_used() -> int:
 		n += Weapons.power(ship.guard)
 	if ship.shield_on and shield_cell() >= 0:
 		n += Weapons.SHIELD_POWER
+	if server.power != null:
+		n += server.power.engines_draw()    # (v68) power for the engines (dodge)
 	return n
 
 
@@ -466,37 +576,50 @@ func setup_asked(p, action: int, a: int, b: int) -> void:
 			probe_asked(p)
 		Net.GUNSET_RANSOM:
 			ransom_taken(p)
-		Net.GUNSET_ARM:
-			if a == Net.GUARD_MOUNT:
-				_arm_guard(p, b == 1)
-				return
-			if a >= ship.mounts.size() or ship.mounts[a] == Weapons.NONE:
-				return
-			if b == 0:
-				ship.armed[a] = 0
-				charge[a] = 0.0              # a gun without power loses its charge
-			elif ship.armed[a] == 0:
-				if power_used() + Weapons.power(ship.mounts[a]) > server.power.budget():
-					server.chat.tell(p, "Не хватает энергии реактора: %s берёт %d, свободно %d. Отключите другое орудие или щит." % [
-						Weapons.name_of(ship.mounts[a]), Weapons.power(ship.mounts[a]), server.power.budget() - power_used()])
-					return
-				ship.armed[a] = 1
-		Net.GUNSET_SHIELD:
-			if shield_cell() < 0:
-				return
-			if b == 0:
-				ship.shield_on = false
-				ship.shield = 0.0
-			elif not ship.shield_on:
-				if power_used() + Weapons.SHIELD_POWER > server.power.budget():
-					server.chat.tell(p, "Не хватает энергии реактора на щит: нужно %d, свободно %d." % [Weapons.SHIELD_POWER, server.power.budget() - power_used()])
-					return
-				ship.shield_on = true
+		Net.GUNSET_ARM, Net.GUNSET_SHIELD:
+			# (v68, the author's F2) power moved to the power panel in the engine room
+			server.chat.tell(p, "Питание орудий и щита включают на щите питания у СМЭС в машинном отделении.")
 		Net.GUNSET_MOUNT:
 			if a == Net.GUARD_MOUNT:
 				_mount(p, a, b)
 			else:
 				server.mounts.order(p, a, b)  # (v60) guns are carried up by hand: the console orders it
+
+
+func arm(p, a: int, on: bool) -> void:
+	## (v68) A gun powered or cut, from the power panel (Power.ACT_GUN).
+	var ship = server.ship
+	if a == Net.GUARD_MOUNT:
+		arm_guard(p, on)
+		return
+	if a < 0 or a >= ship.mounts.size() or ship.mounts[a] == Weapons.NONE:
+		return
+	if not on:
+		ship.armed[a] = 0
+		charge[a] = 0.0              # a gun without power loses its charge
+	elif ship.armed[a] == 0:
+		if power_used() + Weapons.power(ship.mounts[a]) > server.power.budget():
+			if p != null:
+				server.chat.tell(p, "Не хватает энергии реактора: %s берёт %d, свободно %d. Отключите другое орудие, щит или двигатели." % [
+					Weapons.name_of(ship.mounts[a]), Weapons.power(ship.mounts[a]), server.power.budget() - power_used()])
+			return
+		ship.armed[a] = 1
+
+
+func switch_shield(p, on: bool) -> void:
+	## (v68) The shield switched on or off, from the power panel.
+	var ship = server.ship
+	if shield_cell() < 0:
+		return
+	if not on:
+		ship.shield_on = false
+		ship.shield = 0.0
+	elif not ship.shield_on:
+		if power_used() + Weapons.SHIELD_POWER > server.power.budget():
+			if p != null:
+				server.chat.tell(p, "Не хватает энергии реактора на щит: нужно %d, свободно %d." % [Weapons.SHIELD_POWER, server.power.budget() - power_used()])
+			return
+		ship.shield_on = true
 
 
 func _mount(p, a: int, item: int) -> void:
@@ -531,6 +654,7 @@ func _mount(p, a: int, item: int) -> void:
 		return
 	if item == Net.ITEM_NONE and old == Weapons.NONE:
 		return
+	server.mounts.unload(a)                  # (v68) its hand-loaded rounds back into the locker
 	if old != Weapons.NONE:
 		_into_cargo(Weapons.item_of(old, old_fx))
 	if w != Weapons.NONE:
@@ -552,12 +676,13 @@ func _into_cargo(item: int) -> void:
 	server.ship.store[item] = int(server.ship.store.get(item, 0)) + 1
 
 
-func _arm_guard(p, on: bool) -> void:
+func arm_guard(p, on: bool) -> void:
 	var ship = server.ship
 	if ship.guard == Weapons.NONE or on == ship.guard_armed:
 		return
 	if on and power_used() + Weapons.power(ship.guard) > server.power.budget():
-		server.chat.tell(p, "Не хватает энергии реактора: «Заслон» берёт %d, свободно %d." % [Weapons.power(ship.guard), server.power.budget() - power_used()])
+		if p != null:
+			server.chat.tell(p, "Не хватает энергии реактора: «Заслон» берёт %d, свободно %d." % [Weapons.power(ship.guard), server.power.budget() - power_used()])
 		return
 	ship.guard_armed = on
 	if not on:
@@ -602,6 +727,10 @@ func tick() -> void:
 				_starts_to_flee()
 		if ransom > 0 and server.tick >= ransom_until:
 			_ransom_ends("Пираты не дождались ответа на выкуп.")
+		if goal == Net.GOAL_BOUNTY and not goal_lost and down(Net.ESYS_WEAPONS) and down(Net.ESYS_ENGINE) \
+				and not server.stations.ours_aboard:
+			_surrenders()
+			return
 		_scan_tick()
 		if (down(Net.ESYS_ENGINE) or fleeing() or held()) and server.derelict._pirates_dock_at >= 0:
 			server.derelict._pirates_dock_at += 1          # it drifts, runs or is held: the time to fight it off stands still
@@ -609,7 +738,7 @@ func tick() -> void:
 			server.derelict._pirates_dock_at += 1          # (v55) we keep our distance: it closes in at half the pace
 		if fleeing() and not held() and not server.stations.ours_aboard:
 			flee += _jump_rate()
-			if flee >= FLEE_SECONDS * Net.TICK_HZ:
+			if flee >= _flee_seconds() * Net.TICK_HZ:
 				_escaped()
 		if boss > 0 and not phase2 and enemy_hull > 0 and enemy_hull <= roundi(hull_full() * PHASE2_SHARE):
 			_phase_two()
@@ -617,7 +746,7 @@ func tick() -> void:
 		if fighting() and not down(Net.ESYS_WEAPONS) and ransom == 0:
 			var pace: float = 1.0 / _weapons_slowness() / _slower * float(Hulls.temper(temper)["pace"]) \
 				* (1.0 if server.enemy_crew.manned(Net.ESYS_WEAPONS) else UNMANNED_PACE) * server.hazards.enemy_pace() \
-				* (PHASE2_PACE if phase2 and boss == 1 else 1.0)
+				* (PHASE2_PACE if phase2 and boss == 1 else 1.0) * (RUNNER_PACE if goal == Net.GOAL_RUNNER else 1.0)
 			for k in enemy_weapons.size():
 				enemy_charge[k] = minf(enemy_charge[k] + pace / Weapons.charge_ticks(enemy_weapons[k]), 1.0)
 				if enemy_charge[k] >= 1.0 and fighting():
@@ -666,7 +795,7 @@ func packet() -> PackedByteArray:
 			out.append(roundi(charge[i] * 20.0) * 5)
 		var ammo := Weapons.ammo(ship.mounts[i])
 		out.append((Net.GUNF_ARMED if ship.armed[i] == 1 else 0) | (Net.GUNF_BEAM if beam_left[i] > 0 else 0)
-			| (Net.GUNF_NO_AMMO if ammo != 0 and int(ship.store.get(ammo, 0)) <= 0 else 0))
+			| (Net.GUNF_NO_AMMO if ammo != 0 and not server.mounts.has_round(i) else 0))
 	out.append(power_used())
 	out.append(server.power.budget())                  # (v61) the reactor's power now, with the SMES's boost
 	var gen := shield_cell()
@@ -722,6 +851,14 @@ func packet() -> PackedByteArray:
 		# (v59) the top sensors show its guns charging, per gun 0..100 (255 = not seen)
 		for k in enemy_charge.size():
 			out.append(roundi(enemy_charge[k] * 20.0) * 5 if server.outfit.sees_charge() else 255)
+	# (v68) u8 its goal (GOAL_*), u8 GOALF_*, u8 the cargo pod's room (255 = none), u16 what the goal pays
+	var f := fighting()
+	out.append(goal if f else Net.GOAL_NONE)
+	out.append(Net.GOALF_LOST if goal_lost else 0)
+	out.append(cargo_room if f and cargo_room >= 0 else 255)
+	var o := out.size()
+	out.resize(o + 2)
+	out.encode_u16(o, goal_pay if f else 0)
 	return out
 
 
@@ -745,7 +882,8 @@ func _escaped() -> void:
 	enemy_hull = 0
 	beam_left.fill(0)
 	server.derelict.pirates_escaped()
-	server.chat.say("Пиратский корабль ушёл в прыжок. Упустили.")
+	server.chat.say("Курьер ушёл в прыжок вместе с грузом. Упустили." if goal == Net.GOAL_RUNNER else "Пиратский корабль ушёл в прыжок. Упустили.")
+	goal_lost = true
 
 
 func fire(p, which: int) -> void:
@@ -767,13 +905,10 @@ func fire(p, which: int) -> void:
 		var w: int = ship.mounts[i]
 		var fx: int = ship.mount_fx[i]
 		var ammo := Weapons.ammo(w)
-		if ammo != 0:
-			if int(ship.store.get(ammo, 0)) <= 0:
-				server.chat.tell(p, "Орудие %d: нет %s в трюме (%s)." % [i + 1, "снарядов" if ammo == Net.ITEM_SHELL else "ракет",
-					Weapons.lower_name(w, fx)])
-				continue
-			ship.store[ammo] -= 1
-			server.supplies.tell_store()
+		if not server.mounts.take_round(i):        # (v68) a round loaded by hand first, then the locker
+			server.chat.tell(p, "Орудие %d: нет %s в трюме (%s)." % [i + 1, "снарядов" if ammo == Net.ITEM_SHELL else "ракет",
+				Weapons.lower_name(w, fx)])
+			continue
 		charge[i] = 0.0
 		fired += 1
 		server.mounts.fired(i)
@@ -874,12 +1009,12 @@ func _tractor(i: int, w: int) -> void:
 	if _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
 		_draw_beam(cell, Net.SHOT_TRACTOR, 0, -1, w)
 		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
-		server.chat.say("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
+		server.chat.say_bridge("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
 		return
 	_draw_beam(cell, Net.SHOT_TRACTOR, Net.LANDED, -1, w)
 	var hold := float(Weapons.info(w)["hold"]) if Weapons.info(w).has("hold") else Weapons.TRACTOR_HOLD
 	held_until = maxi(held_until, server.tick + roundi(hold * Net.TICK_HZ))
-	server.chat.say("Орудие %d (захватный луч): пиратский корабль схвачен на %d с: не уклоняется, не уходит прыжком и не подходит к шлюзу.%s" % [
+	server.chat.say_bridge("Орудие %d (захватный луч): пиратский корабль схвачен на %d с: не уклоняется, не уходит прыжком и не подходит к шлюзу.%s" % [
 		i + 1, int(hold), _enemy_state()])
 
 
@@ -991,7 +1126,7 @@ func _tell_volley(log: Dictionary) -> void:
 			else "%s сбила их точечная оборона (%d)" % ["ракеты" if what == "ракет" else "снаряды", int(log["down"])])
 	if parts.is_empty():
 		return
-	server.chat.say("Орудие %d (%s%s): %s.%s%s" % [int(log["gun"]) + 1, Weapons.lower_name(int(log["w"]), int(log.get("fx", 0))),
+	server.chat.say_bridge("Орудие %d (%s%s): %s.%s%s" % [int(log["gun"]) + 1, Weapons.lower_name(int(log["w"]), int(log.get("fx", 0))),
 		", сведённый луч" if log.get("focus", false) else "", "; ".join(parts),
 		"" if said.is_empty() else " " + " ".join(_unique(said)), _enemy_state()])
 
@@ -1183,7 +1318,7 @@ func _beam_pulse(i: int) -> void:
 			parts.append("прожёг %d раз (%s)" % [log[0], _room_word(room)])
 		if log[1] > 0:
 			parts.append("щит не пустил %d раз" % log[1])
-		server.chat.say("Орудие %d (%s): %s.%s%s" % [i + 1, Weapons.lower_name(w, server.ship.mount_fx[i]), ", ".join(parts),
+		server.chat.say_bridge("Орудие %d (%s): %s.%s%s" % [i + 1, Weapons.lower_name(w, server.ship.mount_fx[i]), ", ".join(parts),
 			"" if (log[2] as PackedStringArray).is_empty() else " " + " ".join(_unique(log[2])), _enemy_state()])
 	if fighting():
 		_settle()
@@ -1213,7 +1348,7 @@ func _siphon_pulse(i: int) -> void:
 		else:
 			what = "вытянул из щита пиратов %d, нашему щиту %s." % [roundi(log[0]),
 				("+%d" % roundi(log[1])) if log[1] > 0.0 else "ничего (генератор не работает или щит полон)"]
-		server.chat.say("Орудие %d (сифон): %s%s" % [i + 1, what, _enemy_state()])
+		server.chat.say_bridge("Орудие %d (сифон): %s%s" % [i + 1, what, _enemy_state()])
 
 
 func _enemy_state() -> String:
@@ -1368,6 +1503,8 @@ func _wear_room(system: int, room: int, damage: int, wound: float = -1.0) -> Str
 	## A blow of `damage` in that room: whoever is in it may be hurt (each one
 	## `wound` of the time; -1: the plain chance, 0: nobody), and the system there worn.
 	var hurt := crew_hit(room, wound) if system != Net.ESYS_CREW and damage > 0 and wound != 0.0 else ""
+	if damage > 0:
+		hurt = _join(_cargo_hit(room), hurt)     # (v68) the cargo pod's room
 	if system < 0 or system >= systems.size() or systems[system] == 0 or damage <= 0:
 		return hurt
 	var was: int = systems[system]
@@ -1445,7 +1582,7 @@ func _mend_tick() -> void:
 			_mend_part[k] = 0.0
 			systems[k] += 1
 			if systems[k] == 1:
-				server.chat.say(("Ремонтные дроны починили: %s снова работают." if crewless else "Пираты починили: %s снова работают.") % Net.ESYS_NAMES[k].to_lower())
+				server.chat.say_bridge(("Ремонтные дроны починили: %s снова работают." if crewless else "Пираты починили: %s снова работают.") % Net.ESYS_NAMES[k].to_lower())
 
 
 func crew_hit(room: int, wound: float = -1.0, kill_one: bool = false) -> String:
@@ -1518,7 +1655,7 @@ func _our_bomb_lands(i: int, w: int, fx: int, room: int, hit: bool, spot: Vector
 		return
 	var gun := "Орудие %d (%s)" % [i + 1, Weapons.lower_name(w, fx)]
 	if not hit or room < 0:
-		server.chat.say("%s: телепорт сбился, бомба потеряна.%s" % [gun, _enemy_state()])
+		server.chat.say_bridge("%s: телепорт сбился, бомба потеряна.%s" % [gun, _enemy_state()])
 		return
 	server.combat.jolt(Net.JOLT_THEIR_HIT, Net.SHOT_BOMB, spot)
 	reveal(room)
@@ -1541,7 +1678,7 @@ func _our_bomb_lands(i: int, w: int, fx: int, room: int, hit: bool, spot: Vector
 		if wound > 0.0:
 			said = _join(said, crew_hit(room, wound, bool(info.get("kill", false))))
 	said = _join(said, _fx_on_enemy(fx, system, room))
-	server.chat.say("%s: взрыв в отсеке (%s).%s%s" % [gun, _room_word(room), "" if said == "" else " " + said, _enemy_state()])
+	server.chat.say_bridge("%s: взрыв в отсеке (%s).%s%s" % [gun, _room_word(room), "" if said == "" else " " + said, _enemy_state()])
 	_settle()
 
 
@@ -1568,7 +1705,7 @@ func _their_bomb_lands(w: int, fx: int, target: int, cell: int, hit: bool, spot:
 	var ship = server.ship
 	var gun := Weapons.lower_name(w, fx)
 	if not hit:
-		server.chat.say("Пираты стреляют (%s): телепорт сбился, бомба не дошла." % gun)
+		server.chat.say_bridge("Пираты стреляют (%s): телепорт сбился, бомба не дошла." % gun)
 		return
 	server.combat.jolt(Net.JOLT_HEAVY, Net.SHOT_BOMB, spot)
 	var info := Weapons.info(w)
@@ -1678,7 +1815,7 @@ func ransom_taken(p) -> void:
 	if _rng.randf() < RANSOM_PRISONER and server.reserve < Net.RESERVE_MAX:
 		server.reserve += 1
 		extra = " Один из пиратов просится к нам: он теперь в резерве экипажа (%d)." % server.reserve
-	server.chat.say("%s принимает выкуп: +%d кредитов и канистра топлива. Пиратский корабль уходит.%s" % [p.name, ransom, extra])
+	server.chat.say("%s принимает выкуп: +%d кредитов и канистра топлива. Пиратский корабль уходит.%s%s" % [p.name, ransom, extra, _goal_paid()])
 	ransom = 0
 	enemy_hull = 0
 	beam_left.fill(0)
@@ -1716,7 +1853,7 @@ func _wrecked() -> void:
 		if crewless:
 			server.chat.say("Ядро дрон-корабля разбито: машина мертва, корабль наш! Он разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать.%s" % [paid, CAPTURE_PARTS + parts, gun])
 		else:
-			server.chat.say("Пиратский корабль захвачен: его экипаж перебит! Корабль разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать.%s" % [paid, CAPTURE_PARTS + parts, gun])
+			server.chat.say("Пиратский корабль захвачен: его экипаж перебит! Корабль разобран на ценное: %d кредитов, %d запчасти и канистра топлива в трюм. Его можно обыскать.%s%s" % [paid, CAPTURE_PARTS + parts, gun, _goal_paid()])
 		server.supplies.tell_store()
 		return
 	if boss > 0:
@@ -1732,7 +1869,7 @@ func _wrecked() -> void:
 		# it stays alongside, dead: what it holds is there for the taking
 		server.derelict.becomes_wreck()
 		var gun := _loot_gun(false)
-		server.chat.say("Пиратский корабль разбит! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s" % [reward, gun])
+		server.chat.say("Пиратский корабль разбит! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s%s" % [reward, gun, _goal_paid()])
 	else:
 		server.ship.store[Net.ITEM_FUEL] = int(server.ship.store.get(Net.ITEM_FUEL, 0)) + Net.WRECK_FUEL
 		server.derelict.pirates_wrecked()
@@ -1830,7 +1967,8 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 	var chance: float = float(Weapons.info(w)["hit"]) if enemy_hit_chance < 0.0 else enemy_hit_chance
 	if enemy_hit_chance < 0.0:
 		# (v55) our pilot's dodge and the battle position
-		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus() - server.stations.our_dodge(), 0.05, 0.95)
+		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus() - server.stations.our_dodge()
+			- (server.stations.EVADE_DODGE if server.stations.evading() else 0.0), 0.05, 0.95)   # (v68) the pilot's evade
 	if down(Net.ESYS_HELM):
 		chance *= BLIND_ENEMY_HIT
 	# (v56) every shot is rolled now and lands when its flight is over
@@ -1952,6 +2090,9 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		else:
 			server.crew.hull_hit(_armoured(Net.HULL_PER_HOLE * damage))
 			said.append("Ракета разорвалась на обшивке: прочность %d из %d." % [ship.hull, server.ship.hull_max])
+		if Weapons.klass(w) != Weapons.CLASS_NEURAL and not info.has("disable") and target < 0 \
+				and server.systems.knock_on(cell, heavy) != "":
+			said.append("От удара что-то сломалось рядом.")     # (v68, the author's E1) breakdowns come from hits
 		if Weapons.pierce(w) > 0 or fx == Weapons.FX_HOLE:
 			# (v58) it goes on through, or tears a second hole: one more breach beside the crew
 			var past := _hull_near_crew()
@@ -1979,8 +2120,13 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		parts.append("рикошет от нашей брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
 	if parts.is_empty() and said.is_empty():
 		return
-	server.chat.say("Пираты стреляют (%s)%s%s" % [Weapons.lower_name(w, fx), (": " + ", ".join(parts) + ".") if not parts.is_empty() else ".",
-		"" if said.is_empty() else " Попадание! " + " ".join(said)])
+	var line := "Пираты стреляют (%s)%s%s" % [Weapons.lower_name(w, fx), (": " + ", ".join(parts) + ".") if not parts.is_empty() else ".",
+		"" if said.is_empty() else " Попадание! " + " ".join(said)]
+	# (v68, the author's G3) what the volley did to us is a warning for everybody; misses and the shield are the bridge's
+	if said.is_empty():
+		server.chat.say_bridge(line)
+	else:
+		server.chat.say(line)
 
 
 func _armoured(strength: int) -> int:
@@ -2189,6 +2335,6 @@ func wear_by_hand(system: int) -> void:
 			enemy_shield = 0.0
 		server.chat.say("Наши на борту пиратов вывели из строя: %s. %s" % [Net.ESYS_NAMES[system].to_lower(), DOWN_TEXT[system]])
 	else:
-		server.chat.say(SABOTAGE_TEXT % [Net.ESYS_NAMES[system].to_lower(), systems[system], systems_full[system]])
+		server.chat.say_bridge(SABOTAGE_TEXT % [Net.ESYS_NAMES[system].to_lower(), systems[system], systems_full[system]])
 	if crewless and system == Net.ESYS_DRONES and systems[system] == 0:
 		_settle()                            # (v62) its core wrecked by hand: the drone ship is ours

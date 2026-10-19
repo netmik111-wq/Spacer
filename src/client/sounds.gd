@@ -23,7 +23,7 @@ const MUFFLED_BUS := "Muffled"
 # (v56) the name of each sound, for files that replace it (see above)
 const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: "hiss", Net.SOUND_THUD: "thud",
 	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow",
-	Net.SOUND_PHASE: "phase"}
+	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load"}
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -47,7 +47,9 @@ const GUN_FLAK := "gun_flak"               # point defence firing: a short burst
 const GUN_NOVA := "gun_nova"               # the «Сверхновая»: a rising scream and a blinding boom
 const GUN_BOMB := "gun_bomb"               # (v62) a bomb launcher: a teleport's warbling hum and a pop
 const GUN_SHRAPNEL := "gun_shrapnel"       # (v62) «Шрапнель»: a dry, scattered crackle
-const FIGHT_NAMES := [GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
+const ALERT_YELLOW := "alert_yellow"       # (v68) the alert going up to yellow: two falling chimes
+const ALERT_RED := "alert_red"             # (v68) red alert: a rising and falling siren, heard by everyone aboard
+const FIGHT_NAMES := [ALERT_YELLOW, ALERT_RED, GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
 	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA,
 	GUN_BOMB, GUN_SHRAPNEL]
 
@@ -76,6 +78,9 @@ static func prepare() -> void:
 	_streams[Net.SOUND_SHOT] = [_shot()]
 	_streams[Net.SOUND_BLOW] = [_blow()]
 	_streams[Net.SOUND_PHASE] = [_phase()]
+	_streams[Net.SOUND_LOAD] = [_load()]
+	_streams[ALERT_YELLOW] = [_alert_yellow()]
+	_streams[ALERT_RED] = [_alert_red()]
 	_streams[GUN_LASER] = [_gun_laser(1.0), _gun_laser(1.07)]
 	_streams[GUN_HEAVY] = [_gun_heavy()]
 	_streams[GUN_ROCKET] = [_gun_rocket()]
@@ -293,6 +298,43 @@ static func _thud() -> AudioStreamWAV:
 	_tone(out, 0.0, 62.0, 0.55, 11.0)
 	_noise(out, 0.07, 0.3, 0.25, 25.0, 0.8)
 	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _load() -> AudioStreamWAV:
+	# (v68) a round pushed into a breech: a slide, then a heavy clack of the lock
+	var out := _buffer(0.6)
+	_noise(out, 0.0, 0.3, 0.25, 6.0, 0.7)
+	_tone(out, 0.32, 140.0, 0.5, 18.0)
+	_tone(out, 0.32, 1400.0, 0.2, 60.0)
+	_noise(out, 0.32, 0.45, 0.4, 40.0, 0.5)
+	_fade(out, 0.01)
+	return _wav(out)
+
+
+static func _alert_yellow() -> AudioStreamWAV:
+	# (v68) two falling chimes
+	var out := _buffer(1.1)
+	_tone(out, 0.0, 880.0, 0.3, 3.5)
+	_tone(out, 0.0, 1760.0, 0.08, 5.0)
+	_tone(out, 0.45, 660.0, 0.3, 3.5)
+	_tone(out, 0.45, 1320.0, 0.08, 5.0)
+	_fade(out, 0.005)
+	return _wav(out)
+
+
+static func _alert_red() -> AudioStreamWAV:
+	# (v68) a siren: three rises and falls of a harsh tone
+	var seconds := 2.4
+	var out := _buffer(seconds)
+	var phase := 0.0
+	for i in out.size():
+		var t := float(i) / RATE
+		var f := 520.0 + 380.0 * (0.5 - 0.5 * cos(TAU * t / 0.8))
+		phase += TAU * f / RATE
+		var v := sin(phase) + 0.35 * sin(phase * 2.0) + 0.2 * sin(phase * 3.0)
+		out[i] += v * 0.22 * minf(1.0, (seconds - t) * 4.0)
+	_fade(out, 0.02)
 	return _wav(out)
 
 

@@ -76,9 +76,9 @@ const BASE := {
 	Net.ITEM_SUIT + 9: {"name": "Скафандр", "about": SUIT_ABOUT, "kind": Net.ITEM_SUIT + 10, "wear": Net.WEAR_SUIT, "tank": 9},
 	Net.ITEM_SUIT + 10: {"name": "Скафандр", "about": SUIT_ABOUT, "wear": Net.WEAR_SUIT, "tank": 10, "price": 40, "stock": 2},
 	# rockets and shells: cargo (the ship's weapons off their mounts are added by _made, below)
-	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме.", "price": Weapons.ROCKET_PRICE, "cargo": true},
-	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме.", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
-	Net.ITEM_SHELL: {"name": "Снаряд", "about": "Снаряд для автопушки и «Молота». Хранится в трюме.", "price": Weapons.SHELL_PRICE, "cargo": true},
+	Net.ITEM_ROCKET: {"name": "Ракета", "about": "Ракета для ракетной установки. Хранится в трюме; её можно взять и зарядить в орудие вручную (держите E у орудия): так оно заряжается быстрее.", "price": Weapons.ROCKET_PRICE, "cargo": true},
+	Net.ITEM_EMP_ROCKET: {"name": "ЭМИ-ракета", "about": "Ракета для ЭМИ-установки. Хранится в трюме; её можно взять и зарядить в орудие вручную (держите E у орудия).", "price": Weapons.EMP_ROCKET_PRICE, "cargo": true},
+	Net.ITEM_SHELL: {"name": "Снаряд", "about": "Снаряд для автопушки и «Молота». Хранится в трюме; его можно взять и зарядить в орудие вручную (держите E у орудия): так оно заряжается быстрее.", "price": Weapons.SHELL_PRICE, "cargo": true},
 	Net.ITEM_PROBE: {"name": "Зонд-сканер", "about": "Запускается с пульта орудий: показывает все отсеки пиратского корабля, его экипаж и повадки. Хранится в трюме.",
 		"price": 12, "stock": 1, "cargo": true},
 	Net.ITEM_DRONE: {"name": "Дрон-разведчик", "about": "Запускается с монитора дрона на мостике: залетает внутрь пиратского корабля, им управляют клавишами движения. Показывает отсеки, где побывал, и пиратов рядом; может взорваться в отсеке и повредить систему сквозь щит. Хранится в трюме.",
@@ -152,6 +152,17 @@ static func carried_gun(item: int) -> bool:
 	## the point defence: it is set from the gun console, it has no mount in the hull).
 	var w := Weapons.of_item(item) if INFO.has(item) else Weapons.NONE
 	return w != Weapons.NONE and w != Weapons.GUARD
+
+
+static func carried_round(item: int) -> bool:
+	## (v68, the author's F3) A shell or rocket: cargo, but it may be taken out of the
+	## locker to load a gun's breech by hand.
+	return item == Net.ITEM_SHELL or item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET
+
+
+static func carried(item: int) -> bool:
+	## Cargo that may still be taken out of the locker and carried: a ship gun, or (v68) a round.
+	return carried_gun(item) or carried_round(item)
 
 
 static func rounds(item: int) -> int:

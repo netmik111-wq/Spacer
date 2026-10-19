@@ -8,6 +8,7 @@ extends Node2D
 ## hatch; of the deck above only its see-through floors are hinted, with
 ## whoever stands on them.
 
+const RED_ALERT_DIM := 0.3           # (v68) how far a red alert dims the lights (0 lit .. 1 dark)
 const Net := preload("res://src/shared/net.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const Sight := preload("res://src/shared/sight.gd")
@@ -222,6 +223,7 @@ var _hum_timer := 0.0
 var _sound_pen: Node2D               # draws them over everything, in screen space
 var _shots: Array = []               # shots and blows to draw: [kind, hit, from, to (deck pixels), deck, seconds left]
 var _fight := FightFx.new()          # (v56) the ships' shots flying and bursting
+var _alert_heard := -1               # (v68) client.alert_changes as last sounded (-1: not yet in the game)
 var _shake := 0.0                    # (v56) how far the screen is thrown now, in screen pixels (dies away)
 var _mask_camera: Camera2D
 var _dark_layer: CanvasLayer
@@ -532,7 +534,9 @@ func _update_ship(delta: float) -> void:
 		for deck in _decks:
 			deck.things.queue_redraw()
 	# light and dark change with every step anybody holding a flashlight takes
-	_dark = move_toward(_dark, 0.0 if client.power_at(client.pred.y * map.width + client.pred.x) else 1.0, delta * 2.5)   # (v61) the bridge backup lights its room
+	# (v61) the bridge backup lights its room; (v68) the lights' breaker off is dark, a red alert dims them
+	var lit_here := client.light_at(client.pred.y * map.width + client.pred.x)
+	_dark = move_toward(_dark, (RED_ALERT_DIM if client.alert == Net.ALERT_RED else 0.0) if lit_here else 1.0, delta * 2.5)
 	_lit = client.lit_cells()
 	_dim = _find_dim()
 	_near = _find_near()
@@ -1434,6 +1438,15 @@ func _update_audio(delta: float) -> void:
 			_audio.play(Net.SOUND_STEP, _feet(Vector2(here.x, map.local_y(here.y))), Net.SOUND_RANGE[Net.SOUND_STEP], _thin_air_here(),
 				-12.0 + Options.db_of(Options.steps_volume))   # (v56: quieter, the author's word)
 		_last_cell = here
+	if client.alert_changes != _alert_heard:
+		# (v68, the author's J4) the alert sounds through the ship's speakers: everyone hears it where there is air
+		var first := _alert_heard < 0
+		_alert_heard = client.alert_changes
+		var cell := here.y * map.width + here.x
+		var in_air := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR
+		if not first and in_air and client.alert != Net.ALERT_GREEN:
+			_audio.play(Sounds.ALERT_RED if client.alert == Net.ALERT_RED else Sounds.ALERT_YELLOW,
+				_feet(Vector2(here.x, map.local_y(here.y))), 40.0, false, -4.0)
 	_hum_timer -= delta
 	if _hum_timer > 0.0:
 		return

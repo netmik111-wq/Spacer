@@ -274,7 +274,7 @@ func _unlit(cell: int) -> bool:
 	## power (except the bridge while its backup SMES holds it).
 	if server.map.is_other(cell):
 		return _dark_cell(cell) or not server.powered()
-	return not server.power.at(cell)
+	return not server.power.light_at(cell)      # (v68) the lights' breaker too
 
 
 func _lit_cells() -> Dictionary:
@@ -343,7 +343,7 @@ func _prepare() -> void:
 	_now.resize(n)
 	_chunk.resize(n)
 	_shines.resize(n)
-	_dark_now = not server.powered()
+	_dark_now = not server.powered() or not server.power.lights_on()
 	_dark_ship = server.derelict.dark()
 	for q: Player in server.players:
 		if q == null:
