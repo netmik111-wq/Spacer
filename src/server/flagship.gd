@@ -3,7 +3,7 @@ extends RefCounted
 ## point in the game where we go... a boss fight with a big ship... win the
 ## boss, end of the game"). Server only.
 ##
-## The flagship waits in the sector Sectors.goal_of names. When our ship
+## The flagship waits in the sector Sectors.goal names. When our ship
 ## arrives there it comes out a few seconds later and fights to the end: it
 ## never runs and never offers a ransom (Gunnery, with `boss` set). Jump away
 ## and it stays behind; come back and it is there again, mended. Each game
@@ -21,9 +21,15 @@ extends RefCounted
 ## bridge console is broken. Wrecking the flagship, or killing its whole crew
 ## by boarding it, wins the game (GameServer.won); the voyage goes on after.
 ##
+## (v64, the author's C3 and my V1, V2) It waits in the fourth cluster
+## (Sectors.FLAG_DEPTH), at the system Sectors.build puts it in, and wakes as
+## soon as our ship comes into that cluster; then it roams the whole cluster
+## along its lanes (never into a station's system). While it lives, the
+## cluster's exits are shut (its jammer).
+##
 ## (v63, the author's R7: "the flagship roams its sector FTL-style and grows
 ## stronger the longer you take") It sleeps at the goal until our ship first
-## comes within AREA jumps of it. Then it wakes and roams: every MOVE_SECONDS it
+## comes into its area (v64: its cluster). Then it wakes and roams: every MOVE_SECONDS it
 ## moves to a neighbouring sector of its area (along a route), shown on the
 ## chart; meeting it in a sector (we arrive, or it comes to us, WARN_SECONDS
 ## after a warning) is the fight. From waking its growth clock runs, even while
@@ -46,7 +52,6 @@ const PHASE2_SECONDS := 25.0         # (v62) in its second phase the carrier tel
 const PHASE2_PARTY := 3              # ... this many at a time...
 const PHASE2_TROOPS := 4             # ... and calls up this many more troops
 const CAPTURE_SECONDS := 10          # the whole crew down this long with its boarders aboard: the ship is theirs
-const AREA := 2                      # (v63) it roams the sectors this many jumps from the goal
 const MOVE_SECONDS := 90.0           # (v63) it moves on this often
 const WARN_SECONDS := 20.0           # (v63) coming into our sector, it is seen this long before it comes out
 const GROW_SECONDS := 180.0          # (v63) it takes a step of growth this often once awake...
@@ -96,7 +101,8 @@ func kind() -> int:
 
 
 func goal() -> Vector2i:
-	return Sectors.goal_of(server.space_seed)
+	## Its lair: a system of the flagship's cluster (Sectors.NO_GOAL while we are in another).
+	return server.sectors.goal
 
 
 func call_in(which: int = 0) -> bool:
@@ -150,7 +156,8 @@ func is_at(c: Vector2i) -> bool:
 
 
 func in_area(c: Vector2i) -> bool:
-	return Sectors.jumps_between(c, goal()) <= AREA
+	## (v64) Its area is its whole cluster.
+	return server.sectors.depth == Sectors.FLAG_DEPTH and server.sectors.goal != Sectors.NO_GOAL and server.sectors.index_of(c) >= 0
 
 
 func caught() -> bool:
@@ -197,18 +204,18 @@ func _roam() -> void:
 	if move_ticks < roundi(MOVE_SECONDS * Net.TICK_HZ):
 		return
 	move_ticks = 0
+	var s: Sectors = server.sectors
 	var ways: Array = []
-	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var c := at + d
-		if in_area(c) and c != Vector2i.ZERO and Sectors.joined(server.space_seed, at, c):
-			ways.append(c)
+	for n in s.neighbours(s.index_of(at)):
+		if s.kind[n] != Sectors.STATION:
+			ways.append(s.cell[n])
 	if ways.is_empty():
 		return
 	# it leans towards us when we are in its area
 	var pick: Vector2i = ways[_rng.randi_range(0, ways.size() - 1)]
 	if in_area(ours) and _rng.randf() < 0.5:
 		for c: Vector2i in ways:
-			if Sectors.jumps_between(c, ours) < Sectors.jumps_between(pick, ours):
+			if s.hops_between(c, ours) < s.hops_between(pick, ours):
 				pick = c
 	at = pick
 	server.story.changed()
@@ -358,6 +365,8 @@ func won(captured: bool) -> void:
 	## The flagship is wrecked, or taken by our boarders: the game is won. The
 	## voyage goes on (the author: "you can roam around after we kill the flagship").
 	server.won = true
+	server.sectors.locked = false            # (v64) its jammer is silent: the cluster's exits open
+	server.to_all(server.navigation.sectors_packet())
 	server.chat.say("ПОБЕДА! Флагман пиратов %s. Цель пути достигнута: игра выиграна. Его обломки можно обыскать, а дальше лететь куда угодно." % (
 		"взят на абордаж, его экипаж перебит" if captured else "разбит"))
 	server.crew.tell_campaign()

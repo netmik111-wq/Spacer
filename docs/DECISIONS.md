@@ -806,3 +806,51 @@ no answers when it was built). Change any of these if he answers otherwise.
 - **Text is server data** (`src/server/tales.gd`): one table, so adding an event needs no code. Effects are a small
   closed set (`Story._apply`).
 
+
+### The cluster map, places and hunters (v64)
+
+The author answered "A" to all 19 cluster questions (https://claude.ai/artifact/Q3XhoTfZTiM6CqztJkmmkE, C1..C19)
+and to all 11 of my follow-ups (https://claude.ai/artifact/UBEtPDJuG7WS7nkqpkhVqN, V1..V11).
+- **One cluster at a time, laid on cells** (`Sectors.build`): a cluster is a 5×4 grid of cells starting at column
+  `6 * depth`, so no two clusters of a game share a cell and everything keyed by a cell (`Sectors.key`: `been`, the
+  derelict's leftovers, a trader's buy-backs, SOS marks) kept working unchanged. What a cluster holds follows from the
+  seed, its depth and the cell the ship came in at (`Road.entry`): only those are saved. The old infinite grid
+  (`kind_at`, the 7×5 window) is gone.
+- **Lanes**: two random paths from the entry to the two exits, filled up to 10–14 systems (16 with 5+ players, C17),
+  then a tree, 40% extra lanes between neighbours and 15% diagonals. Every system is reachable (spacetest checks 1200
+  clusters).
+- **Guarantees**: a trader and a derelict in every cluster (quests need a derelict), a station in all but the dead
+  zone, a trader within 2 jumps of the first start (the arms-dealer rule of v58 still holds near the start). Picked by
+  turning a quiet system first, then meteors or a derelict, an ion storm last; the flagship is placed before them so it
+  can't overwrite one.
+- **Exits**: one on the top half, one on the bottom half of the far column; their cluster kinds differ (C9). The long
+  jump costs 2 cans and charges 1.5× longer (C11): leaving is a decision, not a click. `Net`/`Sectors.EXIT_JUMP` (254)
+  is the jump target for it, so the old jump packet carries it.
+- **Flagship's cluster (V1)**: its exits are locked by its jammer until it is beaten (his comment: "U cannot leave,
+  jummer is here"). That is the one lock: inside the cluster you can always jump, so the rule "while a console works
+  there is a way to escape" still holds; the boss fight itself keeps v57's "no exit". It wakes on entering its cluster
+  and roams all of it (V2), never into a station's system; it is never at an exit and avoids ion storms.
+- **Danger by level** (C13): `far_from_start` now returns `depth*4 + column/2`, so each cluster is 4 steps harder and
+  everything that read "distance from the start" (pirate classes, loot tiers, trader stock, gear tiers) follows.
+- **Cluster kinds** (C12): weights per kind (`SYSTEM_WEIGHTS`), a storm band of 3–5 storms (`_patch`, a breadth-first
+  patch from a random system), dead zones with no station and stations turned to derelicts. Nebulae (C14, V10) are an
+  overlay over 2–4 systems: they blind the chart and the sensors, halve pirate events, and hunters wander.
+- **Places (C6, V3–V5, his notebook page1016-07)**: rolled per system from the seed (`Sectors.places_of`), at least
+  25 from where a jump lands (an ambush 50) so nothing happens on arrival. Hidden until the sensors are within 35/50/70
+  (a fifth to a third of the system's width); an ambush is always seen (a fight you choose). The abandoned ship reuses
+  the derelict code (`Derelict.update` asks `Road.at_wreck`). Mines (1 in 5 containers) and survivors (1 in 4 bodies)
+  are V4. Found and taken places are saved by `key*8 + index`.
+- **Hunters (C15, V6–V8)**: first after 5 min, then every 4, at most 3 (4 with a big crew, 2 in the flagship's cluster,
+  where the flagship is the pressure), one lane per 75 s, never into a station's system (V7). A hunter is a pirate ship
+  3 steps of danger harder, of the biggest classes that level allows, with its own temper `Net.TEMPER_HUNTER`
+  (aggressive, V8). Hunters come only while the eventer is on (`director.auto`), so tests stay quiet.
+- **Quests stay inside the cluster (V9)**: targets are systems of this cluster (nearer or further when none is 2–4
+  away); leaving fails side quests, and a mission under way is set anew in the next cluster. The first mission is
+  offered from level 3 to 11 (the end of the first cluster through the third).
+- **Old saves (C19, V11)**: a save without "road" goes on at the start of a fresh first cluster with ship, crew,
+  locker, money, the chapter and the codes; visited marks and side quests are reset; the flagship goes back to sleep.
+- **The chart (C16)**: the cluster view plus a road tab, drawn in `BridgeView`; what is known comes from the server
+  (`S_ROAD`), so the client cannot peek at unknown systems' kinds (it still has them in the cluster packet, as before).
+- **A pirate crossing over during our boarding** (the CI thread's find, the author's "yes"): `EnemyCrew._read_world` counts
+  those gone from its crew alive and off their ship (`crossed`); `Gunnery.crew_lost` then says it crossed over instead of
+  "killed". It still leaves the enemy's crew count (it is a boarder aboard ours, counted by `Pirates.aboard`).

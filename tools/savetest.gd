@@ -46,9 +46,10 @@ func _initialize() -> void:
 	_run(a, 2)
 	_expect(q.cond == Net.COND_DEAD, "(one of the crew is dead)")
 	a.space_seed = 12345
-	var arrived: Vector2i = a.sectors.cell[a.sectors.neighbours(a.ship.sector)[0]]
+	a.road.build(Vector2i.ZERO)              # (v64) the first cluster of that space
+	var arrived: Vector2i = a.sectors.cell[a.sectors.neighbours(a.sectors.start)[0]]
 	a.been[Sectors.key(arrived)] = true
-	a.sectors.build(a.space_seed, arrived, a.been)
+	a.road.build(arrived)
 	a.ship.sector = a.sectors.here
 	a.ship.pos = Vector2(33.0, 21.5)
 	a.ship.store[Net.ITEM_PATCH] = 2

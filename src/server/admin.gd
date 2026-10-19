@@ -147,6 +147,12 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			server.flagship.admin_grow()
 		Net.ADMIN_GARDEN:
 			server.garden.ripen_all()
+		Net.ADMIN_HUNTER:
+			server.road.spawn_hunter()
+		Net.ADMIN_CLUSTER:
+			server.road.admin_next(clampi(argument, 0, 1))
+		Net.ADMIN_REVEAL:
+			server.road.reveal_here()
 
 
 func give(p: Player, item: int) -> void:

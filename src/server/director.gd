@@ -266,6 +266,9 @@ func _weight(e: Dictionary, here: int) -> int:
 	# a crew with no weapons at all is boarded half as often
 	if (int(e["id"]) == BOARDING or int(e["id"]) == PIRATE_SHIP) and server.supplies.weapons_aboard() == 0:
 		w = maxi(w / 2, 1)
+	# (v64, the author's C14) inside a nebula the pirates' sensors see as little as ours: they come half as often
+	if (int(e["id"]) == BOARDING or int(e["id"]) == PIRATE_SHIP or int(e["id"]) == PIRATE_RAID) and server.road.in_fog():
+		w = maxi(w / 2, 1)
 	# a crew with nothing left to close a hole with gets holes three times as rarely
 	if (int(e["id"]) == MICROMETEORITE or int(e["id"]) == METEOR_VOLLEY) and server.supplies.patches_aboard() == 0:
 		w = maxi(w / 3, 1)

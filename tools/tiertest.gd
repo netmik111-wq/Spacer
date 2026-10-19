@@ -271,15 +271,7 @@ func _traders() -> void:
 	for i in sectors.count:
 		if sectors.kind[i] == Sectors.TRADER:
 			at = i
-	if at < 0:                            # (now and then the chart holds none: lay it out around one farther off)
-		for r in range(1, 20):
-			for x in range(-r, r + 1):
-				var c := Vector2i(x, r)
-				if at < 0 and Sectors.kind_at(server.space_seed, c) == Sectors.TRADER:
-					server.been[Sectors.key(c)] = true
-					sectors.build(server.space_seed, c, server.been)
-					at = sectors.here
-	_expect(at >= 0, "(a trader nearby for the trade checks)")
+	_expect(at >= 0, "(a trader in the cluster for the trade checks: every cluster has one since v64)")
 	if at < 0:
 		return
 	ship.sector = at

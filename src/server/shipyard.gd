@@ -38,11 +38,12 @@ func setup(p_server: Node) -> void:
 	_rng.randomize()
 
 
-func make(party: int, raid: bool, fits: Array) -> Dictionary:
+func make(party: int, raid: bool, fits: Array, harder: int = 0, temper_of: int = -1) -> Dictionary:
 	## A pirate ship for this place: `party` is the boarding party the director
 	## sends (a raider's own crew is its class's), `fits` the drawings that
-	## can lie off our airlock.
-	var far: int = server.sectors.far_from_start(server.ship.sector) if server.sectors.count > 0 else 0
+	## can lie off our airlock. (v64) A hunter comes `harder` steps of danger
+	## harder than the place, with its own temper (`temper_of`).
+	var far: int = (server.sectors.far_from_start(server.ship.sector) if server.sectors.count > 0 else 0) + harder
 	if classic and fits.has(Net.OTHER_PIRATE):
 		return _classic(party, far)
 	# the class: one that may come this far out and has a hull that fits
@@ -61,6 +62,20 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 			continue
 		choice.append([k, hulls])
 		total += int(c["weight"])
+	if harder > 0 and force_class < 0:
+		# (v64, my V8) a hunter: the biggest class that may come this far out (never a drone ship)
+		var top := -1
+		for e: Array in choice:
+			var c: Dictionary = Hulls.CLASSES[e[0]]
+			if not c.get("drone", false):
+				top = maxi(top, int(c["from"]))
+		var big := choice.filter(func(e: Array) -> bool:
+			return int(Hulls.CLASSES[e[0]]["from"]) == top and not Hulls.CLASSES[e[0]].get("drone", false))
+		if not big.is_empty():
+			choice = big
+			total = 0
+			for e: Array in choice:
+				total += int(Hulls.CLASSES[e[0]]["weight"])
 	if choice.is_empty():
 		return _classic(party, far)
 	var roll := _rng.randi_range(1, total)
@@ -95,6 +110,8 @@ func make(party: int, raid: bool, fits: Array) -> Dictionary:
 		temper = Net.TEMPER_RECKLESS if _rng.randf() < 0.5 else Net.TEMPER_HUNTER   # (v63) the hard mode: no cautious ones
 	if force_temper >= 0 and tempers.has(force_temper):
 		temper = force_temper
+	elif temper_of >= 0:
+		temper = temper_of
 	if drone:
 		temper = Net.TEMPER_MACHINE          # (v62) a machine fights the same way every time
 	# (v62, the author's E5) a teleporter, now and then, far enough out

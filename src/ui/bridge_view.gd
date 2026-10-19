@@ -16,6 +16,7 @@ var text: Label                      # the lines under it
 var buttons: GridContainer           # the buttons under those
 var buttons_for := -1                # what the buttons were last built for (-1: build them anew)
 var _story_seen := 0                 # (v63) the comms console's marks as last drawn
+var show_road := false               # (v64, the author's C16) the chart shows the road of clusters instead of this one
 
 
 func _init(p_client: GameClient, p_chart: Control, p_text: Label, p_buttons: GridContainer) -> void:
@@ -26,57 +27,101 @@ func _init(p_client: GameClient, p_chart: Control, p_text: Label, p_buttons: Gri
 
 
 func update_chart() -> void:
-	## The sector console: where the ship is, the drive, the fuel, and a jump button for every sector in reach.
+	## The sector console: the cluster, where the ship is, the drive, the fuel, and a jump
+	## button for every sector a lane leads to (v64: and the long jump out at an exit).
+	var sectors := client.sectors
+	if sectors.count == 0:
+		return
 	var now := client.server_now()
 	var jumping := client.jump_to != Net.NO_SECTOR
 	var wait := (client.drive_ready - now) / Net.TICK_HZ
+	var lines := PackedStringArray()
+	lines.append("Скопление «%s» (%d-е на пути): %s." % [Sectors.CLUSTER_NAMES[sectors.ckind], sectors.depth + 1, Sectors.CLUSTER_ABOUT[sectors.ckind]])
 	if jumping:
-		text.text = "Корабль в секторе %s.\nКурс задан: %s. Прыжок через %d с." % [
-			client.sectors.describe(client.sector), client.sectors.describe(client.jump_to),
-			maxi(int(ceil((client.jump_tick - now) / Net.TICK_HZ)), 0)]
+		lines.append("Корабль в секторе %s. Курс задан: %s. Прыжок через %d с." % [
+			sectors.describe(client.sector), sectors.describe(client.jump_to) if client.jump_to == Sectors.EXIT_JUMP or knows_jump() else "«%s»" % sectors.names[client.jump_to],
+			maxi(int(ceil((client.jump_tick - now) / Net.TICK_HZ)), 0)])
 	elif wait > 0.0:
-		text.text = "Корабль в секторе %s.\nДвигатель перезаряжается: ещё %d с." % [client.sectors.describe(client.sector), int(ceil(wait))]
+		lines.append("Корабль в секторе %s. Двигатель перезаряжается: ещё %d с." % [sectors.describe(client.sector), int(ceil(wait))])
 	else:
-		text.text = "Корабль в секторе %s.\nДвигатель готов. Куда прыгаем?" % client.sectors.describe(client.sector)
+		lines.append("Корабль в секторе %s. Двигатель готов. Куда прыгаем?" % sectors.describe(client.sector))
 	var fuel := client.stock(Net.ITEM_FUEL)
 	if fuel > 0:
-		text.text += "\nТопливо в шкафу снабжения: %d. Прыжок сжигает одну канистру." % fuel
+		lines.append("Топливо в шкафу снабжения: %d. Прыжок сжигает одну канистру, долгий прыжок из скопления %d." % [fuel, Sectors.EXIT_FUEL])
 	else:
-		text.text += "\nТоплива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях, станция снабжения даёт немного."
-	text.text += "\nДо начала пути отсюда прыжков: %d. Карта показывает только окрестности корабля." % client.sectors.far_from_start(client.sector)
-	var goal := client.sectors.jumps_to_goal(client.sector)
+		lines.append("Топлива в шкафу снабжения нет: прыгнуть нельзя. Его продаёт торговец, оно бывает на брошенных кораблях и в тайниках.")
+	var k := sectors.exit_of(client.sector)
+	if k >= 0:
+		lines.append(("Это выход из скопления: долгим прыжком отсюда в скопление «%s» (%s). Назад в это скопление уже не вернуться." %
+			[Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.CLUSTER_ABOUT[sectors.beyond[k]]]) if not (sectors.locked and not client.won) else
+			"Это выход из скопления, но глушилка флагмана держит его закрытым, пока флагман не разбит.")
+	else:
+		lines.append("Выходы из скопления отмечены стрелками справа: оттуда долгий прыжок в следующее.")
+	# (v64) the pirate hunters
+	var road: Dictionary = client.road
+	if road.get("fog", false):
+		lines.append("Мы в туманности: охотники нас не видят, но и наши сенсоры слепы. Что в соседних секторах, не видно.")
+	else:
+		var hunters: Array = road.get("hunters", [])
+		var due := int(road.get("hunter_s", 65535))
+		var line := "Пиратских охотников в скоплении: %d (красные ромбы)." % hunters.size() if not hunters.is_empty() else "Охотников в скоплении пока нет."
+		if due != 65535:
+			line += " Следующий придёт через %d:%02d." % [due / 60, due % 60]
+		lines.append(line)
 	var st: Dictionary = client.story
 	if st.hash() != _story_seen:
 		_story_seen = st.hash()
 		chart.queue_redraw()
-	if not client.won and int(st.get("flags", 0)) & Net.STORY_FLAGSHIP:
-		var fs: Vector2i = st["flagship"]
-		var d := Sectors.jumps_between(client.sectors.cell[client.sector], fs)
-		text.text += "\nФлагман пиратов проснулся и рыщет у цели: %s (красный треугольник). Рост: %d из 4." % [
-			"он в нашем секторе!" if d == 0 else "%d прыжк%s отсюда" % [d, _jumps_word(d)], int(st["growth"])]
-	elif client.won:
-		text.text += "\nФлагман пиратов повержен: цель пути достигнута. Летите куда хотите."
-	else:
-		text.text += ("\nФлагман пиратов здесь, в этом секторе: уйти прыжком он не даст." if goal == 0 else
-			"\nЦель пути, флагман пиратов: %d прыжк%s отсюда (красная метка на карте)." % [goal, _jumps_word(goal)])
-	# one button per sector within reach; rebuilt when the ship has moved
-	var place_key := Sectors.key(client.sectors.cell[client.sector]) * 2    # the buttons belong to this place in space
+	if client.won:
+		lines.append("Флагман пиратов повержен: цель пути достигнута. Летите куда хотите.")
+	elif int(st.get("flags", 0)) & Net.STORY_FLAGSHIP and sectors.goal != Sectors.NO_GOAL:
+		var d: int = sectors.hops_between(sectors.cell[client.sector], st["flagship"])
+		lines.append("Флагман пиратов рыщет по скоплению: %s (красный треугольник). Рост: %d из 4." % [
+			"он в нашем секторе!" if d == 0 else ("%d прыжк%s отсюда" % [d, _jumps_word(d)] if d > 0 else "где-то рядом"), int(st["growth"])])
+	elif sectors.depth < Sectors.FLAG_DEPTH:
+		var left := Sectors.FLAG_DEPTH - sectors.depth
+		lines.append("Цель пути, флагман пиратов, ждёт в %d-м скоплении: впереди ещё %d скоплени%s до него." % [Sectors.FLAG_DEPTH + 1, left, "е" if left == 1 else ("я" if left < 5 else "й")])
+	text.text = "\n".join(lines)
+	# one button per sector a lane leads to, the long jump at an exit, and the road; rebuilt when they change
+	var place_key := hash([sectors.cell[client.sector], client.road.get("known", PackedByteArray()), k, sectors.locked and not client.won, show_road])
 	if buttons_for != place_key:
 		buttons_for = place_key
 		for old in buttons.get_children():
 			old.queue_free()
-		for id in client.sectors.neighbours(client.sector):
+		for id in sectors.neighbours(client.sector):
 			var go := Button.new()
-			go.text = "Прыжок: %s" % client.sectors.describe(id)
+			go.text = "Прыжок: %s" % (sectors.describe(id) if client.knows_sector(id) else "«%s», неизвестно" % sectors.names[id])
 			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			go.pressed.connect(client.send_jump.bind(id))
+			go.set_meta("fuel", 1)
 			buttons.add_child(go)
+		if k >= 0:
+			var out := Button.new()
+			out.text = "Долгий прыжок: в скопление «%s» (%d топлива)" % [Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.EXIT_FUEL]
+			out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			out.pressed.connect(client.send_jump.bind(Sectors.EXIT_JUMP))
+			out.set_meta("fuel", Sectors.EXIT_FUEL)
+			out.set_meta("exit", true)
+			buttons.add_child(out)
+		var view := Button.new()
+		view.text = "Карта скопления" if show_road else "Карта пути"
+		view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		view.pressed.connect(func() -> void:
+			show_road = not show_road
+			buttons_for = -1
+			chart.queue_redraw())
+		buttons.add_child(view)
 		chart.queue_redraw()
 	for go in buttons.get_children():
-		if go is Button:
-			(go as Button).disabled = jumping or wait > 0.0 or fuel < 1
+		if go is Button and go.has_meta("fuel"):
+			(go as Button).disabled = jumping or wait > 0.0 or fuel < int(go.get_meta("fuel")) \
+				or (go.has_meta("exit") and sectors.locked and not client.won)
 	if jumping:
 		chart.queue_redraw()
+
+
+func knows_jump() -> bool:
+	return client.jump_to < client.sectors.count and client.knows_sector(client.jump_to)
 
 
 func _draw_story(place: Callable) -> void:
@@ -166,7 +211,16 @@ func update_helm() -> void:
 				var gap := at.distance_to(sectors.spot[here]) - float(sectors.reach[here])
 				lines.append("До брошенного корабля %d." % int(ceil(gap)))
 		_:
-			lines.append("В этом секторе идти некуда: вокруг пусто.")
+			if client.road.get("places", []).is_empty():
+				lines.append("Здесь нет ничего примечательного. Облетите сектор: сенсоры могут найти тайники.")
+	# (v64) the places found inside the sector
+	var found := PackedStringArray()
+	for pl: Array in client.road.get("places", []):
+		found.append(Sectors.PLACE_NAMES[int(pl[0])] + (" (пусто)" if pl[2] and int(pl[0]) != Sectors.P_WRECK else ""))
+	if not found.is_empty():
+		lines.append("Сенсоры нашли: %s. Подлетите к метке, чтобы подобрать; засаду лучше облететь." % ", ".join(found))
+	if client.road.get("fog", false):
+		lines.append("Сектор в туманности: сенсоры видят только вблизи.")
 	text.text = "\n".join(lines)
 	var buttons_key := Sectors.key(sectors.cell[here]) * 128 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
 		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0) \
@@ -234,38 +288,66 @@ func draw(kind: int) -> void:
 
 
 func _draw_chart() -> void:
-	## The chart of sectors: where the ship is, where it can jump, what is known about the rest.
+	## The chart of the cluster: where the ship is, where it can jump, what is known about
+	## the rest, the exits, the hunters and the nebula. (v64) Or the road of clusters.
 	var sectors := client.sectors
 	if sectors.count == 0:
 		return
-	var area := Rect2(Vector2(30, 22), chart.size - Vector2(60, 68))
+	chart.draw_rect(Rect2(Vector2.ZERO, chart.size), Color(0.02, 0.05, 0.04))
+	if show_road:
+		_draw_road()
+		return
+	var area := Rect2(Vector2(30, 22), chart.size - Vector2(100, 68))
 	var place := func(id: int) -> Vector2:
 		return area.position + Vector2(sectors.pos[id].x / 100.0, sectors.pos[id].y / 60.0) * area.size
-	chart.draw_rect(Rect2(Vector2.ZERO, chart.size), Color(0.02, 0.05, 0.04))
+	var font := ThemeDB.fallback_font
+	# the nebula first, under everything
+	for id in sectors.count:
+		if sectors.fog[id] == 1:
+			chart.draw_circle(place.call(id), 34.0, FOG)
 	for l: Array in sectors.links:
 		var near: bool = int(l[0]) == client.sector or int(l[1]) == client.sector
 		chart.draw_line(place.call(int(l[0])), place.call(int(l[1])), Color(0.3, 0.8, 0.5, 0.75 if near else 0.22), 2.0 if near else 1.0)
-	if client.jump_to != Net.NO_SECTOR:
+	if client.jump_to != Net.NO_SECTOR and client.jump_to < sectors.count:
 		chart.draw_line(place.call(client.sector), place.call(client.jump_to), Color(1, 1, 1, 0.9), 3.0)
-	var font := ThemeDB.fallback_font
 	var colours := [Color(0.55, 0.62, 0.75), Color(1.0, 0.6, 0.25), Color(0.95, 0.85, 0.35), Color(0.3, 0.85, 0.8), Color(0.78, 0.5, 0.88),
 		GOAL, ION]   # one per Sectors.KIND_NAMES
+	# the exits: an arrow on to the next cluster, with its kind
+	var locked := sectors.locked and not client.won
+	for k in sectors.exits.size():
+		var at: Vector2 = place.call(sectors.exits[k])
+		var tip := at + Vector2(46, 0)
+		var ink := Color(0.6, 0.6, 0.6) if locked else EXIT
+		chart.draw_line(at + Vector2(14, 0), tip, ink, 2.0)
+		chart.draw_colored_polygon(PackedVector2Array([tip + Vector2(8, 0), tip + Vector2(-2, -6), tip + Vector2(-2, 6)]), ink)
+		var label := "закрыт" if locked else Sectors.CLUSTER_NAMES[sectors.beyond[k]]
+		chart.draw_string(font, at + Vector2(14, -8), label, HORIZONTAL_ALIGNMENT_LEFT, 90, 10, ink)
+		if client.jump_to == Sectors.EXIT_JUMP and sectors.exits[k] == client.sector:
+			chart.draw_line(at, tip, Color.WHITE, 3.0)
 	for id in sectors.count:
 		var at: Vector2 = place.call(id)
 		var known := client.knows_sector(id)
 		if not known:
-			chart.draw_circle(at, 3.0, Color(0.3, 0.36, 0.34))     # something is there; nobody knows what
-			continue
-		chart.draw_circle(at, 7.0, colours[sectors.kind[id]])
+			chart.draw_circle(at, 4.0, Color(0.3, 0.36, 0.34))     # something is there; nobody knows what
+			chart.draw_string(font, at + Vector2(-4, -7), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.5, 0.56, 0.54))
+		else:
+			chart.draw_circle(at, 7.0, colours[sectors.kind[id]])
+			if sectors.kind[id] == Sectors.FLAGSHIP:
+				chart.draw_arc(at, 11.0, 0.0, TAU, 32, GOAL, 2.0)
 		if sectors.visited[id] == 1:
 			chart.draw_circle(at, 2.5, Color(0.04, 0.08, 0.07))    # been there
 		if id == client.sector:
 			chart.draw_arc(at, 12.0, 0.0, TAU, 32, Color.WHITE, 2.0)
-		chart.draw_string(font, at + Vector2(-70, 24), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, Color(0.85, 0.95, 0.88))
-		if sectors.kind[id] == Sectors.FLAGSHIP:
-			chart.draw_arc(at, 11.0, 0.0, TAU, 32, GOAL, 2.0)
+		if known or id == client.sector:
+			chart.draw_string(font, at + Vector2(-60, 22), sectors.names[id], HORIZONTAL_ALIGNMENT_CENTER, 120, 10, Color(0.85, 0.95, 0.88))
+	# the hunters
+	for h: Array in client.road.get("hunters", []):
+		if int(h[0]) < sectors.count:
+			var at: Vector2 = place.call(int(h[0])) + Vector2(10, -10)
+			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -6), at + Vector2(5, 0), at + Vector2(0, 6), at + Vector2(-5, 0)]), HUNTER)
+			if h[1]:
+				chart.draw_arc(at, 8.0, 0.0, TAU, 16, HUNTER, 1.5)
 	_draw_story(place)
-	_draw_goal(area)
 	# legend: what the colours are, then what the marks are
 	var ink := Color(0.7, 0.8, 0.74)
 	var x := 8.0
@@ -281,7 +363,7 @@ func _draw_chart() -> void:
 	x = 8.0
 	y = chart.size.y - 10
 	var grey := colours[0] as Color
-	for mark in 5:
+	for mark in 7:
 		var at := Vector2(x + 5, y)
 		var text := ""
 		match mark:
@@ -291,16 +373,23 @@ func _draw_chart() -> void:
 			1:
 				chart.draw_circle(at, 5.0, grey)
 				chart.draw_circle(at, 2.0, Color(0.04, 0.08, 0.07))
-				text = "точка внутри: уже были"
+				text = "уже были"
 			2:
 				chart.draw_circle(at, 3.0, Color(0.3, 0.36, 0.34))
-				text = "неизвестно, что там"
+				text = "неизвестно"
 			3:
 				chart.draw_line(at - Vector2(5, 0), at + Vector2(7, 0), Color(0.3, 0.8, 0.5, 0.75), 2.0)
-				text = "маршрут для прыжка"
+				text = "трасса"
 			4:
-				chart.draw_line(at - Vector2(5, 0), at + Vector2(7, 0), Color.WHITE, 3.0)
-				text = "заданный прыжок"
+				chart.draw_line(at - Vector2(5, 0), at + Vector2(5, 0), EXIT, 2.0)
+				chart.draw_colored_polygon(PackedVector2Array([at + Vector2(9, 0), at + Vector2(4, -4), at + Vector2(4, 4)]), EXIT)
+				text = "выход"
+			5:
+				chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -5), at + Vector2(4, 0), at + Vector2(0, 5), at + Vector2(-4, 0)]), HUNTER)
+				text = "охотник"
+			6:
+				chart.draw_circle(at, 6.0, Color(FOG, 0.6))
+				text = "туманность"
 		chart.draw_string(font, Vector2(x + 16, y + 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, ink)
 		x += 30.0 + font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
 
@@ -308,35 +397,64 @@ func _draw_chart() -> void:
 const GOAL := Color(1.0, 0.25, 0.25)      # (v57) the flagship's sector, and the way to it
 const QUEST := Color(1.0, 0.85, 0.3)       # (v63) a quest's target
 const ION := Color(0.4, 0.55, 1.0)         # (v61) an ion storm
+const EXIT := Color(0.55, 0.95, 1.0)       # (v64) a way out of the cluster
+const HUNTER := Color(1.0, 0.3, 0.45)      # (v64) a pirate hunter
+const FOG := Color(0.55, 0.5, 0.65, 0.22)  # (v64) a nebula
+const PLACE_COLOURS: Array[Color] = [Color(0.75, 0.7, 0.6), Color(0.95, 0.75, 0.3), Color(0.85, 0.85, 0.95), Color(0.7, 0.7, 0.72),
+	Color(1.0, 0.6, 0.4), Color(1.0, 0.3, 0.45)]   # (v64) per Sectors.P_*
+const CLUSTER_COLOURS: Array[Color] = [Color(0.55, 0.62, 0.75), Color(0.95, 0.35, 0.3), Color(0.95, 0.85, 0.35), Color(0.4, 0.55, 1.0),
+	Color(0.6, 0.6, 0.55)]                 # (v64) per kind of cluster
 
 
-func _draw_goal(area: Rect2) -> void:
-	## (v57) The flagship lies off the chart: an arrow at its edge points the way,
-	## with how many jumps there are to go.
+func _draw_road() -> void:
+	## (v64, the author's C16) The road of clusters: those behind us, ours, the two ahead
+	## to choose from, and how far the flagship's lair is.
 	var sectors := client.sectors
-	if client.won:
-		return                                   # (beaten: there is nowhere one must go any more)
-	for id in sectors.count:
-		if sectors.cell[id] == sectors.goal:
-			return                               # it is on the chart: its own mark says enough
-	var here := sectors.cell[sectors.here]
-	var way := Vector2(sectors.goal - here)
-	# where the window's edge is, in sectors from the middle; the arrow sits there
-	var half := Vector2(Sectors.REACH_X + 0.5, Sectors.REACH_Y + 0.5)
-	var k := minf(half.x / maxf(absf(way.x), 0.001), half.y / maxf(absf(way.y), 0.001))
-	var at_cells := way * k
-	var mid := area.position + area.size * 0.5
-	var tip := mid + Vector2(at_cells.x / half.x, at_cells.y / half.y) * area.size * 0.5
-	tip = tip.clamp(area.position + Vector2(8, 8), area.end - Vector2(8, 8))
-	var dir := way.normalized()
-	var side := dir.orthogonal()
-	chart.draw_line(tip - dir * 40.0, tip - dir * 12.0, GOAL, 3.0)
-	chart.draw_colored_polygon(PackedVector2Array([tip, tip - dir * 18.0 + side * 7.0, tip - dir * 18.0 - side * 7.0]), GOAL)
-	var label := "флагман: %d прыжк%s" % [sectors.jumps_to_goal(sectors.here), _jumps_word(sectors.jumps_to_goal(sectors.here))]
 	var font := ThemeDB.fallback_font
-	var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-	var pos := (tip - dir * 40.0 + Vector2(-w / 2.0, 22.0)).clamp(Vector2(4, 14), chart.size - Vector2(w + 4, 4))
-	chart.draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, GOAL)
+	var behind := sectors.road
+	var shown := mini(behind.size(), 4)       # the last four behind us
+	var steps := shown + 1 + 1 + maxi(Sectors.FLAG_DEPTH - sectors.depth - 1, 0)
+	var w := (chart.size.x - 40.0) / maxf(steps, 4.0)
+	var mid := chart.size.y * 0.45
+	var box := Vector2(minf(w - 16.0, 130.0), 46.0)
+	var x := 20.0
+	var draw_box := func(at: Vector2, title: String, sub: String, colour: Color, ours: bool, dim: bool) -> void:
+		var r := Rect2(at - box * 0.5, box)
+		chart.draw_rect(r, Color(colour, 0.12 if dim else 0.25))
+		chart.draw_rect(r, Color.WHITE if ours else Color(colour, 0.5 if dim else 0.9), false, 2.0 if ours else 1.0)
+		chart.draw_string(font, r.position + Vector2(4, 18), title, HORIZONTAL_ALIGNMENT_CENTER, box.x - 8, 11, Color(0.9, 0.95, 0.92, 0.5 if dim else 1.0))
+		chart.draw_string(font, r.position + Vector2(4, 36), sub, HORIZONTAL_ALIGNMENT_CENTER, box.x - 8, 10, Color(0.7, 0.8, 0.74, 0.5 if dim else 1.0))
+	var last := Vector2(-1, -1)
+	for i in shown:
+		var kind: int = behind[behind.size() - shown + i]
+		var at := Vector2(x + w * 0.5, mid)
+		draw_box.call(at, Sectors.CLUSTER_NAMES[kind], "пройдено", CLUSTER_COLOURS[kind], false, true)
+		if last.x >= 0:
+			chart.draw_line(last + Vector2(box.x * 0.5, 0), at - Vector2(box.x * 0.5, 0), Color(0.5, 0.6, 0.55), 1.0)
+		last = at
+		x += w
+	var here := Vector2(x + w * 0.5, mid)
+	draw_box.call(here, Sectors.CLUSTER_NAMES[sectors.ckind], "мы здесь (%d-е)" % (sectors.depth + 1), CLUSTER_COLOURS[sectors.ckind], true, false)
+	if last.x >= 0:
+		chart.draw_line(last + Vector2(box.x * 0.5, 0), here - Vector2(box.x * 0.5, 0), Color(0.5, 0.6, 0.55), 1.0)
+	x += w
+	var locked := sectors.locked and not client.won
+	for k in sectors.exits.size():
+		var at := Vector2(x + w * 0.5, mid + (k * 2 - 1) * (box.y * 0.5 + 10.0))
+		var kind: int = sectors.beyond[k]
+		draw_box.call(at, Sectors.CLUSTER_NAMES[kind], "выход %s" % ("закрыт" if locked else ["сверху", "снизу"][k]), CLUSTER_COLOURS[kind], false, locked)
+		chart.draw_line(here + Vector2(box.x * 0.5, 0), at - Vector2(box.x * 0.5, 0), EXIT, 1.5)
+	x += w
+	var left := Sectors.FLAG_DEPTH - sectors.depth - 1
+	for i in maxi(left, 0):
+		var at := Vector2(x + w * 0.5, mid)
+		var lair := i == left - 1
+		draw_box.call(at, "логово флагмана" if lair else "неизвестно", "%d-е скопление" % (sectors.depth + 3 + i), GOAL if lair else Color(0.4, 0.45, 0.43), false, not lair)
+		x += w
+	var line := "Флагман пиратов разбит: дальше скопления всё опаснее, лететь можно сколько угодно." if client.won else (
+		"Мы в логове флагмана: выходы откроются, когда он будет разбит." if sectors.depth == Sectors.FLAG_DEPTH else
+		("Флагман позади, но не разбит." if sectors.depth > Sectors.FLAG_DEPTH else "Каждое скопление опаснее прошлого. Вид скопления за выходом виден заранее."))
+	chart.draw_string(font, Vector2(16, chart.size.y - 16), line, HORIZONTAL_ALIGNMENT_LEFT, chart.size.x - 32, 12, Color(0.75, 0.85, 0.8))
 
 
 func _draw_helm() -> void:
@@ -374,6 +492,24 @@ func _draw_helm() -> void:
 			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(grey, 0.6), 1.0)
 			chart.draw_rect(Rect2(spot - Vector2(5, 3), Vector2(10, 6)), grey, false, 1.5)
 			chart.draw_string(font, spot + Vector2(-70, 26), "брошенный корабль", HORIZONTAL_ALIGNMENT_CENTER, 140, 12, grey)
+	# (v64) the places found in the sector
+	for pl: Array in client.road.get("places", []):
+		var kind: int = pl[0]
+		var at: Vector2 = area.position + (pl[1] as Vector2) * scale
+		var gone: bool = pl[2] and kind != Sectors.P_WRECK
+		var colour := PLACE_COLOURS[kind] if not gone else Color(0.4, 0.45, 0.43)
+		match kind:
+			Sectors.P_AMBUSH:
+				chart.draw_circle(at, Sectors.AMBUSH_REACH * scale, Color(HUNTER, 0.12 if not gone else 0.04))
+				chart.draw_arc(at, Sectors.AMBUSH_REACH * scale, 0.0, TAU, 40, Color(colour, 0.7), 1.0)
+				chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -6), at + Vector2(5, 0), at + Vector2(0, 6), at + Vector2(-5, 0)]), colour)
+			Sectors.P_WRECK:
+				chart.draw_arc(at, Sectors.WRECK_REACH * scale, 0.0, TAU, 24, Color(colour, 0.6), 1.0)
+				chart.draw_rect(Rect2(at - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
+			_:
+				chart.draw_rect(Rect2(at - Vector2(3, 3), Vector2(6, 6)), colour)
+				chart.draw_arc(at, Sectors.PLACE_REACH * scale, 0.0, TAU, 16, Color(colour, 0.4), 1.0)
+		chart.draw_string(font, at + Vector2(-60, 18), Sectors.PLACE_NAMES[kind], HORIZONTAL_ALIGNMENT_CENTER, 120, 11, colour)
 	var ship := area.position + client.ship_pos() * scale
 	if client.ship_under_way() and client.jump_to == Net.NO_SECTOR:
 		var dest := area.position + client.ship_dest * scale

@@ -120,6 +120,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"smes": server.power.save(),
 		"mode": server.mode, "hull_max": server.ship.hull_max,               # (v63)
 		"story": server.story.save(), "roam": server.flagship.save(), "garden": server.garden.save(),
+		"road": server.road.save(),                                          # (v64)
 	}
 
 
@@ -154,14 +155,22 @@ static func restore(server: Node, data: Dictionary) -> String:
 	if str(data.get("map", "")) != map.map_name:
 		return "Сохранённая кампания сыграна на другом корабле."
 	server.space_seed = int(data["seed"])
+	server.won = bool(data.get("won", false))
 	server.been = {}
-	for k in data["been"]:
-		server.been[int(k)] = true
 	var at := Vector2i(int(data["at"][0]), int(data["at"][1]))
+	var old_map := not data.has("road")      # (v64, the author's C19) saved on the endless grid of before
+	if old_map:
+		# it goes on at the start of a fresh first cluster: the old map's places are gone (my V11)
+		at = Vector2i.ZERO
+		server.road.setup(server)
+	else:
+		for k in data["been"]:
+			server.been[int(k)] = true
+		server.road.load_from(data["road"])
 	server.been[Sectors.key(at)] = true
-	server.sectors.build(server.space_seed, at, server.been)
+	server.road.build(at)
 	server.ship.sector = server.sectors.here
-	server.ship.pos = Vector2(float(data["pos"][0]), float(data["pos"][1]))
+	server.ship.pos = Vector2(float(data["pos"][0]), float(data["pos"][1])) if not old_map else server.sectors.entry[server.ship.sector]
 	server.ship.dest = server.ship.pos
 	server.ship.moving = false
 	server.ship.in_reach = server.sectors.within_reach(server.ship.sector, server.ship.pos)
@@ -219,12 +228,15 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.outfit.refresh()
 	server.story.load_from(data.get("story", {}))
 	server.flagship.load_from(data.get("roam", {}))
+	if old_map:
+		server.story.moved_to_clusters()
+		server.flagship.awake = false        # (it waits in its own cluster now; its growth is kept)
+		server.flagship.at = server.flagship.goal()
 	server.garden.load_from(data.get("garden", {}))
 	server.power.load_from(data.get("smes", []))     # (v61; an older save keeps the SMES as it starts: full)
 	server.voyage_ticks = int(data["voyage"])
 	server.jumps = int(data["jumps"])
 	server.farthest = int(data["farthest"])
-	server.won = bool(data.get("won", false))
 	server.admin.names.clear()
 	for n in data.get("admins", []):
 		server.admin.names[str(n)] = true

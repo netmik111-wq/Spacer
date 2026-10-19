@@ -41,26 +41,20 @@ func _initialize() -> void:
 	var d: Derelict = server.derelict
 	var f: Flagship = server.flagship
 
-	# the goal, on the chart
-	var seed_value := server.space_seed
-	var goal := Sectors.goal_of(seed_value)
-	_expect(Sectors.jumps_between(Vector2i.ZERO, goal) == Sectors.GOAL_JUMPS and goal.x > 0 and goal.y < 0,
-		"the flagship waits %d jumps out, east and north (%s)" % [Sectors.GOAL_JUMPS, str(goal)])
-	_expect(Sectors.kind_at(seed_value, goal) == Sectors.FLAGSHIP, "its sector is the flagship's")
-	var into := 0
-	for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		if Sectors.joined(seed_value, goal + step, goal):
-			into += 1
-	_expect(into == 4, "every neighbour has a route into it")
-	var unreached := 0
-	for s in 300:
-		if not _reaches(s * 7919 + 13):
-			unreached += 1
-	_expect(unreached == 0, "in 300 games the goal can be reached from the start (%d could not)" % unreached)
+	# the goal, on the chart (v64: in the fourth cluster)
+	server.road.depth = Sectors.FLAG_DEPTH
+	server.road.entry = Vector2i(6 * Sectors.FLAG_DEPTH, 0)
+	server.road.build(server.road.entry)
+	server.ship.sector = server.sectors.here
+	var goal: Vector2i = server.sectors.goal
+	_expect(goal != Sectors.NO_GOAL and server.sectors.kind[server.sectors.index_of(goal)] == Sectors.FLAGSHIP,
+		"the flagship waits in the fourth cluster (%s)" % str(goal))
+	_expect(server.sectors.locked and server.road.can_leave() != "", "while it lives, no exit lets us out of its cluster")
 	var packed := server.sectors.pack()
 	var again := Sectors.new()
 	again.unpack(packed, 0)
-	_expect(again.goal == goal and again.jumps_to_goal(again.here) == Sectors.GOAL_JUMPS, "clients learn where it is and how far")
+	_expect(again.goal == goal and again.jumps_to_goal(again.here) == server.sectors.jumps_to_goal(server.sectors.here)
+		and again.jumps_to_goal(again.here) > 0, "clients learn where it is and how far")
 	_expect(f.kind() == 1 or f.kind() == 2, "the game has one of the two kinds (%d)" % f.kind())
 
 	# arriving there: the battleship comes out
@@ -242,29 +236,10 @@ func _initialize() -> void:
 	quit(1 if failed > 0 else 0)
 
 
-func _reaches(seed_value: int) -> bool:
-	## Can the goal be reached from the start, going no farther than a few sectors past it?
-	var goal := Sectors.goal_of(seed_value)
-	var seen := {Vector2i.ZERO: true}
-	var queue: Array = [Vector2i.ZERO]
-	while not queue.is_empty():
-		var at: Vector2i = queue.pop_front()
-		if at == goal:
-			return true
-		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			var to: Vector2i = at + step
-			if seen.has(to) or to.x < -4 or to.x > goal.x + 4 or to.y > 4 or to.y < goal.y - 4:
-				continue
-			if Sectors.joined(seed_value, at, to):
-				seen[to] = true
-				queue.append(to)
-	return false
-
-
 func _arrive_at(cell: Vector2i) -> void:
 	## The ship is in that sector of space now, as if it had jumped there.
 	server.been[Sectors.key(cell)] = true
-	server.sectors.build(server.space_seed, cell, server.been)
+	server.road.build(cell)
 	server.ship.sector = server.sectors.here
 	server.ship.pos = server.sectors.entry[server.ship.sector]
 	_run(1)

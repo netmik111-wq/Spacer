@@ -200,6 +200,9 @@ var story := {}                      # (v63) Net.S_STORY: {flags, flagship (Vect
                                      # reward, title, text}], marks: [[kind, Vector2i]]}
 var garden := {}                     # (v63) the hydroponic trays (Net.S_GARDEN): cell -> [seed, stage, growth, flags]
 var comms_seen := 0                  # (v63) calls heard since joining (the HUD blinks while one waits)
+var road := {"fog": false, "hunter_s": 65535, "hunters": [], "known": PackedByteArray(), "places": []}
+                                     # (v64) Net.S_ROAD: hunters [[system, coming]], what the chart shows per system,
+                                     # places found here [[kind, Vector2, taken]]
 
 # our own character's body
 var health := 100                    # 100 = unhurt, 0 and below = unconscious, Net.HEALTH_DEAD = dead
@@ -698,8 +701,11 @@ func server_now() -> float:
 
 
 func knows_sector(id: int) -> bool:
-	## The crew knows what is in a sector it has been to or can reach in one jump,
-	## and (v57) where the flagship waits: the goal of the voyage is on every chart.
+	## The crew knows what is in a sector the server's chart shows (v64, the author's C7:
+	## where we have been, what the sensors reach, traders and stations; not inside a nebula).
+	var known: PackedByteArray = road["known"]
+	if known.size() == sectors.count:
+		return known[id] == 1
 	return sectors.visited[id] == 1 or sectors.linked(sector, id) or sectors.kind[id] == Sectors.FLAGSHIP
 
 
@@ -748,6 +754,33 @@ func _read_comms(pkt: PackedByteArray) -> void:
 	if got["state"] == Net.COMMS_CALL and comms.get("state", Net.COMMS_QUIET) != Net.COMMS_CALL:
 		comms_seen += 1
 	comms = got
+
+
+func _read_road(pkt: PackedByteArray) -> void:
+	## (v64) The hunters, what the chart shows, the places found in our system.
+	if pkt.size() < 5:
+		return
+	var got := {"fog": pkt[1] & 1 != 0, "hunter_s": pkt.decode_u16(2), "hunters": [], "known": PackedByteArray(), "places": []}
+	var o := 5
+	for i in pkt[4]:
+		if o + 2 > pkt.size():
+			return
+		got["hunters"].append([pkt[o], pkt[o + 1] != 0])
+		o += 2
+	if o >= pkt.size():
+		return
+	var n := pkt[o]
+	got["known"] = pkt.slice(o + 1, o + 1 + n)
+	o += 1 + n
+	if o >= pkt.size():
+		return
+	for i in pkt[o]:
+		var at := o + 1 + i * 4
+		if at + 4 > pkt.size():
+			break
+		got["places"].append([pkt[at], Vector2(pkt[at + 1], pkt[at + 2]), pkt[at + 3] != 0])
+	road = got
+	ship_changes += 1
 
 
 func _read_story(pkt: PackedByteArray) -> void:
@@ -1602,6 +1635,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			_read_comms(pkt)
 		Net.S_STORY:
 			_read_story(pkt)
+		Net.S_ROAD:
+			_read_road(pkt)
 		Net.S_GARDEN:
 			if pkt.size() >= 2:
 				var got := {}
