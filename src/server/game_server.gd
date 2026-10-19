@@ -487,6 +487,11 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_POSITION:
 		if pkt.size() > 1:
 			stations.position_asked(p, pkt[1])
+	elif kind == Net.C_EVADE:
+		stations.evade_asked(p)
+	elif kind == Net.C_ALERT:
+		if pkt.size() > 1:
+			stations.alert_asked(p, pkt[1])
 	elif kind == Net.C_WEAR:
 		if pkt.size() > 1 and pkt[1] < Net.WORN:
 			inventory.take_off(p, pkt[1])

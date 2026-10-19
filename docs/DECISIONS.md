@@ -966,3 +966,37 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
 - Not in v67 (later builds in the plan): deckhand/sailor removal, injuries, alert levels, fights with goals, hunger that
   kills. The simulator's captain (`tools/playthrough.gd`) only learned to count fuel in units and pour cans; it does not
   salvage or work places yet, so its money numbers undercount a real crew.
+
+### Fights for the whole crew (v68, the author's F1–F4, J4, E1, G3 answers)
+
+- **The evade** (his F1: "timing, cost, cooldown"): `Stations.evade_asked`, 1.5 s (+1 s with full piloting skill),
+  −0.5 off their hit chance (clamped at 5%), 40 from the SMES, 12 s rest (my numbers). It needs the engine and no manoeuvre,
+  so the two pilot tools do not stack. The helm lists their gun charges so the press can be timed.
+- **The power panel** (his F2): the guns', point defence's and shield's switches moved from the gun console to the main
+  SMES terminal (`Power._panel`, actions from `ACT_GUARD`), so the engineer has a job in a fight. The gun console keeps the
+  state as read-only text. The ship's own draw of 4 became a core of 1 plus three breakers (lights, air plant, trays), so
+  `base_load()` with every breaker on is the old `BASE_LOAD` and nothing changes for a crew that never touches them.
+  Engines: 2 levels × 2 energy, +5% dodge each. Overcharge +4 for 20 s, 40 s rest, 3% a second to burn the engine (the
+  only breakdown besides hits that is not someone's lot; it is the crew's own risk).
+- **A bot at the engine post minds the panel** (my pick, page question P1): a lone player with bots cannot be on the bridge
+  and in the engine room at once, so the bot switches back on what is off (shield, guns, guard) as far as power allows. It
+  never overcharges or cuts breakers: those are the player's risks.
+- **Loaded mounts** (his F3: "a bonus; an empty mount still takes from the locker"): `Mounts.loaded`, 2 s a round, 4 in a
+  breech, 1.3× charge while loaded, breech first, unloaded rounds go back to the locker. Rounds became carriable
+  (`Items.carried_round`). Bots on «Работы» carry up to 2 in a fight (`Stations.TASK_LOAD`).
+- **Fights with goals** (his F4): only raids the eventer (`PIRATE_RAID`) or a road ambush sends may roll one
+  (`Gunnery.goal_next`): tests and hunters' ordinary pirates stay plain, so their credits do not move by lot. 20% cargo
+  (1× the reward, the pod in an empty room, else beside any system but weapons or shield), 15% bounty (2×, weapons and
+  engine down together = surrender; wrecked = nothing), 15% courier (1×, flees in 40 s instead of the usual). My numbers.
+- **Alert levels** (his J4): `Stations.set_alert`. Red reuses "all to posts" and the holomap's "lock every door"; it
+  locks only with power, as blast doors do. A pirate ship raises yellow by itself (my pick C1) and it drops back only if
+  it was raised by itself. The client dims the light by 0.3 on red and plays a chime or siren where there is air.
+- **No breakdowns out of nothing** (his E1: "they should not come from nothing but create more danger"): the six fault
+  events have weight 0 (the host can still fire them). `Systems.knock_on` breaks something within 6 cells of a pirate hull
+  hit at 30% (45% heavy): door, shutter, air plant, console, or an engine stall if it is near. The "never two obstacles to
+  escape" rule still holds through `can_break`.
+- **The fight's details on the bridge only** (his G3 B): `Chat.say_bridge` sends to those in a room a bridge console faces
+  (helm, gun console, chart). Everyone carries a radio, so "bridge and radio" would have changed nothing. Warnings stay
+  on `say`.
+- Questions on this build: https://claude.ai/artifact/BbM7SUq3yA36g4PBxrGA2q (built on my picks, all "A").
+

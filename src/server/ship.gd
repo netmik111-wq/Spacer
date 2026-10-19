@@ -57,6 +57,7 @@ var mounts := PackedByteArray()       # per gun mount (ShipMap.guns): the weapon
 var mount_fx := PackedByteArray()     # (v58) per gun mount: the effect its tier 3 gun carries (Weapons.FX_*)
 var armed := PackedByteArray()        # per gun mount: 1 = it draws power and charges
 var shield := 0.0                     # the shield, 0..Weapons.SHIELD_FULL
+var lights_off := false              # (v68) the lights' breaker on the power panel is off (Power.breaker)
 var shield_on := true                 # the shield generator is switched on (it draws power)
 var hardened := false                 # the shield stops rockets too (the rare upgrade from a trader)
 var jammed := {}                      # a gun or the shield generator put out by ion or EMP: wall cell -> the tick it is back
@@ -161,9 +162,10 @@ func devices_packet() -> PackedByteArray:
 
 
 func power_packet() -> PackedByteArray:
-	var out := _head(Net.S_POWER, 5)
+	var out := _head(Net.S_POWER, 6)
 	out.encode_u8(3, 1 if power_told else 0)
 	out.encode_u8(4, 1 if backup_told else 0)
+	out.encode_u8(5, 0 if lights_off else 1)
 	return out
 
 

@@ -119,8 +119,8 @@ After that: engines and complex atmosphere (only after asking). With each step a
 items at the trader. The author's sub-items (1.1, 2.1 …) are groundwork for the future.
 The author's rule: bodies remain after death. Returning a dead player with the R key as a new
 crew member was accepted by the author ("excellent"), but he has not called it final.
-The plan under way (accepted 2026-10-19): `/mnt/project-files/plans/every-part-plan.md`, v67 done; next v68 fights
-for the whole crew, v69 people over bots, v70 upkeep, v71 fear, then a question round on fire.
+The plan under way (accepted 2026-10-19): `/mnt/project-files/plans/every-part-plan.md`, v67 and v68 done;
+next v69 people over bots, v70 upkeep, v71 fear, then a question round on fire.
 
 The darkness front (the fourth plan's item 3) is postponed: the author is still thinking it through.
 The author's idea (VISION): "Fear of dark space", an entropy enemy ("the ship of darkness"), fighting it
@@ -141,6 +141,16 @@ Open problems:
 - Fixes the runs found (go into the next build; update the Claude Docs mechanics document then): the long jump with
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
+
+### v68 (fights for the whole crew; the author's F1–F4, J4, E1 and G3 answers)
+- The pilot's evade at the helm (button or space bar: 1.5–2.5 s of their shots hitting half as often, 40 SMES, 12 s rest).
+  The engineer's power panel at the SMES: guns, point defence and shield switches (moved off the gun console), power for
+  the engines (dodge), breakers for the lights, air plant and trays (energy for the guns), a risky reactor overcharge.
+  Rounds carried by hand into a gun's breech (faster charge). Fights with goals: a cargo pod, a bounty, a courier.
+  Green/yellow/red alert (red: bots to posts, doors locked, lights dimmed, siren). Breakdowns now come from pirate hits
+  near the thing, never by chance. The fight's details are told on the bridge only.
+- New test `tools/crewfighttest.gd` (29 scripts), protocol 45. Questions: https://claude.ai/artifact/BbM7SUq3yA36g4PBxrGA2q.
+  Build in `/mnt/project-files/builds/v68/`.
 
 ### v67 (work and money on the road; the author's "every part interesting" answers, and "40 35 30")
 - Fuel in units: a tank of 1000 (600 at the start), jumps 40/35/30 by the engine tier, flying in a system burns 0.1 a unit

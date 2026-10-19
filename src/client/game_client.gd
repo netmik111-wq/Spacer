@@ -152,6 +152,17 @@ var our_hit := 0                     # what the position adds to our hits, in % 
 var their_hit := 0                   # and to theirs
 var posts_manned := 0                # Net.STATION_* bits
 var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*)]
+var alert := Net.ALERT_GREEN         # (v68) the ship's alert level
+var evade_left := 0.0                # (v68) seconds of the pilot's evade still going
+var evade_rest := 0                  # and seconds until it can be pressed again
+var alert_changes := 0               # goes up whenever the alert changes (sounds, the HUD)
+var goal := Net.GOAL_NONE            # (v68) what this fight is for (Net.S_GUNS)
+var goal_flags := 0                  # Net.GOALF_*
+var cargo_room := 255                # the room of the enemy's drawing with its cargo pod (255 = none)
+var goal_pay := 0
+var mount_loaded := PackedByteArray() # (v68) per gun mount: rounds loaded into its breech by hand
+var panel := {"breakers": 7, "engines": 0, "over": 0, "rest": 0}   # (v68) the power panel (Net.S_SMES)
+var _lights := true                  # (v68) the lights' breaker is on (Net.S_POWER)
 var trade := {}                      # what the trader alongside sells: thing -> price (empty = no trader)
 var trade_flags := 0                 # Net.TRADE_*
 var trade_deal := 0                  # (v58) what the trader alongside deals in (Sectors.DEAL_*)
@@ -513,6 +524,18 @@ func send_order(id: int, post: int) -> void:
 		var msg := PackedByteArray([Net.C_ORDER, 0, 0, post])
 		msg.encode_u16(1, id)
 		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_evade() -> void:
+	## (v68) The pilot's evade; only from the ship's controls in a fight.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_EVADE]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_alert(level: int) -> void:
+	## (v68) The alert level (Net.ALERT_*); only from the ship's controls.
+	if _peer != null:
+		_peer.send(0, PackedByteArray([Net.C_ALERT, level]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_position(pos: int) -> void:
@@ -971,6 +994,12 @@ func mount_here(cell: int) -> String:
 		return "-"
 	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
 	var on: int = gun_weapon[i] if i < gun_weapon.size() else Weapons.NONE
+	if item != Net.ITEM_NONE and on != Weapons.NONE and item == Weapons.ammo(on):
+		# (v68) a round for its breech (Mounts.LOAD_MAX = 4)
+		if broken.has(cell):
+			return "-"
+		var n: int = mount_loaded[i] if i < mount_loaded.size() else 0
+		return "Казённик орудия полон: %d из %d." % [n, 4] if n >= 4 else ""
 	if item != Net.ITEM_NONE and Weapons.of_item(item) != Weapons.NONE:
 		if Weapons.of_item(item) == Weapons.GUARD:
 			return "«Заслон» ставят в его собственное гнездо с пульта орудий."
@@ -1128,6 +1157,15 @@ func powered() -> bool:
 func power_at(cell: int) -> bool:
 	## (v61) Does this cell have power: the whole ship's, or the bridge's backup in the room it keeps lit?
 	return _power or _backup and map.on_backup(cell)
+
+
+func light_at(cell: int) -> bool:
+	## (v68) Is there light in that cell: power with the lights' breaker on, or the bridge (its backup keeps it lit).
+	return (_power and _lights) or ((_power or _backup) and map.on_backup(cell))
+
+
+func lights_on() -> bool:
+	return _lights
 
 
 func bridge_lit() -> bool:
@@ -1505,6 +1543,13 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				enemy_fx = pkt.slice(at + 4, at + 4 + enemy_weapons.size())
 				# (v59) its guns' charges, seen by the top sensors (255 = not seen)
 				enemy_charge = pkt.slice(at + 4 + enemy_weapons.size(), at + 4 + enemy_weapons.size() * 2)
+				# (v68) the fight's goal
+				var g := at + 4 + enemy_weapons.size() * 2
+				if pkt.size() >= g + 5:
+					goal = pkt[g]
+					goal_flags = pkt[g + 1]
+					cargo_room = pkt[g + 2]
+					goal_pay = pkt.decode_u16(g + 3)
 		Net.S_GEAR:
 			if not _ours(pkt) or pkt.size() < 4:
 				return
@@ -1524,13 +1569,15 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			drone_coming = pkt[5]
 			drones = pkt[6]
 		Net.S_MOUNTS:
-			if not _ours(pkt) or pkt.size() < 4 + pkt[3] * 2:
+			if not _ours(pkt) or pkt.size() < 4 + pkt[3] * 3:
 				return
 			mount_gunner = PackedByteArray()
 			mount_wanted = PackedByteArray()
+			mount_loaded = PackedByteArray()
 			for i in pkt[3]:
-				mount_gunner.append(pkt[4 + i * 2])
-				mount_wanted.append(pkt[5 + i * 2])
+				mount_gunner.append(pkt[4 + i * 3])
+				mount_wanted.append(pkt[5 + i * 3])
+				mount_loaded.append(pkt[6 + i * 3])
 		Net.S_STATIONS:
 			if not _ours(pkt) or pkt.size() < 11:
 				return
@@ -1546,6 +1593,13 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				var at := 11 + i * 4
 				if pkt.size() >= at + 4:
 					crew_bots.append([pkt.decode_u16(at), pkt[at + 2], pkt[at + 3]])
+			var tail := 11 + pkt[10] * 4
+			if pkt.size() >= tail + 3:
+				if pkt[tail] != alert:
+					alert = pkt[tail]
+					alert_changes += 1
+				evade_left = pkt[tail + 1] / 10.0
+				evade_rest = pkt[tail + 2]
 		Net.S_ECREW:
 			ecrew_probe = pkt[3]
 			ecrew = PackedInt32Array()
@@ -1628,6 +1682,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				return
 			_power = pkt[3] != 0
 			_backup = pkt.size() > 4 and pkt[4] != 0
+			_lights = pkt.size() <= 5 or pkt[5] != 0
 			ship_changes += 1
 			# without power doors open by hand: that is part of the walking rule we predict
 			doors.manual = not _power
@@ -1650,6 +1705,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			if o + 9 <= pkt.size():
 				power_mon = {"made": pkt[o], "base": pkt[o + 1], "used": pkt[o + 2], "budget": pkt[o + 3], "flags": pkt[o + 4],
 					"seconds": pkt.decode_u16(o + 5), "reactor": pkt.decode_u16(o + 7)}
+			if o + 13 <= pkt.size():
+				panel = {"breakers": pkt[o + 9], "engines": pkt[o + 10], "over": pkt[o + 11], "rest": pkt[o + 12]}
 		Net.S_COMMS:
 			_read_comms(pkt)
 		Net.S_STORY:

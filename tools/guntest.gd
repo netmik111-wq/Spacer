@@ -74,7 +74,7 @@ func _initialize() -> void:
 	_expect(g.aim == Net.ESYS_HELM, "the gun console aims them at the enemy's bridge")
 	var pkt := g.packet()
 	var at := 4 + 3 * map.guns.size() + 4 + 4
-	var end := pkt.size() - (map.guns.size() + 4 + g.enemy_weapons.size() * 2)     # (v58: the mounts' effects, the point defence, theirs; v59: their charges)
+	var end := pkt.size() - (map.guns.size() + 4 + g.enemy_weapons.size() * 2 + 5)     # (v68: the goal; v58: the mounts' effects, the point defence, theirs; v59: their charges)
 	_expect(pkt[at] == Net.ESYS_HELM and pkt[at + 1] == Net.ESYS_COUNT and pkt[end - 4] == 1 and pkt[end - 3] == Weapons.LASER and pkt[end - 2] == 0,
 		"clients are told where the guns aim, how the enemy's systems are and what guns it has")
 	var credits := server.ship.credits
@@ -262,14 +262,14 @@ func _v49(p) -> void:
 	g._mount(p, 1, Weapons.item_of(Weapons.HEAVY))      # (v60: carried up by hand, see worktest; the old swap stays for tests)
 	_expect(ship.mounts[1] == Weapons.HEAVY and ship.armed[1] == 0 and int(ship.store[Weapons.item_of(Weapons.LASER)]) == 1
 		and int(ship.store[Weapons.item_of(Weapons.HEAVY)]) == 0, "a heavy laser from the cargo goes on gun 2; the laser it replaces goes into the cargo, unpowered")
-	g.setup_asked(p, Net.GUNSET_ARM, 1, 1)
+	g.arm(p, 1, true)
 	_expect(ship.armed[1] == 1 and g.power_used() == 2 + 3 + Weapons.SHIELD_POWER, "powered, it draws 3 (7 of 8 now)")
 	g._mount(p, 2, Weapons.item_of(Weapons.SIEGE))
-	g.setup_asked(p, Net.GUNSET_ARM, 2, 1)
+	g.arm(p, 2, true)
 	_expect(ship.armed[2] == 0, "the siege laser (4) does not fit in what the reactor has left")
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
-	g.setup_asked(p, Net.GUNSET_ARM, 0, 0)
-	g.setup_asked(p, Net.GUNSET_ARM, 2, 1)
+	g.switch_shield(p, false)
+	g.arm(p, 0, false)
+	g.arm(p, 2, true)
 	_expect(ship.armed[2] == 1 and g.power_used() == 7 and ship.shield == 0.0, "with the shield and a laser switched off it does")
 	g._mount(p, 2, Net.ITEM_NONE)
 	_expect(ship.mounts[2] == Weapons.NONE and int(ship.store[Weapons.item_of(Weapons.SIEGE)]) == 1, "a gun is taken down into the cargo")
@@ -294,18 +294,18 @@ func _v49(p) -> void:
 	ship.mounts[2] = Weapons.SIEGE
 	ship.armed[2] = 1
 	ship.armed[0] = 1
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)
+	g.switch_shield(p, true)
 	_expect(not ship.shield_on, "the shield needs 2 power: with the reactor full (%d of 8) it does not come on" % g.power_used())
 	for u: Dictionary in server.power.units:
 		u["output"] = true
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)
+	g.switch_shield(p, true)
 	_expect(ship.shield_on, "(v61) with the SMES's boost (+%d) it does" % server.power.boost())
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
+	g.switch_shield(p, false)
 	for u: Dictionary in server.power.units:
 		u["output"] = false
-	g.setup_asked(p, Net.GUNSET_ARM, 2, 0)
+	g.arm(p, 2, false)
 	ship.mounts[2] = Weapons.LASER
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 1)
+	g.switch_shield(p, true)
 	_expect(ship.shield_on, "the shield is switched on")
 	_run(10 * Net.TICK_HZ)
 	_expect(absf(ship.shield - 10.0 * Weapons.SHIELD_REGEN) < 1.0, "and builds up %.1f a second (%.1f after 10 s)" % [Weapons.SHIELD_REGEN, ship.shield])

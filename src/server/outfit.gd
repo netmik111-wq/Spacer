@@ -162,6 +162,9 @@ func fit_power() -> bool:
 		return false
 	var budget: int = server.power.budget()
 	var cut := false
+	while server.power.engines > 0 and server.gunnery.power_used() > budget:
+		server.power.engines -= 1            # (v68) the engines' power goes first
+		cut = true
 	for i in range(ship.mounts.size() - 1, -1, -1):
 		if server.gunnery.power_used() <= budget:
 			break

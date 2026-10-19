@@ -37,23 +37,26 @@ const FLAGSHIP_BATTLESHIP := 13
 const FLAGSHIP_CARRIER := 14
 
 ## id, name, size, sectors it can happen in, how often it is picked there
+## (v68, the author's E1: breakdowns "should not come from nothing") the faults are
+## never picked by chance any more (weight 0; the host can still fire them): pirate
+## hits break what is near them (Systems.knock_on), an overcharge the engine (Power)
 const EVENTS: Array[Dictionary] = [
 	{"id": MICROMETEORITE, "name": "Микрометеорит", "size": SMALL,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 10},
 	{"id": METEOR_VOLLEY, "name": "Метеорный залп", "size": MEDIUM,
 		"where": [Sectors.METEORS], "weight": 4},
 	{"id": CONSOLE_FAULT, "name": "Замыкание пульта", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	{"id": ENGINE_FAULT, "name": "Отказ двигателя", "size": BIG,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	{"id": AIR_PLANT_FAULT, "name": "Отказ воздушной установки", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	{"id": DOOR_JAM, "name": "Заклинившая дверь", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 4},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	{"id": SHUTTER_FAULT, "name": "Отказ аварийного шлюза", "size": SMALL,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 3},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	{"id": POWER_GLITCH, "name": "Сбой питания", "size": MEDIUM,
-		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 2},
+		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.ION_STORM], "weight": 0},
 	# never picked by chance (weight 0): it comes by itself to a ship left with no fuel at all
 	{"id": FUEL_DRIFT, "name": "Дрейфующее топливо", "size": SMALL,
 		"where": [Sectors.EMPTY, Sectors.METEORS, Sectors.TRADER, Sectors.DERELICT, Sectors.STATION, Sectors.ION_STORM], "weight": 0},
@@ -201,6 +204,7 @@ func _run(event_id: int) -> void:
 		PIRATE_SHIP:
 			server.derelict.pirates_come(_party())
 		PIRATE_RAID:
+			server.gunnery.goal_next = true          # (v68) it may come with a goal
 			server.derelict.pirates_come(_party(), true)
 		FLAGSHIP_BATTLESHIP:
 			server.flagship.call_in(1)

@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 44
+const PROTOCOL := 45
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -189,6 +189,25 @@ const POWF_STORM := 1               # the ship is inside an ion storm: the react
 const POWF_ENGINE := 2              # the engine makes power
 const POWF_CARRYING := 4            # the SMES carries the whole ship
 const POWF_BACKUP := 8              # the ship is dark, the bridge's backup keeps its room lit
+# (v68, the author's F2) the power panel's breakers of the ship's own draw (Power.breaker)
+const BREAKER_LIGHTS := 0
+const BREAKER_AIR := 1
+const BREAKER_TRAYS := 2
+const BREAKER_NAMES: Array[String] = ["Освещение", "Воздушная установка", "Гидропоника"]
+# (v68, the author's F1) the pilot's evade, from the ship's controls: nothing else
+const C_EVADE := 32
+# (v68, the author's J4) u8 ALERT_*: the alert level, from the ship's controls (the captain, or anybody without one)
+const C_ALERT := 33
+const ALERT_GREEN := 0
+const ALERT_YELLOW := 1
+const ALERT_RED := 2
+const ALERT_NAMES: Array[String] = ["Зелёная тревога", "Жёлтая тревога", "Красная тревога"]
+# (v68, the author's F4) what a raid is for, besides wrecking it (Gunnery.goal)
+const GOAL_NONE := 0
+const GOAL_CARGO := 1               # it tows a cargo pod: a hit in its room smashes it; whole, it pays
+const GOAL_BOUNTY := 2              # it is wanted: guns and engine out together and it surrenders for the bounty
+const GOAL_RUNNER := 3              # a courier that runs from the start: stop it before it jumps
+const GOALF_LOST := 1               # the cargo pod is smashed (or the bounty lost: it was wrecked)
 
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
@@ -542,7 +561,8 @@ const SOUND_SHOT := 7               # a gunshot
 const SOUND_BLOW := 8               # a blow struck
 const SOUND_CRY := 9                # somebody hurt crying out
 const SOUND_PHASE := 10             # (v59) the phase drive throwing the ship to its new position: heard all over it
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40]
+const SOUND_LOAD := 11              # (v68) a round pushed into a gun mount's breech
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 

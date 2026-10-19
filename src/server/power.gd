@@ -25,13 +25,30 @@ extends RefCounted
 ## Every SMES has an SS13 terminal (P5): charging on or off, output on or off,
 ## the input and output targets, the charge and what it is doing. The lower half
 ## of the main one's screen is the power monitor (P6), and the holomap shows it too.
+##
+## (v68, the author's F2) The main SMES's terminal is also the engineer's power
+## panel: the guns', the point defence's and the shield's switches moved here
+## from the gun console; the engines take power for more dodge (ENGINE_POWER a
+## level); the ship's own draw can be cut by its breakers (lights, the air
+## plant, the hydroponic trays: 1 each, freed for the guns); and the reactor
+## can be overcharged for OVER_SECONDS (OVER_POWER more), each second of it with
+## an OVER_RISK chance that the engine breaks.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Player := preload("res://src/server/player.gd")
 
-const BASE_LOAD := 4                 # the ship's own draw, besides the guns and the shield
+const BASE_LOAD := 4                 # the ship's own draw, besides the guns and the shield, every breaker on:
+const CORE_LOAD := 1                 # (v68) consoles, doors and pumps (never switched off), and 1 each for
+const BREAKERS := 3                  # the lights, the air plant and the trays (Net.BREAKER_*)
+const ENGINE_POWER := 2              # (v68) what each level of power for the engines takes...
+const ENGINE_DODGE := 0.05           # ... and the dodge it adds while somebody flies
+const ENGINE_LEVELS := 2
+const OVER_POWER := 4                # (v68) the reactor overcharged gives this much more...
+const OVER_SECONDS := 20.0           # ... this long...
+const OVER_REST := 40.0              # ... then rests this long
+const OVER_RISK := 0.03              # the chance each second of it that the engine breaks
 const BOOST := 3                     # the most the SMES adds to the reactor's power in a fight
 const CAPACITY := 2160.0             # a full SMES with its built-in coils: 3 minutes of 12 (Gear.COIL_CAPACITY scales it)
 const INPUT_MAX := 6                 # the most it takes a second with its built-in coils (Gear.COIL_CHARGE adds to it)
@@ -49,11 +66,24 @@ const ACT_CHARGE := 1                # value 1 = charging on, 0 = off
 const ACT_OUTPUT := 2                # value 1 = output on, 0 = off
 const ACT_INPUT := 3                 # value = the input target
 const ACT_LEVEL := 4                 # value = the output target
+# (v68) the power panel (the main SMES only)
+const ACT_GUARD := 5                 # value 1 = the point defence on, 0 = off
+const ACT_SHIELD := 6                # value 1 = the shield on, 0 = off
+const ACT_ENGINES := 7               # value = power for the engines, 0..ENGINE_LEVELS
+const ACT_BREAKER := 8               # value = Net.BREAKER_* * 2 + 1 (on) or + 0 (off)
+const ACT_OVERCHARGE := 9            # value 1 = overcharge the reactor now, 0 = stop it
+const ACT_GUN := 16                  # + mount number: value 1 = that gun powered, 0 = cut
 
 var server: GameServer
 var units: Array = []                # per SMES: {cell, small, charge, charging, output, input, level, in_now, out_now, warned}
 var _told := PackedByteArray()
 var _was_on := true
+var breaker := PackedByteArray([1, 1, 1])   # (v68) per Net.BREAKER_*: 1 = on
+var engines := 0                     # (v68) power for the engines, 0..ENGINE_LEVELS
+var over_until := 0                  # (v68) the tick the overcharge ends (past = not overcharged)
+var over_rest_until := 0             # and the tick it may be started again
+var over_risk := OVER_RISK           # (tests set it)
+var _rng := RandomNumberGenerator.new()
 
 
 func setup(p_server: GameServer) -> void:
@@ -65,6 +95,10 @@ func setup(p_server: GameServer) -> void:
 		units.append(_unit(cell, true))
 	_told = PackedByteArray()
 	_was_on = true
+	breaker = PackedByteArray([1, 1, 1])
+	engines = 0
+	over_until = 0
+	over_rest_until = 0
 
 
 func _unit(cell: int, small: bool) -> Dictionary:
@@ -151,19 +185,62 @@ func engine_running() -> bool:
 
 
 func reactor_now() -> int:
-	## The reactor's power for the guns and the shield now: half inside an ion storm.
+	## The reactor's power for the guns and the shield now: half inside an ion storm,
+	## (v68) more while overcharged.
 	var r: int = server.outfit.reactor()
-	return r / 2 if server.hazards != null and server.hazards.in_storm() else r
+	r = r / 2 if server.hazards != null and server.hazards.in_storm() else r
+	return r + (OVER_POWER if overcharged() else 0)
+
+
+func overcharged() -> bool:
+	return server.tick < over_until and engine_running()
+
+
+func base_load() -> int:
+	## (v68) The ship's own draw now: consoles and doors, and what the breakers leave on.
+	return CORE_LOAD + breaker.count(1)
+
+
+func freed() -> int:
+	## What the breakers switched off give to the guns and the shield.
+	return BASE_LOAD - base_load()
+
+
+func lights_on() -> bool:
+	return breaker[Net.BREAKER_LIGHTS] == 1
+
+
+func light_at(cell: int) -> bool:
+	## (v68) Is there light in that cell: the ship's power and its lights on, or the bridge's backup?
+	## With the lights' breaker off the bridge stays lit (its own lights, as the backup keeps them).
+	return (on() and lights_on()) or ((on() or backup_on()) and server.map.on_backup(cell))
+
+
+func air_on() -> bool:
+	return breaker[Net.BREAKER_AIR] == 1
+
+
+func trays_on() -> bool:
+	return breaker[Net.BREAKER_TRAYS] == 1
+
+
+func engines_draw() -> int:
+	return engines * ENGINE_POWER
+
+
+func engine_dodge() -> float:
+	## (v68) What the power for the engines adds to our dodge (Stations.our_dodge).
+	return ENGINE_DODGE * engines
 
 
 func carrying() -> bool:
 	## Does the SMES carry the whole ship now (the engine gives nothing, and it can give the ship's own draw)?
-	return not engine_running() and _offer() >= BASE_LOAD
+	return not engine_running() and _offer() >= base_load()
 
 
 func on() -> bool:
 	## Does the ship have power? The engine, or the SMES carrying it (the author's rule since v61).
-	return engine_running() or _offer() >= BASE_LOAD
+	return engine_running() or _offer() >= base_load()
 
 
 func backup_on() -> bool:
@@ -189,15 +266,15 @@ func boost() -> int:
 func budget() -> int:
 	## The power the guns and the shield may draw now.
 	if engine_running():
-		return reactor_now() + boost()
-	if _offer() >= BASE_LOAD:
-		return mini(_offer() - BASE_LOAD, server.outfit.reactor() + BOOST)
+		return reactor_now() + boost() + freed()
+	if _offer() >= base_load():
+		return mini(_offer() - base_load(), server.outfit.reactor() + BOOST + freed())
 	return server.outfit.reactor()           # dark: nothing charges anyway, and nothing is switched off for it
 
 
 func draw() -> int:
 	## What the whole ship draws now: its own draw and the guns and the shield.
-	return (BASE_LOAD + _load()) if on() else 0
+	return (base_load() + _load()) if on() else 0
 
 
 func _load() -> int:
@@ -236,9 +313,9 @@ func tick() -> void:
 	var used := _load()
 	if engine_running():
 		# what is used above the reactor comes from the SMES; what is left of the reactor charges it
-		var over := clampi(used - reactor_now(), 0, boost())
+		var over := clampi(used - reactor_now() - freed(), 0, boost())
 		_take(float(over))
-		var spare := float(maxi(reactor_now() - used, 0))
+		var spare := float(maxi(reactor_now() + freed() - used, 0))
 		for u: Dictionary in main_units():
 			if bool(u["charging"]) and works(u) and spare > 0.0 and float(u["charge"]) < capacity(u):
 				var take := minf(minf(float(int(u["input"])), spare), (capacity(u) - float(u["charge"])) * Net.TICK_HZ)
@@ -248,8 +325,9 @@ func tick() -> void:
 				if float(u["charge"]) > capacity(u) * WARN_AT[0]:
 					u["warned"] = 0
 	elif carrying():
-		_take(float(BASE_LOAD + used))
+		_take(float(base_load() + used))
 	_small_tick()
+	_overcharge_tick()
 	if server.outfit.fit_power():
 		server.chat.say("Не хватает энергии: часть орудий отключена%s." % (" (ионный шторм ослабил реактор)" if server.hazards.in_storm() else ""))
 	var now := on()
@@ -260,6 +338,25 @@ func tick() -> void:
 				else "СМЭС отключён: корабль обесточен.")
 	if server.tick % SEND_EVERY == 0:
 		_tell()
+
+
+func _overcharge_tick() -> void:
+	## (v68) The overcharged reactor may break the engine; it ends by itself.
+	if over_until <= 0:
+		return
+	if server.tick >= over_until or not engine_running():
+		over_until = 0
+		over_rest_until = server.tick + roundi(OVER_REST * Net.TICK_HZ)
+		server.chat.say("Перегрузка реактора закончилась: он снова даёт обычную мощность.")
+		_tell(true)
+		return
+	if server.tick % Net.TICK_HZ == 0 and _rng.randf() < over_risk:
+		over_until = 0
+		over_rest_until = server.tick + roundi(OVER_REST * Net.TICK_HZ)
+		if not server.systems.break_engine():
+			server.systems.power_glitch()
+		server.chat.say("Перегрузка сожгла двигатель! Почините его на нижней палубе; пока СМЭС держит корабль.")
+		_tell(true)
 
 
 func _take(amount: float) -> void:
@@ -342,6 +439,10 @@ func asked(p: Player, which: int, action: int, value: int) -> void:
 	var u: Dictionary = units[which]
 	if server.map.use_ahead(p.st.x, p.st.y, p.st.facing) != int(u["cell"]):
 		return
+	if action >= ACT_GUARD and not bool(u["small"]):
+		_panel(p, action, value)
+		_tell(true)
+		return
 	match action:
 		ACT_CHARGE:
 			u["charging"] = value != 0
@@ -353,6 +454,84 @@ func asked(p: Player, which: int, action: int, value: int) -> void:
 			u["level"] = clampi(value, 0, output_max(u))
 	_tell(true)
 	server.systems.power_changed()
+
+
+# ---------------------------------------------------------------- (v68) the power panel
+
+func _panel(p: Player, action: int, value: int) -> void:
+	var g = server.gunnery
+	if action >= ACT_GUN:
+		g.arm(p, action - ACT_GUN, value != 0)
+		return
+	match action:
+		ACT_GUARD:
+			g.arm_guard(p, value != 0)
+		ACT_SHIELD:
+			g.switch_shield(p, value != 0)
+		ACT_ENGINES:
+			set_engines(p, value)
+		ACT_BREAKER:
+			set_breaker(value >> 1, value & 1 == 1, p)
+		ACT_OVERCHARGE:
+			overcharge(p, value != 0)
+
+
+func set_engines(p: Player, level: int) -> void:
+	level = clampi(level, 0, ENGINE_LEVELS)
+	if level > engines and server.gunnery.power_used() + (level - engines) * ENGINE_POWER > budget():
+		if p != null:
+			server.chat.tell(p, "Не хватает энергии реактора на двигатели: нужно %d, свободно %d." % [(level - engines) * ENGINE_POWER,
+				budget() - server.gunnery.power_used()])
+		return
+	engines = level
+
+
+func set_breaker(which: int, on_now: bool, p: Player = null) -> void:
+	## A breaker of the ship's own draw switched on or off (Net.BREAKER_*).
+	if which < 0 or which >= BREAKERS or (breaker[which] == 1) == on_now:
+		return
+	if on_now and on() and engine_running() and server.gunnery.fighting() and server.gunnery.power_used() > budget() - 1:
+		if p != null:
+			server.chat.tell(p, "Не хватает энергии: сначала отключите орудие, щит или двигатели.")
+		return
+	breaker[which] = 1 if on_now else 0
+	if which == Net.BREAKER_LIGHTS:
+		server.ship.lights_off = not on_now
+		server.replication.sight_changed()
+		server.to_all(server.ship.power_packet())
+	var who := "" if p == null else p.name + ": "
+	server.chat.say("%s%s %s." % [who, Net.BREAKER_NAMES[which], "включено" if on_now else "отключено, энергия отдана орудиям"])
+
+
+func overcharge(p: Player, start: bool) -> void:
+	if not start:
+		if over_until > 0:
+			over_until = server.tick                 # it ends on the next tick, and rests
+		return
+	if overcharged():
+		return
+	if not engine_running():
+		server.chat.tell(p, "Двигатель не работает: перегружать нечего.")
+		return
+	if server.tick < over_rest_until:
+		server.chat.tell(p, "Реактор остывает после перегрузки: ещё %d с." % ceili(float(over_rest_until - server.tick) / Net.TICK_HZ))
+		return
+	over_until = server.tick + roundi(OVER_SECONDS * Net.TICK_HZ)
+	server.chat.say("%s перегружает реактор: +%d энергии на %d с. Двигатель может не выдержать!" % [p.name if p != null else "Кто-то",
+		OVER_POWER, int(OVER_SECONDS)])
+
+
+func spend(amount: float) -> bool:
+	## (v68) Takes `amount` from the main SMES at once (the pilot's evade), if it holds that much.
+	if charge() < amount:
+		return false
+	var left := amount
+	for u: Dictionary in main_units():
+		var take := minf(left, float(u["charge"]))
+		u["charge"] = float(u["charge"]) - take
+		left -= take
+	_tell(true)
+	return true
 
 
 func set_charge(share: float) -> void:
@@ -388,12 +567,18 @@ func packet() -> PackedByteArray:
 	var o := out.size()
 	out.resize(o + 9)
 	out.encode_u8(o, (reactor_now() + BASE_LOAD) if engine_running() else 0)
-	out.encode_u8(o + 1, BASE_LOAD if on() else 0)
+	out.encode_u8(o + 1, base_load() if on() else 0)
 	out.encode_u8(o + 2, _load())
 	out.encode_u8(o + 3, budget())
 	out.encode_u8(o + 4, (1 if server.hazards.in_storm() else 0) | (2 if engine_running() else 0) | (4 if carrying() else 0) | (8 if backup_on() else 0))
 	out.encode_u16(o + 5, seconds_left())
 	out.encode_u16(o + 7, server.outfit.reactor())
+	# (v68) the power panel: u8 breakers (bit per Net.BREAKER_* on), u8 power for the engines,
+	# u8 seconds of the overcharge left, u8 seconds until it may be started again
+	out.append(breaker[0] | breaker[1] << 1 | breaker[2] << 2)
+	out.append(engines)
+	out.append(clampi(ceili(float(over_until - server.tick) / Net.TICK_HZ), 0, 255) if overcharged() else 0)
+	out.append(clampi(ceili(float(over_rest_until - server.tick) / Net.TICK_HZ), 0, 255))
 	return out
 
 
@@ -405,6 +590,19 @@ func _tell(now: bool = false) -> void:
 
 
 # ---------------------------------------------------------------- saving
+
+func save_panel() -> Dictionary:
+	## (v68) The breakers and the engines' power (an overcharge is not kept).
+	return {"breaker": Array(breaker), "engines": engines}
+
+
+func load_panel(d: Dictionary) -> void:
+	var b: Array = d.get("breaker", [1, 1, 1])
+	for i in mini(b.size(), BREAKERS):
+		breaker[i] = 1 if int(b[i]) != 0 else 0
+	engines = clampi(int(d.get("engines", 0)), 0, ENGINE_LEVELS)
+	server.ship.lights_off = not lights_on()
+
 
 func save() -> Array:
 	var out: Array = []

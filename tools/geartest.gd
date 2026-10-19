@@ -213,10 +213,10 @@ func _fight_effects() -> void:
 	_expect(g._focus(255) == 0.0, "nor a volley fired anywhere")
 	# the top sensors see their guns charging
 	var pkt := g.packet()
-	_expect(pkt[pkt.size() - 1] != 255 and g.enemy_weapons.size() > 0, "the top sensors show their guns charging")
+	_expect(pkt[pkt.size() - 6] != 255 and g.enemy_weapons.size() > 0, "the top sensors show their guns charging")
 	ship.gear[Gear.SYS_SENSORS] = 1
 	pkt = g.packet()
-	_expect(pkt[pkt.size() - 1] == 255, "the built-in ones do not")
+	_expect(pkt[pkt.size() - 6] == 255, "the built-in ones do not")   # (v68: before the 5 bytes of the goal)
 	ship.gear[Gear.SYS_SENSORS] = 3
 
 

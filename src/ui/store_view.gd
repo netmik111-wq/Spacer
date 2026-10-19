@@ -277,6 +277,8 @@ func _about_text(trading: bool) -> String:
 		if Items.carried_gun(_hover):
 			line += " Корабельное орудие (щелчок: взять): его несут к орудию в корпусе и ставят, держа E%s." % (
 				"; приказ, что куда ставить, даёт пульт орудий" if not Weapons.damaged(_hover) else ", но сначала его чинят на верстаке")
+		elif Items.carried_round(_hover):
+			line += " Груз корабля, но его можно взять (щелчок) и зарядить в орудие вручную, держа E у орудия."
 		elif Items.cargo(_hover):
 			var gun := Weapons.of_item(_hover) != Weapons.NONE
 			line += " Это груз корабля: из шкафа не берётся%s." % (", ставится с пульта орудий" if gun else "")
@@ -424,7 +426,7 @@ func _on_cards_input(event: InputEvent) -> void:
 	var item := _card_at(click.position)
 	if item < 0:
 		return
-	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0 and (not Items.cargo(item) or Items.carried_gun(item)):
+	if click.button_index == MOUSE_BUTTON_LEFT and client.stock(item) > 0 and (not Items.cargo(item) or Items.carried(item)):
 		client.send_store(Net.STORE_TAKE, item)
 	elif click.button_index == MOUSE_BUTTON_RIGHT and client.can_trade() and client.trade.has(item):
 		client.send_store(Net.STORE_BUY, item)

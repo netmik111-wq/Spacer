@@ -17,6 +17,12 @@ extends RefCounted
 ## console no longer swaps guns by itself: it gives the order (`order`), which
 ## bots on "work" carry out (see Stations) and anybody else may. The point
 ## defence has no place in the hull, so it is still set from the console.
+##
+## (v68, the author's F3: "a loaded mount fires faster, an empty one still takes from
+## the locker") A gun that fires shells or rockets can be fed by hand: facing its
+## mount with the right round in hand, hold "use" LOAD_SECONDS and it goes into the
+## breech (LOAD_MAX at most). While it holds a round the gun charges LOADED_PACE
+## faster, and it fires the loaded round before taking one from the locker.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
@@ -28,6 +34,9 @@ const MOUNT_PACE := 0.25             # a gun with a gunner at it charges this mu
 const MOUNT_SKILL_PACE := 0.25       # ... and this much more again with the best gunnery skill
 const MOUNT_SECONDS := 8.0           # to put a carried gun up on its mount
 const UNMOUNT_SECONDS := 5.0         # to take one down into the hands
+const LOAD_SECONDS := 2.0            # (v68) to push one round into a mount's breech
+const LOAD_MAX := 4                  # rounds a mount's breech holds
+const LOADED_PACE := 1.3             # a gun with a round loaded by hand charges this much faster
 const WANT_NONE := 0                 # no order for that mount
 const WANT_DOWN := 255               # the order: take its gun down into the locker
 const NOT_HERE := "-"                # can(): not a mount, or nothing to do at it with what is in hand
@@ -35,6 +44,7 @@ const NOT_HERE := "-"                # can(): not a mount, or nothing to do at i
 var server: GameServer
 var gunners: Array = []              # per mount: the Player at it now, or null
 var wanted := PackedByteArray()      # per mount: the gun (a thing) the console ordered onto it, WANT_NONE or WANT_DOWN
+var loaded := PackedByteArray()      # (v68) per mount: rounds loaded into its breech by hand
 var _told := PackedByteArray()
 
 
@@ -44,6 +54,8 @@ func setup(p_server: GameServer) -> void:
 	gunners.resize(server.map.guns.size())
 	wanted = PackedByteArray()
 	wanted.resize(server.map.guns.size())
+	loaded = PackedByteArray()
+	loaded.resize(server.map.guns.size())
 	_told = PackedByteArray()
 
 
@@ -69,9 +81,45 @@ func gunner(i: int) -> Player:
 func pace(i: int) -> float:
 	## How much faster that gun charges for its gunner (1 = nobody at it).
 	var p := gunner(i)
+	var fed := LOADED_PACE if i >= 0 and i < loaded.size() and loaded[i] > 0 else 1.0   # (v68) loaded by hand
 	if p == null:
-		return server.outfit.loader()        # (v62) the auto-loader stands in for nobody
-	return 1.0 + MOUNT_PACE + MOUNT_SKILL_PACE * p.skill(Net.SKILL_GUNS)
+		return server.outfit.loader() * fed  # (v62) the auto-loader stands in for nobody
+	return (1.0 + MOUNT_PACE + MOUNT_SKILL_PACE * p.skill(Net.SKILL_GUNS)) * fed
+
+
+func ammo_of(i: int) -> int:
+	## (v68) The round the gun on that mount fires (Net.ITEM_SHELL, ITEM_ROCKET...), 0 = none.
+	var ship = server.ship
+	return Weapons.ammo(ship.mounts[i]) if i >= 0 and i < ship.mounts.size() and ship.mounts[i] != Weapons.NONE else 0
+
+
+func take_round(i: int) -> bool:
+	## (v68) The gun on that mount fires: a round from its breech, else from the locker. False: none.
+	var ship = server.ship
+	var ammo := ammo_of(i)
+	if ammo == 0:
+		return true
+	if loaded[i] > 0:
+		loaded[i] -= 1
+		return true
+	if int(ship.store.get(ammo, 0)) <= 0:
+		return false
+	ship.store[ammo] -= 1
+	server.supplies.tell_store()
+	return true
+
+
+func has_round(i: int) -> bool:
+	var ammo := ammo_of(i)
+	return ammo == 0 or loaded[i] > 0 or int(server.ship.store.get(ammo, 0)) > 0
+
+
+func unload(i: int) -> void:
+	## (v68) The gun comes down: what was in its breech goes back into the locker.
+	var ammo := ammo_of(i)
+	if ammo != 0 and loaded[i] > 0:
+		server.ship.store[ammo] = int(server.ship.store.get(ammo, 0)) + loaded[i]
+	loaded[i] = 0
 
 
 func fired(i: int) -> void:
@@ -97,6 +145,13 @@ func can(p: Player, cell: int) -> String:
 		return NOT_HERE
 	var item := p.in_hand()
 	var on: int = server.ship.mounts[i]
+	if item != Net.ITEM_NONE and on != Weapons.NONE and item == Weapons.ammo(on):
+		# (v68) a round for its breech
+		if server.ship.broken.has(cell):
+			return NOT_HERE
+		if loaded[i] >= LOAD_MAX:
+			return "Казённик орудия полон: %d из %d." % [loaded[i], LOAD_MAX]
+		return ""
 	if _is_gun(item):
 		var w := Weapons.of_item(item)
 		if w == Weapons.GUARD:
@@ -114,6 +169,8 @@ func can(p: Player, cell: int) -> String:
 
 
 func ticks(p: Player) -> int:
+	if p.in_hand() != Net.ITEM_NONE and not _is_gun(p.in_hand()):
+		return roundi(LOAD_SECONDS * Net.TICK_HZ)   # (v68) a round into the breech
 	var seconds := UNMOUNT_SECONDS if p.in_hand() == Net.ITEM_NONE else MOUNT_SECONDS
 	return roundi(seconds * Net.TICK_HZ * (1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)))
 
@@ -126,6 +183,15 @@ func finish(p: Player, cell: int) -> void:
 	var ship = server.ship
 	var g = server.gunnery
 	var item := p.in_hand()
+	if item != Net.ITEM_NONE and not _is_gun(item):
+		# (v68) a round pushed into the breech
+		loaded[i] += 1
+		p.slots[p.hand] = Net.ITEM_NONE
+		p.train(Net.SKILL_GUNS)
+		server.chat.sound(Net.SOUND_LOAD, cell % server.map.width, cell / server.map.width, p.slot)
+		server.chat.tell(p, "Орудие %d заряжено вручную: %d из %d. Оно заряжается быстрее." % [i + 1, loaded[i], LOAD_MAX])
+		return
+	unload(i)
 	var old: int = ship.mounts[i]
 	var old_fx: int = ship.mount_fx[i]
 	var out := Weapons.item_of(old, old_fx) if old != Weapons.NONE else Net.ITEM_NONE
@@ -216,10 +282,11 @@ func _carried(item: int) -> bool:
 
 
 func packet() -> PackedByteArray:
-	## Net.S_MOUNTS: per mount, whether a gunner stands at it and what the console ordered onto it.
+	## Net.S_MOUNTS: per mount, whether a gunner stands at it, what the console ordered onto it, (v68) rounds loaded.
 	var ship = server.ship
 	var out := PackedByteArray([Net.S_MOUNTS, ship.id & 0xFF, ship.id >> 8, wanted.size()])
 	for i in wanted.size():
 		out.append(1 if gunners[i] != null else 0)
 		out.append(wanted[i])
+		out.append(loaded[i])            # (v68) rounds in its breech
 	return out

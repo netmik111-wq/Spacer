@@ -145,7 +145,7 @@ func _terminal() -> void:
 	server.crew.remove(p)
 	kept = []
 	var pkt := pw.packet()
-	_expect(pkt[0] == Net.S_SMES and pkt[3] == pw.units.size() and pkt.size() == 4 + 15 * pw.units.size() + 9, "the terminals' packet (%d bytes)" % pkt.size())
+	_expect(pkt[0] == Net.S_SMES and pkt[3] == pw.units.size() and pkt.size() == 4 + 15 * pw.units.size() + 9 + 4, "the terminals' packet (%d bytes)" % pkt.size())
 
 
 func _coils() -> void:

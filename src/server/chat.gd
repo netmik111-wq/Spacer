@@ -177,6 +177,34 @@ func say(text: String) -> void:
 	server.log_line.emit("[корабль] %s" % text)
 
 
+var _bridge := {}                    # (v68) the rooms (ShipMap.rooms) of the bridge: those its consoles face
+var _bridge_map: Object = null
+
+
+func on_bridge(q: Player) -> bool:
+	## (v68) Is this character on the bridge (in a room one of its consoles faces)?
+	var map := server.map
+	if _bridge_map != map:
+		_bridge_map = map
+		_bridge = {}
+		for c: int in map.helm.keys() + map.gun_console.keys() + map.chart.keys():
+			var front := map.fitting_front(c)
+			if front >= 0 and map.room_of[front] >= 0:
+				_bridge[map.room_of[front]] = true
+	var at := q.st.y * map.width + q.st.x
+	return at >= 0 and at < map.room_of.size() and _bridge.has(map.room_of[at])
+
+
+func say_bridge(text: String) -> void:
+	## (v68, the author's G3) A detail of the fight: only those on the bridge read it
+	## (the rest hear what the bridge tells them). Warnings still go by say().
+	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_SHIP, text)
+	for q: Player in server.players:
+		if q != null and q.peer != null and not q.corpse and on_bridge(q):
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+	server.log_line.emit("[мостик] %s" % text)
+
+
 func tell(p: Player, text: String) -> void:
 	## A line from the ship in one player's chat only.
 	if p.peer == null:

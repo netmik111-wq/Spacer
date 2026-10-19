@@ -74,7 +74,7 @@ func _launch(p: Player) -> void:
 	state = Net.DRONE_FLYING
 	dir = Net.DIR_NONE
 	_arrive = server.tick + roundi(FLY_SECONDS * Net.TICK_HZ)
-	server.chat.say("%s запускает дрона-разведчика: через %d с он проникнет на пиратский корабль." % [p.name, int(FLY_SECONDS)])
+	server.chat.say_bridge("%s запускает дрона-разведчика: через %d с он проникнет на пиратский корабль." % [p.name, int(FLY_SECONDS)])
 
 
 func inside() -> bool:
@@ -107,7 +107,7 @@ func tick() -> void:
 		state = Net.DRONE_INSIDE
 		_empty_at = server.tick + roundi(BATTERY_SECONDS * Net.TICK_HZ)
 		_next_step = server.tick
-		server.chat.say("Дрон проник на пиратский корабль. Управление с монитора дрона: клавиши движения.")
+		server.chat.say_bridge("Дрон проник на пиратский корабль. Управление с монитора дрона: клавиши движения.")
 		_entered()
 	elif inside():
 		if dir != Net.DIR_NONE and server.tick >= _next_step:
@@ -163,7 +163,7 @@ func _blow(p: Player) -> void:
 		said.append(hurt)
 	state = Net.DRONE_NONE
 	at = -1
-	server.chat.say("%s взрывает дрона внутри пиратского корабля.%s%s" % [p.name, "" if said.is_empty() else " " + " ".join(said), g._enemy_state()])
+	server.chat.say_bridge("%s взрывает дрона внутри пиратского корабля.%s%s" % [p.name, "" if said.is_empty() else " " + " ".join(said), g._enemy_state()])
 	g.settle()
 
 

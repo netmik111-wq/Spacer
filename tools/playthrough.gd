@@ -462,7 +462,7 @@ func _arm_guns() -> void:
 	for i in ship.mounts.size():
 		if ship.mounts[i] != Weapons.NONE and ship.armed[i] == 0:
 			if _at(server.map.gun_console):
-				server.gunnery.setup_asked(cap, Net.GUNSET_ARM, i, 1)
+				server.gunnery.arm(cap, i, true)
 
 
 func _buy_hull() -> void:

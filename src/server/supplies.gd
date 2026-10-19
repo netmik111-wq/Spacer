@@ -231,7 +231,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 		return
 	match action:
 		Net.STORE_TAKE:
-			if int(server.ship.store.get(item, 0)) > 0 and (not Items.cargo(item) or Items.carried_gun(item)) and p.add(item, true):
+			if int(server.ship.store.get(item, 0)) > 0 and (not Items.cargo(item) or Items.carried(item)) and p.add(item, true):
 				server.ship.store[item] -= 1
 				if Items.carried_gun(item):
 					# (v60) a ship gun is carried by hand to its mount (see Mounts)

@@ -8,6 +8,7 @@ const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
 const Items := preload("res://src/shared/items.gd")
+const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
 const Options := preload("res://src/client/options.gd")
@@ -101,6 +102,9 @@ var _hand_shown := -1
 var _hand_label: Label               # what is in the hand, over the slots
 var _jump_label: Label
 var _flash: ColorRect
+var _alert_label: Label              # (v68) the alert level, over the screen while it is not green
+var _alert_tint: ColorRect           # (v68) a slow red pulse over the screen on red alert
+var _alert_time := 0.0
 var _monitor_step := 0.08
 var _monitor_time := 0.0
 var _chat_box: VBoxContainer
@@ -360,6 +364,17 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_jump_label.offset_top = 56
 	_jump_label.modulate = Color(0.7, 0.9, 1.0)
 	_jump_label.visible = false
+	_alert_tint = ColorRect.new()
+	_alert_tint.color = Color(0.9, 0.05, 0.02, 0.0)
+	_alert_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_alert_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_alert_tint)
+	_alert_label = _text(root, 15)
+	_alert_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_alert_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_alert_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_alert_label.offset_top = 32
+	_alert_label.visible = false
 	_flash = ColorRect.new()
 	_flash.color = Color(0.85, 0.93, 1.0, 0.0)
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1026,6 +1041,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		done = false
 	elif Options.pressed(event, "use") and _console.visible:
 		_open_console(0)                                # the key closes a screen it opened
+	elif _console_kind == 4 and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+			and (event as InputEventKey).physical_keycode == KEY_SPACE:
+		client.send_evade()                             # (v68) the pilot's evade, timed by hand
 	elif _console.visible:
 		done = false
 	elif Options.pressed(event, "use") and _use_screen(client.use_target()):
@@ -1228,7 +1246,13 @@ func _process(delta: float) -> void:
 		if mount_why != "":
 			_hint.text = mount_why
 		elif _use_held and client.work > 0:
-			_hint.text = "Ставлю орудие…" if item != Net.ITEM_NONE else "Снимаю орудие…"
+			_hint.text = ("Досылаю снаряд…" if Weapons.of_item(item) == Weapons.NONE else "Ставлю орудие…") \
+				if item != Net.ITEM_NONE else "Снимаю орудие…"
+		elif item != Net.ITEM_NONE and Weapons.of_item(item) == Weapons.NONE:
+			# (v68, the author's F3) a round carried by hand into the breech
+			var n: int = client.mount_loaded[g] if g < client.mount_loaded.size() else 0
+			_hint.text = "Орудие %d. Держите E, чтобы дослать в казённик: %s (заряжено %d из 4; заряженное бьёт быстрее)" % [
+				g + 1, Items.name_of(item).to_lower(), n]
 		elif item != Net.ITEM_NONE:
 			_hint.text = "Орудие %d. Держите E, чтобы поставить: %s" % [g + 1, Items.name_of(item).to_lower()]
 		else:
@@ -1477,6 +1501,14 @@ func _process(delta: float) -> void:
 		_jump_label.text = "Прыжок через %d с: %s" % [
 			maxi(int(ceil((client.jump_tick - client.server_now()) / Net.TICK_HZ)), 0), client.sectors.describe(client.jump_to)]
 	_flash.color.a = maxf(_flash.color.a - delta * 1.6, 0.0)
+	# (v68) the alert
+	_alert_time += delta
+	_alert_label.visible = client.alert != Net.ALERT_GREEN and not _console.visible
+	if _alert_label.visible:
+		_alert_label.text = Net.ALERT_NAMES[client.alert].to_upper()
+		_alert_label.modulate = Color(1.0, 0.35, 0.3, 0.6 + 0.4 * sin(_alert_time * 4.0)) if client.alert == Net.ALERT_RED \
+			else Color(1.0, 0.85, 0.35)
+	_alert_tint.color.a = (0.04 + 0.03 * sin(_alert_time * 2.6)) if client.alert == Net.ALERT_RED else 0.0
 
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
 	_info_timer -= delta

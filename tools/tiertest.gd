@@ -193,8 +193,8 @@ func _kinetic_and_guard() -> void:
 	_expect(ship.mounts[0] != Weapons.GUARD, "point defence does not go on a gun's mount")
 	g.setup_asked(p, Net.GUNSET_MOUNT, Net.GUARD_MOUNT, Weapons.item_of(Weapons.GUARD))
 	_expect(ship.guard == Weapons.GUARD and int(ship.store[Weapons.item_of(Weapons.GUARD)]) == 0, "it goes on its own mount")
-	g.setup_asked(p, Net.GUNSET_SHIELD, 0, 0)
-	g.setup_asked(p, Net.GUNSET_ARM, Net.GUARD_MOUNT, 1)
+	g.switch_shield(p, false)
+	g.arm(p, Net.GUARD_MOUNT, true)
 	_expect(ship.guard_armed, "and is powered")
 	g.enemy_hit_chance = 1.0
 	var hits := 0
