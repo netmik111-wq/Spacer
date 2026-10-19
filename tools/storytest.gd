@@ -172,11 +172,25 @@ func _calm() -> void:
 func _arrive_at(cell: Vector2i) -> void:
 	## The ship is in that sector of space now, as if it had jumped there.
 	server.been[Sectors.key(cell)] = true
-	server.sectors.build(server.space_seed, cell, server.been)
+	server.road.build(cell)
 	server.ship.sector = server.sectors.here
 	server.ship.pos = server.sectors.entry[server.ship.sector]
 	server.story.entered_sector()
 	_run(1)
+
+
+func _kind(c: Vector2i) -> int:
+	## (v64) The kind of that system of the cluster we are in (-1: not in it).
+	var i := server.sectors.index_of(c)
+	return -1 if i < 0 else int(server.sectors.kind[i])
+
+
+func _enter_cluster(depth: int) -> void:
+	## (v64) The ship is at the start of the cluster `depth` steps along the road, as if it had come in.
+	server.road.depth = depth
+	server.road.entry = Vector2i(6 * depth, 0)
+	server.road.hunters = []
+	_arrive_at(server.road.entry)
 
 
 func _cargo() -> void:
@@ -188,9 +202,9 @@ func _cargo() -> void:
 	if st.quests.is_empty():
 		return
 	var q: Dictionary = st.quests[0]
-	var d := Sectors.jumps_between(st.here(), q["at"])
-	_expect(d >= Story.QUEST_NEAR and d <= Story.QUEST_FAR, "its station is %d jumps away" % d)
-	_expect(Sectors.kind_at(server.space_seed, q["at"]) == Sectors.STATION, "and it is a station")
+	var d: int = server.sectors.hops_between(st.here(), q["at"])
+	_expect(d >= 1 and d <= Story.QUEST_FAR + 2, "its station is %d jumps away" % d)   # (v64: nearer or further when the cluster has none in range)
+	_expect(_kind(q["at"]) == Sectors.STATION, "and it is a station of this cluster")
 	_expect(int(server.ship.store.get(Net.ITEM_CARGO, 0)) == 1, "the crate is in the locker")
 	var pkt := st.story_packet()
 	_expect(pkt[9] == 1, "the story packet lists it")
@@ -244,7 +258,7 @@ func _blackbox() -> void:
 	if st.quests.is_empty():
 		return
 	var q: Dictionary = st.quests[0]
-	_expect(Sectors.kind_at(server.space_seed, q["at"]) == Sectors.DERELICT, "it points at a derelict")
+	_expect(_kind(q["at"]) == Sectors.DERELICT, "it points at a derelict of this cluster")
 	_arrive_at(q["at"])
 	var cells := PackedInt32Array([server.map.spawns[0].y * server.map.width + server.map.spawns[0].x])
 	server.floor_things.erase(cells[0])
@@ -262,15 +276,16 @@ func _missions() -> void:
 	var st: Story = server.story
 	st.chapter = 0
 	st.m1_next = 0
-	# somewhere 4 jumps out that is quiet and not an SOS
+	# somewhere in the second cluster that is quiet and not an SOS
 	st.quests.clear()
+	_enter_cluster(1)
+	st._due_at = -1
+	st.m1_next = 0                           # (coming in at its start may already have offered it)
+	var s: Sectors = server.sectors
 	var at := Vector2i.MAX
-	for x in range(-4, 5):
-		for y: int in [4 - absi(x), absi(x) - 4]:
-			var c := Vector2i(x, y)
-			if at == Vector2i.MAX and Sectors.kind_at(server.space_seed, c) != Sectors.FLAGSHIP \
-					and not Story.sos_at(server.space_seed, c) and not server.flagship.is_at(c):
-				at = c
+	for i in s.count:
+		if at == Vector2i.MAX and i != s.start and not Story.sos_at(server.space_seed, s.cell[i], s.kind[i]):
+			at = s.cell[i]
 	_arrive_at(at)
 	_expect(st._due_event == Tales.find("m1") and st._due_at > 0, "the first mission is offered %d jumps out" % server.sectors.far_from_start(server.ship.sector))
 	_run(5 * Net.TICK_HZ)
@@ -300,6 +315,7 @@ func _missions() -> void:
 	_expect(st.chapter == 3 and st.codes, "beaten: the flagship's codes are ours")
 	_expect(server.flagship.growth == 1, "and its growth goes a step back")
 	server.derelict._leave(true)
+	_enter_cluster(0)
 	_run(2)
 
 
@@ -316,20 +332,27 @@ func _sos() -> void:
 	_calm()
 	var found := Vector2i.MAX
 	var n := 0
-	for x in range(-6, 7):
-		for y in range(-6, 7):
-			if Sectors.kind_at(server.space_seed, Vector2i(x, y)) == Sectors.EMPTY and Vector2i(x, y) != Vector2i.ZERO:
+	var depth := -1
+	for dp: int in [0, 1, 2, 4, 5, 6, 7]:     # cluster after cluster along the road, but the flagship's
+		var s := Sectors.new()
+		var at := Vector2i(6 * dp, 0)
+		s.build(server.space_seed, at, {}, dp, at)
+		for i in s.count:
+			if s.kind[i] == Sectors.EMPTY and s.cell[i] != Vector2i.ZERO:
 				n += 1
-				if Story.sos_at(server.space_seed, Vector2i(x, y)) and not st.sos_done.has(Sectors.key(Vector2i(x, y))) \
-						and not server.flagship.is_at(Vector2i(x, y)):
-					found = Vector2i(x, y)
-	_expect(found != Vector2i.MAX, "some quiet sectors send an SOS (%d quiet near the start)" % n)
+				if found == Vector2i.MAX and Story.sos_at(server.space_seed, s.cell[i], s.kind[i]) and not st.sos_done.has(Sectors.key(s.cell[i])):
+					found = s.cell[i]
+					depth = dp
+	_expect(found != Vector2i.MAX, "some quiet systems send an SOS (%d quiet in seven clusters)" % n)
 	if found == Vector2i.MAX:
 		return
 	st.call = {}
+	_enter_cluster(depth)
 	_arrive_at(found)
 	_expect(st._due_event == Tales.find("sos"), "arriving there brings the SOS call")
 	_expect(st.sos_done.has(Sectors.key(found)), "and the SOS is marked answered")
+	st._due_at = -1
+	_enter_cluster(0)
 	st._due_at = -1
 
 
@@ -541,19 +564,27 @@ func _flagship() -> void:
 	f.forced = 1                         # (the battleship: it cannot take the ship while the test waits)
 	keep_hull = true
 	server.story.codes = false
+	_enter_cluster(0)
+	_run(2)
+	_expect(not f.awake and f.goal() == Sectors.NO_GOAL, "in another cluster, it sleeps out of sight")
+	_enter_cluster(Sectors.FLAG_DEPTH)
 	var goal := f.goal()
-	_arrive_at(Vector2i.ZERO)
 	_run(2)
-	_expect(not f.awake and f.where() == goal, "far from it, it sleeps at the goal")
-	var near := goal + Vector2i(-Flagship.AREA, 0)
-	_arrive_at(near)
-	_run(2)
-	_expect(f.awake, "within %d jumps of it, it wakes" % Flagship.AREA)
+	_expect(f.awake and goal != Sectors.NO_GOAL, "come into its cluster, it wakes")
 	var pkt := server.story.story_packet()
 	_expect(pkt[1] & Net.STORY_FLAGSHIP != 0, "the chart is told where it is")
 	_run(roundi(Flagship.GROW_SECONDS * Net.TICK_HZ) + 2)
 	_expect(f.growth == 1, "after %d s it has grown a step" % int(Flagship.GROW_SECONDS))
-	_arrive_at(goal + Vector2i(-Flagship.AREA - 2, 0))   # (away again: it roams on its own)
+	if server.derelict.here:                   # (it may have found us meanwhile)
+		server.derelict._leave(true)
+	server.gunnery.enemy_gone()
+	var away: Vector2i = server.sectors.cell[server.ship.sector]   # away from it again: it roams on its own
+	var dist := server.sectors.distances(server.sectors.index_of(f.at))
+	for i in server.sectors.count:
+		if dist[i] > dist[server.sectors.index_of(away)] and server.sectors.kind[i] != Sectors.FLAGSHIP:
+			away = server.sectors.cell[i]
+	_arrive_at(away)
+	f._come_at = -1
 	_run(2)
 	var moved := false
 	var start := f.at
@@ -561,7 +592,7 @@ func _flagship() -> void:
 		_run(roundi(Flagship.MOVE_SECONDS * Net.TICK_HZ))
 		moved = moved or f.at != start
 		_expect(f.in_area(f.at), "")
-	_expect(moved, "it moves about its area")
+	_expect(moved, "it moves about its cluster")
 	f.growth = 0
 	var plain: Dictionary = server.shipyard.flagship(1, server.derelict._pirate_spots())
 	f.growth = 4
@@ -626,7 +657,7 @@ func _saved() -> void:
 	server.garden.growth[3] = 0.4
 	server.flagship.awake = true
 	server.flagship.growth = 3
-	server.flagship.at = server.flagship.goal() + Vector2i(0, 1)
+	server.flagship.at = server.sectors.cell[server.ship.sector]
 	var data := Campaign.snapshot(server)
 	var json: Dictionary = JSON.parse_string(JSON.stringify(data))
 	var other := _new_server(26401)

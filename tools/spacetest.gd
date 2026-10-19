@@ -1,10 +1,12 @@
 extends SceneTree
-## Checks endless space without a network or a window:
+## Checks the clusters of space without a network or a window:
 ##   godot --headless --path . --script res://tools/spacetest.gd
-## Space is made from a seed, not stored: the same place must always hold the
-## same thing, every sector must have a way on, and a ship that keeps jumping
-## must keep finding new sectors while the chart remembers the old ones.
-## Fails with exit code 1.
+## (v64) Space is a road of clusters made from a seed, not stored: the same
+## cluster must always hold the same thing, every system must be reachable,
+## every cluster must have its two exits, a trader and (but the dead zone) a
+## station, and the flagship must wait in the fourth. A ship that keeps jumping
+## must find new systems, and the long jump out must take it into the next
+## cluster. Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -15,75 +17,121 @@ var failed := 0
 
 func _initialize() -> void:
 	var seed_value := 20261011
-	# 1. the same place holds the same thing, whenever and from wherever it is looked at
+	# 1. the same cluster holds the same thing, whenever it is made
 	var a := Sectors.new()
 	var b := Sectors.new()
-	a.build(seed_value, Vector2i(5, -3), {})
-	b.build(seed_value, Vector2i(7, -2), {})
-	var same := true
-	for i in a.count:
-		var j := b.cell.find(a.cell[i])
-		if j >= 0 and (a.kind[i] != b.kind[j] or a.names[i] != b.names[j] or a.spot[i] != b.spot[j] or a.entry[i] != b.entry[j]):
-			same = false
-	_expect(same, "a sector is the same from whichever side the chart comes upon it")
+	a.build(seed_value, Vector2i.ZERO, {})
+	b.build(seed_value, Vector2i(1, 0), {Sectors.key(Vector2i.ZERO): true})
+	_expect(a.cell == b.cell and a.kind == b.kind and a.names == b.names and a.links == b.links and a.spot == b.spot
+		and a.entry == b.entry and a.exits == b.exits and a.beyond == b.beyond, "a cluster is the same whenever it is made")
+	_expect(a.cell[a.start] == Vector2i.ZERO and a.here == a.start and b.visited[b.start] == 1, "the voyage begins at the first cluster's start")
 	var other := Sectors.new()
-	other.build(seed_value + 1, Vector2i(5, -3), {})
-	_expect(other.kind != a.kind or other.names != a.names, "another game has another space")
+	other.build(seed_value + 1, Vector2i.ZERO, {})
+	_expect(other.kind != a.kind or other.names != a.names or other.links != a.links, "another game has another space")
 
 	# 2. over the network and back
+	a.road = PackedByteArray([1, 3])
 	var copy := Sectors.new()
 	copy.unpack(a.pack(), 0)
 	_expect(copy.count == a.count and copy.here == a.here and copy.cell == a.cell and copy.kind == a.kind and copy.names == a.names
-		and copy.links == a.links and copy.spot == a.spot and copy.reach == a.reach and copy.entry == a.entry,
-		"the chart survives the trip to a client (%d bytes for %d sectors)" % [a.pack().size(), a.count])
+		and copy.links == a.links and copy.spot == a.spot and copy.reach == a.reach and copy.entry == a.entry and copy.deal == a.deal
+		and copy.depth == a.depth and copy.ckind == a.ckind and copy.start == a.start and copy.exits == a.exits and copy.beyond == a.beyond
+		and copy.level == a.level and copy.fog == a.fog and copy.road == a.road and copy.goal == a.goal and copy.locked == a.locked,
+		"the cluster survives the trip to a client (%d bytes for %d systems)" % [a.pack().size(), a.count])
 
-	# 3. routes: everybody has a way on, nobody more than four, and space is in one piece
-	var most := 0
-	var least := 99
-	var size := 30
-	for y in range(-size, size + 1):
-		for x in range(-size, size + 1):
-			var n := 0
-			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-				if Sectors.joined(seed_value, Vector2i(x, y), Vector2i(x, y) + d):
-					n += 1
-			most = maxi(most, n)
-			least = mini(least, n)
-	_expect(least >= 1 and most <= Sectors.MAX_ROUTES, "every sector has a route, none more than %d (found %d to %d)" % [Sectors.MAX_ROUTES, least, most])
-	var seen := {Vector2i.ZERO: true}
-	var todo: Array[Vector2i] = [Vector2i.ZERO]
-	while not todo.is_empty():
-		var c: Vector2i = todo.pop_back()
-		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			var n: Vector2i = c + d
-			if absi(n.x) <= size and absi(n.y) <= size and not seen.has(n) and Sectors.joined(seed_value, c, n):
-				seen[n] = true
-				todo.append(n)
-	var inner := 0
-	var reached := 0
-	for y in range(-10, 11):
-		for x in range(-10, 11):
-			inner += 1
-			if seen.has(Vector2i(x, y)):
-				reached += 1
-	print("  from the start %d of the %d sectors within 10 can be reached without going further than %d" % [reached, inner, size])
-	_expect(reached >= inner * 95 / 100, "space is in one piece around the start")
+	# 3. the shape of every cluster: many seeds, every depth
+	var bad_size := 0
+	var cut_off := 0
+	var bad_exits := 0
+	var no_trader := 0
+	var no_station := 0
+	var station_in_dead := 0
+	var bad_flagship := 0
+	var bad_level := 0
+	var same_beyond := 0
+	var most_lanes := 0
+	var kinds := [0, 0, 0, 0, 0, 0, 0]
+	var ckinds := [0, 0, 0, 0, 0]
+	var fogged := 0
+	var thin_storm := 0
+	var trader_far := 0
+	var made := 0
+	var small_total := 0
+	var big_total := 0
+	for sv in range(1000, 1200):
+		for depth in 6:
+			var at := Vector2i.ZERO if depth == 0 else Vector2i(6 * depth, (sv * 7 + depth * 3) % 9 - 4)
+			var s := Sectors.new()
+			s.build(sv, at, {}, depth, at, 1, true)
+			made += 1
+			small_total += s.count
+			var big := Sectors.new()
+			big.build(sv, at, {}, depth, at, 8, true)
+			big_total += big.count
+			if s.count < Sectors.SYSTEMS[0] or s.count > Sectors.MOST_SYSTEMS or big.count > Sectors.MOST_SYSTEMS:
+				bad_size += 1
+			var d := s.distances(s.start)
+			if d.has(-1):
+				cut_off += 1
+			if s.exits.size() != 2 or s.exits[0] == s.exits[1] or s.cell[s.exits[0]].x != at.x + Sectors.COLS - 1 or s.cell[s.exits[1]].x != at.x + Sectors.COLS - 1 \
+					or s.cell[s.start] != at:
+				bad_exits += 1
+			if s.beyond.size() == 2 and s.beyond[0] == s.beyond[1]:
+				same_beyond += 1
+			if not s.kind.has(Sectors.TRADER) or not s.kind.has(Sectors.DERELICT):
+				no_trader += 1
+			if s.ckind != Sectors.C_DEAD and not s.kind.has(Sectors.STATION):
+				no_station += 1
+			if s.ckind == Sectors.C_DEAD and s.kind.has(Sectors.STATION):
+				station_in_dead += 1
+			var flags := s.kind.count(Sectors.FLAGSHIP)
+			if (depth == Sectors.FLAG_DEPTH) != (flags == 1) or flags > 1 or (depth == Sectors.FLAG_DEPTH and (not s.locked or s.exits.has(s.index_of(s.goal)))):
+				bad_flagship += 1
+			if s.level[s.start] != depth * Sectors.LEVEL_STEP:
+				bad_level += 1
+			if depth == 0:
+				var near := 99
+				for i in s.count:
+					if s.kind[i] == Sectors.TRADER:
+						near = mini(near, d[i])
+				if near > 2:
+					trader_far += 1
+			for i in s.count:
+				most_lanes = maxi(most_lanes, s.neighbours(i).size())
+				kinds[s.kind[i]] += 1
+			ckinds[s.ckind] += 1
+			if s.fog.has(1):
+				fogged += 1
+			if s.ckind == Sectors.C_STORM and s.kind.count(Sectors.ION_STORM) < 3:
+				thin_storm += 1
+	print("  %d clusters: systems of each kind %s; clusters of each kind %s; %d with a nebula" % [made, kinds, ckinds, fogged])
+	_expect(bad_size == 0, "every cluster has %d to %d systems (a big crew up to %d)" % [Sectors.SYSTEMS[0], Sectors.SYSTEMS[1], Sectors.MOST_SYSTEMS])
+	_expect(big_total > small_total, "a big crew finds bigger clusters (%.1f against %.1f systems)" % [float(big_total) / made, float(small_total) / made])
+	_expect(cut_off == 0, "every system of every cluster can be reached along lanes")
+	_expect(bad_exits == 0, "every cluster is entered on its left and has two exits on its far side")
+	_expect(same_beyond == 0, "two exits never lead to clusters of one kind")
+	_expect(no_trader == 0 and no_station == 0 and station_in_dead == 0, "every cluster has a trader and a derelict, and all but the dead zone a station")
+	_expect(trader_far == 0, "in the first cluster a trader is at most two jumps from the start")
+	_expect(bad_flagship == 0, "the flagship waits in the fourth cluster only, not at an exit, and shuts its exits")
+	_expect(bad_level == 0, "each cluster is %d steps of danger harder than the one before" % Sectors.LEVEL_STEP)
+	_expect(most_lanes <= 8, "no system has more than 8 lanes (found %d)" % most_lanes)
+	var all_kinds := kinds.duplicate()
+	all_kinds.remove_at(Sectors.FLAGSHIP)
+	_expect(all_kinds.min() > 0 and ckinds.min() > 0 and fogged > 0, "every kind of system and of cluster is met, and nebulae")
+	_expect(thin_storm == 0, "a storm belt has a band of at least three ion storms")
+	var places := 0
+	var with_places := 0
+	for i in a.count:
+		var p := a.places(seed_value, i)
+		places += p.size()
+		with_places += 1 if p.size() > 0 else 0
+		for pl: Array in p:
+			if (pl[1] as Vector2).distance_to(a.entry[i]) <= Sectors.PLACE_REACH + 4:
+				places = -999
+	_expect(a.places(seed_value, a.start).is_empty(), "the first cluster's start has no places of its own")
+	_expect(places > 0, "places lie inside systems (%d in %d systems), never where a ship comes out of a jump" % [places, with_places])
 
-	# 4. what space holds: all five kinds (v61: and ion storms), and more meteor streams further out
-	var near := [0, 0, 0, 0, 0, 0, 0]
-	var far := [0, 0, 0, 0, 0, 0, 0]
-	for y in range(-6, 7):
-		for x in range(-6, 7):
-			near[Sectors.kind_at(seed_value, Vector2i(x, y))] += 1
-			far[Sectors.kind_at(seed_value, Vector2i(x + 300, y + 300))] += 1
-	print("  around the start: %s; far away: %s (quiet, meteors, traders, stations, derelicts, -, ion storms)" % [near, far])
-	near.remove_at(Sectors.FLAGSHIP)         # (the flagship is placed by the goal, never rolled)
-	far.remove_at(Sectors.FLAGSHIP)
-	_expect(near.min() > 0 and far.min() > 0, "every kind of sector is found near the start and far from it")
-	_expect(far[Sectors.METEORS] > near[Sectors.METEORS], "meteor streams are commoner far from the start")
-	_expect(Sectors.kind_at(seed_value, Vector2i.ZERO) == Sectors.EMPTY, "the voyage begins in quiet space")
-
-	# 5. a ship that keeps jumping: the server builds the chart anew each time and remembers where it has been
+	# 4. a ship that keeps jumping, and the long jump out
 	var server := GameServer.new()
 	get_root().add_child(server)
 	var problem := server.start(26210, "ship01", 0)
@@ -92,6 +140,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.story.auto = false                             # (no comms calls: their outcomes may pay credits)
 	# a ship under way when the jump is set coasts straight on, whatever point it was making for
 	var from: Vector2 = server.ship.pos
 	server.ship.dest = from + Vector2(20, 0)
@@ -106,47 +155,50 @@ func _initialize() -> void:
 	for t in 4:
 		server._tick()
 	_expect(not server.ship.moving and server.ship.pos == server.sectors.entry[server.ship.sector], "it comes out of the jump standing still at its place of arrival")
-	server.been = {Sectors.key(server.sectors.cell[server.ship.sector]): true}    # the walk below starts from here
-	server.sectors.build(server.space_seed, server.sectors.cell[server.ship.sector], server.been)
 	server.ship.credits = Net.START_CREDITS
 	server.ship.store[Net.ITEM_FUEL] = 100                # the walk below is about the chart, not about fuel
-	server.story.auto = false                             # (no comms calls: their outcomes may pay credits)
-	for t in Net.DRIVE_REST_TICKS:
-		server._tick()
-	var start_cell: Vector2i = server.sectors.cell[server.ship.sector]
+	var s: Sectors = server.sectors
 	var credits := server.ship.credits
 	var fresh := 0
-	var path: Array[Vector2i] = [start_cell]
-	var ok := server.ship.sector == server.sectors.here and server.sectors.visited[server.ship.sector] == 1
-	var walked := {}                      # cell -> times this walk came there (to get out of dead ends)
-	for jump in 12:
-		# go on to a sector not yet visited if there is one, else to the one the walk came to least
+	var ok := true
+	var visited_before := s.visited.count(1)
+	# walk to an exit, by the shortest way, through systems not visited where one can
+	var exit: int = s.exits[0]
+	var guard := 0
+	while server.ship.sector != exit and guard < 30:
+		guard += 1
+		var d := s.distances(exit)
 		var next := -1
-		for n in server.sectors.neighbours(server.ship.sector):
-			if next < 0 or (server.sectors.visited[n] == 0 and server.sectors.visited[next] == 1) \
-					or (server.sectors.visited[n] == server.sectors.visited[next] \
-					and int(walked.get(server.sectors.cell[n], 0)) < int(walked.get(server.sectors.cell[next], 0))):
+		for n in s.neighbours(server.ship.sector):
+			if d[n] < d[server.ship.sector] and (next < 0 or s.visited[n] == 0):
 				next = n
-		var to: Vector2i = server.sectors.cell[next]
-		if server.sectors.visited[next] == 0:
+		if s.visited[next] == 0:
 			fresh += 1
+		server.ship.drive_ready = 0
 		server.navigation.start_jump(next, "Проверка")
 		for t in Net.JUMP_TICKS + 2:
 			server._tick()
-		path.append(to)
-		walked[to] = int(walked.get(to, 0)) + 1
-		ok = ok and server.ship.sector == server.sectors.here and server.sectors.cell[server.ship.sector] == to \
-			and server.sectors.visited[server.ship.sector] == 1 and server.ship.jump_to == Net.NO_SECTOR
-	_expect(ok, "after every jump the chart is centred on the sector the ship jumped to")
-	_expect(fresh >= 6 and server.ship.credits == credits + fresh * Net.EXPLORE_REWARD,
-		"%d of 12 jumps found a new sector, and only those were paid for" % fresh)
-	var remembered := true
-	for i in server.sectors.count:
-		if path.has(server.sectors.cell[i]) != (server.sectors.visited[i] == 1):
-			remembered = false
-	_expect(remembered and server.been.size() == fresh + 1, "the chart marks exactly the sectors the ship has been to (%d of them)" % server.been.size())
-	var far_now: int = server.sectors.far_from_start(server.ship.sector)
-	print("  the ship ended %d jumps from the start, at %s" % [far_now, server.sectors.cell[server.ship.sector]])
+		ok = ok and server.ship.sector == next and s.here == next and s.visited[next] == 1 and server.ship.jump_to == Net.NO_SECTOR
+	_expect(ok and server.ship.sector == exit, "the ship walks along lanes to an exit (%d jumps)" % guard)
+	_expect(fresh > 0 and server.ship.credits == credits + fresh * Net.EXPLORE_REWARD and s.visited.count(1) == visited_before + fresh,
+		"%d new systems found and paid for, and marked on the chart" % fresh)
+	var into: int = s.beyond[0]
+	var was_kind: int = s.ckind
+	var old_cells := s.cell.duplicate()
+	var fuel := server.ship.fuel()
+	server.ship.drive_ready = 0
+	server.navigation.start_jump(Sectors.EXIT_JUMP, "Проверка")
+	_expect(server.ship.jump_to == Sectors.EXIT_JUMP and server.ship.jump_tick - server.tick > Net.JUMP_TICKS, "the long jump charges longer than a plain one")
+	for t in Net.JUMP_TICKS * 2:
+		server._tick()
+	_expect(server.ship.fuel() == fuel - Sectors.EXIT_FUEL, "the long jump burns %d cans" % Sectors.EXIT_FUEL)
+	_expect(s.depth == 1 and s.ckind == into and s.road == PackedByteArray([was_kind]) and server.ship.sector == s.start,
+		"and the ship comes into the next cluster at its start, of the kind the exit showed (%s)" % Sectors.CLUSTER_NAMES[into])
+	var shared := false
+	for c: Vector2i in s.cell:
+		shared = shared or old_cells.has(c)
+	_expect(not shared, "the new cluster shares no system with the old one: there is no way back")
+	_expect(s.far_from_start(s.start) == Sectors.LEVEL_STEP, "and it is a step of danger harder")
 	server.stop()
 	server.free()
 

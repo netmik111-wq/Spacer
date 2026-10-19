@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v63 (version 0.56).
+Last updated: build v64 (version 0.57).
 
 Contents:
 
@@ -683,10 +683,9 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 
 ### Pirate flagship: the goal of the game (v57)
 
-- Every game has a **goal point**: the pirates' flagship waits in a sector **12 jumps** from the start
-  (3–5 rows north, the rest east; the place comes from the game's seed). The chart always shows that
-  sector in red with a ring; while it is out of the chart's window, a red arrow at the window's edge points
-  to it with «флагман: N прыжков». There is always a way there: routes run along the goal's row and column.
+- Every game has a **goal point**: the pirates' flagship waits in a system of the **4th cluster** (v64; before, 12
+  jumps from the start). Never at an exit, rarely in an ion storm. The chart always shows its system in red with a ring
+  once we are in its cluster; before that the sector console says how many clusters are left to it.
 - Arriving in its sector, the flagship comes out **5 s** later. Which of the two it is stays hidden until
   then (the author: "no courage to fight if you know who you will fight"); it is fixed per game by lot.
 - **No way out** (the author: "you win or you lose, no other exit"): while it fights, no jump can be set
@@ -710,12 +709,12 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   says the flagship is beaten; its reward is **200** credits and the wreck can be searched. The voyage
   goes on after that; the flagship does not come back.
 - The eventer has «Флагман: линкор» and «Флагман: абордажник» to call either one in for testing.
-- **It roams and grows** (v63, the author's R7: "FTL-style"). It sleeps at the goal until our ship first comes
-  within **2 jumps** of it. Then it wakes («флагман пиратов проснулся») and roams the sectors within 2 jumps of
-  the goal: every **90 s** it moves to a neighbouring sector along a route (half the time towards us, when we are in
-  its area). The chart shows it as a red triangle «ФЛАГМАН», the sector console and the comms console say where it
-  is. Meeting it is the fight: we arrive where it is (it comes out 5 s later), or it comes into our sector (a warning,
-  then **20 s** to jump away). Arriving at the goal while it is elsewhere, the chat says so.
+- **It roams and grows** (v63, the author's R7: "FTL-style"). It sleeps until our ship comes into its cluster (v64;
+  before, within 2 jumps). Then it wakes («флагман пиратов проснулся») and roams its cluster (never into a station's
+  system): every **90 s** it moves to a neighbouring system along a lane (half the time towards us). The chart shows it
+  as a red triangle «ФЛАГМАН», the sector console and the comms console say where it is. Meeting it is the fight: we
+  arrive where it is (it comes out 5 s later), or it comes into our system (a warning, then **20 s** to jump away).
+  Arriving at its lair while it is elsewhere, the chat says so. Its jammer keeps the cluster's exits shut (section 19).
 - From waking, its **growth clock** runs, even while we are far away (it is saved): every **3 min** (**2 min** on the
   hard mode) it takes a step, up to **4**: 1 its guns charge in **0.8** of the time; 2 its shield refills **1.5×**
   faster and each of its systems takes one more hit; 3 it carries **4** more boarders (the battleship gets a teleporter
@@ -1063,9 +1062,10 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 ## 18. Bridge and flight within a sector
 
 - The bridge has two consoles (power needed):
-  - **sector map** (green screen): neighbouring sectors and jumping. At the bottom of the map there is a legend:
+  - **sector map** (green screen): the cluster (section 19, "The chart") and jumping. At the bottom of the map there is a legend:
     colour — what is in the sector; white ring — the ship is here; dark dot inside — already visited;
-    small grey dot — unknown what's there; green line — route; white — the set jump;
+    «?» — unknown what's there; green line — a lane; white — the set jump; (v64) arrow — an exit; grey cloud — a
+    nebula; red diamond — a hunter;
   - **ship control** (panel with lights): clicking the sector map sets a course.
 - A sector is a 200×200 square; the ship moves in a straight line at 1.5 per second.
 - A sector has one main feature: a meteor shower (a circle of radius 45–60, with
@@ -1094,14 +1094,41 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 ## 19. Space, sectors and jumps
 
-- **Space is infinite.** Sectors are created as you approach; the same place is always
-  the same. The map shows a 7×5 neighbourhood around the ship.
-- Every sector has a route north or east (no dead ends) and, with probability
-  0.3, one more in each direction; no more than 4.
-- Sector kinds: calm space, meteor shower, trader, supply station,
-  derelict ship, (v61) ion storm, and (v57) the pirates' flagship, one per game (section 17, "Pirate flagship").
-  The share of meteor showers grows with distance from the start: from 20% to 45%. About a third of the
-  calm sectors hold an ion storm (roughly one sector in ten).
+- (v64, the author's cluster answers C1–C19) **Space is a road of clusters.** A cluster is **10–14 star
+  systems** (up to **16** with a crew of 5 or more players; bots don't count) joined by **lanes**. The ship comes in on
+  its left side and leaves by one of **two exits** on its right side. Everything follows from the game's seed: the
+  same game always has the same clusters.
+- **Jumps go only along lanes** and burn **1** canister. Any system of the current cluster can be visited again.
+- **The long jump**: from an exit system, the sector console has «Долгий прыжок» (**2** canisters, a charge 1.5×
+  longer). It takes the ship into the **next cluster**, at its start; a cluster left behind can never be entered
+  again. Each exit shows the **kind of cluster** it leads to (two exits never lead to the same kind).
+- **Kinds of cluster** (the first is always the frontier):
+  - **Приграничье** (frontier): a bit of everything.
+  - **Пиратские угодья** (pirate territory): more derelicts and ambushes, hunters come sooner (×0.7 of the time).
+  - **Торговые миры** (trade worlds): traders and stations, few ambushes, hunters come later (×1.4).
+  - **Штормовой пояс** (storm belt): a band of **3–5** ion storms across the cluster.
+  - **Мёртвая зона** (dead zone): many derelicts, wrecks and battlefields, one more place per system, **no supply
+    station**.
+- Every cluster has at least one **trader** and one **derelict**, and every one but the dead zone a **station**. In the
+  first cluster a trader is at most **2 jumps** from the start, and the start itself is calm with nothing in it.
+- **Danger grows with each cluster** (the author's C13): a cluster is **4 steps** of danger harder than the one before;
+  inside a cluster it grows by one step every two columns. Pirate ships and loot tiers go by that
+  step, as they went by the distance from the start before.
+- **The flagship's lair is the 4th cluster** (section 17). While the flagship lives, its **jammer holds the exits**:
+  «Глушилка флагмана пиратов держит выходы из скопления». After it is beaten the exits open and the road goes on,
+  harder, cluster after cluster.
+- **Nebulae** (the author's C14): a third of the clusters or so (half the pirate ones and dead zones) have a nebula over
+  **2–4** neighbouring systems. Inside one: the chart shows nothing but where we have been, the sensors find places only
+  within **15**, hunters lose our trail and wander, and the eventer sends pirates half as often.
+- **What the chart shows** (the author's C7): the systems we have been to, those within **1/2/3 lanes** (by the sensors'
+  tier), and the traders, stations and the flagship (they call out). The rest are «?» until we come near. A system
+  inside a nebula shows only once visited.
+- **Exploring pays**: the first visit to a system pays **15** credits.
+- **Old saves** (from before v64) go on at the start of a fresh first cluster; the reserve, the hull, the locker and the
+  gear are kept; side quests are dropped, the chapter is kept (a mission under way is set anew in the new space).
+
+- Kinds of system: calm space, meteor shower, trader, supply station, derelict ship, (v61) ion storm, and (v57) the
+  pirates' flagship (section 17).
 - **Ion storm** (v61): a wide area (55–75 across) around the sector's middle; a jump lands inside it. Inside:
   the reactor gives **half** its power (guns that no longer fit switch off); every **40–70 s** a surge puts one
   of our guns, the shield generator or an SMES out for **10 s** (never the engine or a console). A pirate
@@ -1119,6 +1146,47 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   **20** credits, or leaves **1** for nothing if asked (also what happens when nobody answers), or kind people give
   **2**. Three times in ten it is still the «Дрейфующее топливо» ("Drifting fuel") event: **2** canisters into the
   locker. So there's no dead end without fuel, but time passes.
+
+### Places inside a system (v64)
+
+- Besides its main thing, a system may hold **places** (none at the first cluster's start, a station or the
+  flagship): 0 (30%), 1 (40%), 2 (22%) or 3 (8%). The kind is shown before arrival only as the system's kind; the
+  places themselves are **hidden until the sensors come within 35/50/70** (by their tier; 15 inside a nebula). Then the
+  chat says so and they appear on the ship-control console. Fly onto one (within **6**) to take it, once.
+- **Обломки** (debris, 30%): 1–2 spare parts and 5–15 credits of scrap.
+- **Контейнер** (a dropped container, 25%): 2–3 things (patches, parts, medpatches, magazines, fuel, rations, shells,
+  rockets, a probe) and, 30% of the time, a crate of ship gear of the place's tier. **One in five is a pirate mine**:
+  **12** off the hull and a breach.
+- **Тела** (bodies, 20%): one thing from their pockets and a note; **25%** of the time one of them still breathes:
+  **+1 to the reserve**.
+- **Брошенный корабль** (an abandoned ship, 10%): it comes alongside like a derelict when the ship is within **10**, to
+  be searched (never in a derelict system: one alongside at a time).
+- **Поле боя** (a battlefield, 8%; twice as often in the dead zone): debris twice, bodies, gun parts, and 30% of the
+  time a damaged ship gun.
+- **Засада пиратов** (a pirate ambush, 7%; three times as often in pirate territory, rare in trade worlds): **seen from
+  anywhere in the system** and drawn with its circle. Coming within **25** brings its pirate ship out (a raid). It can
+  be flown around.
+
+### Pirate hunters (v64)
+
+- **Hunters** (the author's C15) are pirate ships the chart shows as red diamonds. The first comes **5 min** after the
+  ship enters a cluster, then one more every **4 min**; at most **3** at a time (**4** with a crew of 5 or more; **2** in
+  the flagship's cluster). These times are ×0.7 in pirate territory, ×1.4 in trade worlds, ×2 on the easy mode and ×0.75
+  on the hard one. Each comes in as far from us as it can.
+- Every **75 s** each hunter moves one lane closer to us. It **never enters a system with a supply station** (a safe
+  harbour). From inside a nebula the chart shows no hunters, and they wander instead of following.
+- When one comes into our system, the chat warns: **20 s** to jump away. When we jump into its system, it comes out
+  **6 s** later. Its ship is a pirate ship **3 steps** of danger harder than the place, with the hunter's temper, named
+  «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
+  our trail from where we left it.
+
+### The chart (v64)
+
+- The sector console has two views: **«Карта скопления»** (the cluster: systems, lanes, the set jump, exits with arrows
+  and the kind of cluster each leads to, «?» for unknown systems, nebulae as grey clouds, hunters, the flagship, quest
+  marks and SOS) and **«Карта пути»** (the road: the clusters passed, the one we are in, and how many to the flagship's).
+  Its text says the cluster's kind and number, fuel, whether this is an exit, the hunters and the time to the next.
+- The ship-control console shows the places found in the system (and the ambush's circle).
 
 ## 20. Eventer (GM)
 
@@ -1236,7 +1304,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 ## 23. Campaign: hull, end, saving
 
-- The **goal** (since v57) is to reach the pirates' flagship 12 jumps away and beat it (section 17); after
+- The **goal** (since v57) is to reach the pirates' flagship in the 4th cluster and beat it (section 17); after
   that the game is won and the voyage may go on. Until then, hold out. The top line (F1) shows the reserve and hull integrity.
 - **Modes** (v63, the author's R9): chosen for a new campaign in the menu («Режим новой кампании»), kept in the save.
   **Easy**: a hull worn to nothing does not end the voyage; it costs **50** of the hull's top strength instead, and
@@ -1333,7 +1401,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 ### Quests
 
 - Some answers give a **quest** (at most **3** besides the chapter's missions; no time limit). Its target is a
-  sector **2–4 jumps** away (a little further if none fits), marked on the chart with a yellow diamond «!»; the
+  system of **this cluster** **2–4 jumps** away (nearer or further if none fits; v64: a cluster left behind fails its side
+  quests), marked on the chart with a yellow diamond «!»; the
   comms console lists them with the jumps left and the reward.
   - **Cargo** («Груз для станции»): a crate (`Груз по заданию`) goes into the locker; arriving at the target station
     with it pays **30 + 8 per jump**. Without the crate in the locker the quest fails.
@@ -1342,13 +1411,13 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
     (or we jump away from it) the quest is lost.
   - **Black box** («Чёрный ящик»): in a derelict sector; the derelict there has the box (`Чёрный ящик`) lying aboard.
     Put it into the supply locker: paid **30 + 8 per jump**.
-- **The chapter's missions** (the author's R6): arriving **3–6 jumps** from the start, the fleet calls: «Пропавший
+- **The chapter's missions** (the author's R6): arriving at danger step **3–11** (v64: from the end of the first cluster through the third), the fleet calls: «Пропавший
   конвой» (find the convoy's wreck in a derelict sector and bring its log, a black box, to the locker; **60** credits
-  and a crate of better gear). That opens «Коды флагмана»: a pirate courier (a gunship) waits in a sector 2–4 jumps
-  away, towards the goal; beat it for **80** credits and the **flagship's codes**: in its fight all its rooms show at
+  and a crate of better gear). That opens «Коды флагмана»: a pirate courier (a gunship) waits in a system 2–4 jumps
+  away, towards the cluster's exits (leaving the cluster sets it anew in the next one); beat it for **80** credits and the **flagship's codes**: in its fight all its rooms show at
   once, and its growth goes **one step back**. Turned down, the first mission is offered again 3 jumps later; a
   courier that gets away is found again in another sector.
-- **SOS** (the author's R5): about **15%** of calm sectors send an SOS, marked «SOS» on the chart. Arriving there brings
+- **SOS** (the author's R5): about **15%** of calm systems send an SOS, marked «SOS» on the chart. Arriving there brings
   its call: help (**40%** survivors: 2 to the reserve and 3 rations; **30%** salvage: 3 parts and 15 credits; **30%** a
   pirate trap), the guard's blue answer (no trap: survivors, or the pirates reported for 25 credits), or leave.
 
@@ -1389,3 +1458,5 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 - «Вызов на пульт связи» (any for this sector) and a list of every call by name; «Флагман: проснуться и +1 шаг роста»;
   «Гидропоника: всё созрело».
+- (v64) «Охотник входит в скопление», «Открыть все тайники системы», «В следующее скопление (верхний выход)» and
+  «(нижний выход)».

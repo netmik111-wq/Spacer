@@ -19,6 +19,7 @@ const Gunnery := preload("res://src/server/gunnery.gd")
 const Net := preload("res://src/shared/net.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 var pilot = null                     # (v55) our pilot at the controls, or null
 var mend := 10.0                     # seconds for our crew to put one broken device right (0 = nobody mends)
@@ -175,7 +176,12 @@ func _aim(g: Gunnery) -> int:
 
 
 func _sector_at(far: int) -> int:
-	## A sector that many jumps from the start, if the chart has one.
+	## A system at that step of danger (v64: in the cluster it lies in), if there is one.
+	var depth := far / Sectors.LEVEL_STEP
+	if server.sectors.depth != depth:
+		server.road.depth = depth
+		server.road.entry = Vector2i(6 * depth, 0)
+		server.road.build(server.road.entry)
 	for i in server.sectors.count:
 		if server.sectors.far_from_start(i) == far:
 			return i

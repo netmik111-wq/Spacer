@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 42
+const PROTOCOL := 43
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -434,6 +434,11 @@ const MARK_SOS := 0                 # a distress call comes from that sector
 const MARK_QUEST := 1               # a quest's target
 const S_GARDEN := 43                # to all: u8 count of trays, per tray u16 cell, u8 seed (ITEM_SEED + ...; 0 = empty),
                                     # u8 stage (GROW_*), u8 growth 0..100, u8 flags (GARDEN_*)
+const S_ROAD := 44                  # (v64) to all: u8 flags (1 = the ship is inside a nebula), u16 seconds to the next
+                                    # pirate hunter (65535 = none due), u8 count of hunters seen, per hunter u8 system,
+                                    # u8 1 if it is coming out at us; u8 count of systems, per system u8 1 if the chart
+                                    # shows what it holds; u8 count of places found in the ship's system, per place
+                                    # u8 kind (Sectors.P_*), u8 x, u8 y, u8 1 if taken
 const GROW_EMPTY := 0
 const GROW_GROWING := 1
 const GROW_RIPE := 2
@@ -560,6 +565,9 @@ const ADMIN_CREDITS_GIVEN := 100
 const ADMIN_TALE := 30              # (v63) the comms console takes the call of that event (Tales.ALL index; 255 = any that fits)
 const ADMIN_GROW := 31              # (v63) the flagship wakes in its area (if not yet) and takes one more step of growth
 const ADMIN_GARDEN := 32            # (v63) every tray ripe now
+const ADMIN_HUNTER := 33            # (v64) a pirate hunter comes into the cluster now
+const ADMIN_CLUSTER := 34           # (v64) the ship is put into the next cluster by the exit given as the argument (0, 1)
+const ADMIN_REVEAL := 35            # (v64) every place in the ship's system found by the sensors
 
 const NO_SECTOR := 255
 const JUMP_TICKS := 160             # a jump takes 8 s to charge

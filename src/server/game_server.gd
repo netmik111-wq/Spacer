@@ -37,6 +37,7 @@ extends Node
 ##   outside      (v61) bots going out through an airlock in suits to mend the hull
 ##   robots       (v62) our security robots: set down from their crates, they guard where they stand
 ##   assault      (v62) boarders teleported across by ordinary pirates, and drone ships' assault drones
+##   road         (v64) the road of clusters, the places inside a system, the pirate hunters
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -77,6 +78,7 @@ const EnemyCrew := preload("res://src/server/enemy_crew.gd")
 const Drone := preload("res://src/server/drone.gd")
 const Stations := preload("res://src/server/stations.gd")
 const Flagship := preload("res://src/server/flagship.gd")
+const Road := preload("res://src/server/road.gd")
 const Workshop := preload("res://src/server/workshop.gd")
 const Outfit := preload("res://src/server/outfit.gd")
 const Mounts := preload("res://src/server/mounts.gd")
@@ -175,6 +177,7 @@ var robots := Robots.new()             # (v62) our security robots
 var assault := Assault.new()           # (v62) teleported boarders and assault drones
 var story := Story.new()               # (v63) the comms console's calls, quests, SOS sectors, missions
 var garden := Garden.new()             # (v63) food and the hydroponic trays
+var road := Road.new()                 # (v64) the road of clusters, places inside a system, pirate hunters
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
@@ -256,7 +259,8 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	saved_crew.clear()
 	space_seed = rng.randi()
 	been = {Sectors.key(Vector2i.ZERO): true}
-	sectors.build(space_seed, Vector2i.ZERO, been)
+	road.setup(self)
+	road.build(Vector2i.ZERO)
 	ship.sector = sectors.here
 	ship.pos = sectors.entry[ship.sector]
 	ship.dest = ship.pos
@@ -646,6 +650,7 @@ func _tick() -> void:
 	systems.update_doors()
 	navigation.update_jump()
 	navigation.update()
+	road.tick()
 	hazards.tick()
 	outside.tick()
 	derelict.update()
