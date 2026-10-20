@@ -100,6 +100,7 @@ var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _hand_shown := -1
 var _hand_label: Label               # what is in the hand, over the slots
+var _hurt_label: Label               # (v70) our injuries, over that
 var _jump_label: Label
 var _flash: ColorRect
 var _alert_label: Label              # (v68) the alert level, over the screen while it is not green
@@ -254,6 +255,14 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_hand_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_hand_label.offset_right = _slots_view.offset_right
 	_hand_label.offset_bottom = _slots_view.offset_top - 6
+	_hurt_label = _text(root, 14)
+	_hurt_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	_hurt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_hurt_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_hurt_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hurt_label.offset_right = _slots_view.offset_right
+	_hurt_label.offset_bottom = _hand_label.offset_bottom - 22
+	_hurt_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.4))
 
 	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
 	_tank_bar = ColorRect.new()
@@ -1081,10 +1090,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+const CONSOLE_KINDS := [3, 4, 17, 20, 21, 28, 30]   # (v70) use_target kinds that are consoles (a concussion keeps one from them)
+const DAZED := "Контузия: в глазах двоится, с пультом не разобраться. Пройдёт сама; быстрее с аптечкой или в автодоке под присмотром."
+
+
 func _use_screen(target: int) -> bool:
 	## What the "use" key (or a click) opens: a bridge console, the locker, the
 	## pockets of somebody lying, an intercom to speak into. False = none of those.
-	if target == 13:
+	if client.concussed and CONSOLE_KINDS.has(target):
+		_on_notice(DAZED)                                # (v70) the server would refuse it too (Systems.at_console)
+	elif target == 13:
 		client.send_search(client.lying_near())          # the screen opens when the server agrees
 	elif target == 19:
 		_open_chat(Net.CHAT_INTERCOM_MARK + " ")
@@ -1121,8 +1136,10 @@ func _fires_at(c: Vector2i) -> bool:
 	## Is a click on this cell meant for the thing in the hand rather than for
 	## what lies there: a weapon or something to heal with, aimed at somebody (or at ourselves)?
 	var item := client.in_hand()
-	if not (Items.is_weapon(item) or Items.uses(item) >= 0 or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
+	if not Items.aimed(item):
 		return false
+	if Items.INFO.has(item) and Items.INFO[item].has("throw"):
+		return true                          # (v70) a flashbang is thrown wherever the click is
 	if c == Vector2i(client.pred.x, client.pred.y):
 		return true
 	for e: GameClient.Ent in client.ents.values():
@@ -1216,6 +1233,9 @@ func _process(delta: float) -> void:
 	var no_power := not client.power_at(client.use_cell())
 	var why := "двигатель не работает, СМЭС пуст" if client.engine_down() else "двигатель заглох, СМЭС пуст"
 	var no_part := "" if client.parts > 0 else " (без запчасти втрое дольше)"
+	if client.concussed and CONSOLE_KINDS.has(target):
+		_hint.text = DAZED
+		target = -1
 	if target == 1:
 		if client.patches <= 0:
 			_hint.text = "Нечем заделать пробоину: заплатки в шкафу снабжения на нижней палубе"
@@ -1324,6 +1344,15 @@ func _process(delta: float) -> void:
 		_hint.text = "Голокарта обесточена: %s" % why if no_power else "E: голокарта корабля (воздух, пробоины, поломки)"
 	elif target == 19:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
+	elif target == 41:
+		_hint.text = "Обезвреживаю бомбу…" if (_use_held and client.work > 0) else \
+			"Пиратская бомба! Держите E, чтобы обезвредить (%d с, инженеру вдвое быстрее)" % 5
+	elif target == 42:
+		var welded := client.doors.welded[client.map.door_of[client.use_cell()]] == 1
+		_hint.text = ("Срезаю шов…" if welded else "Завариваю дверь…") if (_use_held and client.work > 0) else \
+			("Дверь заварена. Держите E, чтобы срезать шов" if welded else "Держите E, чтобы заварить дверь: её не откроет никто, пираты прорежут за 12 с")
+	elif target == 43:
+		_hint.text = "Дверь заварена: не открывается ни для кого. Срезать шов можно сварочным аппаратом"
 	elif target == 40:
 		_hint.text = "Чиню замок…" if (_use_held and client.work > 0) else "Замок взломан: дверь открыта для всех. Держите E, чтобы починить (с запчастью быстрее)"
 	elif target == 18:
@@ -1443,13 +1472,24 @@ func _process(delta: float) -> void:
 			var info: Dictionary = Items.INFO.get(item, {})
 			var what := Items.name_of(item).to_lower()
 			if rounds > 0:
-				what += " (%d из %d)" % [rounds, Net.PISTOL_ROUNDS]
+				what += " (%d из %d)" % [rounds, Items.full_rounds(item)]
 				extra = "    Щелчок: выстрел"
 			elif rounds == 0:
 				what += " (пуст)"
-				extra = "    Щелчок: перезарядить" if client.carried(Net.ITEM_MAG) > 0 else "    Нужен магазин"
+				extra = "    Щелчок: перезарядить" if client.carried(Items.ammo_of(item)) > 0 else \
+					("    Нужен магазин" if Items.ammo_of(item) == Net.ITEM_MAG else "    Нужны патроны")
+			elif info.has("stun"):
+				extra = "    Щелчок рядом: разряд (собьёт с ног)"
 			elif info.has("blow"):
 				extra = "    Щелчок рядом: удар"
+			elif info.has("throw"):
+				extra = "    Щелчок: бросить (до %d клеток)" % Items.THROW_RANGE
+			elif item == Net.ITEM_CUFFS:
+				extra = "    Щелчок по лежащему пирату рядом: заковать"
+			elif item == Net.ITEM_SPLINT:
+				extra = "    Щелчок по соседу или Z на себя: вправить перелом"
+			elif item == Net.ITEM_WELDER:
+				extra = "    Держите E у закрытой двери: заварить или срезать шов"
 			elif info.has("heal"):
 				extra = "    Щелчок по соседу или Z на себя: заклеить раны"
 			elif Items.worn_as(item) >= 0:
@@ -1461,8 +1501,20 @@ func _process(delta: float) -> void:
 				extra = "    Щелчок по соседу или Z на себя: лечить, 3 с не двигаясь"
 			_hand_label.text = Options.keyed("В руке: %s%s    G: положить" % [what, extra])
 		# a weapon in the hand shows a sight instead of the arrow
-		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.is_weapon(item) or Items.INFO.get(item, {}).has("heal") or Items.uses(item) > 0 else Input.CURSOR_ARROW)
+		Input.set_default_cursor_shape(Input.CURSOR_CROSS if Items.aimed(item) else Input.CURSOR_ARROW)
 	_hand_label.visible = alive
+	# (v70) injuries
+	var hurt := PackedStringArray()
+	if client.bleeding:
+		hurt.append("кровотечение")
+	if client.leg_broken:
+		hurt.append("перелом ноги (идёте медленно)")
+	if client.arm_broken:
+		hurt.append("перелом руки (руки медленнее, стрельба неточная)")
+	if client.concussed:
+		hurt.append("контузия (пульты не даются)")
+	_hurt_label.text = ("Травмы: " + ", ".join(hurt)) if not hurt.is_empty() else ""
+	_hurt_label.visible = alive and not hurt.is_empty()
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)
@@ -1470,6 +1522,8 @@ func _process(delta: float) -> void:
 
 	# fading out: the screen darkens below 40 health
 	var dark := clampf((40.0 - client.health) / 40.0, 0.0, 1.0) * 0.5
+	if client.concussed and client.my_cond == Net.COND_OK:
+		dark = maxf(dark, 0.22 + 0.12 * sin(_life * 2.2))   # (v70) a concussion: the world swims
 	if client.my_cond == Net.COND_CRIT:
 		dark = 0.72
 		_fate.text = "Вы без сознания"

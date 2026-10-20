@@ -31,6 +31,17 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(9 + (k % 4) * 1.6, 9 + (k / 4) * 2.2) * u, Vector2(1, 1.4) * u),
 				Color(0.95, 0.75, 0.25) if k < n else Color(0.25, 0.25, 0.3))
 		return
+	if item >= Net.ITEM_SHOTGUN and item <= Net.ITEM_SHOTGUN + Net.SHOTGUN_ROUNDS:
+		# (v70) a shotgun: a long double barrel, a wooden stock, a pip for every shell in it
+		canvas.draw_rect(Rect2(at + Vector2(1, 6) * u, Vector2(15, 3) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(6, 6.5) * u, Vector2(10, 1) * u), Color(0.45, 0.47, 0.52))
+		canvas.draw_rect(Rect2(at + Vector2(6, 7.6) * u, Vector2(10, 0.8) * u), Color(0.35, 0.37, 0.42))
+		canvas.draw_rect(Rect2(at + Vector2(1, 7) * u, Vector2(6, 4.5) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(1.5, 7.5) * u, Vector2(5, 3.5) * u), Color(0.5, 0.3, 0.15))
+		var n := item - Net.ITEM_SHOTGUN
+		for k in Net.SHOTGUN_ROUNDS:
+			canvas.draw_rect(Rect2(at + Vector2(8 + k * 2, 11) * u, Vector2(1.3, 2) * u), Color(0.85, 0.2, 0.15) if k < n else Color(0.25, 0.25, 0.3))
+		return
 	if item > Net.ITEM_MEDKIT and item <= Net.ITEM_MEDKIT + Net.MEDKIT_USES:
 		# a first-aid kit: a white box with a red cross, and a pip for every use left
 		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.15, 0.15, 0.18))
@@ -222,6 +233,54 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			for k in 3:
 				canvas.draw_rect(Rect2(at + Vector2(7, 9 + k * 1.6) * u, Vector2(3, 0.7) * u), Color(0.12, 0.13, 0.13))
 			canvas.draw_rect(Rect2(at + Vector2(7, 6.8) * u, Vector2(1.2, 1.2) * u), Color(0.35, 0.95, 0.4))
+		Net.ITEM_SHELLS:
+			# (v70) a box of shotgun shells, two red ones on top
+			canvas.draw_rect(Rect2(at + Vector2(4, 7) * u, Vector2(9, 7) * u), Color(0.12, 0.1, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(5, 8) * u, Vector2(7, 5) * u), Color(0.75, 0.6, 0.3))
+			for k in 2:
+				canvas.draw_rect(Rect2(at + Vector2(6 + k * 3, 3.5) * u, Vector2(2, 4) * u), Color(0.85, 0.2, 0.15))
+				canvas.draw_rect(Rect2(at + Vector2(6 + k * 3, 6.5) * u, Vector2(2, 1) * u), Color(0.9, 0.75, 0.3))
+		Net.ITEM_STUNNER:
+			# (v70) a stun baton: a dark rod with a blue tip
+			canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(14, 4) * u, Color(0.08, 0.08, 0.1), 3.2 * u)
+			canvas.draw_line(at + Vector2(3, 13) * u, at + Vector2(14, 4) * u, Color(0.22, 0.22, 0.3), 1.8 * u)
+			canvas.draw_line(at + Vector2(11.5, 6) * u, at + Vector2(14, 4) * u, Color(0.4, 0.75, 1.0), 2.2 * u)
+			canvas.draw_circle(at + Vector2(14, 4) * u, 1.2 * u, Color(0.8, 0.95, 1.0))
+		Net.ITEM_FLASHBANG:
+			# (v70) a flashbang: a can with a pin ring
+			canvas.draw_rect(Rect2(at + Vector2(5.5, 5) * u, Vector2(6, 9) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(6.5, 6) * u, Vector2(4, 7) * u), Color(0.45, 0.5, 0.4))
+			canvas.draw_rect(Rect2(at + Vector2(6.5, 8.5) * u, Vector2(4, 1.2) * u), Color(0.9, 0.85, 0.3))
+			canvas.draw_rect(Rect2(at + Vector2(7, 3) * u, Vector2(3, 2) * u), Color(0.55, 0.57, 0.62))
+			canvas.draw_arc(at + Vector2(11.5, 3.5) * u, 1.6 * u, 0.0, TAU, 12, Color(0.75, 0.75, 0.8), 0.8 * u)
+		Net.ITEM_WELDER:
+			# (v70) a welder: a torch with a hose and a bright flame
+			canvas.draw_rect(Rect2(at + Vector2(3, 9) * u, Vector2(8, 4) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(4, 10) * u, Vector2(6, 2) * u), Color(0.85, 0.6, 0.15))
+			canvas.draw_line(at + Vector2(10, 10) * u, at + Vector2(13.5, 6) * u, Color(0.4, 0.42, 0.48), 1.6 * u)
+			canvas.draw_circle(at + Vector2(14.5, 4.8) * u, 1.4 * u, Color(0.55, 0.85, 1.0))
+			canvas.draw_line(at + Vector2(3, 12) * u, at + Vector2(1.5, 15) * u, Color(0.15, 0.15, 0.18), 1.2 * u)
+		Net.ITEM_CUFFS:
+			# (v70) handcuffs: two rings and a chain
+			canvas.draw_arc(at + Vector2(5.5, 9) * u, 3.0 * u, 0.0, TAU, 16, Color(0.1, 0.1, 0.12), 2.0 * u)
+			canvas.draw_arc(at + Vector2(5.5, 9) * u, 3.0 * u, 0.0, TAU, 16, Color(0.7, 0.72, 0.78), 1.0 * u)
+			canvas.draw_arc(at + Vector2(11.5, 9) * u, 3.0 * u, 0.0, TAU, 16, Color(0.1, 0.1, 0.12), 2.0 * u)
+			canvas.draw_arc(at + Vector2(11.5, 9) * u, 3.0 * u, 0.0, TAU, 16, Color(0.7, 0.72, 0.78), 1.0 * u)
+		Net.ITEM_SPLINT:
+			# (v70) a splint: two slats bound with white straps
+			canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 3) * u), Color(0.15, 0.12, 0.1))
+			canvas.draw_rect(Rect2(at + Vector2(3, 10) * u, Vector2(11, 3) * u), Color(0.15, 0.12, 0.1))
+			canvas.draw_rect(Rect2(at + Vector2(3.5, 5.5) * u, Vector2(10, 2) * u), Color(0.7, 0.55, 0.32))
+			canvas.draw_rect(Rect2(at + Vector2(3.5, 10.5) * u, Vector2(10, 2) * u), Color(0.7, 0.55, 0.32))
+			for x in [5, 11]:
+				canvas.draw_rect(Rect2(at + Vector2(x, 4.5) * u, Vector2(1.5, 9) * u), Color(0.92, 0.92, 0.9))
+		Net.ITEM_BOMB:
+			# (v70) a pirates' bomb: a dark box, a red lamp
+			canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.08, 0.08, 0.1))
+			canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(9, 6) * u), Color(0.32, 0.3, 0.26))
+			canvas.draw_rect(Rect2(at + Vector2(5, 7) * u, Vector2(4, 2) * u), Color(0.1, 0.25, 0.1))
+			canvas.draw_circle(at + Vector2(11, 8) * u, 1.3 * u, Color(1.0, 0.2, 0.15))
+			canvas.draw_line(at + Vector2(6, 5) * u, at + Vector2(8, 2.5) * u, Color(0.85, 0.2, 0.15), 0.8 * u)
 		Net.ITEM_MAG:
 			# a magazine with a round showing at the top
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.12, 0.12, 0.15))

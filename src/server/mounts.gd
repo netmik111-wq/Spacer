@@ -84,7 +84,7 @@ func pace(i: int) -> float:
 	var fed := LOADED_PACE if i >= 0 and i < loaded.size() and loaded[i] > 0 else 1.0   # (v68) loaded by hand
 	if p == null:
 		return server.outfit.loader() * fed  # (v62) the auto-loader stands in for nobody
-	return (1.0 + MOUNT_PACE + MOUNT_SKILL_PACE * p.skill(Net.SKILL_GUNS)) * fed
+	return (1.0 + (MOUNT_PACE + MOUNT_SKILL_PACE * p.skill(Net.SKILL_GUNS)) * server.stations.share(p)) * fed   # (v70) a bot, half
 
 
 func ammo_of(i: int) -> int:

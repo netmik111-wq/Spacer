@@ -56,12 +56,9 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		restore_character(p, server.saved_crew[p.name])   # back from the last evening, as they were
 		server.saved_crew.erase(p.name)
 	else:
-		var job: int = pkt[4 + n] if pkt.size() > 4 + n else Net.JOB_CREWMAN
-		if job >= Net.JOBS:
-			job = Net.JOB_CREWMAN
-		if job == Net.JOB_CAPTAIN and _has_captain():
-			job = Net.JOB_CREWMAN                # one captain to a ship
-			demoted = true
+		var wanted_job: int = pkt[4 + n] if pkt.size() > 4 + n else Net.JOB_PILOT
+		var job := free_job(wanted_job, p)
+		demoted = wanted_job == Net.JOB_CAPTAIN and job != Net.JOB_CAPTAIN
 		p.take_job(job)
 		if not back_from_reserve:
 			_kit_out(p)                      # (somebody from the reserve comes with empty hands)
@@ -118,10 +115,35 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	announce_join(p, peer)
 	_bot_makes_way(p)
 	if demoted:
-		server.chat.tell(p, "Капитан на борту уже есть: вы поднимаетесь на борт матросом.")
+		server.chat.tell(p, "Капитан на борту уже есть: вы поднимаетесь на борт как %s." % Net.JOB_NAMES[p.job].to_lower())
 	if back_from_reserve:
 		server.chat.say("%s возвращается на борт из резерва экипажа. В резерве осталось: %d." % [p.name, server.reserve])
 	server.log_line.emit("%s подключился (игроков: %d)." % [p.name, server.player_count()])
+
+
+const FREE_ORDER: Array[int] = [Net.JOB_PILOT, Net.JOB_ENGINEER, Net.JOB_MEDIC, Net.JOB_GUARD]
+
+
+func free_job(wanted: int, newcomer: Player = null) -> int:
+	## (v70, the author's J1: the sailor is gone, "a new player takes a free real job")
+	## The job asked for, if no other person aboard holds it; else the first free one
+	## of FREE_ORDER; with every job held, the one asked for (two share it). One captain.
+	if wanted < Net.JOB_CAPTAIN or wanted >= Net.JOBS:
+		wanted = Net.JOB_PILOT                # (the sailor of old, or nonsense)
+	var held := {}
+	for q: Player in server.players:
+		if q != null and q != newcomer and not q.corpse and not q.bot and not q.pirate and not q.ally:
+			held[q.job] = true
+	for c: Dictionary in server.saved_crew.values():
+		held[int(c["job"])] = true           # (those of the last evening keep their posts)
+	if wanted == Net.JOB_CAPTAIN and not held.has(Net.JOB_CAPTAIN):
+		return Net.JOB_CAPTAIN
+	if not held.has(wanted) and wanted != Net.JOB_CAPTAIN:
+		return wanted
+	for j: int in FREE_ORDER:
+		if not held.has(j):
+			return j
+	return wanted if wanted != Net.JOB_CAPTAIN else Net.JOB_PILOT
 
 
 func _has_captain() -> bool:
@@ -182,7 +204,8 @@ func _kit_out(p: Player) -> void:
 		Net.JOB_MEDIC:
 			p.add(Net.ITEM_MEDPATCH)
 		Net.JOB_GUARD:
-			p.add(Net.ITEM_BATON)
+			p.add(Net.ITEM_STUNNER)          # (v70) the guard takes prisoners: a stun baton and cuffs
+			p.add(Net.ITEM_CUFFS)
 		Net.JOB_CAPTAIN, Net.JOB_PILOT:
 			p.add(Net.ITEM_FLASHLIGHT)
 
@@ -294,8 +317,8 @@ func roster_entry(p: Player) -> PackedByteArray:
 	e.resize(6)
 	e.encode_u16(0, p.slot)
 	e.encode_u8(2, p.colour)
-	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PIRATE if p.pirate else (Net.KIND_ROBOT if p.ally else
-		(Net.KIND_BOT if p.bot else Net.KIND_PLAYER))))
+	e.encode_u8(3, Net.KIND_CORPSE if p.corpse else (Net.KIND_PRISONER if p.prisoner else (Net.KIND_PIRATE if p.pirate else (Net.KIND_ROBOT if p.ally else
+		(Net.KIND_BOT if p.bot else Net.KIND_PLAYER)))))
 	e.encode_u8(4, p.job)
 	e.encode_u8(5, name_bytes.size())
 	e.append_array(name_bytes)
@@ -334,7 +357,7 @@ func _danger_at(s: Vector2i) -> float:
 	var room: int = map.room_of[s.y * map.width + s.x]
 	var risk := 0.0
 	for q: Player in server.players:
-		if q == null or not q.pirate or q.corpse or q.cond == Net.COND_DEAD:
+		if q == null or not q.pirate or q.prisoner or q.corpse or q.cond == Net.COND_DEAD:
 			continue
 		var d := maxi(absi(q.st.x - s.x), absi(q.st.y - s.y))
 		if d <= SPAWN_SAFE or (room >= 0 and map.room_of[q.st.y * map.width + q.st.x] == room):
@@ -500,12 +523,22 @@ func update_vitals(p: Player) -> void:
 		else:
 			p.supply = false
 	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds + server.garden.hunger_of(p))
+	server.combat.bleed(p)                   # (v70) bleeding opens the wounds a little every tick
+	if p.concussed > 0 and server.tick >= p.concussed:
+		p.concussed = 0
+		if p.peer != null:
+			server.chat.tell(p, "Контузия прошла: в глазах больше не двоится.")
 	var cond := Vitals.condition(p.health, p.cond)
+	var stunned := server.tick < p.stun_until
+	if cond == Net.COND_OK and (stunned or p.prisoner):
+		cond = Net.COND_CRIT                 # (v70) knocked down, or lying bound
 	if cond == p.cond:
 		return
 	if p.cond == Net.COND_OK:
 		server.chat.sound(Net.SOUND_THUD, p.st.x, p.st.y, p.slot)
-	if cond == Net.COND_CRIT:
+	if cond == Net.COND_CRIT and stunned and p.health > 0.0:
+		server.chat.say("%s падает, оглушённый." % p.name)
+	elif cond == Net.COND_CRIT:
 		server.chat.say("%s теряет сознание." % p.name)
 	elif cond == Net.COND_DEAD:
 		p.died_tick = server.tick
@@ -520,7 +553,8 @@ func update_vitals(p: Player) -> void:
 			becomes_corpse(p)
 			return
 	elif p.cond == Net.COND_CRIT:
-		server.chat.say("%s приходит в себя." % p.name)
+		server.chat.say("%s %s." % [p.name, "поднимается на ноги" if p.health >= Vitals.WAKE_AT and p.stun_until > 0 else "приходит в себя"])
+		p.stun_until = 0
 	p.cond = cond
 	p.st.down = cond != Net.COND_OK
 	p.st.dir = Net.DIR_NONE
@@ -542,7 +576,9 @@ const ROBOT_PART := 0.5              # (v62) a broken robot leaves a spare part 
 
 func respawn(p: Player) -> void:
 	## A dead character comes back as a fresh crew member at a spawn point; the body stays.
-	_leave_body(p)
+	if not p.taken:
+		_leave_body(p)
+	p.taken = false                          # (v70) one the pirates dragged off leaves no body
 	p.supply = false
 	p.using = false
 	p.work = 0
@@ -565,6 +601,8 @@ func respawn(p: Player) -> void:
 	p.health = Net.HEALTH_FULL
 	p.wounds = 0.0
 	p.treating = -1
+	p.heal_injuries()                        # (v70)
+	p.stun_until = 0
 	p.cond = Net.COND_OK
 	p.inputs.clear()
 	p.self_dirty = true

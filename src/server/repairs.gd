@@ -28,6 +28,12 @@ func update(p: Player) -> void:
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
 		return
+	var bomb := server.pirates.bomb_by(p)
+	if bomb >= 0:
+		# (v70) a pirates' bomb in front or underfoot: held E disarms it (an engineer is quicker)
+		if _work_done(p, bomb, server.pirates.defuse_ticks(p)):
+			server.pirates.defuse(p, bomb)
+		return
 	var cell := server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 	var door := server.map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
@@ -77,6 +83,10 @@ func update(p: Player) -> void:
 		# (v63) a hydroponic tray: planting, tending, harvesting, clearing (see Garden)
 		if _work_done(p, cell, server.garden.ticks(cell)):
 			server.garden.finish(p, cell)
+	elif door >= 0 and p.in_hand() == Net.ITEM_WELDER and server.doors.is_shut(door):
+		# (v70, the author's W1) a welder seals a shut door, or cuts a welded one open
+		if _work_done(p, cell, WELD_TICKS):
+			weld(p, door)
 	elif door >= 0 and server.doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
@@ -125,6 +135,18 @@ func update(p: Player) -> void:
 		p.work = 0
 
 
+const WELD_TICKS := 80               # (v70) 4 s to weld a door shut, or to cut the weld
+
+
+func weld(p: Player, door: int) -> void:
+	var doors := server.doors
+	doors.welded[door] = 1 - doors.welded[door]
+	server.chat.sound(Net.SOUND_ZAP, p.st.x, p.st.y, p.slot)
+	server.replication.sight_changed()
+	server.chat.say("%s %s." % [p.name, "заваривает дверь: теперь её не откроет никто, пока не срежут шов" if doors.welded[door] == 1
+		else "срезает шов: дверь снова открывается"])
+
+
 func can_pour(p: Player, cell: int) -> bool:
 	## (v67) A can of fuel in hand, facing a working engine, with room in the tank for it?
 	return p.in_hand() == Net.ITEM_FUEL and server.map.engine.has(cell) and not server.ship.broken.has(cell) \
@@ -156,6 +178,8 @@ func usable_ahead(p: Player) -> bool:
 	## (or that it opens a screen for)? The same things, in the same order, as
 	## GameClient.use_target finds before somebody lying, things on the floor and ladders.
 	var map := server.map
+	if server.pirates.bomb_by(p) >= 0:
+		return true                          # (v70) a pirates' bomb to disarm
 	var cell := map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 	if cell < 0:
 		return false
@@ -172,6 +196,8 @@ func usable_ahead(p: Player) -> bool:
 			or map.comms.has(cell) or map.trays.has(cell) or map.cryo.has(cell):
 		return true
 	var door := map.door_of[cell]
+	if door >= 0 and p.in_hand() == Net.ITEM_WELDER and server.doors.is_shut(door):
+		return true                          # (v70) a door to weld, or to cut open
 	return door >= 0 and ((server.doors.is_shut(door) and server.doors.held_by_partner(door)) or server.doors.jammed[door] == 1
 		or server.doors.faulty[door] == 1 or server.doors.is_sealed(door) or server.doors.picked[door] == 1
 		or server.doors.barred(door, map.door_access[door], p.st.access) and not map.leaving(p.st.x, p.st.y, door))

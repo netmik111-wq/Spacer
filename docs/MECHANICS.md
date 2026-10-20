@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v69 (version 0.62).
+Last updated: build v70 (version 0.63).
 
 Contents:
 
@@ -35,6 +35,7 @@ Contents:
 25. [The road: comms console, quests, food, hydroponics, modes (v63)](#25-the-road-comms-console-quests-food-hydroponics-modes-v63)
 26. [Work and money on the road (v67)](#26-work-and-money-on-the-road-v67)
 27. [Fights for the whole crew (v68)](#27-fights-for-the-whole-crew-v68)
+28. [People over bots (v70)](#28-people-over-bots-v70)
 
 ---
 
@@ -1342,15 +1343,16 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 | Job | Access | Own skill | Extra starting gear |
 |---|---|---|---|
-| Sailor | nowhere | — | — |
 | Captain | everywhere (one per ship) | — | flashlight |
 | Pilot | bridge | piloting (v60) | flashlight |
 | Engineer | engine room, life support, gun compartments | repair | spare part |
 | Doctor | medbay | medicine | plaster |
-| Guard | armoury, gun compartments | shooting | baton |
+| Guard | armoury, gun compartments | shooting | stun baton, handcuffs (v70; a baton before) |
 
-- There is **one** captain per ship: if there already is one, the second applicant boards
-  as a sailor and gets a message about it. Last evening's captain keeps the
+- (v70) There are no sailors any more: a newcomer gets the job asked for if no other person aboard holds it, else
+  the first free one of pilot, engineer, doctor, guard; with every job held, the one asked for (two share it).
+- There is **one** captain per ship: if there already is one, the second applicant gets a free job
+  that way and a message about it. Last evening's captain keeps the
   place until they return.
 - Each member of the first crew arrives with a **radio**, a **patch** and a **spare part**, plus their
   job's item. Those who come from the reserve (by R or by rejoining after death) are dressed
@@ -1621,3 +1623,69 @@ seat has a job, not only the gunner's.
 - **The fight's details on the bridge only** (G3 B): who fired what, the shield taking it, beams, repairs, manoeuvres,
   the evade and the drone's reports reach only those standing in a bridge room. Warnings (hull hits, breaches, boarders,
   the alert) still reach everyone.
+
+## 28. People over bots (v70)
+
+The author's P, M, H, G, B and W answers (`/mnt/project-files/plans/every-part-plan.md`, questions page
+"Spacer v70: вопросы"): a person at a post is worth more than a bot, and every job has its own work.
+
+- **Bots at half** (P1): a bot at a post gives **half** of what a person gives there: the helm's dodge (15% + up to 10%
+  by skill), the engine post's 5%, the shield generator's 1.25× pace (a bot: 1.125×), a gunner's mount pace, the gun
+  console's aim bonus and the tending of an autodoc. Only a person can press the evade.
+- **Jobs** (J1): see section 21: the sailor is gone, a newcomer takes a free job.
+- **The autodoc** (M1): alone it heals only up to **50** health (it says so once). Somebody holding E at it tends it:
+  then it heals fully, **2×** faster, up to **3×** with the best medicine skill (a bot tending adds half of that), and after
+  **3 s** of tending it also mends the patient's injuries. A bot lying in an untended autodoc gets up at 50.
+  The body scanner lists injuries too.
+- **Injuries** (M2):
+  - **Bleeding**: a bullet starts it **25%** of the time (a pellet 10%). It costs **0.5** health a second (as a wound)
+    and stops by itself after **90 s**. A patch, a kit or a tended autodoc stops it.
+  - **Broken bones**: a wound of **25+** at once breaks an arm or a leg **20%** of the time. A broken leg makes every step
+    slow (as hauling); a broken arm makes the hands **2×** slower and a shot up to **0.8** cells off. A **splint** (click
+    on oneself or a neighbour, or Z; **4 s** standing still) or a kit sets it.
+  - **Concussion**: a blow gives one **15%** of the time, a stun baton **30%**, a flashbang **30%**, a bomb's blast **50%**.
+    For **90 s** the screen swims and a person cannot work a console (a kit or a tended autodoc ends it sooner).
+  - The HUD shows one's injuries above the hand line. Coming back from the reserve heals them all.
+- **The pilot outside fights** (H1, H2):
+  - In a **meteor stream** each meteor is seen **2.5 s** ahead (a beep on the bridge, a line at the helm). The pilot at the
+    controls presses the evade (space or the button): **60%** to steer round it, +30% with the best skill, **10** from the
+    SMES. A bot at the controls does it by itself at half the chance; with nobody there it hits. A meteor volley's three
+    meteors come 3.5 s apart, so each can be steered round.
+  - In an **ion storm** a pilot at the controls steers clear of each surge **40%** of the time (+20% with the best skill;
+    a bot half).
+- **Prisoners** (G1 to G3):
+  - A pirate who is down (out cold, or knocked down by a stun baton or a flashbang) is cuffed with a click of
+    **handcuffs**: what he fought with falls to the floor, he lies bound and nobody fights him.
+  - The **armoury is the brig**: anywhere else he slips the cuffs after **2 min**, grabs a pipe and fights again.
+  - A supply station or a trader takes every prisoner aboard for **40** credits each (the trade screen's «Сдать пленных»).
+  - Searched for the first time he **talks**: every hidden place of this system is marked on the chart, and to a guard
+    he also names the pirate hunters' sectors in this cluster.
+  - A pirate ship come to fight while we hold one calls the comms console after **6 s**: give him back and they leave;
+    ask a ransom (they may pay **30**) or refuse. Never the flagship, never a drone ship, and not while ours are aboard
+    their ship.
+- **Boarders' goals** (B1): about **half** of a boarding party come for something (at most one bomb and one kidnapper a
+  party). A pirate with a goal fights only those within **4** cells, or anybody for **8 s** after being hurt.
+  - **Wrecker**: goes to a machine (the engine while the escape rule allows it, the air plant, the shield generator, a
+    gun with a weapon on it; never a bridge console) and breaks it in **8 s**.
+  - **Robber**: **5 s** at the supply locker, takes **3** things into its pockets and walks back out the hole it came in by.
+    Killed on the way, its body holds them.
+  - **Bomber**: plants a bomb by a machine in **2 s**. The bomb beeps every **2 s** and goes off after **30 s**: a
+    flashbang's burst, a hole in the nearest hull within 3 cells, the nearest machine within 3 cells broken, **25**
+    to everyone within 3 cells. Hold E standing on it or facing it to disarm it: **5 s**, an engineer **2.5 s**. It cannot
+    be picked up.
+  - **Kidnapper**: hauls one of ours who is lying (within 14 cells, on its deck) to its hole and leaves with him: he is
+    lost, no body is left. A player comes back from the reserve as after a death; a bot after 15 s.
+- **Weapons** (B3, B2):
+  - **Shotgun** (45 cr.): **5 pellets** in a fan, **10** each, reach **7** cells, **4** shells (a box of 4 shells: 6 cr.).
+    Up close all pellets hit.
+  - **Stun baton** (the guard's): a blow of **5** that knocks down for **5 s** (a machine 1 s).
+  - **Flashbang**: click where to throw (up to **6** cells, it stops short of walls). **1 s** later everybody within **4**
+    cells who sees it falls for **3 s**, ours too.
+  - **Welder**: hold E at a shut door for **4 s**: it is welded and opens for nobody, ours neither; bots go round it.
+    Pirates cut through it in **12 s** (it is then wrecked open, jammed, until mended). Hold E again to cut the weld.
+  - The locker starts with 1 shotgun, 2 boxes of shells, 1 stun baton, 2 flashbangs, 1 welder, 2 handcuffs, 2 splints.
+- **Pirates walk better**: a pirate now picks its way at the end of each step (before, it changed its way only when it
+  ran into a wall, so it went straight down corridors).
+- **Boarders force shutters**: the hole a boarder cuts drops the room's emergency shutters; a pirate in its way now
+  forces one up by hand (**3 s**, then it stays up **5 s**), as anybody can. Before, it stayed shut in that room.
+  Our security robots do not.

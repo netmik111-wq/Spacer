@@ -16,10 +16,14 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Player := preload("res://src/server/player.gd")
 
 const SURGE_MIN := 40.0              # seconds between surges, at the least
 const SURGE_MAX := 70.0
 const SURGE_SECONDS := 10.0          # what a surge puts out stays out this long
+const STEER_CLEAR := 0.4             # (v70, the author's H2) a pilot at the controls steers clear of a surge this often...
+const STEER_SKILL := 0.2             # ... and this much more with the best skill (a bot at the controls: half)
+var steer_roll := -1.0               # (tests: a fixed lot; -1 = dice)
 const STORM_PACE := 1.5              # a pirate's guns charge this many times slower in a storm
 const STORM_REGEN := 0.5             # and its shield refills at this share of its pace
 
@@ -75,6 +79,11 @@ func surge() -> String:
 	## Returns what was said (tests and the admin panel use it).
 	var said := ""
 	var cell := _our_victim()
+	var pilot: Player = server.stations.at_post(Net.POST_HELM)
+	if cell >= 0 and pilot != null and (steer_roll if steer_roll >= 0.0 else _rng.randf()) \
+			< (STEER_CLEAR + STEER_SKILL * pilot.skill(Net.SKILL_PILOT)) * server.stations.share(pilot):
+		cell = -1                            # (v70) the pilot took the ship round the discharge
+		said = "Ионный разряд: %s уводит корабль в сторону, разряд проходит мимо." % pilot.name
 	if cell >= 0:
 		server.ship.jammed[cell] = server.tick + roundi(SURGE_SECONDS * Net.TICK_HZ)
 		server.combat.jolt(Net.JOLT_HULL, 0, Vector2(cell % server.map.width, cell / server.map.width))

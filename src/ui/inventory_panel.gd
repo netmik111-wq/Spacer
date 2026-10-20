@@ -210,7 +210,7 @@ func _process(_delta: float) -> void:
 	else:
 		var what := Items.name_of(item)
 		if Items.rounds(item) >= 0:
-			what += ", патронов %d из %d" % [Items.rounds(item), Net.PISTOL_ROUNDS]
+			what += ", патронов %d из %d" % [Items.rounds(item), Items.full_rounds(item)]
 		elif Items.uses(item) >= 0:
 			what += ", применений %d из %d" % [Items.uses(item), Net.MEDKIT_USES]
 		elif Items.tank_of(item) >= 0:

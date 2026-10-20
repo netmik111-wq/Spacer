@@ -17,11 +17,13 @@ extends RefCounted
 ##   {"job": Net.JOB_*}            somebody of that job alive aboard (a bot counts): a blue answer
 ##   {"skill": [Net.SKILL_*, n]}   somebody with that much of the skill: blue
 ##   {"item": Net.ITEM_*}          that thing in the supply locker (it stays there): blue
+##   {"prisoner": 1}               (v70) a prisoner of ours aboard: blue
 ##   {"pay": {"credits": n}} etc.  spent when the answer is taken; the answer is shut without it
 ## Effects (Story._apply): credits, fuel, parts, patches, food, hull, reserve, medkits,
 ## seeds (bought kinds by lot), hybrid (a hybrid seed), probe, drone, gear (a crate),
 ## hurt (wounds to one of the crew), hole (breaches), glitch (power), raid (a pirate ship
-## to fight), skill (+n to everyone's own skill), quest (Net.QUEST_*), mission (1 or 2).
+## to fight), skill (+n to everyone's own skill), quest (Net.QUEST_*), mission (1 or 2),
+## swap (v70: a prisoner given back to the pirates fighting us, for n credits; they leave).
 
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -271,6 +273,16 @@ const EVENTS: Array[Dictionary] = [
 		"text": "Журнал конвоя расшифрован: пираты передают коды флагмана со своим курьером. Курьер, тяжёлый канонерский корабль, стоит в секторе, отмеченном на карте. Коды покажут отсеки флагмана и собьют его подготовку.",
 		"choices": [
 			{"text": "Перехватить курьера", "out": [[1, "Сектор курьера отмечен на карте.", {"mission": 2}]]}]},
+	# ------------------------------------------------- (v70, the author's J5) a prisoner of theirs aboard
+	{"id": "prisoner_swap", "tag": "prisoner", "weight": 1, "plain": 2,
+		"title": "Верните нашего",
+		"text": "Пиратский капитан выходит на связь: «У вас наш человек. Отдайте его, и мы уйдём. Не отдадите — разнесём вас вместе с ним.»",
+		"choices": [
+			{"text": "Отдать пленного: пусть уходят", "need": {"prisoner": 1}, "out": [[1, "Пленного выводят в шлюз. Пиратский корабль забирает его и уходит.", {"swap": 0}]]},
+			{"text": "Потребовать выкуп", "need": {"prisoner": 1}, "out": [
+				[3, "Капитан ругается, но платит. Пленного забирают, корабль уходит.", {"swap": 30}],
+				[2, "«Выкуп? Мы заберём его сами.» Бой продолжается.", {}]]},
+			{"text": "Отказать", "out": [[1, "Связь обрывается. Бой продолжается.", {}]]}]},
 ]
 
 

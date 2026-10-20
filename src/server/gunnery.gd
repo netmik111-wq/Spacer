@@ -258,6 +258,8 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	server.enemy_crew.board(boarders, int(design["layout"]))
 	if server.assault != null:
 		server.assault.enemy_arrives()
+	if server.prisons != null:
+		server.prisons.enemy_arrives()       # (v70) a man of theirs in our cuffs: they call about him
 
 
 # ---------------------------------------------------------------- (v68) fights with goals
@@ -897,7 +899,7 @@ func fire(p, which: int) -> void:
 		return
 	var fired := 0
 	var focus := _focus(which)
-	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS)   # (v60) the one at the console aims better with skill
+	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS) * server.stations.share(p)   # (v60) the one at the console aims better with skill (v70: a bot, half)
 	for i in charge.size():
 		if not ((which == 255 or which == i) and charge[i] >= 1.0 and ship.armed[i] == 1 and not ship.broken.has(map.guns[i]) \
 				and not jammed(map.guns[i]) and beam_left[i] == 0):
@@ -1758,7 +1760,7 @@ func _bomb_room(cell: int, wound: float, stun: float, kill_one: bool) -> String:
 				server.chat.sound(Net.SOUND_CRY, p.st.x, p.st.y, p.slot)
 			p.health = maxf(p.health - stun, minf(p.health, STUN_FLOOR))
 		else:
-			server.combat.hurt(p, roundi(THERMITE_BURN if kill_one and burnt == "" else wound), null)
+			server.combat.hurt(p, roundi(THERMITE_BURN if kill_one and burnt == "" else wound), null, server.combat.CAUSE_BLAST)
 			if kill_one and burnt == "":
 				burnt = p.name
 		names.append(p.name)
@@ -1816,6 +1818,19 @@ func ransom_taken(p) -> void:
 		server.reserve += 1
 		extra = " Один из пиратов просится к нам: он теперь в резерве экипажа (%d)." % server.reserve
 	server.chat.say("%s принимает выкуп: +%d кредитов и канистра топлива. Пиратский корабль уходит.%s%s" % [p.name, ransom, extra, _goal_paid()])
+	ransom = 0
+	enemy_hull = 0
+	beam_left.fill(0)
+	server.supplies.tell_store()
+	server.derelict.pirates_escaped()
+
+
+func swap_done(paid: int) -> void:
+	## (v70, the author's J5) We gave their man back (for `paid` credits): their ship leaves, no parting volley.
+	if not fighting():
+		return
+	if paid > 0:
+		server.ship.credits = mini(server.ship.credits + paid, 65535)
 	ransom = 0
 	enemy_hull = 0
 	beam_left.fill(0)

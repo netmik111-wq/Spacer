@@ -30,8 +30,8 @@ func setup(p_server: GameServer) -> void:
 
 func at_console(p: Player, cells: Dictionary) -> bool:
 	## Does this player stand facing a working console of that kind?
-	if p.cond != Net.COND_OK:
-		return false
+	if p.cond != Net.COND_OK or p.concussed > 0 and not p.bot:
+		return false                         # (v70) concussed, a person cannot make sense of a console
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	return ahead >= 0 and cells.has(ahead) and not server.ship.broken.has(ahead) and server.power.at(ahead)
 

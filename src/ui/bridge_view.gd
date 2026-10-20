@@ -186,6 +186,10 @@ func update_helm() -> void:
 		lines.append("Разбитый пиратский корабль пристыкован к шлюзу." if client.other_docked else
 			"Над шлюзом разбитый пиратский корабль. До него можно добраться через открытый космос или пристыковаться.")
 		lines.append("Пока кто-то снаружи или корабли состыкованы, корабль не тронется и не прыгнет. Тронемся, и обломки останутся позади.")
+	if client.meteor_left > 0.0:
+		# (v70, the author's H1) a meteor seen coming: the pilot steers round it
+		lines.append("МЕТЕОР ПО КУРСУ! Удар через %.1f с. %s" % [client.meteor_left, "Манёвр сделан." if client.meteor_tried else
+			"Уклонение (пробел): %d%% увернуться, %d заряда СМЭС." % [roundi(100.0 * (Stations.METEOR_DODGE + Stations.METEOR_SKILL * client.skills[Net.SKILL_PILOT] / float(Net.SKILL_MAX))), int(Stations.METEOR_COST)]])
 	if client.fighting():
 		# (v55) the battle position
 		var pos := "Позиция в бою: %s." % Net.POS_NAMES[client.battle_pos].to_lower()
@@ -245,6 +249,7 @@ func update_helm() -> void:
 	var buttons_key := Sectors.key(sectors.cell[here]) * 128 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
 		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0) \
 		+ (64 if _has_phase() else 0)
+	buttons_key = buttons_key * 2 + (1 if client.meteor_left > 0.0 and not client.fighting() else 0)   # (v70) the meteor button
 	if buttons_for != buttons_key:
 		buttons_for = buttons_key
 		for old in buttons.get_children():
@@ -276,6 +281,13 @@ func update_helm() -> void:
 			dodge.set_meta("evade", true)
 			dodge.pressed.connect(func() -> void: client.send_evade())
 			buttons.add_child(dodge)
+		elif client.meteor_left > 0.0:
+			var steer := Button.new()
+			steer.text = "Уклонение от метеора!"
+			steer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			steer.set_meta("steer", true)
+			steer.pressed.connect(func() -> void: client.send_evade())
+			buttons.add_child(steer)
 		for level in [Net.ALERT_GREEN, Net.ALERT_YELLOW, Net.ALERT_RED]:
 			var al := Button.new()
 			al.text = Net.ALERT_NAMES[level]
@@ -293,6 +305,8 @@ func update_helm() -> void:
 					or (pos == Net.POS_BEHIND and client.phase_left > 0)
 			elif b.has_meta("evade"):
 				(b as Button).disabled = leaving or client.evade_left > 0 or client.evade_rest > 0 or client.battle_goal != Net.POS_NONE
+			elif b.has_meta("steer"):
+				(b as Button).disabled = leaving or client.meteor_tried
 			elif b.has_meta("alert"):
 				(b as Button).disabled = b.get_meta("alert") == client.alert
 	chart.queue_redraw()

@@ -718,7 +718,7 @@ func _light_picture(light: Dictionary, key: int) -> Array:
 func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float) -> void:
 	var map := client.map
 	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
-	if kind >= Net.SHOT_CANNON:
+	if kind >= Net.SHOT_CANNON and kind != Net.SHOT_FLASH:
 		# (v56) a ship's gun: it flies, then bursts (FightFx); drawn at the middle of the cells
 		var lift := Vector2(_tile * 0.5, _tile * 0.5)
 		_fight.add(kind, hit, Vector2(from.x, from.y - deck * _stride) * _tile + lift, Vector2(to.x, to.y - deck * _stride) * _tile + lift,
@@ -726,7 +726,7 @@ func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, fli
 		return
 	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
 	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
-	_shots.append([kind, hit != 0, a, b, deck, SHOT_SECONDS])
+	_shots.append([kind, hit != 0, a, b, deck, SHOT_SECONDS * (3.0 if kind == Net.SHOT_FLASH else 1.0)])
 
 
 func cell_under_mouse() -> Vector2:
@@ -997,12 +997,16 @@ func _draw_shade() -> void:
 	for sh: Array in _shots:
 		if int(sh[4]) != _deck_shown:
 			continue
-		var left := float(sh[5]) / SHOT_SECONDS
+		var left := minf(float(sh[5]) / SHOT_SECONDS, 1.0)
 		var a: Vector2 = sh[2]
 		var b: Vector2 = sh[3]
 		if int(sh[0]) == Net.SHOT_BULLET:
 			_shade.draw_line(a, b, Color(1.0, 0.9, 0.5, 0.85 * left), 1.5)
 			_shade.draw_circle(a + (b - a).normalized() * 10.0, 5.0 * left, Color(1.0, 0.85, 0.4, left))
+		elif int(sh[0]) == Net.SHOT_FLASH:
+			# (v70) a flashbang or a bomb: a white burst
+			_shade.draw_circle(b, 40.0 + 60.0 * (1.0 - left), Color(1.0, 1.0, 0.95, 0.75 * left))
+			continue
 		else:
 			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
 		if bool(sh[1]):
@@ -1064,6 +1068,8 @@ func _draw_mask() -> void:
 	for sh: Array in _shots:
 		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
+		elif int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_FLASH:
+			_mask.draw_circle(sh[3], 140.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))  # (v70) a flashbang lights the room
 	_fight.draw_light(_mask, _deck_shown)
 	_draw_light(_mask, _lit, Color(0, 0, 1, FLASH), 1)       # flashlights: soft round pools
 

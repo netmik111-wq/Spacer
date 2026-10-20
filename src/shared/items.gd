@@ -20,6 +20,11 @@ extends RefCounted
 ##   gear     (v59) the crate of ship gear (Gear.*) it is: the same; carried, and kept in the locker
 ##   keep     (v63) kept in the supply locker though the ship sets out with none (seeds, a black box)
 ##   seed     (v63) the packet of seeds it is (Plants): its name, words and price come from there
+##   ammo     (v70) a gun's rounds come from this thing (a pistol's from ITEM_MAG), "full" of them at a time
+##   pellets  (v70) a shotgun: the shot is that many pellets in a spread
+##   stun     (v70) a blow with it knocks the one hit down for this many seconds
+##   throw    (v70) a click anywhere throws it there (a flashbang)
+##   aim      (v70) a click on somebody next to us uses it on them (handcuffs, a splint)
 ## Later things will add their own properties here (damage, what it protects
 ## from, which layer of clothing it is), so a new kind of thing does not need
 ## new code where things are moved about.
@@ -32,6 +37,8 @@ const Plants := preload("res://src/shared/plants.gd")
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
 const MEDKIT_HEAL := 30
+
+const SHOTGUN_ABOUT := "Бьёт дробью веером: пять дробин по 10, до 7 клеток. Перезаряжается коробкой патронов."
 
 const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Z: надеть."
 
@@ -100,6 +107,24 @@ const BASE := {
 		"price": 25, "cargo": true},
 	Net.ITEM_BLACKBOX: {"name": "Чёрный ящик", "about": "Бортовой самописец с обломков. Положите его в шкаф снабжения: заказчик заберёт запись по связи.",
 		"keep": true},
+	# (v70, the author's B3, J5, J2) the crew's new weapons and tools
+	Net.ITEM_SHELLS: {"name": "Патроны к дробовику", "about": "Четыре патрона к дробовику.", "price": 6, "stock": 2},
+	Net.ITEM_STUNNER: {"name": "Электрошокер", "about": "Бьёт того, кто рядом, разрядом: тот падает на 5 секунд, его можно заковать. Может оглушить надолго.",
+		"price": 30, "stock": 1, "blow": 5, "stun": 5.0},
+	Net.ITEM_FLASHBANG: {"name": "Светошумовая граната", "about": "Щёлкните, куда бросить (до 6 клеток). Через секунду вспышка: все рядом, кто её видит, падают на 3 секунды, могут получить контузию. Своих тоже.",
+		"price": 15, "stock": 2, "throw": true},
+	Net.ITEM_WELDER: {"name": "Сварочный аппарат", "about": "Держите E у закрытой двери 4 секунды: она заварена, не пройдёт никто, пираты будут резать её 12 секунд. Так же держите E, чтобы срезать шов.",
+		"price": 35, "stock": 1},
+	Net.ITEM_CUFFS: {"name": "Наручники", "about": "Щёлкните по пирату, который лежит (без сознания или оглушён) рядом с вами: он ваш пленный. Пленного держат в арсенале (это гауптвахта), сдают на станцию или торговцу, допрашивают (обыск) или меняют.",
+		"price": 8, "stock": 2, "aim": true},
+	Net.ITEM_SPLINT: {"name": "Шина", "about": "Щёлкните по себе или по соседу: вправляет сломанную руку или ногу (4 секунды, не сходя с места).",
+		"price": 6, "stock": 2, "aim": true},
+	Net.ITEM_BOMB: {"name": "Бомба пиратов", "about": "Тикает. Держите E, стоя рядом, чтобы обезвредить (инженер быстрее)."},
+	Net.ITEM_SHOTGUN + 0: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 0, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5, "price": 45, "stock": 1},
+	Net.ITEM_SHOTGUN + 1: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 1, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
+	Net.ITEM_SHOTGUN + 2: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 2, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
+	Net.ITEM_SHOTGUN + 3: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 3, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
+	Net.ITEM_SHOTGUN + 4: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 4, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -145,6 +170,10 @@ static func _made() -> Dictionary:
 
 const PISTOL_DAMAGE := 30
 const PISTOL_RANGE := 14
+const PELLET_DAMAGE := 10            # (v70) a shotgun's pellet
+const SHOTGUN_RANGE := 7
+const SHOTGUN_SPREAD := 0.28         # radians between the outermost pellets and the middle one
+const THROW_RANGE := 6               # (v70) how far a flashbang is thrown
 
 
 static func carried_gun(item: int) -> bool:
@@ -166,8 +195,29 @@ static func carried(item: int) -> bool:
 
 
 static func rounds(item: int) -> int:
-	## Rounds in a pistol; -1 if it is not one.
+	## Rounds in a pistol (v70: or a shotgun); -1 if it is not one.
 	return int(INFO[item].get("rounds", -1)) if INFO.has(item) else -1
+
+
+static func ammo_of(item: int) -> int:
+	## (v70) What reloads that gun: a magazine for a pistol, a box of shells for a shotgun.
+	return int(INFO[item].get("ammo", Net.ITEM_MAG)) if INFO.has(item) else Net.ITEM_NONE
+
+
+static func full_rounds(item: int) -> int:
+	## (v70) Rounds in that gun when it is fully loaded.
+	return int(INFO[item].get("full", Net.PISTOL_ROUNDS)) if INFO.has(item) else 0
+
+
+static func loaded(item: int) -> int:
+	## (v70) The same gun fully loaded (anything else as it is).
+	return kind_of(item) + full_rounds(item) if rounds(item) >= 0 else item
+
+
+static func aimed(item: int) -> bool:
+	## (v70) Is a click on somebody meant for the thing in hand: a weapon, something to heal
+	## with, handcuffs, a splint (GameScreen._fires_at asks).
+	return is_weapon(item) or uses(item) >= 0 or (INFO.has(item) and (INFO[item].has("heal") or INFO[item].has("aim")))
 
 
 static func uses(item: int) -> int:
@@ -196,7 +246,7 @@ static func suit_with(tank: float) -> int:
 
 
 static func is_weapon(item: int) -> bool:
-	return rounds(item) >= 0 or (INFO.has(item) and INFO[item].has("blow"))
+	return rounds(item) >= 0 or (INFO.has(item) and (INFO[item].has("blow") or INFO[item].has("throw")))
 
 
 static func known(item: int) -> bool:
@@ -282,8 +332,9 @@ static func kept_in_locker() -> PackedInt32Array:
 static var CATEGORIES: Array = [
 	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FUEL]],
 	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
-	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES]],
-	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON]],
+	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES, Net.ITEM_SPLINT]],
+	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON, Net.ITEM_SHOTGUN, Net.ITEM_SHELLS, Net.ITEM_STUNNER,
+		Net.ITEM_FLASHBANG, Net.ITEM_WELDER, Net.ITEM_CUFFS]],
 	["Корабельное оружие", Array(Weapons.gun_items())],
 	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET, Net.ITEM_SHELL]],
 	["Детали орудий", range(Net.ITEM_GUN_PARTS, Net.ITEM_GUN_PARTS + Weapons.KINDS)],
@@ -318,7 +369,7 @@ static func spawnable() -> PackedInt32Array:
 	for item: int in INFO.keys():
 		if kind_of(item) != item or not light(item).is_empty() or cargo(item):
 			continue
-		out.append(item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item)
+		out.append(loaded(item) if rounds(item) == 0 else item)
 	return out
 
 
@@ -337,7 +388,7 @@ static func admin_sections() -> Array:
 	for c: Array in CATEGORIES:
 		var things := PackedInt32Array()
 		for item: int in c[1]:
-			var new := item + Net.PISTOL_ROUNDS if rounds(item) == 0 else item
+			var new := loaded(item) if rounds(item) == 0 else item
 			if left.has(new):
 				things.append(new)
 				left.erase(new)

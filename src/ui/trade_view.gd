@@ -94,6 +94,7 @@ func refresh() -> void:
 	## Called every frame while the screen is shown: rebuilt only when something changed.
 	var sig := "%d|%d|%s|%s|%d|%s|%d|%d|%d|%d|%d|%s|%d" % [_cat, client.credits, str(client.store), str(client.trade), client.trade_flags, str(client.trade_back),
 		client.hull, client.reserve, roundi(client.store_air), client.shield_flags, 1 if client.can_trade() else 0, str(client.trade_wants), client.fuel]
+	sig += "|%d" % client.prisoners()
 	if sig == _shown:
 		return
 	_shown = sig
@@ -232,10 +233,20 @@ func _station() -> void:
 		var row := _row(item, Items.name_of(item), "в шкафу: %d" % client.stock(item), "%s. %s" % [Items.name_of(item), Items.about(item)])
 		var price: int = client.trade[item]
 		_button(row, "Купить: %d кр." % price, client.credits >= price, func() -> void: client.send_store(Net.STORE_BUY, item))
+	_prisoners()
 	_about.text = "Станция снабжения бесплатно пополняет воздух, топливо и обшивку, а продаёт только это. Продать что-то, нанять людей и купить остальное можно у торговцев."
 
 
+func _prisoners() -> void:
+	## (v70, the author's G1) Pirates in our handcuffs are handed over for a reward.
+	var n := client.prisoners()
+	var row := _row(Net.ITEM_NONE, "Сдать пленных", "на борту: %d" % n,
+		"Пираты в наручниках, где бы они ни лежали на корабле, передаются властям: %d кр. за каждого." % Net.PRISONER_PAYS)
+	_button(row, "Сдать: +%d кр." % (Net.PRISONER_PAYS * n), n > 0, func() -> void: client.send_store(Net.STORE_PRISONERS))
+
+
 func _services() -> void:
+	_prisoners()
 	var tank := _row(Net.ITEM_NONE, "Топливо в бак +%d" % Net.FUEL_LOT, "в баке: %d из %d" % [client.fuel, client.fuel_max],
 		"Заливает топливо прямо в бак корабля.")
 	_button(tank, "Купить: %d кр." % Net.PRICE_FUEL, client.credits >= Net.PRICE_FUEL and client.fuel <= client.fuel_max - Net.FUEL_LOT,

@@ -24,7 +24,7 @@ func can_reach(p: Player, id: int) -> bool:
 	if p.cond != Net.COND_OK or id < 0 or id >= server.players.size() or id == p.slot:
 		return false
 	var other: Player = server.players[id]
-	return other != null and other.cond != Net.COND_OK \
+	return other != null and other.cond != Net.COND_OK and not other.taken \
 		and absi(other.st.x - p.st.x) + absi(other.st.y - p.st.y) <= 1
 
 
@@ -47,6 +47,7 @@ func _do_hands(p: Player) -> void:
 		elif can_reach(p, id):
 			p.searching = id
 			p.search_sent = PackedByteArray()        # so that the pockets are sent at once
+			server.prisons.talk(p, server.players[id])   # (v70) a prisoner searched talks
 	elif p.want_kind == HAND_DRAG:
 		if id == Net.NOBODY:
 			p.want_kind = 0
@@ -71,9 +72,9 @@ func let_go(p: Player) -> void:
 	var body: Player = server.players[p.dragging] if p.dragging < server.players.size() else null
 	if body != null and body.dragged_by == p.slot:
 		body.dragged_by = -1
-		body.st.slow = false
+		body.st.slow = body.leg              # (v70) a broken leg still slows
 	p.dragging = -1
-	p.st.slow = false
+	p.st.slow = p.leg
 	p.self_dirty = true
 
 
