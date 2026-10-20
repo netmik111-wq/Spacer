@@ -1881,15 +1881,18 @@ func _wrecked() -> void:
 		server.flagship.won(captured)
 		return
 	server.ship.credits += reward
-	if raid or server.stations.ours_aboard:
-		# it stays alongside, dead: what it holds is there for the taking
-		server.derelict.becomes_wreck()
-		var gun := _loot_gun(false)
-		server.chat.say("Пиратский корабль разбит! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s%s" % [reward, gun, _goal_paid()])
-	else:
-		server.ship.store[Net.ITEM_FUEL] = int(server.ship.store.get(Net.ITEM_FUEL, 0)) + Net.WRECK_FUEL
-		server.derelict.pirates_wrecked()
-		server.chat.say("Пиратский корабль разбит и уходит, не успев пристыковаться! За него начислено %d кредитов, из обломков подобрана канистра топлива." % reward)
+	# it stays alongside, dead: what it holds is there for the taking. (v72, the author's note: "when we
+	# kill the boarders' ship it must die, not run, and stay where we can dock and loot it") A boarding
+	# ship wrecked before it docked used to fly off and leave a fuel can in our hold; now it is a wreck
+	# like a raider's, and the can lies aboard it.
+	var boarder: bool = not raid and not server.stations.ours_aboard
+	server.derelict.becomes_wreck()
+	if boarder:
+		for i in Net.WRECK_FUEL:
+			server.derelict.drop_thing(Net.ITEM_FUEL)
+	var gun := _loot_gun(false)
+	server.chat.say("Пиратский корабль разбит%s! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s%s" % [
+		", не успев пристыковаться" if boarder else "", reward, gun, _goal_paid()])
 	server.supplies.tell_store()
 
 

@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v71 (version 0.64, upkeep) is the latest. Plans one to four are done except the darkness front (the
+Build v72 (version 0.65, the author's notes: bots at work, the boarders' wreck) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -55,7 +55,9 @@ v70 people over bots: bots at posts give half, no sailor, the autodoc needs a me
 meteors and surges, prisoners, boarders with goals (wreck, rob, bomb, kidnap), the shotgun and the welder.
 v71 upkeep: hunger that slows (10 min) and kills (25 min on), the galley's stove and three dishes, complex repairs
 (a toolbox and two part kinds) as a campaign option the hard mode turns on.
-Next in that plan: fear (its own build), then a fire question round.
+v72 his two notes: bots raise shutters on the way to a repair (suited, no other way), repairs first, free bots mend, one
+bot per job said in chat, the bots' log (crew window and crew_log.txt); a boarding ship wrecked before docking stays a wreck.
+Next (his answer in v72): polish the game first; then fear (its own build) and a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -86,7 +88,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 32 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 33 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -119,6 +121,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/fixtest.gd (since v69: self-healing, autodoc, buried finds, docking, wrecks on the chart, hunters, station, locked rooms, airlock cycle, vents, sight)
     godot --headless --path . --script res://tools/peopletest.gd (since v70: bots at half, jobs, autodoc, injuries, meteors, surges, prisoners, boarders' goals, bombs, kidnapping, shotgun, flashbang, welder)
     godot --headless --path . --script res://tools/upkeeptest.gd (since v71: hunger slows and kills, the galley and its dishes, complex repairs, bots' parts)
+    godot --headless --path . --script res://tools/bottest.gd (since v72: bots through shutters, one bot per job, free bots mend, the log, the boarders' wreck)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -142,7 +145,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 32 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 33 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -347,6 +350,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   hand); `server.complex_repairs` (set before start, like `mode`) decides the part kinds (`Upkeep.part_for`). A slow
   walk is `Player.slowed()` (a broken leg or hunger's `weak`), never `p.leg` alone. Hunger counts `Garden.starved`
   seconds: a test that starves the crew calls `garden._feed_tick()` per second rather than running 25 min of ticks.
+- (v72) A bot's repair job is `Player.bot_job` (set only by `Stations._took`, which also says it aloud); whatever moves a
+  bot to other work must let it go (`_set_order` does). Bots' log lines go through `Chat.bot_log` (`chat.bot_lines` keeps
+  them only with `keep_heard`). Free bots volunteer to mend: a test that wants a breach or a broken machine left alone sets
+  `server.stations.volunteers = false` (or gives the bots posts). A boarding ship wrecked by the guns now stays (`Derelict.wreck`): a test that wants the next pirate
+  ship calls `derelict.pirates_wrecked()` to clear it away.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

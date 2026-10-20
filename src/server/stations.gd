@@ -39,6 +39,7 @@ const Weapons := preload("res://src/shared/weapons.gd")
 const Vitals := preload("res://src/server/vitals.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Upkeep := preload("res://src/shared/upkeep.gd")
+const Items := preload("res://src/shared/items.gd")
 
 const HELM_DODGE := 0.15             # the enemy's shots miss this much more often with somebody at the controls
 const PILOT_DODGE := 0.10            # (v60) and up to this much more again with the piloting skill (a pilot by job starts at half)
@@ -89,6 +90,9 @@ var meteor_roll := -1.0              # (tests: a fixed lot instead of the dice; 
 var alert := Net.ALERT_GREEN         # (v68, the author's J4) the alert level
 var _alert_auto := false             # it went to yellow by itself when a pirate ship came
 var _fight_seen := false
+var volunteers := true               # (v72) free bots come to mend (tests that want things left broken switch it off)
+var _spot_jobs := {}                 # (v72) bot slot -> {spot to mend from: the job's cell}, from its last plan
+var _job_words := {}                 # (v72) bot slot -> how the job it has taken is called (for the log)
 var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
 
 
@@ -520,6 +524,9 @@ func _bots() -> Array:
 
 
 func _set_order(q: Player, post: int, by: Player) -> void:
+	if q.order != post:
+		server.chat.bot_log(q, "приказ: %s." % Net.POST_NAMES[post].to_lower())
+	_took(q, -1)
 	q.order = post
 	q.order_by = by.slot if by != null else -1
 	q.bot_goal = -1
@@ -590,7 +597,7 @@ func bot_think(p: Player) -> bool:
 	_wants_healing(p)
 	if server.outside.drive(p):
 		return true                          # (v61) out mending the hull (see Outside)
-	if p.order == Net.POST_FREE and not p.bot_healing:
+	if p.order == Net.POST_FREE and not p.bot_healing and not _volunteers(p):
 		p.doing = Net.DOING_IDLE
 		return false
 	var map := server.map
@@ -605,11 +612,11 @@ func bot_think(p: Player) -> bool:
 		server.movement.climb(p)
 		p.bot_plan_tick = -1000
 		return true
-	if _through_lock(p):
+	if _through_lock(p) or _through_shutter(p):
 		return true
 	if p.bot_step > 0:
 		p.using = false
-		p.st.dir = Net.DIR_NONE if server.movement._would_vent(p.st.x, p.st.y, p.bot_step) else p.bot_step
+		p.st.dir = Net.DIR_NONE if server.movement._would_vent(p.st.x, p.st.y, p.bot_step) and not _forced_ahead(p) else p.bot_step
 		return true
 	p.st.dir = Net.DIR_NONE
 	if p.bot_goal == here:
@@ -629,6 +636,43 @@ func _through_lock(p: Player) -> bool:
 		return false
 	var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
 	return server.systems.lock_bars(ahead) and server.systems.get_past(p, ahead, true)
+
+
+func _through_shutter(p: Player) -> bool:
+	## (v72, the author's note: bots did not open the emergency shutter, and mended only after he
+	## had raised it) Its way to a repair leads through a shutter that is down (see _route's
+	## `shutters`): a bot in a suit holds "use" on it until it is forced up (Repairs), then walks on.
+	if p.bot_step <= 0 or p.st.cd > 0 or p.bot_task != TASK_MEND:
+		return false
+	var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
+	if ahead < 0 or server.systems.lock_door(ahead) or not server.doors.is_sealed(ahead):
+		return false
+	p.st.dir = Net.DIR_NONE
+	if p.st.facing != p.bot_step:
+		p.st.facing = p.bot_step
+		p.self_dirty = true
+	p.using = true
+	p.doing = Net.DOING_GOING
+	server.chat.bot_log(p, "поднимает аварийный шлюз, чтобы пройти: %s" % _job_words.get(p.slot, "к работе"))
+	return true
+
+
+func _forced_ahead(p: Player) -> bool:
+	## (v72) The door of its next step has just had its shutter forced up (by it, on its way to a
+	## repair): it goes through, though the pressure behind differs.
+	var d := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
+	return d >= 0 and p.bot_task == TASK_MEND and server.tick < server.forced_until[d]
+
+
+func _volunteers(p: Player) -> bool:
+	## (v72, the author's "repairs always first"; my B2 pick) A free bot comes to mend when
+	## something is broken that no other bot has taken, then goes back to wandering.
+	if p.bot_goal >= 0 and p.bot_task in [TASK_MEND, TASK_LOCKER, TASK_OXYGEN]:
+		return true                          # on its way to it already
+	if not volunteers or (server.tick + p.slot) % BOT_PLAN_TICKS != 0 or _repair_jobs(p).is_empty():
+		return false
+	p.bot_plan_tick = -1000
+	return true
 
 
 func _wants_healing(p: Player) -> void:
@@ -669,6 +713,8 @@ func _plan(p: Player, here: int) -> void:
 				goals = _mount_post_goals(p)
 			Net.POST_REPAIR:
 				p.bot_task = _work_goals(p, goals)
+			Net.POST_FREE:
+				p.bot_task = _mend_goals(p, goals, _taken(p))      # (v72) a free bot only comes to mend
 			Net.POST_FOLLOW:
 				var lead: Player = server.players[p.order_by] if p.order_by >= 0 and p.order_by < server.players.size() else null
 				if lead != null and not lead.corpse and lead.cond != Net.COND_DEAD:
@@ -684,21 +730,36 @@ func _plan(p: Player, here: int) -> void:
 		p.bot_step = 0
 		p.using = false
 		p.doing = Net.DOING_IDLE
+		_took(p, -1)
+		_tell_task(p)
 		return
 	if goals.has(here):
 		p.bot_goal = here
 		p.bot_face = goals[here]
 		p.bot_step = 0
 		p.doing = _doing(p)
+		_took(p, int((_spot_jobs.get(p.slot, {}) as Dictionary).get(here, -1)) if p.bot_task == TASK_MEND else -1)
+		_tell_task(p)
 		return
 	var wide: bool = p.order == Net.POST_FOLLOW or not server.map.on_ship(here)
-	var r := _route(here, goals, wide, p.has_suit())
+	var suited := p.has_suit()
+	var r := _route(here, goals, wide, suited)
+	if int(r[1]) < 0 and p.bot_task == TASK_MEND and suited and p.tank > 0.2:
+		r = _route(here, goals, wide, suited, true)     # (v72) through shutters that are down, only if no other way
 	p.bot_step = r[0]
 	p.bot_goal = r[1]
 	p.bot_face = int(goals.get(r[1], 0))
 	p.using = false
 	p.doing = Net.DOING_NO_WAY if p.bot_goal < 0 else (Net.DOING_CARRY if p.bot_task in [TASK_LOCKER, TASK_MOUNT] else
 		(Net.DOING_HEAL if p.bot_task == TASK_HEAL else Net.DOING_GOING))
+	if p.bot_task == TASK_MEND and p.bot_goal < 0:
+		var jobs: Array = (_spot_jobs.get(p.slot, {}) as Dictionary).values()
+		_took(p, -1)
+		if not jobs.is_empty():
+			server.chat.bot_log(p, "не могу добраться: %s." % _job_text(int(jobs[0])), p.order == Net.POST_REPAIR)
+		return
+	_took(p, int((_spot_jobs.get(p.slot, {}) as Dictionary).get(p.bot_goal, -1)) if p.bot_task == TASK_MEND else -1)
+	_tell_task(p)
 
 
 func _doing(p: Player) -> int:
@@ -758,37 +819,26 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 	## (v60) A bot on "work": a gun it carries goes where it was ordered or back to
 	## the locker; then what is broken is mended (it fetches patches and spare parts
 	## from the locker first); then the console's orders for the guns are carried out.
+	## (v72, the author's "repairs always first") Mending comes before the gun it carries too,
+	## unless that gun fills its last free hand.
 	var map := server.map
 	var mounts = server.mounts
 	var taken := _taken(p)
-	# a gun in its hands
 	var gun := _carried_gun(p)
-	if gun >= 0:
-		var i: int = mounts.order_for(p.slots[gun])
-		if i >= 0 and not server.ship.broken.has(map.guns[i]):
-			p.haul = i
-			_add_spots(p, map.guns[i], goals, taken)
-			if not goals.is_empty():
-				return TASK_MOUNT
-		p.haul = -1
-		_locker_goals(p, goals, taken)
-		return TASK_LOCKER
+	if gun >= 0 and p.count(Net.ITEM_NONE) == 0:
+		return _carry_goals(p, gun, goals, taken)
 	# a suit, if it has none and the locker has one
 	if not p.has_suit() and _store_suit() >= 0:
 		_locker_goals(p, goals, taken)
 		if not goals.is_empty():
 			return TASK_LOCKER
 	# what is broken
-	var jobs := _repair_jobs(p)
-	if not jobs.is_empty():
-		if not _supplies_wanted(p).is_empty():
-			_locker_goals(p, goals, taken)
-			if not goals.is_empty():
-				return TASK_LOCKER
-		for c: int in jobs:
-			_add_spots(p, c, goals, taken)
-		if not goals.is_empty():
-			return TASK_MEND
+	var mend := _mend_goals(p, goals, taken)
+	if mend != TASK_POST:
+		return mend
+	# a gun in its hands
+	if gun >= 0:
+		return _carry_goals(p, gun, goals, taken)
 	# (v68, my G1 pick) in a fight, rounds from the locker into the breeches of the guns that fire them
 	if server.gunnery.fighting():
 		var need := _mounts_wanting_rounds()
@@ -835,6 +885,162 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 	return TASK_POST
 
 
+func _carry_goals(p: Player, gun: int, goals: Dictionary, taken: Dictionary) -> int:
+	## A gun in its hands: up onto the mount the gun console wants it on, else back to the locker.
+	var i: int = server.mounts.order_for(p.slots[gun])
+	if i >= 0 and not server.ship.broken.has(server.map.guns[i]):
+		p.haul = i
+		_add_spots(p, server.map.guns[i], goals, taken)
+		if not goals.is_empty():
+			return TASK_MOUNT
+	p.haul = -1
+	_locker_goals(p, goals, taken)
+	return TASK_LOCKER
+
+
+func _mend_goals(p: Player, goals: Dictionary, taken: Dictionary) -> int:
+	## (v72) What is broken and not taken by another bot: TASK_MEND with the spots to mend it from
+	## in `goals` (each spot's job kept in _spot_jobs), TASK_LOCKER for a suit, patches or parts
+	## first, or TASK_POST with nothing to mend.
+	var jobs := _repair_jobs(p)
+	var spot_job := {}
+	_spot_jobs[p.slot] = spot_job
+	if jobs.is_empty():
+		return TASK_POST
+	var fetch := not p.has_suit() and _store_suit() >= 0 or not _supplies_wanted(p).is_empty()
+	if not p.has_suit() and _store_suit() >= 0:
+		_locker_goals(p, goals, taken)      # a suit first: then every job is in reach
+		if not goals.is_empty():
+			return TASK_LOCKER
+	var mend := {}
+	var airless := -1                       # a job only the lack of air keeps this bot from
+	for c: int in jobs:
+		for s: Array in _spots_for(c):
+			var at := int(s[0])
+			if taken.has(at) or spot_job.has(at):
+				continue
+			if not _breathable(p, at):
+				airless = c
+				continue
+			mend[at] = int(s[1])
+			spot_job[at] = c
+	if not mend.is_empty():
+		if fetch:
+			_locker_goals(p, goals, taken)  # patches or parts first
+			if not goals.is_empty():
+				return TASK_LOCKER
+		goals.merge(mend)
+		return TASK_MEND
+	if airless < 0 or p.has_suit() and p.tank > 0.2:
+		return TASK_POST                    # the rest is in other bots' hands
+	var to := _suited_helper(p)
+	server.chat.bot_log(p, "не могу добраться: %s: там нет воздуха, а скафандра нет.%s" % [_job_text(airless),
+		" Передаю работу: %s." % to.name if to != null else ""], p.order == Net.POST_REPAIR)
+	return TASK_POST
+
+
+func _suited_helper(p: Player) -> Player:
+	## (v72, the author's comment on L1: "if a bot cannot take the job, he passes it to the next with a
+	## spacesuit") A bot in a suit with oxygen that mends (on «Работы», or free) to hand the job to; it
+	## takes it by itself (a job no bot holds is anybody's), this only names it. Null: none aboard.
+	for q: Player in _bots():
+		if q != p and q.cond == Net.COND_OK and q.has_suit() and q.tank > 0.2 and q.order in [Net.POST_REPAIR, Net.POST_FREE]:
+			return q
+	return null
+
+
+func _took(p: Player, job: int) -> void:
+	## (v72) The repair job this bot has taken now (-1 = none). A new one is said aloud
+	## (the author's "tell in chat that one of the bots is taking the work").
+	if job == p.bot_job:
+		return
+	p.bot_job = job
+	if job < 0:
+		_job_words.erase(p.slot)
+		return
+	_job_words[p.slot] = _job_text(job)
+	server.chat.bot_log(p, "беру %s." % _job_words[p.slot], true)
+
+
+func _tell_task(p: Player) -> void:
+	## (v72) What the bot sets about now, for the bots' log (repairs are told by _took).
+	var words := ""
+	match p.bot_task:
+		TASK_MEND:
+			return
+		TASK_LOCKER:
+			var want := PackedStringArray()
+			for item: int in _supplies_wanted(p):
+				want.append(Items.name_of(item).to_lower())
+			if not p.has_suit() and _store_suit() >= 0:
+				want.append("скафандр")
+			words = "идёт к шкафу снабжения" + (": " + ", ".join(want) if not want.is_empty() else "")
+		TASK_MOUNT:
+			words = "несёт орудие к установке %d" % (p.haul + 1) if p.haul >= 0 else "несёт орудие"
+		TASK_OXYGEN:
+			words = "заправляет баллон скафандра"
+		TASK_HEAL:
+			words = "ранен, идёт в автодок"
+		TASK_GARDEN:
+			words = "работает в гидропонике"
+		TASK_FUEL:
+			words = "заливает топливо в двигатель"
+		TASK_LOAD:
+			words = "заряжает орудие"
+		_:
+			if p.order == Net.POST_FREE:
+				return
+			words = "работы нет, ждёт" if p.order == Net.POST_REPAIR and p.bot_goal < 0 else \
+				("не может встать на пост: %s" % Net.POST_NAMES[p.order].to_lower() if p.bot_goal < 0 else "пост: %s" % Net.POST_NAMES[p.order].to_lower())
+	server.chat.bot_log(p, words + ".")
+
+
+func _job_text(cell: int) -> String:
+	## (v72) How a repair job is called in the log: what is broken and where it is.
+	var map := server.map
+	var what := "поломку"
+	if server.air.holes.has(cell):
+		what = "пробоину"
+	elif server.ship.broken.has(cell) and map.device_name(cell) != "":
+		what = map.device_name(cell)
+	elif map.door_of[cell] >= 0:
+		var d: int = map.door_of[cell]
+		what = "заклинившую дверь" if server.doors.jammed[d] == 1 else "аварийный шлюз"
+	return "%s (%s)" % [what, _where(cell)]
+
+
+func _where(cell: int) -> String:
+	## (v72) Where a cell is, in words: the deck, and the nearest named thing in the same room.
+	var map := server.map
+	var w := map.width
+	var room := map.room_of[cell]
+	if room < 0:
+		for o: int in [1, -1, w, -w]:
+			if cell + o >= 0 and cell + o < map.room_of.size() and map.room_of[cell + o] >= 0:
+				room = map.room_of[cell + o]
+				break
+	var deck := map.deck_of_cell(cell)
+	var words: String = map.deck_names[deck].to_lower() if deck >= 0 and deck < map.deck_names.size() else "корабль"
+	var best := ""
+	var best_d := 1e9
+	if room >= 0:
+		for dy in range(-8, 9):
+			for dx in range(-8, 9):
+				var x := cell % w + dx
+				var y := cell / w + dy
+				if x < 0 or y < 0 or x >= w or y >= map.height:
+					continue
+				var c := y * w + x
+				var name := map.device_name(c)
+				if name == "" or c == cell:
+					continue
+				var front := map.fitting_front(c)
+				if front >= 0 and map.room_of[front] == room and dx * dx + dy * dy < best_d:
+					best_d = dx * dx + dy * dy
+					best = name
+	return words + (", рядом " + best if best != "" else "")
+
+
 func _mounts_wanting_rounds() -> Array:
 	## (v68) The mounts whose gun fires shells or rockets and whose breech is not full.
 	var out: Array = []
@@ -865,6 +1071,7 @@ func _locker_goals(p: Player, goals: Dictionary, taken: Dictionary) -> void:
 
 func _repair_jobs(p: Player) -> Array:
 	## Broken machines, doors gone wrong, holes (with a patch to hand or in the locker).
+	## (v72, my B3 pick) Not those another bot has taken (Player.bot_job).
 	var map := server.map
 	var jobs: Array = []
 	for c: int in server.ship.broken.keys():
@@ -877,6 +1084,9 @@ func _repair_jobs(p: Player) -> Array:
 		for c: int in server.air.holes.keys():
 			if not map.is_other(c):
 				jobs.append(c)
+	for q: Player in server.players:
+		if q != null and q != p and q.bot and q.bot_job >= 0 and not q.corpse and q.cond == Net.COND_OK:
+			jobs.erase(q.bot_job)
 	return jobs
 
 
@@ -938,17 +1148,18 @@ func _taken(p: Player) -> Dictionary:
 		if q == null or q == p or q.corpse:
 			continue
 		out[q.st.y * server.map.width + q.st.x] = true
-		if q.bot and q.order != Net.POST_FREE and q.bot_goal >= 0:
+		if q.bot and q.bot_goal >= 0 and (q.order != Net.POST_FREE or q.bot_task != TASK_POST):   # (v72) a free bot come to mend too
 			out[q.bot_goal] = true
 	return out
 
 
-func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = false) -> Array:
+func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = false, shutters: bool = false) -> Array:
 	## [the first step of a shortest way to the nearest of the goals (a direction,
 	## -1 = the ladder underfoot, 0 = none), that goal (-1 = none reachable)].
 	## Our own ship only, ladders included, around shutters that are down; (v66)
 	## through our airlocks (the bot pumps or forces their doors, see _through_lock),
-	## and with `wide` onto a ship alongside too, and out into space in a suit.
+	## and with `wide` onto a ship alongside too, and out into space in a suit. (v72) With
+	## `shutters`, through emergency shutters that are down too (a suited bot forces them).
 	var map := server.map
 	var w := map.width
 	var first := {start: 0}
@@ -967,7 +1178,7 @@ func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = fa
 			if not (map.walkable(nx, ny) and (wide or map.on_ship(j)) or wide and suited and map.floats(nx, ny)):
 				continue
 			var door := map.door_of[j]
-			if door >= 0 and (server.doors.is_sealed(door) and not server.systems.lock_door(door) or server.doors.welded[door] == 1):
+			if door >= 0 and (server.doors.is_sealed(door) and not server.systems.lock_door(door) and not shutters or server.doors.welded[door] == 1):
 				continue                     # (v70) nor through a welded door
 			nexts.append([j, d])
 		if map.climb[cell] >= 0 and not map.floats(x, y):
@@ -1041,13 +1252,16 @@ func _work(p: Player) -> void:
 			p.doing = Net.DOING_POST
 			if server.tick % 40 == p.slot % 40:
 				_keep_powered()
-		Net.POST_REPAIR:
+		Net.POST_REPAIR, Net.POST_FREE:
 			var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 			var hole := server.air.holes.has(ahead)
 			var door := server.map.door_of[ahead] if ahead >= 0 else -1
 			if not hole and not server.ship.broken.has(ahead) and not (door >= 0 and (server.doors.jammed[door] == 1 or server.doors.faulty[door] == 1)):
 				p.using = false
 				p.bot_plan_tick = -1000          # done here: on to the next
+				if p.bot_job >= 0:
+					server.chat.bot_log(p, "готово: %s." % _job_words.get(p.slot, "работа"))
+					_took(p, -1)
 				return
 			var item := Net.ITEM_PATCH if hole else Net.ITEM_PART
 			if hole and p.count(Net.ITEM_PATCH) == 0:
@@ -1082,10 +1296,11 @@ func _at_locker(p: Player) -> void:
 		for n in (2 if item == Net.ITEM_PATCH else 1):
 			if int(server.ship.store.get(item, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
 				sup.store_asked(p, Net.STORE_TAKE, item)
-	if server.ship.tank < BOT_POURS_BELOW and p.count(Net.ITEM_FUEL) == 0 and int(server.ship.store.get(Net.ITEM_FUEL, 0)) > 0 \
+	# (v72) a free bot come to mend takes only what mending wants, not cans or rounds
+	if p.order == Net.POST_REPAIR and server.ship.tank < BOT_POURS_BELOW and p.count(Net.ITEM_FUEL) == 0 and int(server.ship.store.get(Net.ITEM_FUEL, 0)) > 0 \
 			and p.count(Net.ITEM_NONE) > 0 and not server.map.engine.is_empty():
 		sup.store_asked(p, Net.STORE_TAKE, Net.ITEM_FUEL)        # (v67) a can for the tank
-	if server.gunnery.fighting():
+	if server.gunnery.fighting() and p.order == Net.POST_REPAIR:
 		for i: int in _mounts_wanting_rounds():          # (v68) rounds for the breeches, two at a time
 			var ammo: int = server.mounts.ammo_of(i)
 			while p.count(ammo) < 2 and int(server.ship.store.get(ammo, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:

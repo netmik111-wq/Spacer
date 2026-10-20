@@ -82,11 +82,13 @@ func _initialize() -> void:
 	for i in 20:
 		g.charge.fill(1.0)
 		g.fire(p, 255)
-		if not d.here:
+		if d.wreck:
 			break
-	_expect(not d.here and g.enemy_hull == 0, "enough hits wreck it before it docks")
+	# (v72, the author's note) a boarding ship wrecked before it docks stays alongside as a wreck
+	_expect(d.here and d.wreck and g.enemy_hull == 0, "enough hits wreck it before it docks: it stays alongside, a wreck")
 	_expect(server.ship.credits == credits + Gunnery.WRECK_REWARD, "and the ship is paid for it")
-	_expect(server.pirates.aboard() == 0, "its crew goes down with it")
+	_expect(server.pirates.aboard() == 0, "none of its crew is aboard ours")
+	d.pirates_wrecked()                      # (cleared away for the next one)
 
 	# its systems
 	g.enemy_hit_chance = 1.0

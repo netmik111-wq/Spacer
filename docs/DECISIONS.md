@@ -1115,3 +1115,36 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   outright** (only slower: 3× without the right part, 3× more without a toolbox): a broken helm must always be mendable
   (the escape rule). The toolbox is never used up; the ship starts with 2 and engineers bring their own in complex games.
   Without complex repairs a board works as any part, so it is never dead weight.
+
+### Bots at work and the boarders' wreck (v72, the author's two notebook notes; questions page https://claude.ai/artifact/Ht1weGfuxFTaiJXPwywy63, built on my picks)
+
+- **Shutters** (his video: the door he raised was an emergency shutter, not the airlock): `Stations._route` skipped every
+  sealed non-airlock door, so a hole behind one was never reached and the bot fell through to other work. Now `_plan`
+  routes a second time with `shutters = true` only when the first way fails, the task is `TASK_MEND`, and the bot wears a
+  suit with oxygen (B1 "A"); `_through_shutter` holds "use" on it (the same `Repairs` forcing a player does, 3 s up for 5 s)
+  and `_forced_ahead` lets it past `Movement._would_vent` while the shutter is forced. Air lost is the price, as for a
+  player; never for wandering.
+- **Repairs first** (his "priority of the job: repairs always first"): `_work_goals` now asks `_mend_goals` before the
+  carried gun (unless the gun fills its last free hand: a bot with no free slot could never fetch a patch and would stand
+  at the hole), rounds, trays and fuel. Free bots volunteer (`_volunteers`, every `BOT_PLAN_TICKS`, staggered by slot)
+  and use the same `_mend_goals`; posts stay manned (B2 "A").
+- **One bot per job** (B3 "A", my idea so "a bot takes the work" means something): `Player.bot_job`, set by `_took`;
+  `_repair_jobs` drops jobs held by another bot that is up. A bot that cannot reach its job lets it go.
+- **Chat and log** (L1 "A", L2 "A"): `Chat.bot_log` sends `Net.S_BOTLOG` to every client (protocol 49); the same line twice
+  in a row is dropped (`Player.bot_said`), so plans every 10 ticks do not spam. Only "беру ..." and "не могу добраться"
+  (the latter for bots on «Работы» only) also go to chat. The client keeps 2000 lines for the crew window and appends all
+  to `crew_log.txt` next to the exe (`GameClient.log_path`, user:// from the editor; headless clients write none), so the
+  author can send it with a bug. Where a job is: the deck name and the nearest named thing in the same room
+  (`Stations._where`).
+- **Handing a job over** (his comment on L1: "if a bot cannot take the job, he passes it to the next with a spacesuit"):
+  a job nobody holds is anybody's, so a suited bot takes it by itself; `_mend_goals` now looks for jobs in reach before
+  fetching patches (else the suitless bot walked to the locker and the job looked taken), and `_suited_helper` only names
+  the bot in the "cannot get there" line. A free bot come to mend takes from the locker only what mending wants (it used
+  to pocket a fuel can it would never pour: found by `salvagetest`).
+- **What next** (N1, his comment "we need to polish the game first"): v73 is polish, not fear.
+- **The boarders' wreck** (his note "they need to die not to run and become part of the map where we can dock and loot"):
+  `Gunnery._wrecked` calls `Derelict.becomes_wreck` for a boarding ship too, so it is kept on the chart like a raider's
+  (v69). Survivors are rolled as for a raider (W1 "A": `WRECK_ALL_DEAD` 70%); the `WRECK_FUEL` can now lies aboard
+  (`Derelict.drop_thing`) instead of going into the hold. A boarding ship whose crew we kill in its quarters still breaks
+  off and goes unpaid (unchanged: no hull damage, it is not wrecked).
+

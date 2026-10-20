@@ -142,6 +142,15 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v72 (the author's two notebook notes: bots at work, the boarders' wreck)
+- Bots on a repair now raise an emergency shutter that is down when it is the only way to the job (suited only), mend
+  before any other work, and free bots come to mend too. Each job is taken by one bot, which says so in chat.
+- The bots' log: the crew window (O) keeps every order and job of every bot for the whole game, and the same lines go
+  to `crew_log.txt` next to the game.
+- A boarding ship wrecked before it docks stays alongside as a wreck (on the chart, dockable, its fuel can aboard).
+- New test `tools/bottest.gd` (33 scripts), protocol 49. Questions: https://claude.ai/artifact/Ht1weGfuxFTaiJXPwywy63
+  (built on my picks). Build in `/mnt/project-files/builds/v72/`.
+
 ### v71 (upkeep; the fourth step of the "every part interesting" plan, the author's H1, L1 and L2)
 - Hunger slows and finally kills: after 10 min of starving everybody walks slowly, after 25 min health sinks with no
   floor (death about 68 min after the rations ran out). Any food at a jump ends it.

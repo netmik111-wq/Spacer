@@ -236,8 +236,9 @@ func _places() -> void:
 		_expect(r.found.has(key) and not server.gunnery.fighting(), "an ambush is seen from afar (%.0f away), and waits" % server.ship.pos.distance_to(_place_at(f[2])))
 		_put(_off(_place_at(f[2]), Sectors.AMBUSH_REACH - 2.0))
 		_run(Net.TICK_HZ * 3)
-		_expect(server.derelict.here and server.gunnery.fighting(), "flown close, its pirate ship comes out (here %s, fighting %s, taken %s, kind %d)"
-			% [server.derelict.here, server.gunnery.fighting(), r.taken.has(key), server.sectors.kind[server.ship.sector]])
+		_expect(server.derelict.here and server.gunnery.fighting(), "flown close, its pirate ship comes out (here %s, fighting %s, taken %s, kind %d, outside %s, can %s)"
+			% [server.derelict.here, server.gunnery.fighting(), r.taken.has(key), server.sectors.kind[server.ship.sector],
+			server.derelict.someone_outside(), server.derelict.pirates_can_come()])
 		_calm()
 	_enter_cluster(0)
 

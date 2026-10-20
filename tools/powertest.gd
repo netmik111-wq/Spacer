@@ -33,6 +33,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.stations.volunteers = false   # (v72) free bots would mend the engine this test breaks
 	server.gunnery.flies = false
 	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	_carrying()
