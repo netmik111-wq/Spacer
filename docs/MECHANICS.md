@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v75 (version 0.68).
+Last updated: build v76 (version 0.69).
 
 Contents:
 
@@ -199,7 +199,8 @@ Contents:
   rises only up to "100 minus wounds". A badly wounded unconscious person won't wake up
   until treated. (v75) Wounds of **100** or more leave nothing to come back to: such a person lies
   dying, **0.5** health a second (about 3 minutes from 0 to death), unless an autodoc or a medkit
-  treats them first.
+  treats them first. (v76) A player out cold (not just stunned) may **hold R for 2 s** to give up: the character
+  dies at once (the body stays), and R brings a new one from the reserve as after any death.
 - The screen darkens below 40 health. The unconscious and the dead lie down.
 - **Bodies remain** where they fell (the author's rule). Above 30 bodies, the oldest is removed.
 

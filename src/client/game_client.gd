@@ -1343,7 +1343,8 @@ func is_corpse(id: int) -> bool:
 
 func send_respawn() -> void:
 	## Dead: ask to come back as a new crew member (the server allows it after a few seconds).
-	if phase == PLAYING and my_cond == Net.COND_DEAD:
+	## (v76) Out cold: give up (the character dies at once; R again brings a new one from the reserve).
+	if phase == PLAYING and (my_cond == Net.COND_DEAD or my_cond == Net.COND_CRIT and health <= 0):
 		_peer.send(0, PackedByteArray([Net.C_RESPAWN]), ENetPacketPeer.FLAG_RELIABLE)
 
 

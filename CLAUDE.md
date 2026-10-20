@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v75 (version 0.68, polish) is the latest. Plans one to four are done except the darkness front (the
+Build v76 (version 0.69, give up while out cold) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -68,6 +68,8 @@ and cuffs that slip only when awake, whole and unwatched; bots mend their mount,
 wait at a busy door and say only breaches aloud; hits flash and bleed, red light at red alert, music and ship sounds; the
 run's story at the end, the host's address and players, a quiet first 5 minutes, a bug-report zip; deep wounds kill
 slowly (the simulator found a game that could never end); the simulator salvages, and a soak test.
+v76: out cold, hold R 2 s to give up and come back from the reserve. He said: the simulator does not replace his own
+playtests, so no numbers change for now; nothing public (no GitHub Releases, the repository stays private).
 Later: bots and pirates walking on a slant (his word), fear (its own build) and a fire
 question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -408,8 +410,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - A file up to 30 MB goes through chat, and the Windows game weighs 36 MB archived. So it
   is split into `game.001` and `game.002` in two archives; `play.bat` joins them and checks
   the size. The size in `play.bat` is updated with every build.
-- Builds aren't stored in git: the exe is larger than 100 MB. The author was offered to publish them
-  in the Releases section as one archive; no answer yet.
+- Builds aren't stored in git: the exe is larger than 100 MB. Nothing is published outside (the author, 2026-10-20:
+  no GitHub Releases, the repository stays fully private).
 
 The order of a build: code → `godot --headless --path . --import` → all checks above →
 `docs/MECHANICS.md`, the Claude Docs document, `dist_files/README.txt` (CRLF line ends, BOM),

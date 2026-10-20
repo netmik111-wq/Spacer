@@ -1268,3 +1268,10 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
 - **Deep wounds kill slowly** (mine, found by the simulator: all our people lay out cold with boarders aboard, and the
   captain at −5 health could neither wake nor die, a game that never ends): unconscious with wounds of 100 or more loses
   `Vitals.DYING` (0.5) health a second, so about 3 minutes to death unless treated. Then R and the reserve work as always.
+  (v76) He kept it ("in 3 minutes the character needs to die") and added: "when the player is unconscious he can choose to
+  die instantly and respawn". Holding R for 2 s (a hold, so a stray press does not kill) while out cold, not merely stunned
+  and not a prisoner; the death is counted «погиб от ран»; the respawn is the usual second R, from the reserve.
+- **The simulator does not replace playtests** (his answer, 2026-10-20): "I need to test it myself, so the game must
+  stay the same for now". The v75 tables (0 of 20 won) change no numbers until he has played.
+- **Nothing public** (his answer): the repository stays private and no GitHub Release is made; builds go through the chat
+  as before.

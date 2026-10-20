@@ -627,6 +627,16 @@ func respawn(p: Player) -> void:
 	server.chat.say("%s снова в строю." % p.name)
 
 
+func give_up(p: Player) -> void:
+	## (v76, the author: "when the player is unconscious he can choose to die instantly and respawn")
+	## Out cold (not merely stunned, not a prisoner): the character dies now, the body stays,
+	## and R brings a new one from the reserve as after any death.
+	if p.bot or p.pirate or p.corpse or p.health > 0.0 or server.over != Net.OVER_NONE:
+		return
+	p.wounds = maxf(p.wounds, Net.HEALTH_FULL)    # (so the summary says «погиб от ран»)
+	p.health = Net.HEALTH_DEAD
+
+
 func respawn_from_reserve(p: Player) -> void:
 	## A dead player asks to come back: that takes one of the reserve.
 	if server.over != Net.OVER_NONE:

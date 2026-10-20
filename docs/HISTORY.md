@@ -154,6 +154,11 @@ Open problems:
   needs in red, yellow and green on the sector console and the ship's controls.
 - Protocol 50. Questions: https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS. Build in `/mnt/project-files/builds/v73/`.
 
+### v76 (his answers after v75)
+- Out cold, a player may hold R for 2 s to give up: the character dies at once and R brings a new one from the reserve.
+  Deep wounds killing in about 3 minutes stays (his yes). No numbers changed after the simulator (he will test himself);
+  nothing published outside (the repository stays private). Version 0.69, build in `/mnt/project-files/builds/v76/`.
+
 ### v75 (polish; his 20 answers on "Spacer v75 Polish", all the recommended picks, and five notebook notes)
 - Prisoners: a four-cell brig under the armoury (`@ deck x y brig`), cuffs slip only when awake, above half health and
   with none of ours in the room (his note: a prisoner in critical health got a pipe and escaped); no food for prisoners;

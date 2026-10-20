@@ -127,6 +127,8 @@ var _alert_label: Label              # (v68) the alert level, over the screen wh
 var _alert_tint: ColorRect           # (v68) a slow red pulse over the screen on red alert
 var _pause_people: Label             # (v75) the people in the game, in the Esc menu
 var _pause_shot: Image               # (v75) the screen when the Esc menu opened, for a bug report
+var _give_up := 0.0                    # (v76) seconds R has been held while out cold
+const GIVE_UP_SECONDS := 2
 var _alert_time := 0.0
 var _monitor_step := 0.08
 var _monitor_time := 0.0
@@ -1420,7 +1422,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		show_debug(not _debug.visible)
 	elif Options.pressed(event, "toggle_predict"):
 		client.predict = not client.predict
-	elif Options.pressed(event, "respawn"):
+	elif Options.pressed(event, "respawn") and client.my_cond == Net.COND_DEAD:
 		client.send_respawn()
 	elif _pause.visible:
 		done = false
@@ -2180,9 +2182,17 @@ func _process(delta: float) -> void:
 	var dark := clampf((40.0 - client.health) / 40.0, 0.0, 1.0) * 0.5
 	if client.concussed and client.my_cond == Net.COND_OK:
 		dark = maxf(dark, 0.22 + 0.12 * sin(_life * 2.2))   # (v70) a concussion: the world swims
+	# (v76) out cold: holding R for GIVE_UP_SECONDS gives up (the character dies, R then brings a new one)
+	var out_cold := client.my_cond == Net.COND_CRIT and client.health <= 0
+	_give_up = _give_up + delta if out_cold and Options.held("respawn") and not busy else 0.0
+	if _give_up >= GIVE_UP_SECONDS:
+		_give_up = -INF                        # (once per hold)
+		client.send_respawn()
 	if client.my_cond == Net.COND_CRIT:
 		dark = 0.72
 		_fate.text = "Вы без сознания"
+		if out_cold:
+			_fate.text += ". Тяжёлые раны убьют вас за несколько минут, если вас не вылечат. Удерживайте R %d с, чтобы сдаться и вернуться из резерва." % GIVE_UP_SECONDS
 	elif client.my_cond == Net.COND_DEAD:
 		dark = 0.8
 		if client.reserve > 0:
