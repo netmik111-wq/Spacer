@@ -429,7 +429,7 @@ func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
 				known.erase(slot)
 			continue
-		if _seen_now(p, q, a_mine):
+		if (not q.taken or q == p) and _seen_now(p, q, a_mine):   # (v70) one dragged off is gone
 			if now != had:
 				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
 				known[slot] = now
@@ -532,7 +532,8 @@ func send() -> void:
 		var health_now := roundi(p.health)
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / maxi(p.work_total, 1)
-		var vitals := ((health_now + 200) << 20) | (tank_now << 10) | (work_now << 1) | (1 if p.supply else 0)
+		var marks := (1 if p.supply else 0) | (2 if p.bleeding > 0 else 0) | (4 if p.arm else 0) | (8 if p.leg else 0) | (16 if p.concussed > 0 else 0) | (32 if p.dragging >= 0 else 0)
+		var vitals := ((health_now + 200) << 24) | (tank_now << 13) | (work_now << 5) | marks
 		var carried := p.slots.duplicate()
 		carried.append_array(p.worn)
 		if vitals != p.vitals_sent or carried != p.slots_sent:
@@ -543,7 +544,7 @@ func send() -> void:
 			out.encode_u8(ov, Net.SEC_VITALS)
 			out.encode_s16(ov + 1, health_now)
 			out.encode_u8(ov + 3, tank_now)
-			out.encode_u8(ov + 4, 1 if p.supply else 0)
+			out.encode_u8(ov + 4, marks)    # (v70) with the injuries
 			out.encode_u8(ov + 5, work_now)
 			for k in Net.SLOTS:
 				out.encode_u8(ov + 6 + k, p.slots[k])

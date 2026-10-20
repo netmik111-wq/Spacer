@@ -1044,3 +1044,46 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   vents off (it checks sealed rooms staying empty).
 - Protocol 46 (the door flags' new bit). New test `tools/fixtest.gd` (30 scripts).
 - Questions: https://claude.ai/artifact/9DBk13CrtNCfmyFPdQoL1N (all answered: "A" but D1 "B", and a comment on A2).
+
+### People over bots (v70, the "every part interesting" plan's third step; questions page https://claude.ai/artifact/UsGtByhPuWjBu3PKWwPFVm, built on my picks)
+
+- **Bots at half** (P1 "A"): one number, `Stations.BOT_SHARE` (0.5), through `Stations.share(p)`, applied where a post's
+  help is worked out (`our_dodge`, `shield_pace`, `Mounts.pace`, `Gunnery.fire`'s aim bonus, `Medbay.tending`). Only the
+  bonus is halved, never the base (a mount's 1×), so a bot is still worth having. The evade stays a person's (v68).
+- **No sailor** (J1): `Crew.free_job` gives the job asked for unless another person holds it, else the first free of
+  pilot, engineer, doctor, guard; all taken, the one asked for. `JOB_CREWMAN` (0) is kept in the code for "no access"
+  (tests, old saves) but the menu no longer offers it.
+- **Autodoc** (M1 "A"): `UNTENDED_CAP` 50: alone it keeps people alive, it does not replace the medic. Tended pace
+  `1 + (TENDED - 1 + SKILL_TEND × skill) × share`. Bots lying in an untended autodoc get up at the cap (else they would
+  lie there forever). Injuries mend after `FIX_SECONDS` (3) of tending.
+- **Injuries** (M2 "A"): kept on `Player` (`bleeding` ticks, `leg`, `arm`, `concussed` until-tick), made in
+  `Combat.injure` by the wound's cause (`CAUSE_*`: shot, pellet, blow, blast). The leg uses the haul's slow step
+  (`st.slow`, already predicted by the client), so no new movement rule was needed; `Player.heal_injuries` resets it to
+  the haul state. Concussion: `Systems.at_console` refuses a person (bots keep their posts, or a bot could be stuck
+  for 90 s). The client gets the injuries in SEC_VITALS' flags byte (bits 1..5, bit 5 = hauling, because with a broken
+  leg `pred.slow` no longer means hauling).
+- **Meteors** (H1 "A"): only in a meteor stream (`Director._do("hole")` asks `Stations.meteor_seen`); micrometeorites
+  elsewhere still come unseen. The volley's gap went from 1.5 s to 3.5 s, so each meteor gets its own warning.
+  Ion surges (H2 "A"): `Hazards.STEER_CLEAR` 0.4 + 0.2 × skill, × share.
+- **Prisoners** (G1–G3 "A"): `src/server/prisons.gd`. A prisoner is still a pirate `Player` with `prisoner` set: every
+  place that counts pirates or picks a foe skips it (`Pirates.aboard`, `foe`, `EnemyCrew._alive`, `Crew._danger_at`,
+  roster `KIND_PRISONER`). Brig = cells with `ACCESS_ARMORY` in `ShipMap.access_in`. The swap is a tale
+  (`prisoner_swap`, effect "swap") so it rides the comms console's call machinery; it is never offered by the flagship
+  or a drone ship, and refused while ours are aboard their ship (they could not leave).
+- **Boarders' goals** (B1 "A"): set when a boarder comes aboard (`Pirates.give_goal`), half of them, one bomb and one
+  kidnapper a party at most (a party = boarders within `PARTY_GAP` ticks). Wreckers never touch the bridge consoles and
+  the engine only when `Systems.can_break("engine")` allows it: the escape rule holds. A bomb is a floor thing
+  (`ITEM_BOMB`) plus `Pirates.bombs`; it cannot be picked up, only disarmed (held E, `Repairs.update` first). A
+  kidnapped person is `Player.taken`: dead, hidden from every client (`Replication._characters`), and `Crew.respawn`
+  leaves no body for him (the author's "bodies stay" rule is about deaths; he is not dead aboard).
+- **Welder** (W1 "A"): a door flag (`Doors.welded`, bit 6) that `Doors.blocks` answers for everybody, so `Mover.step`
+  and the client's prediction need nothing new; `Blast.tick` already makes pirates cut what blocks them (now also
+  welds, and clears the weld). Bots' routes skip welded doors.
+- **Pirates' walking** (found while testing the robber): `Pirates.think` turned only at `cd == 0`, which a walking
+  character never shows (Mover.step counts down and steps in the same tick), so pirates went straight until a wall.
+  It now turns at `cd <= 1`.
+- Protocol 47 (new items, sounds, the stations packet's meteor bytes, the vitals flags).
+- (v70, mine) Boarders force any emergency shutter in their way, as they already forced airlock doors. The 30-run
+  check of the robber showed why: the hole a boarder cuts drops its room's shutters, and while the hole stays open
+  the pressure keeps them down, so a robber or wrecker with a goal stood in that room for good. Forcing takes the
+  same 3 s as for a person (Repairs). Our security robots do not force them (that lets air out).

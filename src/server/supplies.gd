@@ -297,6 +297,9 @@ func store_asked(p: Player, action: int, item: int) -> void:
 				server.ship.credits -= Net.PRICE_CREW
 				server.reserve += 1
 				server.chat.say("%s нанимает у торговца нового члена экипажа. В резерве: %d." % [p.name, server.reserve])
+		Net.STORE_PRISONERS:
+			if can_trade():
+				server.prisons.sell(p)       # (v70, the author's J5) a station or a trader takes our prisoners
 		Net.STORE_BUY_HULL:
 			if trader_here() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < server.ship.hull_max and server.over == Net.OVER_NONE:
 				server.ship.credits -= Net.PRICE_HULL
@@ -324,7 +327,8 @@ func _put_back(p: Player, at: int) -> void:
 
 func weapons_aboard() -> int:
 	## Weapons the crew could lay hands on: in the locker and in its pockets.
-	var n: int = server.ship.store.get(Net.ITEM_PISTOL, 0) + server.ship.store.get(Net.ITEM_BATON, 0)
+	var n: int = server.ship.store.get(Net.ITEM_PISTOL, 0) + server.ship.store.get(Net.ITEM_BATON, 0) \
+		+ server.ship.store.get(Net.ITEM_SHOTGUN, 0) + server.ship.store.get(Net.ITEM_STUNNER, 0)
 	for q: Player in server.players:
 		if q != null and not q.pirate and not q.ally and not q.corpse:
 			for v in q.slots:

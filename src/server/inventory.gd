@@ -30,8 +30,8 @@ func pick_up(p: Player) -> bool:
 	var here := p.st.y * server.map.width + p.st.x
 	var ahead := server.map.cell_ahead(p.st.x, p.st.y, p.st.facing)
 	for cell: int in [ahead, here]:
-		if cell < 0 or not server.floor_things.has(cell) or _lying_in(cell):
-			continue
+		if cell < 0 or not server.floor_things.has(cell) or _lying_in(cell) or server.pirates.bombs.has(cell):
+			continue                         # (v70) a pirates' bomb is disarmed, not picked up
 		var things: PackedByteArray = server.floor_things[cell]
 		var top := Net.FLOOR_STACK - 1
 		while top >= 0 and things[top] == Net.ITEM_NONE:
@@ -89,7 +89,7 @@ func act(p: Player) -> bool:
 	## puts on something to wear (what was worn there comes off into the hand).
 	## (v69) A first-aid kit or a patch treats oneself.
 	var item := p.in_hand()
-	if p.cond == Net.COND_OK and not p.corpse and (Items.uses(item) > 0 or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
+	if p.cond == Net.COND_OK and not p.corpse and (Items.uses(item) > 0 or item == Net.ITEM_SPLINT or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
 		server.combat.treat_self(p)
 		return true
 	if p.cond == Net.COND_OK and not p.corpse and Items.worn_as(item) >= 0:

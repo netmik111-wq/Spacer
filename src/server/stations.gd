@@ -43,6 +43,7 @@ const HELM_DODGE := 0.15             # the enemy's shots miss this much more oft
 const PILOT_DODGE := 0.10            # (v60) and up to this much more again with the piloting skill (a pilot by job starts at half)
 const ENGINE_DODGE := 0.05           # and with somebody minding the engine
 const SHIELD_PACE := 1.25            # the shield refills this much faster with somebody at its generator
+const BOT_SHARE := 0.5               # (v70, the author's P1: "people should matter more than bots") a bot at a post gives half the help
 const MANOEUVRE_SECONDS := 8.0       # to change the battle position, without dodging meanwhile
 const FAR_HIT := 0.15                # at a distance both sides hit this much less
 const FLANK_HIT := 0.15              # from its flank we hit this much better...
@@ -58,6 +59,14 @@ const EVADE_SECONDS := 1.5           # the moment, for one without piloting skil
 const EVADE_SKILL := 1.0             # ... and this much longer with the best skill
 const EVADE_REST := 12.0             # before it can be pressed again
 const EVADE_COST := 40.0             # taken from the SMES each time
+# (v70, the author's H1: "a pilot should matter outside fights too") in a meteor
+# stream each meteor is seen METEOR_WARN seconds ahead: the pilot at the controls
+# steers round it with the evade (space), by lot; a bot at the controls does it by
+# itself at half the chance; with nobody there it hits.
+const METEOR_WARN := 2.5
+const METEOR_DODGE := 0.6            # the chance to steer round it...
+const METEOR_SKILL := 0.3            # ... and this much more with the best piloting skill
+const METEOR_COST := 10.0            # from the SMES
 const EVADE_DODGE := 0.5
 
 var server: GameServer
@@ -72,6 +81,10 @@ var _sabotage := PackedFloat32Array()
 var _told := PackedByteArray()
 var evade_until := 0                 # (v68) the tick the pilot's evade ends
 var evade_ready := 0                 # and the tick it can be pressed again
+var meteor_at := 0                   # (v70) the tick a meteor seen coming strikes (0 = none coming)
+var meteor_tried := false            # the pilot has steered (or tried) for this one
+var meteor_missed := false           # and got the ship out of its way
+var meteor_roll := -1.0              # (tests: a fixed lot instead of the dice; -1 = dice)
 var alert := Net.ALERT_GREEN         # (v68, the author's J4) the alert level
 var _alert_auto := false             # it went to yellow by itself when a pirate ship came
 var _fight_seen := false
@@ -168,7 +181,8 @@ func our_dodge() -> float:
 	var pilot: Player = _at.get(Net.POST_HELM, null)
 	if pilot == null:
 		return 0.0
-	var d := HELM_DODGE + PILOT_DODGE * pilot.skill(Net.SKILL_PILOT) + (ENGINE_DODGE if _at.has(Net.POST_ENGINE) else 0.0) \
+	var minder: Player = _at.get(Net.POST_ENGINE, null)
+	var d := (HELM_DODGE + PILOT_DODGE * pilot.skill(Net.SKILL_PILOT)) * share(pilot) + (ENGINE_DODGE * share(minder) if minder != null else 0.0) \
 		+ server.outfit.dodge_bonus() + server.power.engine_dodge()
 	return d * (FLANK_DODGE if position == Net.POS_FLANK else 1.0)
 
@@ -194,7 +208,13 @@ func their_hit_bonus() -> float:
 
 
 func shield_pace() -> float:
-	return SHIELD_PACE if _at.has(Net.POST_SHIELD) else 1.0
+	var p: Player = _at.get(Net.POST_SHIELD, null)
+	return 1.0 + (SHIELD_PACE - 1.0) * share(p) if p != null else 1.0
+
+
+static func share(p: Player) -> float:
+	## (v70) How much of a post's help this one gives: a person all of it, a bot half.
+	return BOT_SHARE if p != null and p.bot else 1.0
 
 
 func slows_docking() -> bool:
@@ -296,6 +316,9 @@ func evade_asked(p: Player) -> void:
 	## the next moment (longer with piloting skill) hit far less often. It costs the SMES.
 	if not server.systems.at_console(p, server.map.helm):
 		return
+	if meteor_at > 0 and not server.gunnery.fighting():
+		_steer(p)
+		return
 	if not server.gunnery.fighting():
 		server.chat.tell(p, "Боя нет: уклоняться не от чего.")
 		return
@@ -315,6 +338,56 @@ func evade_asked(p: Player) -> void:
 	evade_ready = server.tick + roundi(EVADE_REST * Net.TICK_HZ)
 	p.train(Net.SKILL_PILOT)
 	server.chat.say_bridge("%s бросает корабль в сторону: уклонение на %.1f с." % [p.name, float(evade_until - server.tick) / Net.TICK_HZ])
+
+
+# ---------------------------------------------------------------- (v70) meteors
+
+func meteor_seen() -> bool:
+	## A meteor is coming (the director's, in a meteor stream): it strikes in
+	## METEOR_WARN seconds unless the pilot steers round it. False if one is coming already.
+	if meteor_at > 0:
+		return false
+	meteor_at = server.tick + roundi(METEOR_WARN * Net.TICK_HZ)
+	meteor_tried = false
+	meteor_missed = false
+	for c: int in server.map.helm.keys():
+		server.chat.sound(Net.SOUND_BEEP, c % server.map.width, c / server.map.width)
+	server.chat.say_bridge("Метеор по курсу! Через %.1f с удар: пилот, уклонение (пробел у штурвала)." % METEOR_WARN)
+	return true
+
+
+func _lot() -> float:
+	return meteor_roll if meteor_roll >= 0.0 else server.rng.randf()
+
+
+func _steer(p: Player) -> void:
+	## The pilot steers round the meteor coming.
+	if meteor_tried:
+		return
+	if server.engine_down() or not server.power.engine_running():
+		server.chat.tell(p, "Двигатель не работает: увернуться не выйдет.")
+		return
+	if not server.power.spend(METEOR_COST):
+		server.chat.tell(p, "В СМЭС не хватает заряда на манёвр (нужно %d)." % int(METEOR_COST))
+		return
+	meteor_tried = true
+	meteor_missed = _lot() < METEOR_DODGE + METEOR_SKILL * p.skill(Net.SKILL_PILOT)
+	p.train(Net.SKILL_PILOT)
+	server.chat.say_bridge("%s закладывает вираж%s" % [p.name, "." if meteor_missed else ", но не успевает!"])
+
+
+func _meteor_tick() -> void:
+	if meteor_at <= 0 or server.tick < meteor_at:
+		return
+	meteor_at = 0
+	var pilot: Player = _at.get(Net.POST_HELM, null)
+	if not meteor_tried and pilot != null and pilot.bot and server.power.engine_running() and not server.engine_down():
+		meteor_missed = _lot() < (METEOR_DODGE + METEOR_SKILL * pilot.skill(Net.SKILL_PILOT)) * share(pilot)
+	if meteor_missed:
+		server.chat.say_bridge("Метеор прошёл мимо: корабль увернулся.")
+		return
+	server.systems.breach_random()
+	server.hazards.meteor_on_enemy()
 
 
 # ---------------------------------------------------------------- (v68) the alert
@@ -561,7 +634,9 @@ func _wants_healing(p: Player) -> void:
 	## (v60) A badly hurt bot goes to lie in a free autodoc until it is whole enough.
 	var m = server.medbay
 	if p.bot_healing:
-		if p.health >= m.BOT_LEAVES_AT and p.wounds <= 0.0 or m.free_beds(p).is_empty():
+		var doc: int = m.bed_of(p)
+		var up: float = m.leave_at(doc) if doc >= 0 else m.BOT_LEAVES_AT
+		if p.health >= up and (p.wounds <= 0.0 or up < m.BOT_LEAVES_AT) or m.free_beds(p).is_empty():
 			p.bot_healing = false
 			p.bot_plan_tick = -1000
 	elif p.health < m.BOT_GOES_AT and not m.free_beds(p).is_empty():
@@ -877,8 +952,8 @@ func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = fa
 			if not (map.walkable(nx, ny) and (wide or map.on_ship(j)) or wide and suited and map.floats(nx, ny)):
 				continue
 			var door := map.door_of[j]
-			if door >= 0 and server.doors.is_sealed(door) and not server.systems.lock_door(door):
-				continue
+			if door >= 0 and (server.doors.is_sealed(door) and not server.systems.lock_door(door) or server.doors.welded[door] == 1):
+				continue                     # (v70) nor through a welded door
 			nexts.append([j, d])
 		if map.climb[cell] >= 0 and not map.floats(x, y):
 			nexts.append([map.climb[cell], -1])
@@ -1132,6 +1207,7 @@ func tick() -> void:
 	_position_tick()
 	_boarding()
 	_alert_tick()
+	_meteor_tick()
 	var now := packet()
 	if now != _told:
 		_told = now
@@ -1158,4 +1234,7 @@ func packet() -> PackedByteArray:
 	out.append(alert)
 	out.append(clampi(ceili(float(evade_until - server.tick) * 10.0 / Net.TICK_HZ), 0, 255) if evading() else 0)
 	out.append(clampi(ceili(float(evade_ready - server.tick) / Net.TICK_HZ), 0, 255))
+	# (v70) u8 tenths of a second until a meteor seen coming strikes (0 = none), u8 1 = the pilot has steered
+	out.append(clampi(ceili(float(meteor_at - server.tick) * 10.0 / Net.TICK_HZ), 1, 255) if meteor_at > 0 else 0)
+	out.append(1 if meteor_tried else 0)
 	return out

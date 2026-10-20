@@ -92,6 +92,7 @@ const Assault := preload("res://src/server/assault.gd")
 const Story := preload("res://src/server/story.gd")
 const Garden := preload("res://src/server/garden.gd")
 const Salvage := preload("res://src/server/salvage.gd")
+const Prisons := preload("res://src/server/prisons.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -180,6 +181,7 @@ var story := Story.new()               # (v63) the comms console's calls, quests
 var garden := Garden.new()             # (v63) food and the hydroponic trays
 var road := Road.new()                 # (v64) the road of clusters, places inside a system, pirate hunters
 var salvage := Salvage.new()           # (v67) cutting scrap off wrecks, things floating outside
+var prisons := Prisons.new()           # (v70) pirates in our handcuffs
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
@@ -283,6 +285,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	power.setup(self)
 	outside.setup(self)
 	salvage.setup(self)
+	prisons.setup(self)
 	robots.setup(self)
 	assault.setup(self)
 	outfit.setup(self)
@@ -674,6 +677,9 @@ func _tick() -> void:
 	gunnery.tick()
 	medbay.tick()
 	blast.tick()
+	combat.tick()                 # (v70) flashbangs in flight
+	pirates.tick()                # (v70) the pirates' bombs
+	prisons.tick()
 	outfit.tick()
 	enemy_crew.tick()
 	drone.tick()

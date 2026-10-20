@@ -373,7 +373,7 @@ func come_to_life() -> void:
 
 
 func _alive(p) -> bool:
-	return p != null and not p.corpse and p.cond != Net.COND_DEAD and server.map.is_other(p.st.y * server.map.width + p.st.x)
+	return p != null and not p.corpse and not p.prisoner and p.cond != Net.COND_DEAD and server.map.is_other(p.st.y * server.map.width + p.st.x)
 
 
 func _read_world() -> void:
@@ -382,7 +382,7 @@ func _read_world() -> void:
 	for p in people:
 		if _alive(p) and server.players[p.slot] == p:
 			still.append(p)
-		elif p != null and server.players[p.slot] == p and not p.corpse and p.cond != Net.COND_DEAD:
+		elif p != null and server.players[p.slot] == p and not p.corpse and not p.prisoner and p.cond != Net.COND_DEAD:
 			crossed += 1                     # (v64) alive, but off its ship: a boarder of ours now, not a loss
 	people = still
 	var n := people.size()

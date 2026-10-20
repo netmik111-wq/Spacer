@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 46
+const PROTOCOL := 47
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -91,7 +91,8 @@ const SEC_FLOOR := 10               # u16 count, then FLOOR_BYTES-byte records: 
                                     # bytes: the things lying in that cell, bottom first (ITEM_NONE = none)
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
-                                    # u8 flags (bit 0: supply on), u8 work done on what it is using (0..100),
+                                    # u8 flags (bit 0: supply on; v70: 1 bleeding, 2 broken arm,
+                                    # 3 broken leg, 4 concussed, 5 hauling somebody), u8 work done on what it is using (0..100),
                                     # then SLOTS bytes: what it carries, one item per slot (ITEM_*),
                                     # then WORN bytes: what it wears (WEAR_*)
 const SLOTS := 12                   # slots for things: BASE_SLOTS always, POCKETS with a jumpsuit, PACK_SLOTS with a backpack
@@ -148,6 +149,16 @@ const ITEM_SCRAP := 233             # (v67) scrap cut off a wreck or a derelict:
 const ITEM_ORE := 234               # (v67) a chunk of ore from an asteroid: carried, kept in the locker, sold, refined into fuel
 const ITEM_DATA := 235              # (v67) scan data of an anomaly: cargo, sold to traders
 const ITEM_PISTOL := 10             # a pistol with no rounds in it; ITEM_PISTOL + n holds n rounds
+# (v70, the author's B3, J2, J5) personal weapons, cuffs and splints
+const ITEM_SHOTGUN := 236           # a shotgun with no shells in it; ITEM_SHOTGUN + n holds n (236..240)
+const SHOTGUN_ROUNDS := 4
+const ITEM_SHELLS := 241            # a box of SHOTGUN_ROUNDS shotgun shells: reloads a shotgun
+const ITEM_STUNNER := 242           # a stun baton: a blow that knocks the one hit down for a while
+const ITEM_FLASHBANG := 243         # a flashbang: thrown at a cell, it stuns everybody near who sees it
+const ITEM_WELDER := 244            # a welder: holding "use" at a shut door welds it shut, or cuts the weld
+const ITEM_CUFFS := 245             # handcuffs: put on a pirate who is down, he is our prisoner
+const ITEM_SPLINT := 246            # a splint: sets a broken arm or leg
+const ITEM_BOMB := 247              # (v70, the author's B1) a boarder's bomb: planted on the floor, never carried by us
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
 
@@ -396,6 +407,7 @@ const SHOT_NOVA := 18               # the «Сверхновая»: a blinding w
 const SHOT_HAMMER := 19             # the «Молот»: a heavy glowing slug
 const SHOT_BOMB := 20               # (v62) a bomb: no flight across, a shimmer where it is teleported in, then its burst
 const SHOT_SHRAPNEL := 21           # (v62) «Шрапнель»: a cloud of small glowing fragments
+const SHOT_FLASH := 22              # (v70) a flashbang or a boarder's bomb bursting: a white flash at `to`
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2
@@ -496,6 +508,8 @@ const STORE_SELL := 10              # sell one of the thing named from the locke
 const STORE_HARDEN := 11            # buy the shield hardening from a trader who offers it
 const STORE_BUY_BACK := 12          # (v58) buy back from a trader a thing we sold it, at the price it paid
 const STORE_BUY_FUEL := 13          # (v67) have the trader pour FUEL_LOT units of fuel straight into the tank
+const STORE_PRISONERS := 14         # (v70) hand every prisoner aboard over to a station or a trader for PRISONER_PAYS each
+const PRISONER_PAYS := 40
 const S_TRADE := 32                 # what the trader alongside offers (sent when it changes): u8 count, then per thing
                                     # u8 ITEM_*, u16 price; then u8 TRADE_* flags. Count 0 = no trader. (v58) Then, with
                                     # a trader: u8 deal (Sectors.DEAL_*), u8 x3 % it pays (plain, guns, ammunition),
@@ -562,7 +576,11 @@ const SOUND_BLOW := 8               # a blow struck
 const SOUND_CRY := 9                # somebody hurt crying out
 const SOUND_PHASE := 10             # (v59) the phase drive throwing the ship to its new position: heard all over it
 const SOUND_LOAD := 11              # (v68) a round pushed into a gun mount's breech
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6]
+const SOUND_BANG := 12              # (v70) a flashbang or a boarder's bomb bursting
+const SOUND_BEEP := 13              # (v70) a bomb ticking; the meteor warning on the bridge
+const SOUND_SHOTGUN := 14           # (v70) a shotgun
+const SOUND_ZAP := 15               # (v70) a stun baton
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 
@@ -662,11 +680,11 @@ const JOBS := 6
 const JOB_NAMES: Array[String] = ["Матрос", "Капитан", "Пилот", "Инженер", "Врач", "Охранник"]
 const JOB_ABOUT: Array[String] = [
 	"Без особых доступов. Учится всему понемногу.",
-	"Доступ везде. Один на корабль.",
-	"Мостик: карта сектора, управление, пульт орудий.",
+	"Доступ везде. Один на корабль. Объявляет тревогу, отдаёт приказы ботам.",
+	"Мостик: карта сектора, управление, пульт орудий. Уклоняется в бою и уводит корабль от метеоров.",
 	"Машинное отделение, жизнеобеспечение, орудийные отсеки. Быстро чинит.",
-	"Медблок. Быстро лечит.",
-	"Арсенал и орудийные отсеки. Метко стреляет.",
+	"Медблок. Быстро лечит, лучше всех ухаживает за раненым в автодоке.",
+	"Арсенал (он же гауптвахта) и орудийные отсеки. Метко стреляет, приходит с электрошокером и наручниками, лучше всех допрашивает пленных.",
 ]
 const JOB_ACCESS: Array[int] = [0, ACCESS_ALL, ACCESS_BRIDGE, ACCESS_ENGINE | ACCESS_GUNS, ACCESS_MEDBAY, ACCESS_ARMORY | ACCESS_GUNS]
 # skills, 0..SKILL_MAX: how quickly one mends, treats, how well one shoots
@@ -699,6 +717,7 @@ const KIND_BOT := 1
 const KIND_CORPSE := 2              # a body left behind; nobody controls it
 const KIND_PIRATE := 3              # an enemy the server moves
 const KIND_ROBOT := 4                # (v62) our security robot: a machine the server moves; not crew
+const KIND_PRISONER := 5             # (v70) a pirate in our handcuffs: lies bound, takes no part
 const PIRATE_COLOURS := 3           # rows of assets/chars.png after the crew's SUIT_COLOURS: pirates' suits
 const ROBOT_COLOUR := SUIT_COLOURS + PIRATE_COLOURS        # (v62) the row of an enemy robot (assault drone, guard)
 const OUR_ROBOT_COLOUR := ROBOT_COLOUR + 1                 # (v62) the row of our security robot

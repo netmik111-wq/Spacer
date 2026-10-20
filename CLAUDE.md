@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v69 (version 0.62, the author's bug notes and two ideas) is the latest. Plans one to four are done except the darkness front (the
+Build v70 (version 0.63, people over bots) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -51,7 +51,9 @@ outside, work places, traders' wants, the refinery, the parting volley; v68 figh
 overcharge), rounds loaded by hand, fights with goals, alert levels, breakdowns from hits, fight news on the bridge only.
 Several reactors is a later question round (it breaks the one-engine rule).
 v69 was the author's notebook between plan builds: 11 bug fixes, wrecks kept on the chart, the one-press airlock, vents.
-Next in that plan: people over bots, upkeep, fear (each its own build), then a fire question round.
+v70 people over bots: bots at posts give half, no sailor, the autodoc needs a medic, injuries, the pilot steers round
+meteors and surges, prisoners, boarders with goals (wreck, rob, bomb, kidnap), the shotgun and the welder.
+Next in that plan: upkeep, fear (each its own build), then a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -82,7 +84,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 30 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 31 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -113,6 +115,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/salvagetest.gd (since v67: fuel units, pouring, scrap, floating finds, work places, refinery)
     godot --headless --path . --script res://tools/crewfighttest.gd (since v68: power panel, overcharge, evade, loaded mounts, goals, alerts, knock-on)
     godot --headless --path . --script res://tools/fixtest.gd (since v69: self-healing, autodoc, buried finds, docking, wrecks on the chart, hunters, station, locked rooms, airlock cycle, vents, sight)
+    godot --headless --path . --script res://tools/peopletest.gd (since v70: bots at half, jobs, autodoc, injuries, meteors, surges, prisoners, boarders' goals, bombs, kidnapping, shotgun, flashbang, welder)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -136,7 +139,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 30 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 31 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -167,7 +170,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   teleported boarders and assault drones, `robots`: our security robots; since v63 `story`: the comms console's
   calls (data in `tales.gd`), quests, missions, SOS, and `garden`: food, hunger and the hydroponic trays; since v64 `road`:
   the road of clusters, places inside a system and pirate hunters; since v67 `salvage`: cutting scrap off dark ships and
-  things floating outside).
+  things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -330,6 +333,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   (`replication.set_round(false)` for strict cone checks). Vents refill sealed rooms (`systems.vents_on = false` to
   keep a room empty). Leaving a locked room is free (`ShipMap.leaving`); a hacked lock stays open (`Doors.picked`).
   `Derelict._put` adds to a floor cell, never replaces.
+- (v70) A prisoner is a pirate `Player` with `prisoner` set: whatever counts pirates or picks a foe must skip it (as
+  `Pirates.aboard`/`foe` do). A kidnapped one is `taken` (dead, hidden from clients, no body on respawn). A bot's help at a
+  post goes through `Stations.share(p)`. Pirates' bombs are floor things plus `Pirates.bombs`; boarders get goals only while
+  `pirates.goals_on` (tests that count pirates' fighting may want it off). `Systems.at_console` refuses a concussed person.
+  Pirates turn at `cd <= 1` (a walking character never shows cd 0 to a think).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

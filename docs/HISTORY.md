@@ -142,6 +142,19 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v70 (people over bots; the third step of the "every part interesting" plan)
+- A bot at a post gives half the help a person gives (helm, engine, shield, guns, the gun console, tending the autodoc);
+  only a person presses the evade. The sailor is gone: a newcomer takes a free job.
+- The autodoc alone heals only to 50 health; tended it heals fully and mends injuries. New injuries: bleeding, broken
+  arm or leg (splints), concussion (no consoles for a person).
+- The pilot steers round meteors in a stream (seen 2.5 s ahead) and clear of ion surges.
+- Prisoners: stun baton, flashbang and handcuffs; the armoury is the brig; prisoners are sold, questioned or exchanged
+  with their ship over the comms console.
+- Boarders come for something: to wreck a machine, rob the locker, plant a bomb or drag one of ours off. New shotgun
+  and welder (welds a door shut). Pirates now pick their way at every step (they used to go straight until a wall).
+- New test `tools/peopletest.gd` (31 scripts), protocol 47. Questions: https://claude.ai/artifact/UsGtByhPuWjBu3PKWwPFVm
+  (built on my picks while he slept). Build in `/mnt/project-files/builds/v70/`.
+
 ### v69 (bug fixes and two ideas; the author's notebook)
 - Fixes: plasters and medkits treat yourself with a click anywhere on you or Z, and say why when nothing happens; the
   autodoc heals the worst off and can be tended from its bed; finds no longer vanish inside a docking ship's wall;

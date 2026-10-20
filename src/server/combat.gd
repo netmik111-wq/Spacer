@@ -7,6 +7,7 @@ const Net := preload("res://src/shared/net.gd")
 const Mover := preload("res://src/shared/mover.gd")
 const Player := preload("res://src/server/player.gd")
 const Items := preload("res://src/shared/items.gd")
+const Sight := preload("res://src/shared/sight.gd")
 
 const TREAT_TICKS := 60             # one use of a first-aid kit takes 3 s
 const SHOT_TICKS := 6                # a pistol fires at most this often
@@ -14,12 +15,41 @@ const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
 const BLOW_TICKS := 16               # a blow with a baton
 const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
 const SHOT_SEEN := 24                # a shot is drawn for everybody this close on its deck
+# (v70, the author's J2) injuries
+const BLEED_CHANCE := 0.25           # a bullet starts bleeding this often (a pellet: PELLET_BLEED)
+const PELLET_BLEED := 0.1
+const BLEED_RATE := 0.5              # health a second it costs (as a wound)
+const BLEED_SECONDS := 90.0          # and it stops by itself after this long
+const HEAVY_HIT := 25.0              # a wound this big at once may break a bone...
+const BREAK_CHANCE := 0.2            # ... this often (an arm or a leg, by lot)
+const BLOW_CONCUSS := 0.15           # a blow concusses this often (a stun baton: STUN_CONCUSS)
+const STUN_CONCUSS := 0.3
+const BLAST_CONCUSS := 0.5           # a bomb's blast
+const FLASH_CONCUSS := 0.3           # a flashbang's
+const CONCUSS_SECONDS := 90.0
+const SPLINT_TICKS := 80             # setting a bone takes 4 s (down to half with skill)
+const ARM_SLOWER := 2.0              # a broken arm: the hands are this many times slower...
+const ARM_SPREAD := 0.8              # ... and a shot goes up to this many cells off
+# (v70, the author's B3) the flashbang
+const FLASH_FUSE := 20               # it bursts 1 s after it is thrown
+const FLASH_REACH := 4.0             # cells: who sees it this close falls
+const FLASH_STUN := 3.0
+const ROBOT_STUN := 0.2              # a machine is knocked down for this share of the time
+const CAUSE_OTHER := 0               # what a wound came from (see hurt)
+const CAUSE_SHOT := 1
+const CAUSE_PELLET := 2
+const CAUSE_BLOW := 3
+const CAUSE_BLAST := 4
 
 var server: GameServer
+var bangs: Array = []                # (v70) flashbangs in the air: [tick it bursts, cell, the thrower's slot]
+var _rng := RandomNumberGenerator.new()   # (v70) injuries, pellets and wide shots: its own lots
 
 
 func setup(p_server: GameServer) -> void:
 	server = p_server
+	bangs = []
+	_rng.seed = 7070
 
 
 func place_at(q: Player, when: int) -> Vector2:
@@ -35,27 +65,40 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 	## A click with the thing in the hand: a pistol shoots there (or is
 	## reloaded when empty), a baton strikes the cell next to us that way, a
 	## patch for wounds is put on ourselves or on the one next to us.
+	## (v70) A shotgun fires a spread, a stun baton knocks down, a flashbang is
+	## thrown there, handcuffs go on a pirate lying next to us, a splint sets a bone.
 	if p.cond != Net.COND_OK or p.corpse or server.tick < p.ready_tick:
 		return
 	var item := p.in_hand()
 	var rounds := Items.rounds(item)
+	var slow := ARM_SLOWER if p.arm else 1.0
 	if rounds > 0:
 		p.slots[p.hand] = item - 1
-		p.ready_tick = server.tick + SHOT_TICKS
-		_shoot(p, clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick), at)
+		p.ready_tick = server.tick + roundi(SHOT_TICKS * slow * (2.0 if Items.INFO[item].has("pellets") else 1.0))
+		if p.arm:
+			at += Vector2(_rng.randf_range(-ARM_SPREAD, ARM_SPREAD), _rng.randf_range(-ARM_SPREAD, ARM_SPREAD))
+		if Items.INFO[item].has("pellets"):
+			_shotgun(p, clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick), at, int(Items.INFO[item]["pellets"]))
+		else:
+			_shoot(p, clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick), at)
 	elif rounds == 0:
-		var mag := p.slots.find(Net.ITEM_MAG)
+		var mag := p.slots.find(Items.ammo_of(item))
 		if mag >= 0:
 			p.slots[mag] = Net.ITEM_NONE
-			p.slots[p.hand] = Net.ITEM_PISTOL + Net.PISTOL_ROUNDS
-			p.ready_tick = server.tick + RELOAD_TICKS
+			p.slots[p.hand] = Items.loaded(item)
+			p.ready_tick = server.tick + roundi(RELOAD_TICKS * slow)
 	elif Items.INFO.has(item) and Items.INFO[item].has("blow"):
-		p.ready_tick = server.tick + BLOW_TICKS
-		_strike(p, at, int(Items.INFO[item]["blow"]))
+		p.ready_tick = server.tick + roundi(BLOW_TICKS * slow * (1.5 if Items.INFO[item].has("stun") else 1.0))
+		_strike(p, at, int(Items.INFO[item]["blow"]), float(Items.INFO[item].get("stun", 0.0)))
+	elif item == Net.ITEM_FLASHBANG:
+		_throw(p, at)
+	elif item == Net.ITEM_CUFFS:
+		cuff(p, _beside(p, at, false))
 	elif Items.INFO.has(item) and Items.INFO[item].has("heal"):
 		var who := _beside(p, at, true)
-		if who != null and who.wounds > 0.0:        # (a patch is not wasted on one who has no wounds)
+		if who != null and (who.wounds > 0.0 or who.bleeding > 0):        # (a patch is not wasted on one who has no wounds)
 			heal(who, float(Items.INFO[item]["heal"]))
+			who.bleeding = 0                 # (v70) a patch stops bleeding
 			p.slots[p.hand] = Net.ITEM_NONE
 			if who != p:
 				server.chat.say("%s заклеивает раны: %s." % [p.name, who.name])
@@ -63,16 +106,21 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			_why_not_treated(p, who)
 	elif item == Net.ITEM_ROBOT:
 		server.robots.deploy(p, Vector2i(roundi(at.x), roundi(at.y)))   # (v62) a security robot set down there
-	elif Items.uses(item) > 0:
-		# a first-aid kit: the treatment takes a while, and both must keep still for it
+	elif Items.uses(item) > 0 or item == Net.ITEM_SPLINT:
+		# a first-aid kit (v70: or a splint): the treatment takes a while, and both must keep still for it
 		var who := _beside(p, at, true)
-		if who != null and who.wounds > 0.0:
+		var needs := who != null and (who.leg or who.arm) if item == Net.ITEM_SPLINT else who != null and (who.wounds > 0.0 or who.injured())
+		if needs:
 			p.treating = who.slot
 			p.work = 0
 			p.work_cell = -2
-			p.work_total = _treat_ticks(p)
+			p.work_total = _treat_ticks(p, item)
 			if who == p:
-				server.chat.tell(p, "Вы обрабатываете свои раны: стойте на месте %d с." % ceili(_treat_ticks(p) / float(Net.TICK_HZ)))
+				server.chat.tell(p, "Вы %s: стойте на месте %d с." % ["вправляете себе перелом" if item == Net.ITEM_SPLINT else "обрабатываете свои раны",
+					ceili(_treat_ticks(p, item) / float(Net.TICK_HZ))])
+		elif item == Net.ITEM_SPLINT:
+			server.chat.tell(p, "Шина нужна при переломе: щёлкните по себе (или Z) или по соседу со сломанной рукой или ногой." if who == null
+				else "%s переломов нет." % ("У вас" if who == p else "У %s" % who.name))
 		else:
 			_why_not_treated(p, who)
 
@@ -89,6 +137,9 @@ func _why_not_treated(p: Player, who: Player) -> void:
 		server.chat.tell(p, "Лечить некого: щёлкните по себе (или Z) или по тому, кто стоит рядом.")
 		return
 	var whose := "У вас" if who == p else "У %s" % who.name
+	if who.prisoner:
+		server.chat.tell(p, "%s в наручниках: пленного не лечат аптечкой." % who.name)
+		return
 	var hunger: float = server.garden.hunger_of(who)
 	if who.health < Net.HEALTH_FULL - 0.5 and hunger > 0.5 and who.health >= Net.HEALTH_FULL - who.wounds - hunger - 0.5:
 		server.chat.tell(p, "%s нет ран: это голод. Поможет только еда." % whose)
@@ -125,28 +176,53 @@ func update_treatment(p: Player) -> bool:
 		return false
 	var q: Player = server.players[p.treating] if p.treating < server.players.size() else null
 	var kit := p.in_hand()
-	if q == null or q.corpse or q.cond == Net.COND_DEAD or p.cond != Net.COND_OK or Items.uses(kit) <= 0 \
+	var splint := kit == Net.ITEM_SPLINT
+	if q == null or q.corpse or q.cond == Net.COND_DEAD or p.cond != Net.COND_OK or (Items.uses(kit) <= 0 and not splint) \
 			or p.st.cd > 0 or p.st.dir != Net.DIR_NONE or absi(q.st.x - p.st.x) > 1 or absi(q.st.y - p.st.y) > 1 \
-			or q.wounds <= 0.0:
+			or (not splint and q.wounds <= 0.0 and not q.injured()) or (splint and not q.leg and not q.arm):
 		p.treating = -1
 		p.work = 0
 		return false
 	p.work += 1
-	if p.work >= _treat_ticks(p):
+	if p.work >= _treat_ticks(p, kit):
 		p.train(Net.SKILL_MEDICINE)
-		heal(q, float(Items.MEDKIT_HEAL))
-		p.slots[p.hand] = kit - 1 if Items.uses(kit) > 1 else Net.ITEM_NONE
 		p.work = 0
+		if splint:
+			# (v70) a splint sets one bone: the leg first (it slows one most)
+			set_bone(q)
+			p.slots[p.hand] = Net.ITEM_NONE
+			server.chat.say("%s вправляет перелом: %s." % [p.name, q.name] if q != p else "%s вправляет себе перелом." % p.name)
+			p.treating = -1
+			return true
+		heal(q, float(Items.MEDKIT_HEAL))
+		# (v70) a kit's use also stops bleeding, sets a bone and eases a concussion
+		var mended := q.injured()
+		q.bleeding = 0
+		q.concussed = 0
+		if q.leg or q.arm:
+			set_bone(q)
+		p.slots[p.hand] = kit - 1 if Items.uses(kit) > 1 else Net.ITEM_NONE
 		if q != p:
-			server.chat.say("%s перевязывает раны: %s." % [p.name, q.name])
-		if q.wounds <= 0.0 or p.slots[p.hand] == Net.ITEM_NONE:
+			server.chat.say("%s %s: %s." % [p.name, "оказывает помощь" if mended else "перевязывает раны", q.name])
+		if (q.wounds <= 0.0 and not q.injured()) or p.slots[p.hand] == Net.ITEM_NONE:
 			p.treating = -1
 	return true
 
 
-func _treat_ticks(p: Player) -> int:
+func set_bone(q: Player) -> void:
+	## (v70) A broken leg (else arm) set.
+	if q.leg:
+		q.leg = false
+		q.st.slow = q.dragging >= 0 or q.dragged_by >= 0
+		q.self_dirty = true
+	else:
+		q.arm = false
+
+
+func _treat_ticks(p: Player, kit: int = Net.ITEM_NONE) -> int:
 	## A treatment takes TREAT_TICKS for one with no skill, down to half that for the best.
-	return roundi(TREAT_TICKS * (1.0 - 0.5 * p.skill(Net.SKILL_MEDICINE)))
+	## (v70) Setting a bone with a splint, SPLINT_TICKS.
+	return roundi((SPLINT_TICKS if kit == Net.ITEM_SPLINT else TREAT_TICKS) * (1.0 - 0.5 * p.skill(Net.SKILL_MEDICINE)))
 
 
 func _stops_shot(x: int, y: int) -> bool:
@@ -191,7 +267,169 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 	tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y)
 	server.chat.sound(Net.SOUND_SHOT, p.st.x, p.st.y, p.slot)
 	if hit != null:
-		hurt(hit, Items.PISTOL_DAMAGE, p)
+		hurt(hit, Items.PISTOL_DAMAGE, p, CAUSE_SHOT)
+
+
+func _ray(p: Player, way: Vector2, reach: float) -> float:
+	## (v70) How far a shot that way from `p` flies before a wall, a shut door or the deck's end stops it.
+	var from := Vector2(p.st.x, p.st.y)
+	var start := Vector2i(p.st.x, p.st.y)
+	var t := 0.3
+	while t < reach:
+		var c := from + way * t
+		var cell := Vector2i(roundi(c.x), roundi(c.y))
+		if cell != start and (_stops_shot(cell.x, cell.y) or server.map.deck_of(cell.y) != server.map.deck_of(start.y)):
+			return t
+		t += 0.1
+	return reach
+
+
+func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
+	## (v70, the author's B3) A spread of pellets: each flies and hits the first it meets.
+	var from := Vector2(p.st.x, p.st.y)
+	var aim := at - from
+	if aim.length() < 0.1:
+		return
+	aim = aim.normalized()
+	var hits := {}
+	for k in pellets:
+		var way := aim.rotated(Items.SHOTGUN_SPREAD * (2.0 * k / maxf(pellets - 1, 1) - 1.0) + _rng.randf_range(-0.04, 0.04))
+		var best := _ray(p, way, float(Items.SHOTGUN_RANGE))
+		var hit: Player = null
+		for q: Player in server.players:
+			if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
+				continue
+			var pos := place_at(q, seen_tick)
+			var along := (pos - from).dot(way)
+			if along <= 0.2 or along >= best:
+				continue
+			if (pos - (from + way * along)).length() <= HIT_RADIUS:
+				best = along
+				hit = q
+		tell_shot(Net.SHOT_BULLET, hit != null, from, from + way * best, p.st.y)
+		if hit != null:
+			hits[hit] = int(hits.get(hit, 0)) + 1
+	server.chat.sound(Net.SOUND_SHOTGUN, p.st.x, p.st.y, p.slot)
+	if not hits.is_empty():
+		p.train(Net.SKILL_GUNS)
+	for q: Player in hits:
+		hurt(q, Items.PELLET_DAMAGE * int(hits[q]), p, CAUSE_PELLET)
+
+
+func _throw(p: Player, at: Vector2) -> void:
+	## (v70, the author's B3) A flashbang thrown towards `at` (THROW_RANGE at most): it
+	## lands short of a wall and bursts FLASH_FUSE ticks later.
+	var from := Vector2(p.st.x, p.st.y)
+	var way := at - from
+	var reach := minf(way.length(), float(Items.THROW_RANGE))
+	if reach < 0.1:
+		way = Vector2(Net.DX[p.st.facing], Net.DY[p.st.facing])
+		reach = 1.0
+	way = way.normalized()
+	reach = minf(_ray(p, way, reach + 0.01), reach)
+	var end := from + way * reach
+	var cell := Vector2i(roundi(end.x), roundi(end.y))
+	if not server.map.walkable(cell.x, cell.y):
+		cell = Vector2i(p.st.x, p.st.y)
+	p.slots[p.hand] = Net.ITEM_NONE
+	p.ready_tick = server.tick + BLOW_TICKS
+	bangs.append([server.tick + FLASH_FUSE, cell.y * server.map.width + cell.x, p.slot])
+	server.chat.sound(Net.SOUND_DROP, cell.x, cell.y, p.slot)
+
+
+func tick() -> void:
+	## (v70) Flashbangs bursting, and bleeding.
+	var i := 0
+	while i < bangs.size():
+		if server.tick >= int(bangs[i][0]):
+			var b: Array = bangs[i]
+			bangs.remove_at(i)
+			flash(int(b[1]))
+		else:
+			i += 1
+
+
+func flash(cell: int, stun: float = FLASH_STUN, concuss: float = FLASH_CONCUSS) -> int:
+	## (v70) A blinding flash and a bang at that cell: whoever sees it within FLASH_REACH
+	## falls (a machine for a moment). Returns how many fell.
+	var map := server.map
+	var w := map.width
+	var at := Vector2i(cell % w, cell / w)
+	tell_shot(Net.SHOT_FLASH, false, Vector2(at), Vector2(at), at.y)
+	server.chat.sound(Net.SOUND_BANG, at.x, at.y)
+	var fell := 0
+	for q: Player in server.players:
+		if q == null or q.corpse or q.cond == Net.COND_DEAD or map.deck_of(q.st.y) != map.deck_of(at.y):
+			continue
+		var to := Vector2i(q.st.x, q.st.y)
+		if Vector2(to).distance_to(Vector2(at)) > FLASH_REACH:
+			continue
+		if to != at and not Sight.clear_cached(map, server.doors, at, to, server.replication.lines):
+			continue
+		stun_for(q, stun * (ROBOT_STUN if q.robot else 1.0))
+		if not q.robot and _rng.randf() < concuss:
+			concuss_now(q)
+		fell += 1
+	return fell
+
+
+func stun_for(q: Player, seconds: float) -> void:
+	## (v70) Knocked down for that long (Crew.update_vitals keeps it down).
+	q.stun_until = maxi(q.stun_until, server.tick + roundi(seconds * Net.TICK_HZ))
+
+
+func concuss_now(q: Player) -> void:
+	if q.robot:
+		return
+	if q.concussed == 0 and q.peer != null:
+		server.chat.tell(q, "Контузия: в глазах двоится, пульты не разобрать. Пройдёт сама за %d с или с аптечкой." % int(CONCUSS_SECONDS))
+	q.concussed = server.tick + roundi(CONCUSS_SECONDS * Net.TICK_HZ)
+
+
+func injure(q: Player, taken: float, cause: int) -> void:
+	## (v70, the author's J2) What a wound may do besides: bleeding, a broken bone, a concussion.
+	if q.robot or q.cond == Net.COND_DEAD:
+		return
+	var bleed := BLEED_CHANCE if cause == CAUSE_SHOT else (PELLET_BLEED if cause == CAUSE_PELLET else 0.0)
+	if bleed > 0.0 and q.bleeding == 0 and _rng.randf() < bleed:
+		q.bleeding = roundi(BLEED_SECONDS * Net.TICK_HZ)
+		if q.peer != null:
+			server.chat.tell(q, "У вас кровотечение: остановит пластырь, аптечка или автодок.")
+	if taken >= HEAVY_HIT and _rng.randf() < BREAK_CHANCE:
+		if _rng.randf() < 0.5 and not q.leg:
+			q.leg = true
+			q.st.slow = true
+			q.self_dirty = true
+			server.chat.say("%s: перелом ноги!" % q.name)
+		elif not q.arm:
+			q.arm = true
+			server.chat.say("%s: перелом руки!" % q.name)
+	var concuss := BLOW_CONCUSS if cause == CAUSE_BLOW else (BLAST_CONCUSS if cause == CAUSE_BLAST else 0.0)
+	if concuss > 0.0 and _rng.randf() < concuss:
+		concuss_now(q)
+
+
+func bleed(p: Player) -> void:
+	## (v70) One tick of bleeding (Crew.update_vitals calls it).
+	if p.bleeding <= 0 or p.cond == Net.COND_DEAD:
+		return
+	p.bleeding -= 1
+	var lost := BLEED_RATE / Net.TICK_HZ
+	p.health = maxf(p.health - lost, Net.HEALTH_DEAD - 1.0)
+	p.wounds = minf(p.wounds + lost, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
+	if p.bleeding == 0 and p.peer != null:
+		server.chat.tell(p, "Кровь остановилась сама.")
+
+
+func cuff(p: Player, q: Player) -> void:
+	## (v70, the author's J5) Handcuffs on a pirate who is down: he is our prisoner.
+	## What he fought with falls to the floor.
+	if q == null or not q.pirate or q.robot or q.prisoner or q.corpse or q.cond != Net.COND_CRIT:
+		server.chat.tell(p, "Заковать можно только пирата, который лежит рядом (без сознания или оглушён)." if q == null or not q.pirate or q.prisoner
+			else ("Робота не заковать." if q.robot else "Он ещё держится на ногах: сначала собейте его (электрошокер, граната, или пусть потеряет сознание)."))
+		return
+	p.slots[p.hand] = Net.ITEM_NONE
+	server.prisons.take(q, p)
 
 
 func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
@@ -218,24 +456,30 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 	return best
 
 
-func _strike(p: Player, at: Vector2, damage: int) -> void:
+func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
 	var q := _beside(p, at, false)
 	var to := at if q == null else Vector2(q.st.x, q.st.y)
 	tell_shot(Net.SHOT_BLOW, q != null, Vector2(p.st.x, p.st.y), to, p.st.y)
-	server.chat.sound(Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
+	server.chat.sound(Net.SOUND_ZAP if stun > 0.0 else Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
 	if q != null:
-		hurt(q, damage, p)
+		hurt(q, damage, p, CAUSE_BLOW)
+		if stun > 0.0:
+			# (v70) a stun baton: down for a while, and now and then concussed
+			stun_for(q, stun * (ROBOT_STUN if q.robot else 1.0))
+			if _rng.randf() < STUN_CONCUSS - BLOW_CONCUSS:
+				concuss_now(q)
 
 
-func hurt(q: Player, damage: int, by: Player) -> void:
+func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 	## A wound. What it does to the body is worked out with everything else in
-	## Crew.update_vitals on the next tick.
+	## Crew.update_vitals on the next tick. (v70) It may also injure (see injure).
 	if q.cond == Net.COND_OK:
 		server.chat.sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
 	var taken := damage * q.toughness        # (v62) heavy armour takes half, our robot more
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
 	q.health = maxf(q.health - taken, Net.HEALTH_DEAD - 1.0)
 	q.wounds = minf(q.wounds + taken, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
+	injure(q, taken, cause)
 	if (q.pirate or q.ally) and by != null:
 		server.pirates.attacked(q, by)
 

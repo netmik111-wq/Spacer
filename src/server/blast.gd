@@ -69,8 +69,10 @@ func tick() -> void:
 			server.chat.sound(Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
 		if done >= roundi(CUT_SECONDS * Net.TICK_HZ):
 			cut.erase(d)
+			var was_welded := doors.welded[d] == 1
+			doors.welded[d] = 0
 			doors.blast[d] = 0
 			doors.jammed[d] = 1
 			doors.ready[d] = server.tick
 			server.replication.sight_changed()
-			server.chat.say("Пираты прорезали бронедверь! Она заклинена открытой, пока её не починят.")
+			server.chat.say(("Пираты прорезали заваренную дверь!" if was_welded else "Пираты прорезали бронедверь!") + " Она заклинена открытой, пока её не починят.")

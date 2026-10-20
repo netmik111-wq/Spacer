@@ -24,6 +24,8 @@ extends RefCounted
 ## (v60) And the bridge can lock a door as a blast door (`blast`, from a holomap):
 ## while the ship has power it opens only for our own crew (Net.ACCESS_OURS);
 ## pirates must cut through it (see Blast).
+## (v70) A welder seals any shut door (`welded`): nobody opens it, ours
+## neither, until it is cut open again (a welder, or pirates' cutters, see Blast).
 ##
 ## Closing is decided by the server alone (it knows who stands where) and
 ## reaches clients as an ordinary change.
@@ -46,6 +48,7 @@ var partner := PackedInt32Array()    # per door: the other door of its airlock, 
 var dead := PackedByteArray()        # per door: 1 = it has no power at all (a derelict's): always opened by hand
 var blast := PackedByteArray()       # (v60) per door: 1 = locked as a blast door against boarders
 var picked := PackedByteArray()      # (v69) per door: 1 = its access lock was broken open: it opens for anybody until mended
+var welded := PackedByteArray()      # (v70) per door: 1 = welded shut: it opens for nobody
 var manual := false                  # the ship has no power: doors are opened by hand
 var bumped := PackedInt32Array()     # doors pushed since this list was last cleared (the server reads it)
 
@@ -70,6 +73,8 @@ func setup(count: int) -> void:
 	blast.fill(0)
 	picked.resize(count)
 	picked.fill(0)
+	welded.resize(count)
+	welded.fill(0)
 	bumped.clear()
 
 
@@ -81,6 +86,7 @@ func copy_from(o: RefCounted) -> void:
 	forced = o.forced.duplicate()
 	blast = o.blast.duplicate()
 	picked = o.picked.duplicate()
+	welded = o.welded.duplicate()
 	partner = o.partner
 	dead = o.dead
 	manual = o.manual
@@ -89,7 +95,7 @@ func copy_from(o: RefCounted) -> void:
 
 func flags(door: int) -> int:
 	## The door's troubles as one byte, the way they travel over the network.
-	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3) | (blast[door] << 4) | (picked[door] << 5)
+	return locked[door] | (jammed[door] << 1) | (faulty[door] << 2) | (forced[door] << 3) | (blast[door] << 4) | (picked[door] << 5) | (welded[door] << 6)
 
 
 func set_flags(door: int, value: int) -> void:
@@ -99,6 +105,7 @@ func set_flags(door: int, value: int) -> void:
 	forced[door] = (value >> 3) & 1
 	blast[door] = (value >> 4) & 1
 	picked[door] = (value >> 5) & 1
+	welded[door] = (value >> 6) & 1
 
 
 func open_ticks(door: int = -1) -> int:
@@ -133,6 +140,9 @@ func barred(door: int, needs: int, has: int) -> bool:
 
 func blocks(door: int, has: int) -> bool:
 	## (v60) A blast door, locked with power on, does not open for one who is not of our crew.
+	## (v70) A welded door opens for nobody.
+	if welded[door] == 1:
+		return true
 	return blast[door] == 1 and (has & Net.ACCESS_OURS) == 0 and not manual and dead[door] == 0
 
 

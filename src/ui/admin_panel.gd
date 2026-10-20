@@ -233,7 +233,7 @@ func _people_tab() -> Control:
 	_note(page, "«Вылечить» возвращает здоровье, закрывает раны, заправляет баллон и поднимает даже погибших (тела, оставленные после возвращения из резерва, не оживают).")
 	page.add_child(_button("Вылечить всех", func() -> void:
 		for id: int in client.roster:
-			if int(client.roster[id]["kind"]) != Net.KIND_CORPSE and int(client.roster[id]["kind"]) != Net.KIND_PIRATE:
+			if int(client.roster[id]["kind"]) != Net.KIND_CORPSE and not client.is_pirate(id):
 				_send(Net.ADMIN_HEAL, 0, id)))
 	var bots := HBoxContainer.new()
 	bots.add_theme_constant_override("separation", 6)
@@ -264,7 +264,7 @@ func _fill_people() -> void:
 		var card := VBoxContainer.new()
 		_people.add_child(card)
 		var who := Label.new()
-		var what := "пират" if kind == Net.KIND_PIRATE else ("бот, " if kind == Net.KIND_BOT else "") + Net.JOB_NAMES[int(entry["job"])].to_lower()
+		var what := "пират" if kind == Net.KIND_PIRATE else "пленный" if kind == Net.KIND_PRISONER else ("бот, " if kind == Net.KIND_BOT else "") + Net.JOB_NAMES[int(entry["job"])].to_lower()
 		who.text = "%s (%s)%s" % [entry["name"], what, "  — это вы" if id == client.my_id else ""]
 		card.add_child(who)
 		var row := HFlowContainer.new()
@@ -274,12 +274,12 @@ func _fill_people() -> void:
 		var target: int = id
 		row.add_child(_button("Вылечить", func() -> void: _send(Net.ADMIN_HEAL, 0, target)))
 		row.add_child(_button("Убить", func() -> void: _send(Net.ADMIN_KILL, 0, target)))
-		if kind != Net.KIND_PIRATE:
+		if kind != Net.KIND_PIRATE and kind != Net.KIND_PRISONER:
 			row.add_child(_button("Навыки на максимум", func() -> void: _send(Net.ADMIN_SKILLS, 0, target)))
 		if id != client.my_id:
 			row.add_child(_button("К нему", func() -> void: _send(Net.ADMIN_GOTO, 0, target)))
 			row.add_child(_button("Ко мне", func() -> void: _send(Net.ADMIN_BRING, 0, target)))
-		if kind != Net.KIND_PIRATE:
+		if kind != Net.KIND_PIRATE and kind != Net.KIND_PRISONER:
 			var job := OptionButton.new()
 			job.focus_mode = Control.FOCUS_NONE
 			for j in Net.JOBS:

@@ -68,10 +68,10 @@ func _ready() -> void:
 	box.add_child(_name)
 	box.add_child(_caption("Профессия"))
 	_job = OptionButton.new()
-	for j in Net.JOBS:
-		_job.add_item(Net.JOB_NAMES[j], j)
+	for j in range(Net.JOB_CAPTAIN, Net.JOBS):
+		_job.add_item(Net.JOB_NAMES[j], j)   # (v70, the author's J1: no sailor any more)
 	_job.item_selected.connect(func(_i: int) -> void: _show_job())
-	_job.select(Net.JOB_CAPTAIN)         # whoever starts a ship alone needs its bridge
+	_job.select(0)                       # the captain: whoever starts a ship alone needs its bridge
 	box.add_child(_job)
 	_job_about = Label.new()
 	_job_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -158,7 +158,7 @@ func _ready() -> void:
 		_address.text = str(cfg.get_value("player", "address", ""))
 		_bots.value = int(cfg.get_value("player", "bots", 2))
 		_mode.select(clampi(int(cfg.get_value("player", "mode", Net.MODE_NORMAL)), 0, Net.MODE_NAMES.size() - 1))
-		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)), 0, Net.JOBS - 1))
+		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)) - Net.JOB_CAPTAIN, 0, Net.JOBS - 1 - Net.JOB_CAPTAIN))
 	_show_job()
 	_name.grab_focus()
 
@@ -169,7 +169,7 @@ func _show_job() -> void:
 
 func job() -> int:
 	## The job the player asks for (Net.JOB_*).
-	return maxi(_job.selected, 0)
+	return _job.get_item_id(maxi(_job.selected, 0))
 
 
 func _gap(height: int) -> Control:

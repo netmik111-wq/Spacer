@@ -91,6 +91,23 @@ var job := 0                         # Net.JOB_*: its access (st.access) and whi
 var skills := PackedByteArray([0, 0, 0, 0])   # per Net.SKILL_*, 0..Net.SKILL_MAX
 var slow_work := 0                   # pieces of work outside its job (every Net.SKILL_SLOW_EVERY-th one teaches)
 var me_sent := PackedByteArray()     # job and skills as last told to its client
+# (v70, the author's J2) injuries: anybody can treat them (see Combat)
+var bleeding := 0                    # ticks of bleeding left (0 = none): wounds open a little every tick
+var leg := false                     # a broken leg: it walks slowly
+var arm := false                     # a broken arm: its hands are slow and it shoots wide
+var concussed := 0                   # the tick a concussion passes (0 = none): consoles refuse it, its screen dims
+var stun_until := 0                  # (v70) knocked down by a stun baton or a flashbang until this tick
+# (v70, the author's J5) a pirate in our handcuffs
+var prisoner := false
+var loose_at := 0                    # the tick a prisoner outside the brig slips the cuffs
+var talked := false                  # a prisoner gives away what he knows once
+# (v70, the author's B1) a boarder's goal (Pirates.GOAL_*)
+var goal := 0
+var goal_cell := -1                  # the machine, the locker or the bomb's place it is making for
+var way_in := -1                     # the cell it came aboard at: where it goes back out
+var goal_work := 0                   # ticks of work done at it
+var angry_until := 0                 # it was hurt: it fights back until this tick, goal or not
+var taken := false                   # (v70) dragged off by pirates: gone, no body left (until it comes back from the reserve)
 
 
 const HISTORY := 32
@@ -100,6 +117,19 @@ func _init() -> void:
 	slots.resize(Net.SLOTS)
 	worn.resize(Net.WORN)
 	history.resize(HISTORY)
+
+
+func injured() -> bool:
+	## (v70) Anything wrong with it that a splint, a patch, a kit or the autodoc mends?
+	return bleeding > 0 or leg or arm or concussed > 0
+
+
+func heal_injuries() -> void:
+	bleeding = 0
+	leg = false
+	arm = false
+	concussed = 0
+	st.slow = dragging >= 0 or dragged_by >= 0
 
 
 func take_job(which: int) -> void:

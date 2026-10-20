@@ -23,7 +23,8 @@ const MUFFLED_BUS := "Muffled"
 # (v56) the name of each sound, for files that replace it (see above)
 const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: "hiss", Net.SOUND_THUD: "thud",
 	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow",
-	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load"}
+	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load", Net.SOUND_BANG: "bang", Net.SOUND_BEEP: "beep",
+	Net.SOUND_SHOTGUN: "shotgun", Net.SOUND_ZAP: "zap"}
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -79,6 +80,10 @@ static func prepare() -> void:
 	_streams[Net.SOUND_BLOW] = [_blow()]
 	_streams[Net.SOUND_PHASE] = [_phase()]
 	_streams[Net.SOUND_LOAD] = [_load()]
+	_streams[Net.SOUND_BANG] = [_bang()]
+	_streams[Net.SOUND_BEEP] = [_beep()]
+	_streams[Net.SOUND_SHOTGUN] = [_shotgun()]
+	_streams[Net.SOUND_ZAP] = [_zap()]
 	_streams[ALERT_YELLOW] = [_alert_yellow()]
 	_streams[ALERT_RED] = [_alert_red()]
 	_streams[GUN_LASER] = [_gun_laser(1.0), _gun_laser(1.07)]
@@ -309,6 +314,44 @@ static func _load() -> AudioStreamWAV:
 	_tone(out, 0.32, 1400.0, 0.2, 60.0)
 	_noise(out, 0.32, 0.45, 0.4, 40.0, 0.5)
 	_fade(out, 0.01)
+	return _wav(out)
+
+
+static func _bang() -> AudioStreamWAV:
+	# (v70) a flashbang or a bomb: a sharp crack and a ringing boom
+	var out := _buffer(1.2)
+	_noise(out, 0.0, 0.08, 0.9, 30.0, 0.2)
+	_noise(out, 0.0, 1.1, 0.6, 5.0, 0.95)
+	_tone(out, 0.0, 55.0, 0.6, 4.0)
+	_tone(out, 0.05, 3200.0, 0.06, 2.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _beep() -> AudioStreamWAV:
+	# (v70) a short electronic beep
+	var out := _buffer(0.18)
+	_tone(out, 0.0, 1650.0, 0.3, 12.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _shotgun() -> AudioStreamWAV:
+	# (v70) a shotgun: a heavy blast with a long tail
+	var out := _buffer(0.7)
+	_noise(out, 0.0, 0.7, 0.85, 8.0, 0.6)
+	_tone(out, 0.0, 85.0, 0.5, 9.0)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _zap() -> AudioStreamWAV:
+	# (v70) a stun baton: a crackling electric snap
+	var out := _buffer(0.3)
+	_noise(out, 0.0, 0.25, 0.5, 18.0, 0.1)
+	_tone(out, 0.0, 2400.0, 0.15, 14.0, -1500.0)
+	_tone(out, 0.0, 120.0, 0.2, 20.0)
+	_fade(out, 0.002)
 	return _wav(out)
 
 

@@ -155,6 +155,8 @@ var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), wha
 var alert := Net.ALERT_GREEN         # (v68) the ship's alert level
 var evade_left := 0.0                # (v68) seconds of the pilot's evade still going
 var evade_rest := 0                  # and seconds until it can be pressed again
+var meteor_left := 0.0               # (v70) seconds until a meteor seen coming strikes (0 = none)
+var meteor_tried := false            # the pilot has steered for it already
 var alert_changes := 0               # goes up whenever the alert changes (sounds, the HUD)
 var goal := Net.GOAL_NONE            # (v68) what this fight is for (Net.S_GUNS)
 var goal_flags := 0                  # Net.GOALF_*
@@ -225,6 +227,11 @@ var health := 100                    # 100 = unhurt, 0 and below = unconscious, 
 var my_cond := 0                     # Net.COND_*
 var tank := Net.TANK_FULL            # oxygen left in the suit's tank, 0..Net.TANK_FULL
 var supply := false                  # breathing from the tank
+var bleeding := false                # (v70) our character's injuries (SEC_VITALS)
+var arm_broken := false
+var leg_broken := false
+var concussed := false
+var hauling := false                 # (v70) the server says we hold somebody (with a broken leg pred.slow alone does not tell)
 var work := 0                        # progress of what we are doing with the "use" key, 0..100
 var want_dir := 0                    # direction the player holds right now; set by the game screen
 
@@ -459,7 +466,12 @@ func send_fire(at: Vector2) -> void:
 
 
 func is_pirate(id: int) -> bool:
-	return roster.has(id) and int(roster[id]["kind"]) == Net.KIND_PIRATE
+	## A pirate, free or (v70) in our handcuffs.
+	return roster.has(id) and (int(roster[id]["kind"]) == Net.KIND_PIRATE or int(roster[id]["kind"]) == Net.KIND_PRISONER)
+
+
+func is_prisoner(id: int) -> bool:
+	return roster.has(id) and int(roster[id]["kind"]) == Net.KIND_PRISONER
 
 
 func send_drop() -> void:
@@ -863,11 +875,17 @@ func use_target(facing: int = -1) -> int:
 	## 26 = an autodoc, 27 = the body scanner, 28 = (v61) an SMES's terminal,
 	## 29 = (v61) our hull from outside, out in space: its strength is mended with patches,
 	## 30 = (v63) the comms console, 31 = a hydroponic tray, 32 = a cryopod,
-	## 33 = (v67) the engine with a can of fuel in hand, 34 = a wall of a dark ship alongside (scrap to cut).
+	## 33 = (v67) the engine with a can of fuel in hand, 34 = a wall of a dark ship alongside (scrap to cut),
+	## 40 = (v69) a door whose broken lock can be mended,
+	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
+	## 43 = a welded door (nothing to do without a welder).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
 	var f := pred.facing if facing < 0 else facing
+	var bomb := floor_cell(f)
+	if bomb >= 0 and top_thing(bomb) == Net.ITEM_BOMB:
+		return 41                            # (v70) as Repairs.usable_ahead: a bomb comes first
 	var cell := map.use_ahead(pred.x, pred.y, f, holes)
 	if cell >= 0:
 		if holes.has(cell):
@@ -924,6 +942,10 @@ func use_target(facing: int = -1) -> int:
 			return 32
 		var door := map.door_of[cell]
 		if door >= 0:
+			if hand < slots.size() and slots[hand] == Net.ITEM_WELDER and doors.is_shut(door):
+				return 42
+			if doors.welded[door] == 1:
+				return 43                    # (v70) welded shut: only said so
 			if doors.is_shut(door) and doors.held_by_partner(door):
 				return 16
 			if doors.jammed[door] == 1:
@@ -1107,7 +1129,8 @@ func lying_near(facing: int = -1) -> int:
 
 func dragging() -> bool:
 	## Our character is hauling somebody along (the server says so).
-	return _have_self and pred.slow and my_cond == Net.COND_OK
+	## (v70) A broken leg slows it too: then only while it holds somebody.
+	return _have_self and pred.slow and my_cond == Net.COND_OK and (not leg_broken or hauling)
 
 
 func _send_hands(kind: int, id: int) -> void:
@@ -1233,7 +1256,16 @@ func crew_count() -> int:
 	## Everybody aboard who is not a body left behind.
 	var n := 0
 	for id: int in roster.keys():
-		if int(roster[id]["kind"]) != Net.KIND_CORPSE and int(roster[id]["kind"]) != Net.KIND_PIRATE:
+		if int(roster[id]["kind"]) != Net.KIND_CORPSE and not is_pirate(id):
+			n += 1
+	return n
+
+
+func prisoners() -> int:
+	## (v70) Pirates in our handcuffs aboard.
+	var n := 0
+	for id: int in roster.keys():
+		if is_prisoner(id):
 			n += 1
 	return n
 
@@ -1279,6 +1311,8 @@ func door_open_amount(door: int) -> float:
 
 
 func player_name(id: int) -> String:
+	if is_prisoner(id):
+		return "%s (пленный)" % roster[id]["name"]
 	return str(roster[id]["name"]) if roster.has(id) else "?"
 
 
@@ -1607,6 +1641,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 					alert_changes += 1
 				evade_left = pkt[tail + 1] / 10.0
 				evade_rest = pkt[tail + 2]
+			if pkt.size() >= tail + 5:
+				meteor_left = pkt[tail + 3] / 10.0
+				meteor_tried = pkt[tail + 4] == 1
 		Net.S_ECREW:
 			ecrew_probe = pkt[3]
 			ecrew = PackedInt32Array()
@@ -1868,6 +1905,11 @@ func _on_world(pkt: PackedByteArray) -> void:
 			health = pkt.decode_s16(pos)
 			tank = pkt[pos + 2]
 			supply = (pkt[pos + 3] & 1) != 0
+			bleeding = (pkt[pos + 3] & 2) != 0
+			arm_broken = (pkt[pos + 3] & 4) != 0
+			leg_broken = (pkt[pos + 3] & 8) != 0
+			concussed = (pkt[pos + 3] & 16) != 0
+			hauling = (pkt[pos + 3] & 32) != 0
 			work = pkt[pos + 4]
 			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
 			worn = pkt.slice(pos + 5 + Net.SLOTS, pos + 5 + Net.SLOTS + Net.WORN)

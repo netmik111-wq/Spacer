@@ -10,6 +10,11 @@ extends RefCounted
 ## It never brings back the dead (the author's rule: bodies stay). Somebody
 ## holding "use" at the autodoc tends the one in it: twice as quick, and a lesson
 ## in medicine every TEND_LESSON_SECONDS.
+## (v70, the author's M1: "a medic should matter") Alone an autodoc only gets its
+## patient out of danger: it heals up to UNTENDED_CAP health and no further. Tended,
+## it heals fully, quicker with the tender's medicine skill (a bot tends at half),
+## and after FIX_SECONDS of tending it also mends injuries: bleeding, broken bones,
+## a concussion.
 ##
 ## The body scanner ('X') is groundwork for the complex health the author has in
 ## mind: pressing "use" at it reports on whoever lies in the nearest autodoc (or
@@ -25,17 +30,26 @@ const AUTODOC_HEAL := 3.0            # health a second (the author's A4 default:
 const TENDED := 2.0                  # this many times quicker with somebody tending
 const TEND_LESSON_SECONDS := 5.0
 const BOT_GOES_AT := 40.0            # a bot this badly hurt walks to an autodoc by itself (see Stations)
-const BOT_LEAVES_AT := 90.0          # and gets up again at this much health
+const BOT_LEAVES_AT := 90.0          # and gets up again at this much health (tended; untended at UNTENDED_CAP)
+const UNTENDED_CAP := 50.0           # (v70) health an autodoc heals to with nobody tending it
+const SKILL_TEND := 1.0              # (v70) a tender with the best medicine skill makes it this much quicker again
+const FIX_SECONDS := 3.0             # (v70) of tending, to mend the patient's injuries
 
 var server: GameServer
 var _tended := {}                    # autodoc cell -> the tick somebody last tended it
 var _lesson := {}                    # Player slot -> ticks of tending towards the next lesson
+var _pace := {}                      # (v70) autodoc cell -> how many times quicker its tender makes it
+var _fixing := {}                    # (v70) patient slot -> ticks of tending towards mending injuries
+var _capped := {}                    # (v70) patient slot -> told the autodoc alone goes no further
 
 
 func setup(p_server: GameServer) -> void:
 	server = p_server
 	_tended = {}
 	_lesson = {}
+	_pace = {}
+	_fixing = {}
+	_capped = {}
 
 
 func works(doc: int) -> bool:
@@ -70,7 +84,25 @@ func free_beds(for_whom: Player) -> Array:
 
 
 func needs_doc(q: Player) -> bool:
-	return q.health < Net.HEALTH_FULL - 0.5 or q.wounds > 0.0
+	return q.health < Net.HEALTH_FULL - 0.5 or q.wounds > 0.0 or q.injured()
+
+
+func tended(doc: int) -> bool:
+	return server.tick - int(_tended.get(doc, -100)) <= 1
+
+
+func leave_at(doc: int) -> float:
+	## (v70) The health a bot lying in that autodoc gets up at.
+	return BOT_LEAVES_AT if tended(doc) else UNTENDED_CAP
+
+
+func bed_of(q: Player) -> int:
+	## The autodoc whose bed this one lies on (-1: none).
+	var c := q.st.y * server.map.width + q.st.x
+	for doc: int in server.map.autodoc.keys():
+		if int(server.map.autodoc[doc]) == c:
+			return doc
+	return -1
 
 
 func tending(p: Player, doc: int) -> bool:
@@ -80,6 +112,7 @@ func tending(p: Player, doc: int) -> bool:
 	if q == null or not works(doc) or not needs_doc(q):
 		return false
 	_tended[doc] = server.tick
+	_pace[doc] = 1.0 + ((TENDED - 1.0) + SKILL_TEND * p.skill(Net.SKILL_MEDICINE)) * server.stations.share(p)
 	var n: int = _lesson.get(p.slot, 0) + 1
 	if n >= roundi(TEND_LESSON_SECONDS * Net.TICK_HZ):
 		n = 0
@@ -95,7 +128,23 @@ func tick() -> void:
 		var q := in_bed(doc)
 		if q == null or not needs_doc(q):
 			continue
-		var rate := AUTODOC_HEAL * (TENDED if server.tick - int(_tended.get(doc, -100)) <= 1 else 1.0) / Net.TICK_HZ
+		var by_hand := tended(doc)
+		if not by_hand and q.health >= UNTENDED_CAP:
+			# (v70) out of danger: further healing needs somebody tending
+			if q.peer != null and not _capped.has(q.slot):
+				_capped[q.slot] = true
+				server.chat.tell(q, "Автодок вывел вас из опасности. Долечить может только он под присмотром: пусть кто-то держит E у автодока.")
+			continue
+		_capped.erase(q.slot)
+		var rate := AUTODOC_HEAL * (float(_pace.get(doc, TENDED)) if by_hand else 1.0) / Net.TICK_HZ
+		if by_hand and q.injured():
+			var n: int = _fixing.get(q.slot, 0) + 1
+			_fixing[q.slot] = n
+			if n >= roundi(FIX_SECONDS * Net.TICK_HZ):
+				_fixing.erase(q.slot)
+				q.heal_injuries()
+				q.self_dirty = true
+				server.chat.say("Автодок под присмотром: у %s остановлена кровь, кости и голова в порядке." % q.name)
 		if q.wounds > 0.0:
 			server.combat.heal(q, rate)
 		else:
@@ -133,6 +182,18 @@ static func report(q: Player) -> String:
 		parts.append("Раны: %d (сами не затянутся: аптечка, пластырь или автодок)." % roundi(q.wounds))
 	else:
 		parts.append("Ран нет.")
+	# (v70) injuries
+	var hurt := PackedStringArray()
+	if q.bleeding > 0:
+		hurt.append("кровотечение")
+	if q.leg:
+		hurt.append("перелом ноги")
+	if q.arm:
+		hurt.append("перелом руки")
+	if q.concussed > 0:
+		hurt.append("контузия")
+	if not hurt.is_empty():
+		parts.append("Травмы: %s (шина, аптечка или автодок под присмотром)." % ", ".join(hurt))
 	if q.has_suit():
 		parts.append("Скафандр, кислород %d%%%s." % [roundi(q.tank * 100.0), ", подача включена" if q.supply else ""])
 	else:

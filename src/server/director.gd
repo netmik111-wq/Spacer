@@ -213,14 +213,17 @@ func _run(event_id: int) -> void:
 		FUEL_DRIFT:
 			server.supplies.find_fuel(RESCUE_FUEL)
 		METEOR_VOLLEY:
-			# three hits a second and a half apart
+			# three hits three and a half seconds apart (v70: each seen coming, so the pilot can steer round each)
 			for i in 3:
-				_queue.append([server.tick + i * 30, "hole"])
+				_queue.append([server.tick + i * 70, "hole"])
 			_queue.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 
 
 func _do(what: String) -> void:
 	if what == "hole":
+		# (v70) in a meteor stream the meteor is seen coming: the pilot may steer round it (see Stations)
+		if server.navigation.sector_kind() == Sectors.METEORS and server.stations.meteor_seen():
+			return
 		server.systems.breach_random()
 		server.hazards.meteor_on_enemy()     # (v61, the author's K16) a meteor strike hits the pirate ship alongside too
 
