@@ -28,6 +28,14 @@ extends SceneTree
 ## beaten (won), the campaign is lost, or after `hours` of game time.
 ## Writes OUT_DIR/run-NN.json (summary, counts, a line per jump) and OUT_DIR/run-NN.log
 ## (the ship's log: every line the ship said), and prints a one-line summary per run.
+##
+## (v75, the author's S3) A soak test: SOAK=1 plays runs one after another (a lost
+## campaign starts a new one) until `hours` of game time have gone by, with BOTS bots
+## (default 7: a full crew), and prints how long a server tick took (most and on
+## average), how often one went over the 50 ms budget, how many objects and how much
+## memory were held at the start and end, and how often a bot said it was stuck.
+## Its last line says "soak: ok" or "soak: bad (why)" and the exit code is 1 when bad.
+##   SOAK=1 godot --headless --path . --script res://tools/playthrough.gd -- OUT_DIR 1 1 normal 2 60   (tools/soak.sh)
 
 const GameServer := preload("res://src/server/game_server.gd")
 const Gunnery := preload("res://src/server/gunnery.gd")
@@ -39,6 +47,7 @@ const Items := preload("res://src/shared/items.gd")
 const Tales := preload("res://src/server/tales.gd")
 
 const BOTS := 3
+const TICK_BUDGET_USEC := 50000        # (v75) the soak test's budget for one tick
 const KIND_NAMES := ["quiet", "meteors", "trader", "station", "derelict", "flagship", "ion storm"]
 const WANT_FUEL := 3                  # cans the captain keeps in the locker when it can buy (v67: each 100 units)
 const WANT_FOOD := 8
@@ -48,6 +57,8 @@ const LOW_HULL := 0.5                 # under this share of the hull, likewise
 const EXPLORE_SHARE := 0.6            # it looks round this share of a cluster's systems before leaving it...
 const EXPLORE_TICKS := 20 * 60 * 20   # ... or for this long at most (the flagship's cluster: straight to it)
 const KEEP_CREDITS := 40              # what it keeps in hand when it buys a better gun
+const SALVAGE_TICKS := 20 * 60 * 6    # (v75) at most this long in a system taking places and cutting scrap
+const SOLD := [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA]   # (v75) what it sells at a trader
 
 var server: GameServer
 var cap = null                        # the captain (a Player)
@@ -77,6 +88,15 @@ var _foe_hit_at := 0
 var _refilling := false
 var _stay := 0.0                      # seconds it means to stay in each system
 var _leave_at := 0                    # the tick it may jump on from this system
+var _salvage_sys := -1                # (v75) the system it salvages in, since the tick below
+var _salvage_since := 0
+var _counted := {}                    # (v75) the places already counted as taken
+var _swept := -1                      # (v75) the system it began sweeping, and the corners still to fly to
+var _sweep_left: Array = []
+var bots := BOTS
+var soak := false
+var _soak := {"ticks": 0, "slow": 0, "most_usec": 0, "sum_usec": 0, "stuck_lines": 0}
+var _cut_next := 0                    # (v75) the tick its next piece of scrap comes off the dark ship alongside
 
 
 func _initialize() -> void:
@@ -89,9 +109,41 @@ func _initialize() -> void:
 	limit_ticks = roundi(hours * 3600.0 * Net.TICK_HZ)
 	_stay = float(args[5]) if args.size() > 5 else 0.0
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	for r in runs:
-		_run(first + r, maxi(mode, 0))
-	quit(0)
+	soak = OS.get_environment("SOAK") == "1"
+	bots = int(OS.get_environment("BOTS")) if OS.get_environment("BOTS") != "" else (7 if soak else BOTS)
+	if not soak:
+		for r in runs:
+			_run(first + r, maxi(mode, 0))
+		quit(0)
+		return
+	var total := limit_ticks
+	var objects_start := 0
+	var memory_start := 0
+	var n := first
+	while int(_soak["ticks"]) < total:
+		limit_ticks = total - int(_soak["ticks"])
+		_run(n, maxi(mode, 0))
+		if n == first:                          # (after the first run: what is loaded once is loaded)
+			objects_start = int(Performance.get_monitor(Performance.OBJECT_COUNT))
+			memory_start = OS.get_static_memory_usage()
+		n += 1
+	var objects_end := int(Performance.get_monitor(Performance.OBJECT_COUNT))
+	var memory_end := OS.get_static_memory_usage()
+	var ticks: int = maxi(int(_soak["ticks"]), 1)
+	var why := PackedStringArray()
+	if int(_soak["most_usec"]) > 4 * TICK_BUDGET_USEC:
+		why.append("a tick took %d ms" % (int(_soak["most_usec"]) / 1000))
+	if float(_soak["slow"]) / ticks > 0.01:
+		why.append("%.1f%% of ticks over budget" % (100.0 * float(_soak["slow"]) / ticks))
+	if n - first > 1 and objects_end > objects_start + 2000:
+		why.append("objects grew from %d to %d" % [objects_start, objects_end])
+	if n - first > 1 and memory_end > memory_start * 1.5 + 32 * 1024 * 1024:
+		why.append("memory grew from %d MB to %d MB" % [memory_start >> 20, memory_end >> 20])
+	print("soak: %d runs, %.0f game min, %d bots; tick most %.1f ms, average %.2f ms, over budget %d; objects %d -> %d, memory %d -> %d MB; bots stuck %d times" % [
+		n - first, ticks / float(Net.TICK_HZ) / 60.0, bots, int(_soak["most_usec"]) / 1000.0, float(_soak["sum_usec"]) / ticks / 1000.0,
+		int(_soak["slow"]), objects_start, objects_end, memory_start >> 20, memory_end >> 20, int(_soak["stuck_lines"])])
+	print("soak: ok" if why.is_empty() else "soak: bad (%s)" % ", ".join(why))
+	quit(0 if why.is_empty() else 1)
 
 
 # ----------------------------------------------------------------- one run
@@ -100,7 +152,7 @@ func _run(number: int, mode: int) -> void:
 	server = GameServer.new()
 	get_root().add_child(server)
 	server.mode = mode
-	var problem := server.start(27000 + number, "ship02", BOTS)
+	var problem := server.start(27000 + number, "ship02", bots)
 	if problem != "":
 		print("run %d: %s" % [number, problem])
 		server.free()
@@ -110,6 +162,11 @@ func _run(number: int, mode: int) -> void:
 	timeline = []
 	_fight = {}
 	_known_corpses = {}
+	_counted = {}
+	_salvage_sys = -1
+	_swept = -1
+	_sweep_left = []
+	_cut_next = 0
 	cap = server.crew.new_player("Капитан")
 	cap.take_job(Net.JOB_CAPTAIN)
 	_give_orders()
@@ -129,6 +186,7 @@ func _run(number: int, mode: int) -> void:
 		"calls": {"received": 0, "answered": 0, "unanswered": 0, "titles": {}},
 		"quests": {"done": 0, "failed": 0},
 		"sectors_by_kind": {}, "places_taken": 0,
+		"salvage": {"floating": 0, "scrap_cut": 0, "places": {}, "sold": {}, "work_seconds": 0},
 	}
 	_credits = server.ship.credits
 	_hull = server.ship.hull
@@ -147,7 +205,14 @@ func _run(number: int, mode: int) -> void:
 		_cause = ""
 		if server.tick % 5 == 0:
 			_think()
+		var t0 := Time.get_ticks_usec()
 		server._tick()
+		var spent := Time.get_ticks_usec() - t0
+		_soak["ticks"] += 1
+		_soak["sum_usec"] += spent
+		_soak["most_usec"] = maxi(int(_soak["most_usec"]), spent)
+		if spent > TICK_BUDGET_USEC:
+			_soak["slow"] += 1
 		_watch()
 		if server.jumps != last_jumps:
 			last_jumps = server.jumps
@@ -227,6 +292,8 @@ func _think() -> void:
 			return
 		_shop()
 		_shopped = visit                     # (once a visit: what it could not buy here it will not find by waiting)
+	if _salvage():
+		return
 	_travel()
 
 
@@ -388,6 +455,8 @@ func _answer_call() -> void:
 
 func _wants_shopping() -> bool:
 	var ship = server.ship
+	if server.navigation.sector_kind() == Sectors.TRADER and _loot() > 0:
+		return true
 	if ship.credits < 5:
 		return false
 	return ship.fuel() < WANT_FUEL or int(ship.store.get(Net.ITEM_FOOD, 0)) < WANT_FOOD or ship.hull < ship.hull_max \
@@ -399,6 +468,7 @@ func _shop() -> void:
 		return
 	var ship = server.ship
 	var offers: Dictionary = server.supplies.offers()
+	_sell()
 	_cause = "trade"
 	# the hull first while it is low, then fuel, food, patches, then the rest of the hull
 	var tries := 0
@@ -419,6 +489,149 @@ func _shop() -> void:
 		server.supplies.store_asked(cap, Net.STORE_HIRE, 0)
 		rec["crew"]["hired"] += 1
 		_note_buy("crew", Net.PRICE_CREW)
+
+
+func _loot() -> int:
+	var n := 0
+	for item: int in SOLD:
+		n += int(server.ship.store.get(item, 0))
+	return n
+
+
+func _sell() -> void:
+	## (v75) Scrap, ore and scan data go to the trader (the money a v67 voyage lives on).
+	var sup = server.supplies
+	if not sup.trader_here():
+		return
+	var sold: Dictionary = rec["salvage"]["sold"]
+	for item: int in SOLD:
+		var price: int = sup.sell_price(item)
+		while price > 0 and int(server.ship.store.get(item, 0)) > 0:
+			_cause = "selling finds"
+			sup.store_asked(cap, Net.STORE_SELL, item)
+			var key := Items.name_of(item)
+			sold[key] = int(sold.get(key, 0)) + price
+			_watch()                                  # (the credits go down to selling, not to the trade after)
+			price = sup.sell_price(item)
+
+
+# ------------------------------------------------------------- salvage (v75)
+
+func _salvage() -> bool:
+	## (v75, the author's S1) What a person does between jumps since v67: fetch what floats
+	## outside, fly to the places the sensors found and take them, hold still at an anomaly
+	## (at the holomap) or a gas cloud (at the engine), cut scrap off a dark ship alongside.
+	## True while it is busy at it (so it does not jump on). Asteroids need a suit walk
+	## outside: it leaves them. At most SALVAGE_TICKS a system.
+	var ship = server.ship
+	_gather_floating()
+	_count_taken()
+	if ship.sector != _salvage_sys:
+		_salvage_sys = ship.sector
+		_salvage_since = server.tick
+	if server.tick - _salvage_since > SALVAGE_TICKS or ship.jump_to != Net.NO_SECTOR:
+		return false
+	if _cut():
+		return true
+	var r = server.road
+	var best := -1
+	var best_d := INF
+	for i in r._here_places.size():
+		var pl: Array = r._here_places[i]
+		var kind: int = pl[0]
+		var k: int = r._key(i)
+		if not r.found.has(k) or r.taken.has(k) or kind == Sectors.P_AMBUSH or kind == Sectors.P_ASTEROID:
+			continue
+		if kind == Sectors.P_GAS and ship.tank >= Net.FUEL_MAX - 50:
+			continue
+		var d: float = ship.pos.distance_to(pl[1])
+		if d < best_d:
+			best = i
+			best_d = d
+	if best < 0:
+		return _sweep()
+	var place: Array = r._here_places[best]
+	var kind: int = place[0]
+	var reach: float = Sectors.PLACE_REACH
+	if kind >= Sectors.P_ANOMALY:
+		reach = Sectors.WORK_REACH
+	elif kind == Sectors.P_WRECK:
+		reach = Sectors.WRECK_REACH
+	if best_d > reach - 1.0 or ship.moving:
+		if best_d > reach - 1.0:
+			_fly_to(place[1])
+		return true
+	var at: Dictionary = server.map.holo if kind == Sectors.P_ANOMALY else server.map.engine
+	if kind >= Sectors.P_ANOMALY and _at(at):
+		rec["salvage"]["work_seconds"] += 0.25
+	if kind < Sectors.P_ANOMALY or kind == Sectors.P_WRECK:
+		return true                         # (taken by the road on its own once in reach)
+	return true
+
+
+func _sweep() -> bool:
+	## Places are hidden until the sensors come near, so it flies a loop round the
+	## system (a quarter of the way in from each side) while fuel allows.
+	var ship = server.ship
+	var kind: int = server.navigation.sector_kind()
+	if kind == Sectors.STATION or kind == Sectors.FLAGSHIP or _flagship_cluster() or _jumps_left() < LOW_FUEL + Sectors.EXIT_FUEL:
+		return false
+	if _sweep_left.is_empty() and _swept != ship.sector:
+		_swept = ship.sector
+		var a := Sectors.SPAN * 0.25
+		var b := Sectors.SPAN * 0.75
+		_sweep_left = [Vector2(a, a), Vector2(b, a), Vector2(b, b), Vector2(a, b)]
+		var near := 0                          # (round the loop from the nearest corner)
+		for i in 4:
+			if ship.pos.distance_to(_sweep_left[i]) < ship.pos.distance_to(_sweep_left[near]):
+				near = i
+		_sweep_left = _sweep_left.slice(near) + _sweep_left.slice(0, near)
+	while not _sweep_left.is_empty() and ship.pos.distance_to(_sweep_left[0]) < 3.0:
+		_sweep_left.pop_front()
+	if _sweep_left.is_empty():
+		return false
+	_fly_to(_sweep_left[0])
+	return true
+
+
+func _count_taken() -> void:
+	var r = server.road
+	for i in r._here_places.size():
+		var k: int = r._key(i)
+		if r.taken.has(k) and not _counted.has(k):
+			_counted[k] = true
+			rec["places_taken"] += 1
+			var by: Dictionary = rec["salvage"]["places"]
+			var key: String = Sectors.PLACE_NAMES[int(r._here_places[i][0])]
+			by[key] = int(by.get(key, 0)) + 1
+
+
+func _gather_floating() -> void:
+	## Things outside come into the locker at once (as a suit walk or the tractor beam would).
+	var store: Dictionary = server.ship.store
+	for c: int in server.salvage.floating():
+		var things: PackedByteArray = server.floor_things[c]
+		for item in things:
+			if item != Net.ITEM_NONE:
+				store[item] = int(store.get(item, 0)) + 1
+				rec["salvage"]["floating"] += 1
+		server.floor_things.erase(c)
+		server.replication.floor_record(c)
+
+
+func _cut() -> bool:
+	## Scrap off a dark ship alongside, one piece per Salvage.cut_ticks (the captain in a suit).
+	var sv = server.salvage
+	if server.derelict.ship == null or not server.derelict.dark() or sv.pieces_left() <= 0 or server.pirates.aboard() > 0:
+		return false
+	if _cut_next == 0 or _cut_next > server.tick + 10 * sv.cut_ticks(cap):
+		_cut_next = server.tick + sv.cut_ticks(cap)
+	if server.tick >= _cut_next:
+		_cut_next = 0
+		sv.left[sv._key()] = sv.pieces_left() - 1
+		server.ship.store[Net.ITEM_SCRAP] = int(server.ship.store.get(Net.ITEM_SCRAP, 0)) + 1
+		rec["salvage"]["scrap_cut"] += 1
+	return true
 
 
 func _better_gun(offers: Dictionary) -> void:
@@ -649,6 +862,8 @@ func _heard(text: String) -> void:
 		_cause = "quests"
 	elif text.contains("провалено.") and text.begins_with("[корабль] Задание"):
 		rec["quests"]["failed"] += 1
+	elif text.contains("застрял по дороге"):
+		_soak["stuck_lines"] += 1
 	elif text.contains("За разведку нового сектора"):
 		_cause = "exploring"
 

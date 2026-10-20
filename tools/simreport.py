@@ -55,8 +55,8 @@ def row(r):
         "credits_most_held": c["most_held"],
         "earned_exploring": eb.get("exploring", 0), "earned_calls": eb.get("calls", 0),
         "earned_quests": eb.get("quests", 0), "earned_ransom": eb.get("ransom", 0),
-        "earned_fights": eb.get("fights", 0),
-        "earned_other": c["earned"] - sum(eb.get(k, 0) for k in ("exploring", "calls", "quests", "ransom", "fights")),
+        "earned_fights": eb.get("fights", 0), "earned_selling": eb.get("selling finds", 0),
+        "earned_other": c["earned"] - sum(eb.get(k, 0) for k in ("exploring", "calls", "quests", "ransom", "fights", "selling finds")),
         "spent_fuel": so.get("Топливо", 0), "spent_food": so.get("Паёк", 0),
         "spent_guns": so.get("ship guns", 0), "spent_calls": so.get("calls", 0),
         "spent_other": c["spent"] - sum(so.get(k, 0) for k in known_spent),
@@ -75,6 +75,10 @@ def row(r):
         "calls_received": r["calls"]["received"], "calls_answered": r["calls"]["answered"],
         "quests_done": r["quests"]["done"], "quests_failed": r["quests"]["failed"],
         "guns_bought": len(r["guns_bought"]),
+        "places_taken": r.get("places_taken", 0),
+        "floating_fetched": r.get("salvage", {}).get("floating", 0),
+        "scrap_cut": r.get("salvage", {}).get("scrap_cut", 0),
+        "place_work_seconds": round(r.get("salvage", {}).get("work_seconds", 0)),
     }
 
 
@@ -118,12 +122,12 @@ def summary(runs, games):
         avg = lambda k: sum(r[k] for r in rs) / n
         lines += ["## %s (%d games, the captain stays %ss per system)" % (b, n, rs[0]["stay_seconds"]), "",
                   "Won %d of %d. On average: %.0f min, %.0f jumps, cluster %.1f reached, %.0f credits earned "
-                  "(%.0f exploring, %.0f calls, %.0f fights), %.0f spent (%.0f fuel, %.0f food), %.1f fights, "
-                  "%.1f director events, %.1f crew deaths." % (
+                  "(%.0f exploring, %.0f selling finds, %.0f calls, %.0f fights), %.0f spent (%.0f fuel, %.0f food), %.1f fights, "
+                  "%.1f director events, %.1f crew deaths; %.1f places taken, %.1f things fetched from outside, %.1f scrap cut." % (
                       sum(r["won"] for r in rs), n, avg("minutes"), avg("jumps"), avg("cluster_reached"),
-                      avg("credits_earned"), avg("earned_exploring"), avg("earned_calls"), avg("earned_fights"),
+                      avg("credits_earned"), avg("earned_exploring"), avg("earned_selling"), avg("earned_calls"), avg("earned_fights"),
                       avg("credits_spent"), avg("spent_fuel"), avg("spent_food"), avg("fights"), avg("events"),
-                      avg("crew_deaths")), "",
+                      avg("crew_deaths"), avg("places_taken"), avg("floating_fetched"), avg("scrap_cut")), "",
                   "| " + " | ".join(c[1] for c in COLS) + " |", "|" + "---|" * len(COLS)]
         for r in rs:
             lines.append("| " + " | ".join(str(r[c[0]]) for c in COLS) + " |")
