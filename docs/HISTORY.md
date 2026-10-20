@@ -154,6 +154,19 @@ Open problems:
   needs in red, yellow and green on the sector console and the ship's controls.
 - Protocol 50. Questions: https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS. Build in `/mnt/project-files/builds/v73/`.
 
+### v74 (art and walking; his answers N2–N7, L1 and Z1 "B", his second-opinion answers and his notebook)
+- Walking on a slant: two keys at once, 1.4 times a straight step (5 or 6 ticks), no cutting wall corners, doorways
+  straight, sliding along a wall; 8 facings for sight, the flashlight, turning and using. Bots and pirates still walk
+  straight (his answer: they should too, later).
+- Art: characters drawn in 8 directions (`tools/make_assets.py` leans the figure for slants), the thing in hand drawn in
+  the hand for everyone, and a `sprites/` folder next to the game for an artist's pictures (`src/client/sprites.gd`, names
+  in `sprites/README.txt` made by `tools/spritelist.gd`, the sheets' originals in `sprites/original/`).
+- The first-shift checklist (8 lines that tick themselves) and the help book on H (keys, machines, things, dangers, road).
+- His notebook: bots no longer pass a job between them while fetching a patch (one «беру» per job in 30 s); a bot at a
+  broken post console mends it first; the helm's chart shows the ship alongside; the work bar no longer stays after
+  letting go of E. The rare airlocktest failure was checked: 200 runs clean since v73.
+- New test `tools/walktest.gd` (34 scripts). Protocol 51. Build in `/mnt/project-files/builds/v74/`.
+
 ### v72 (the author's two notebook notes: bots at work, the boarders' wreck)
 - Bots on a repair now raise an emergency shutter that is down when it is the only way to the job (suited only), mend
   before any other work, and free bots come to mend too. Each job is taken by one bot, which says so in chat.

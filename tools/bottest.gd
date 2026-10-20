@@ -41,6 +41,8 @@ func _initialize() -> void:
 	_hand_over()
 	_shut_in()
 	_boarders_wreck()
+	_one_says_it()
+	_broken_post()
 	print("bottest: %d failed" % failed)
 	quit(1 if failed > 0 else 0)
 
@@ -268,6 +270,48 @@ func _boarders_wreck() -> void:
 	_expect(can, "the fuel can lies aboard the wreck")
 	_wait(2, func(): return false)
 	_expect(d.here and d.wreck, "and it is still there a moment later")
+
+
+func _one_says_it() -> void:
+	print("  -- (v74, the author's note) one hole, every bot free: one bot takes it and keeps it while it fetches a patch")
+	_settle()
+	for q in bots:
+		_suit(q)
+		server.stations.order_asked(cap, q.slot, Net.POST_FREE)
+	var helm := int(server.stations.spots[Net.POST_HELM][0][0])
+	var hole: int = _hull_cells({server.map.room_of[helm]: true})[0]
+	server.chat.bot_lines.clear()
+	server.systems.breach(hole)
+	var shut := _wait(90, func(): return not server.air.holes.has(hole))
+	var takes := 0
+	var takers := {}
+	for e: Array in server.chat.bot_lines:
+		if str(e[1]).begins_with("беру"):
+			takes += 1
+			takers[int(e[0])] = true
+	_expect(shut, "the hole is patched")
+	_expect(takes <= 2 and takers.size() == 1, "one bot took it, once (%d takes by %d bots)" % [takes, takers.size()])
+
+
+func _broken_post() -> void:
+	print("  -- (v74, the author's note) a bot at a post whose console is broken mends it, then stands at its post again")
+	_settle()
+	server.stations.volunteers = false        # nobody else comes to mend it
+	var bot = bots[0]
+	for q in bots:
+		server.stations.order_asked(cap, q.slot, Net.POST_HELM if q == bot else Net.POST_GUNS)
+	_wait(5, func(): return false)
+	for c: int in server.map.helm.keys():
+		server.ship.broken[c] = true
+	var mended := _wait(90, func():
+		for c: int in server.map.helm.keys():
+			if server.ship.broken.has(c):
+				return false
+		return true)
+	_expect(mended, "the helm is mended (task %d goal %d doing %d)" % [bot.bot_task, bot.bot_goal, bot.doing])
+	var back := _wait(30, func(): return bot.doing == Net.DOING_POST)
+	_expect(back and bot.order == Net.POST_HELM, "and the bot is back at its post")
+	server.stations.volunteers = true
 
 
 func _logged(p, words: String) -> bool:

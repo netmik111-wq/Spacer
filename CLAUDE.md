@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v73 (version 0.66, a friendlier game) is the latest. Plans one to four are done except the darkness front (the
+Build v74 (version 0.67, art and walking) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -61,9 +61,10 @@ v73 a friendlier game (his 24 answers, `https://claude.ai/artifact/L5C4LmRshPrQe
 at a docked ship's pressure back home, the hunter's line once, an outline and a ring for E, a right-click menu, diagonal use,
 key badges in hints, names under the mouse, hotbar drag, chat tabs and repeats, danger banners, interface size, Ctrl+wheel
 zoom, ✕ and number keys on consoles, the bridge's alert panel.
-Next (his answer Z1 "B"): v74 art and walking: things drawn in hands, a `sprites/` folder of simple base pictures an artist
-replaces, diagonal walking (1.4x a step, 8 drawn directions), a first-shift checklist and a help book. Then fear (its own
-build) and a fire question round.
+v74 art and walking: things drawn in hands, a `sprites/` folder of simple base pictures an artist replaces, diagonal
+walking (1.4x a step, 8 drawn directions), a first-shift checklist and a help book (H); bots keep their job while fetching
+and mend their own post's console. Later: bots and pirates walking on a slant (his word), fear (its own build) and a fire
+question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -94,7 +95,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 33 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 34 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -128,6 +129,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/peopletest.gd (since v70: bots at half, jobs, autodoc, injuries, meteors, surges, prisoners, boarders' goals, bombs, kidnapping, shotgun, flashbang, welder)
     godot --headless --path . --script res://tools/upkeeptest.gd (since v71: hunger slows and kills, the galley and its dishes, complex repairs, bots' parts)
     godot --headless --path . --script res://tools/bottest.gd (since v72: bots through shutters, one bot per job, free bots mend, the log, the boarders' wreck)
+    godot --headless --path . --script res://tools/walktest.gd (since v74: 8 ways, slant steps, corners, doorways, use and sight on a slant, the look byte)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -151,7 +153,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 33 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 34 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -221,16 +223,19 @@ The parameters for these checks are described in the header of `src/main.gd`.
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
-  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`.
+  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `sprites.gd` (v74: pictures
+  replaced from `sprites/` next to the game; every sheet and item picture loads through it).
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
   draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`, `crew_panel.gd` (v55, key O),
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`, `bench_view.gd` (v58, the workbench), `power_view.gd` (v61),
-  `comms_view.gd` (v63, the comms console), `galley_view.gd` (v71, the galley's stove).
+  `comms_view.gd` (v63, the comms console), `galley_view.gd` (v71, the galley's stove), `help_book.gd` and
+  `first_shift.gd` (v74, H and the first-shift checklist).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
   under xvfb-run), `playthrough.gd` (2026-10-19: a script captain plays whole campaigns and records every number,
-  `-- OUT_DIR runs first mode hours stay`), `simreport.py` (gathers those records into tables for the records page).
+  `-- OUT_DIR runs first mode hours stay`), `simreport.py` (gathers those records into tables for the records page), `spritelist.gd` (v74: writes
+  `dist_files/sprites/README.txt`, the names of every replaceable picture; rerun when items are added).
   `maps/`: ship blueprints (`*.txt`, built to `*.json`).
 
 ## Pitfalls
@@ -367,6 +372,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   never straight into `_chat_lines`. The HUD hint the player reads is `_hint_rich` (badges); `_hint` keeps the plain text,
   invisible. The interface size scales `GameScreen`'s root (`_fit_root`): place new HUD pieces inside it. Hotbar drag is
   `C_SWAP` (`Inventory.swap`), which the client mirrors on its own hand.
+- (v74) Directions are 1..8 (`Net.DIRS`; 5–8 are slants, `Net.diagonal`, `Net.way`, `Net.dir_of`); `Mover.TURN` is 16.
+  Facing takes bits 0–3 of the look byte (`Net.pack_look`), light is 128: never add a look bit below 16. Loops over
+  directions go to `Net.DIRS`, never 4. A slant step's time is `Mover.slant_span`; the self packet carries the span. Bots
+  and pirates still give only 1..4. Load pictures through `Sprites.sheet(name)`, never `load("res://assets/...png")`, or the
+  `sprites/` folder won't replace them. `S_OUTFIT` carries the kind in hand (`GameClient.held_by`).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -378,7 +388,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
 ## Delivering builds
 
 - The archive's first part carries `dist_files/sounds/README.txt` as `sounds/README.txt` (v56: the names of
-  the sounds the author may replace).
+  the sounds the author may replace), and (v74) `dist_files/sprites/README.txt` as `sprites/README.txt` with the five
+  sheets copied from `assets/` into `sprites/original/` (not into `sprites/` itself, or they'd be used as replacements).
 - A file up to 30 MB goes through chat, and the Windows game weighs 36 MB archived. So it
   is split into `game.001` and `game.002` in two archives; `play.bat` joins them and checks
   the size. The size in `play.bat` is updated with every build.

@@ -6,6 +6,7 @@ const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Plants := preload("res://src/shared/plants.gd")
+const Sprites := preload("res://src/client/sprites.gd")
 
 # the colour a ship weapon's picture is marked with, by its class (Weapons.CLASS_*)
 const GUN_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.85, 0.55, 1.0), Color(0.4, 1.0, 0.45), Color(0.85, 0.85, 0.8), Color(0.35, 0.65, 1.0),
@@ -18,6 +19,10 @@ const KIND_MARK: Array[Color] = [Color(1.0, 0.45, 0.2), Color(0.35, 0.65, 1.0), 
 
 
 static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
+	var own := Sprites.item(item)
+	if own != null:
+		canvas.draw_texture_rect(own, cell, false)      # (v74) a picture of one's own (the «sprites» folder)
+		return
 	var u := cell.size.x / 17.0
 	var at := cell.position
 	if item >= Net.ITEM_PISTOL and item <= Net.ITEM_PISTOL + Net.PISTOL_ROUNDS:

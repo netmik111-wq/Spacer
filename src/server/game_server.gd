@@ -419,7 +419,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		if pkt.size() < 8:
 			return
 		var dir := pkt[7]
-		if dir > 4 and (dir <= Mover.TURN or dir > Mover.TURN + 4):
+		if dir > Net.DIRS and (dir <= Mover.TURN or dir > Mover.TURN + Net.DIRS):
 			return                  # a direction, or a turn (Mover.TURN + a direction)
 		# A client sends every input change several times, so that one lost
 		# packet does not hold it up. Keep one copy of each, in order.

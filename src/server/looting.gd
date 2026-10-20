@@ -20,12 +20,13 @@ func setup(p_server: GameServer) -> void:
 
 func can_reach(p: Player, id: int) -> bool:
 	## Can this character lay hands on that one: it is on its feet, the other is
-	## lying (unconscious or dead), and they are in the same cell or next to each other.
+	## lying (unconscious or dead), and they are in the same cell or next to each other
+	## (v74: on a slant too).
 	if p.cond != Net.COND_OK or id < 0 or id >= server.players.size() or id == p.slot:
 		return false
 	var other: Player = server.players[id]
 	return other != null and other.cond != Net.COND_OK and not other.taken \
-		and absi(other.st.x - p.st.x) + absi(other.st.y - p.st.y) <= 1
+		and maxi(absi(other.st.x - p.st.x), absi(other.st.y - p.st.y)) <= 1
 
 
 func hands_asked(p: Player, kind: int, id: int, at: int) -> void:

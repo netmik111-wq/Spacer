@@ -33,7 +33,7 @@ extends Node
 ## that takes a ladder), jump_after=SECONDS (ask
 ## for a jump to the first sector in reach), event_after=SECONDS with event=ID
 ## (the host fires a director event), console_after=SECONDS (open the console
-## the character faces), panel=inventory|crew|admin|options|pause|trade with panel_after=SECONDS (open that
+## the character faces), panel=inventory|crew|help|admin|options|pause|trade with panel_after=SECONDS (open that
 ## window), --no-events (dedicated server: the director stays quiet),
 ## helm_after=SECONDS with helm=X,Y (set a course inside the sector; helm=out
 ## steers straight out of a meteor stream, helm=spot to the station or trader).

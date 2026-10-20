@@ -562,8 +562,8 @@ func send() -> void:
 			out.encode_s16(o + 1, st.x)
 			out.encode_s16(o + 3, st.y)
 			out.encode_u8(o + 5, st.cd)
-			out.encode_u8(o + 6, look(p) | (Net.LOOK_LONG_STEP if st.span > Net.MOVE_TICKS else 0))
-			out.encode_u8(o + 7, st.dir)
+			out.encode_u8(o + 6, look(p))
+			out.encode_u8(o + 7, st.dir | (st.span << 4))   # (v74) a step lasts 4 to 12 ticks
 			out.encode_u16(o + 8, p.last_seq)
 			out.encode_s32(o + 10, st.move_tick)
 			out.encode_s16(o + 14, st.fx)

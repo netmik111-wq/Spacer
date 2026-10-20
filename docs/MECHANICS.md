@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v73 (version 0.66).
+Last updated: build v74 (version 0.67).
 
 Contents:
 
@@ -39,6 +39,7 @@ Contents:
 29. [Upkeep: hunger, the galley, complex repairs (v71)](#29-upkeep-hunger-the-galley-complex-repairs-v71)
 30. [Bots at work and the bots' log (v72)](#30-bots-at-work-and-the-bots-log-v72)
 31. [A friendlier game (v73)](#31-a-friendlier-game-v73)
+32. [Art and walking (v74)](#32-art-and-walking-v74)
 
 ---
 
@@ -1444,7 +1445,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 
 | Key | Action |
 |---|---|
-| WASD, arrows | walk |
+| WASD, arrows | walk; (v74) two keys at once (up or down with left or right) walk on a slant |
 | E | action: console, locker, holomap, drone monitor, ladder, repair, search, pick up item, hack lock, intercom |
 | F | drag a person lying down / let go |
 | Q | oxygen supply |
@@ -1462,6 +1463,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 | T | chat straight into the radio |
 | F2 | admin panel (host and admins) |
 | Esc | menu: settings, admin panel, saving (host) |
+| H | (v74) the help book |
 | F1 | ship status and key hints at the top of the screen (hidden by default since v47) |
 | F3 | debug |
 | F11 | full screen |
@@ -1473,7 +1475,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   fight (v56) (each 0–100%), mute.
 - **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
   in the top left corner (shown even while F1's status is hidden), the white flash after a jump,
-  the screen shaking when the hull is hit (v56, 0–100%), (v73) the size of the interface and its text (75–150%).
+  the screen shaking when the hull is hit (v56, 0–100%), (v73) the size of the interface and its text (75–150%),
+  (v74) «Подсказки первой смены» (the first-shift checklist; turning it on starts it from the beginning).
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
@@ -1813,3 +1816,35 @@ walking and the first-shift checklist are the next build.
   engine or the helm), fuel (red below one jump, yellow below three), the air reserve (red below 15%, yellow below 40%),
   food (red at none, yellow below two jumps for everyone), the main SMES below 15%, an empty crew reserve; «Всё в порядке»
   in green when nothing is wrong.
+
+## 32. Art and walking (v74)
+
+The author's answers N2–N7 and L1 on the page "Spacer v73 Friendly Game", his second-opinion answers, and his notebook.
+
+- **Walking on a slant.** Up or down held together with left or right walks diagonally. A slant step takes **1.4 times** a
+  straight one: 5 or 6 ticks in turn (5.6 on average) against 4, and 11 or 12 against 8 when going slowly. A slant step
+  needs the cell it goes to and both cells beside the corner free: no cutting past a wall's corner. Doorways are never
+  crossed on a slant (a door is entered and left straight). Held against a wall or a doorway, the slant slides along it
+  (across first, then up or down). Somebody dragging a body walks straight. Ladders change decks as before. Bots and pirates
+  still walk straight (the author: they should walk on a slant too, in a later build).
+- **Eight ways to face.** Characters are drawn facing 8 ways (the slants lean the figure). Sight, the flashlight's cone and
+  turning by mouse click use all 8. E while facing a slant uses the console or machine right beside (on the wall next to
+  us), or the floor cell on the slant (a thing lying there); never a door on a slant.
+- **Things in hands.** The thing a person holds is drawn in their hand (its small picture), behind them when they face away.
+  Everyone sees what everyone holds (the server tells it with the look).
+- **The «sprites» folder.** Next to the game, like «sounds»: a PNG of the right name there is used instead of the game's own
+  picture. Sheets (`chars.png`, `tiles.png`, `breach.png`, `hud_monitor.png`, `hud_alerts.png`) must keep their size; the
+  originals are in `sprites/original/`. A thing's picture `item_<number>.png` may be any square size and is drawn in the
+  slot, on the floor and in the hand. `sprites/README.txt` lists all **177** names.
+- **The first shift.** A short list in the top left corner: walk (6 steps), turn on the oxygen (Q), open the supply locker,
+  take another thing in hand, open the help book, stand at the ship's controls, pour a fuel can into the engine, jump.
+  Lines tick themselves; what is done is kept between games, and the list goes **4 s** after the last line. ✕ hides it for
+  good; the settings bring it back.
+- **The help book (H).** Pages: Управление (every key as set), Машины (23 machines with their pictures and what E does
+  there), Вещи (every thing in the game with its picture and use), Опасности (8 dangers), Путь (the goal and the road).
+  The character can walk with it open; H, Esc or ✕ close it.
+- **Bots (his notebook).** A bot says «беру …» once per job in **30 s**, and keeps its job while it fetches the patch or
+  part (others no longer take it from it). A bot whose post's console is broken mends it first, then takes its post.
+- **The helm's chart** marks a ship alongside next to our dot: «пираты», «обломки пиратов» or «корабль рядом».
+- **Work bar.** The bar at the bottom shows only for work with the thing in hand; work on a thing shows the ring alone, and
+  the bar no longer stays up after letting go.

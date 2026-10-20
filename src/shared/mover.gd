@@ -35,7 +35,7 @@ class State:
 		x = px; y = py; fx = px; fy = py; cd = 0; move_tick = -1000
 
 
-const TURN := 8                      # an input of TURN + a direction only turns the character that way
+const TURN := 16                     # an input of TURN + a direction only turns the character that way
 
 
 static func apply_input(st: State, value: int) -> void:
@@ -49,6 +49,9 @@ static func apply_input(st: State, value: int) -> void:
 
 ## Advances one character by one tick. Returns true if a step started.
 ## Walking into a shut door pushes it open and waits in front of it.
+## (v74, the author's N2) A diagonal step never cuts a corner: both cells beside it must be
+## open floor (or space), and no doorway is crossed on a slant. Held against a corner, the
+## character slides along the side that is open.
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
@@ -57,8 +60,20 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 		st.facing = st.dir
 	if st.down or st.cd > 0 or st.dir == 0:
 		return false
-	var nx: int = st.x + Net.DX[st.dir]
-	var ny: int = st.y + Net.DY[st.dir]
+	var dir := st.dir
+	if Net.diagonal(dir) and (st.slow or not slant_open(map, st.x, st.y, Net.DX[dir], Net.DY[dir])):
+		# along the wall: the side way that is open (across first, then up or down); somebody
+		# hauling (or hauled) goes straight, so the body follows into the cell just left
+		var across := Net.dir_of(Net.DX[dir], 0)
+		var upright := Net.dir_of(0, Net.DY[dir])
+		if map.passable(st.x + Net.DX[dir], st.y):
+			dir = across
+		elif map.passable(st.x, st.y + Net.DY[dir]):
+			dir = upright
+		else:
+			return false
+	var nx: int = st.x + Net.DX[dir]
+	var ny: int = st.y + Net.DY[dir]
 	if not map.passable(nx, ny):
 		return false
 	var door := map.door_at(nx, ny)
@@ -76,9 +91,27 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	st.y = ny
 	# hauling somebody, or pushing off through open space, is slow going
 	st.span = Net.DRAG_TICKS if st.slow or map.floats(nx, ny) or map.floats(st.fx, st.fy) else Net.MOVE_TICKS
+	if Net.diagonal(dir):
+		st.span = slant_span(st.span, tick)
 	st.cd = st.span
 	st.move_tick = tick
 	return true
+
+
+static func slant_open(map: ShipMap, x: int, y: int, dx: int, dy: int) -> bool:
+	## (v74) May a character step from x,y by dx,dy on a slant: the cell there and both cells
+	## beside the way open floor or space, none of them (nor x,y) a doorway.
+	for c: Vector2i in [Vector2i(x + dx, y + dy), Vector2i(x + dx, y), Vector2i(x, y + dy)]:
+		if not map.passable(c.x, c.y) or map.door_at(c.x, c.y) >= 0:
+			return false
+	return map.door_at(x, y) < 0 and map.deck_of(y) == map.deck_of(y + dy)
+
+
+static func slant_span(straight: int, tick: int) -> int:
+	## (v74, the author's N3: 1.4 times a straight step) Ticks are whole, so a slant step
+	## takes the next whole number up or down by the tick it starts on: on average exactly
+	## 1.4 times (4 ticks -> 5 or 6, 5.6 on average; 8 -> 11 or 12, 11.2).
+	return (straight * 14 + posmod(tick, 10)) / 10
 
 
 ## Where the character is drawn at (fractional) tick `t`, in tile units.

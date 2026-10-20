@@ -150,6 +150,11 @@ func _video_tab() -> Control:
 	row.add_child(fps)
 	_check(page, "Показывать число кадров в секунду", Options.show_fps, func(on: bool) -> void: Options.show_fps = on)
 	_check(page, "Белая вспышка после прыжка", Options.flash, func(on: bool) -> void: Options.flash = on)
+	# (v74, the author's L1) the first shift's checklist: turned on again, it starts over
+	_check(page, "Подсказки первой смены", Options.first_shift, func(on: bool) -> void:
+		Options.first_shift = on
+		if on:
+			Options.shift_done = 0)
 	_slider(page, "Тряска при попаданиях", Options.shake, func(v: float) -> void: Options.shake = v)
 	# (v73, the author's H5) the size of the interface and its text
 	var size_row := HBoxContainer.new()

@@ -1,0 +1,75 @@
+extends RefCounted
+## (v74, the author's N7) Pictures of one's own, as the «sounds» folder is for sounds: a PNG
+## file of the right name in the «sprites» folder next to the game is used instead of the
+## game's own picture. Sheets (the characters, the tiles, the hole in the hull, the health
+## monitor and the warning lamps) must keep their size, as the game cuts frames out of them;
+## a thing's picture (item_<number>.png, see dist_files/sprites/README.txt) may be any square
+## size and is drawn in its slot, on the floor and in the hand. Files are read once, when the
+## game first wants them.
+
+const Items := preload("res://src/shared/items.gd")
+
+# the sheets that can be replaced: file name -> where the game's own lies
+const SHEETS := {
+	"chars": "res://assets/chars.png",
+	"tiles": "res://assets/tiles.png",
+	"breach": "res://assets/breach.png",
+	"hud_monitor": "res://assets/hud_monitor.png",
+	"hud_alerts": "res://assets/hud_alerts.png",
+}
+
+static var own_files := PackedStringArray()   # the pictures of one's own in use (for the log)
+static var _sheets := {}                       # name -> Texture2D
+static var _items := {}                        # item_<kind> -> Texture2D, or null: none of one's own
+
+
+static func dirs() -> PackedStringArray:
+	## Where pictures of one's own are looked for: next to the game, and (run from the project) in its folder.
+	return PackedStringArray([OS.get_executable_path().get_base_dir().path_join("sprites"),
+		ProjectSettings.globalize_path("res://").path_join("sprites")])
+
+
+static func sheet(name: String) -> Texture2D:
+	## A sheet of the game's pictures, or the one of the same name and size in the folder.
+	if _sheets.has(name):
+		return _sheets[name]
+	var own: Texture2D = load(SHEETS[name])
+	var tex := own
+	var file := _own(name + ".png")
+	if file != null:
+		if Vector2(file.get_size()) == own.get_size():
+			tex = ImageTexture.create_from_image(file)
+			own_files.append(name + ".png")
+		else:
+			print("sprites/%s.png is %dx%d, the game's is %dx%d: not used" % [name, file.get_width(), file.get_height(),
+				own.get_width(), own.get_height()])
+	_sheets[name] = tex
+	return tex
+
+
+static func item_key(item: int) -> String:
+	## The name of a thing's picture: one for every kind (a pistol whatever its rounds).
+	return "item_%d" % Items.kind_of(item)
+
+
+static func item(item: int) -> Texture2D:
+	## The picture of one's own for that thing, or null (the game draws its own).
+	var key := item_key(item)
+	if _items.has(key):
+		return _items[key]
+	var file := _own(key + ".png")
+	var tex: Texture2D = ImageTexture.create_from_image(file) if file != null else null
+	if tex != null:
+		own_files.append(key + ".png")
+	_items[key] = tex
+	return tex
+
+
+static func _own(file: String) -> Image:
+	for dir in dirs():
+		var path := dir.path_join(file)
+		if FileAccess.file_exists(path):
+			var im := Image.load_from_file(path)
+			if im != null and not im.is_empty():
+				return im
+	return null

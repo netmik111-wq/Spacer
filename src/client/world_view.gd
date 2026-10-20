@@ -18,14 +18,20 @@ const ItemArt := preload("res://src/client/item_art.gd")
 const Sounds := preload("res://src/client/sounds.gd")
 const Options := preload("res://src/client/options.gd")
 const FightFx := preload("res://src/client/fight_fx.gd")
+const Sprites := preload("res://src/client/sprites.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
 const CHAR_PAD := 1                  # transparent border around every frame in assets/chars.png
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
-# column of the first frame for each facing in assets/chars.png (down, up, left, right)
-const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9}
+# column of the first frame for each facing in assets/chars.png (down, up, left, right;
+# v74: then down-left, down-right, up-left, up-right)
+const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 18, 6: 21, 7: 12, 8: 15}
+# (v74) where the hand is, from the feet, for each facing (the thing held is drawn there)
+const HAND_AT := {1: Vector2(-8, -17), 2: Vector2(8, -17), 3: Vector2(-5, -16), 4: Vector2(5, -16),
+	5: Vector2(-7, -17), 6: Vector2(7, -17), 7: Vector2(-7, -17), 8: Vector2(7, -17)}
+const HAND_SIZE := 12.0
 
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
 const ABOVE_TINT := Color(0.8, 0.9, 1.0, 0.6)    # somebody seen from below through a see-through floor
@@ -155,7 +161,6 @@ var _hover_pen: Node2D               # above the dark too: the outline of the th
 var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
 var _ring_pen: Node2D                # (v73) the ring that fills over the thing we work on
 var _ring_shown := false
-var ring_on := false                 # (set by GameScreen) the "use" key is held: the job's progress is drawn as a ring
 var zoom_step := 0                   # (v73, the author's H6) Ctrl+wheel: one whole zoom step closer or farther
 var _hover_ink: Node2D               # under _hover_pen: the silhouettes of things on the floor, drawn round them
 var _body_ink: Sprite2D              # on a body under the mouse: its outline (OUTLINE_SHADER)
@@ -245,13 +250,13 @@ func setup(p_client: GameClient) -> void:
 	_tile = map.tile_size
 	_stride = map.deck_stride
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_chars_tex = load("res://assets/chars.png")
-	_breach_tex = load("res://assets/breach.png")
+	_chars_tex = Sprites.sheet("chars")
+	_breach_tex = Sprites.sheet("breach")
 
 	var tiles := TileSet.new()
 	tiles.tile_size = Vector2i(_tile, _tile)
 	var atlas := TileSetAtlasSource.new()
-	atlas.texture = load("res://assets/tiles.png")
+	atlas.texture = Sprites.sheet("tiles")
 	atlas.texture_region_size = Vector2i(_tile, _tile)
 	var source_id := tiles.add_source(atlas)
 	_source_id = source_id
@@ -486,6 +491,36 @@ func _frame(facing: int, moving: bool, pos_tiles: Vector2, colour: int) -> Rect2
 		# alternate the two step poses tile by tile, switching in the middle of a slide
 		column += 1 + (int(floorf(pos_tiles.x + pos_tiles.y + 0.5)) & 1)
 	return _cell(column, colour)
+
+
+class HandArt extends Node2D:
+	## (v74, the author's N6) The thing in a character's hand, drawn on the figure (the small
+	## picture the inventory shows, or the «sprites» folder's).
+	var item := 0
+
+	func _draw() -> void:
+		if item != Net.ITEM_NONE:
+			ItemArt.draw(self, Rect2(-HAND_SIZE * 0.5, -HAND_SIZE * 0.5, HAND_SIZE, HAND_SIZE), item)
+
+
+func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
+	## Puts the thing held where the figure's hand is for that facing: behind the figure when
+	## it faces away from us.
+	var hand: HandArt = sprite.get_node_or_null("hand")
+	if hand == null:
+		if item == Net.ITEM_NONE:
+			return
+		hand = HandArt.new()
+		hand.name = "hand"
+		sprite.add_child(hand)
+	hand.visible = item != Net.ITEM_NONE
+	if not hand.visible:
+		return
+	if hand.item != item:
+		hand.item = item
+		hand.queue_redraw()
+	hand.position = HAND_AT.get(facing, HAND_AT[Net.DIR_DOWN])
+	hand.show_behind_parent = facing == Net.DIR_UP or facing == Net.DIR_UP_LEFT or facing == Net.DIR_UP_RIGHT
 
 
 func _cell(column: int, row: int) -> Rect2:
@@ -838,7 +873,7 @@ func alarm_sound() -> void:
 
 
 func _update_ring() -> void:
-	var working := ring_on and client.work > 0 and client.target_cell() >= 0
+	var working := client.work > 0 and client.target_cell() >= 0   # (v74) held or going on by itself (the bench, a kit)
 	if working or _ring_shown:
 		_ring_shown = working
 		_ring_pen.queue_redraw()
@@ -946,7 +981,7 @@ func _tile_line(id: int) -> Texture2D:
 	var line: Texture2D = null
 	if id < map.fitting.size() and map.fitting[id] == 1:
 		if _tiles_image == null:
-			_tiles_image = (load("res://assets/tiles.png") as Texture2D).get_image()
+			_tiles_image = Sprites.sheet("tiles").get_image()
 			if _tiles_image.is_compressed():
 				_tiles_image.decompress()
 		var name := ""
@@ -1152,7 +1187,7 @@ func _update_fan() -> void:
 	var reach := (float(Sight.SIGHT_REACH) + 1.5) * _tile
 	var m := _cone_fan.material as ShaderMaterial
 	m.set_shader_parameter("origin", origin)
-	m.set_shader_parameter("ahead", Vector2(Net.DX[facing], Net.DY[facing]))
+	m.set_shader_parameter("ahead", Net.way(facing))
 	m.set_shader_parameter("half_field", deg_to_rad(half))
 	m.set_shader_parameter("band", CONE_BAND * _tile)
 	m.set_shader_parameter("spread", tan(deg_to_rad(CONE_SOFT)))
@@ -1187,7 +1222,7 @@ func _draw_look() -> void:
 	var facing: int = s[1]
 	var green := Color(0, 1, 0, 1)
 	var origin := me.position + Vector2(0, -12)
-	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
+	var ahead := Net.way(facing)
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
 	_draw_light(_look, _near, Color(0, 1, 0, NEAR), 0)       # and dimly all round us, as in SS13
@@ -1789,6 +1824,7 @@ func _process(delta: float) -> void:
 		_shown[id] = sprite.visible
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
+		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		if cond == Net.COND_OK:
 			sprite.rotation = 0.0
 			sprite.modulate = Color.WHITE

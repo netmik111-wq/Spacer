@@ -77,7 +77,7 @@ static func cone(map: ShipMap, doors: Doors, origin: Vector2, facing: int, width
 	## 1.0 near and less further off. The cone is `width_deg` wide and `reach`
 	## cells long, and stays on the deck it starts on.
 	var out := {}
-	if facing < 1 or facing > 4:
+	if facing < 1 or facing > Net.DIRS:
 		return out
 	var from := Vector2i(roundi(origin.x), roundi(origin.y))
 	if from.x < 0 or from.y < 0 or from.x >= map.width or from.y >= map.height:
@@ -85,7 +85,7 @@ static func cone(map: ShipMap, doors: Doors, origin: Vector2, facing: int, width
 	var deck := map.deck_of(from.y)
 	var top := deck * map.deck_stride
 	var bottom := top + map.deck_height - 1
-	var ahead := Vector2(Net.DX[facing], Net.DY[facing])
+	var ahead := Net.way(facing)
 	var half := deg_to_rad(width_deg * 0.5)
 	for y in range(maxi(from.y - reach, top), mini(from.y + reach, bottom) + 1):
 		for x in range(maxi(from.x - reach, 0), mini(from.x + reach, map.width - 1) + 1):
@@ -122,9 +122,9 @@ static func glow(map: ShipMap, doors: Doors, origin: Vector2, facing: int, radiu
 	var top := deck * map.deck_stride
 	var bottom := top + map.deck_height - 1
 	var mid := origin
-	if facing >= 1 and facing <= 4 and ahead > 0.0:
+	if facing >= 1 and facing <= Net.DIRS and ahead > 0.0:
 		# the spot moves ahead until a wall: facing a wall, the light pools at its face
-		var way := Vector2(Net.DX[facing], Net.DY[facing])
+		var way := Net.way(facing)
 		var gone := 0.0
 		while gone < ahead:
 			var step := minf(0.5, ahead - gone)
@@ -224,7 +224,7 @@ static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vec
 	## Can somebody at `from` (in cells), facing that way, see the cell `to`
 	## (same deck, inside the arcs, within reach, nothing in the way)?
 	## `lines`: a Dictionary to remember lines in (see clear_cached), or null.
-	if facing < 1 or facing > 4:
+	if facing < 1 or facing > Net.DIRS:
 		return false
 	var at := Vector2i(roundi(from.x), roundi(from.y))
 	if map.deck_of(at.y) != map.deck_of(to.y):
@@ -232,7 +232,7 @@ static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vec
 	var v := Vector2(to) - from
 	if v.length() > reach + 0.5:
 		return false
-	if not in_arcs(Vector2(Net.DX[facing], Net.DY[facing]), v, arcs):
+	if not in_arcs(Net.way(facing), v, arcs):
 		return false
 	if v.length() < 0.75:
 		return true

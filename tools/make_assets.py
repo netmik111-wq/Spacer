@@ -5,7 +5,7 @@
                                                                      see-through floors drawn in code)
   maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically;
                                                                      one drawing per deck)
-  (generated in code)     -> assets/chars.png                       (placeholder crew, 4 directions)
+  (generated in code)     -> assets/chars.png                       (placeholder crew, 8 directions)
   art_src/hud.dmi         -> assets/hud_monitor.png                 (heartbeat monitor animation)
 
 Run from the project folder:  python3 tools/make_assets.py
@@ -869,7 +869,47 @@ UNDERSUIT = (138, 140, 146)
 SHOE = (44, 40, 40, 255)
 
 
+# (v74, the author's N4) the four slants: a front or back view with the head and body
+# leaning towards the side it turns to. Simple base pictures: an artist replaces them
+# through the «sprites» folder. direction 4..7 = down-left, down-right, up-left, up-right.
+SLANT_BASE = {4: (0, -1), 5: (0, 1), 6: (1, -1), 7: (1, 1)}
+
+
+def lean(im, side, top):
+    # a turned look: the figure narrowed to 4/5 (seen at an angle), the head 2 pixels and the
+    # body 1 pixel towards that side (legs stay); before the outline is drawn
+    narrow = im.resize((CHAR_W * 4 // 5, CHAR_H), Image.NEAREST)
+    im.paste((0, 0, 0, 0), (0, 0, CHAR_W, CHAR_H))
+    im.paste(narrow, ((CHAR_W - narrow.width) // 2, 0))
+    px = im.load()
+    rows = {y: [px[x, y] for x in range(CHAR_W)] for y in range(CHAR_H)}
+    for y in range(CHAR_H):
+        k = 2 * side if y <= top + 11 else (side if y <= 32 else 0)
+        if k == 0:
+            continue
+        for x in range(CHAR_W):
+            sx = x - k
+            px[x, y] = rows[y][sx] if 0 <= sx < CHAR_W else (0, 0, 0, 0)
+
+
+def outline(im):
+    px = im.load()
+    solid = [[px[x, y][3] > 0 for x in range(CHAR_W)] for y in range(CHAR_H)]
+    for y in range(CHAR_H):
+        for x in range(CHAR_W):
+            if solid[y][x]:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < CHAR_W and 0 <= ny < CHAR_H and solid[ny][nx]:
+                    px[x, y] = OUTLINE
+                    break
+
+
 def draw_char(colour, direction, pose, outfit=0, pack=False):
+    side = 0
+    if direction in SLANT_BASE:
+        direction, side = SLANT_BASE[direction]
     im = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
     px = im.load()
     suited = outfit == 0
@@ -988,17 +1028,10 @@ def draw_char(colour, direction, pose, outfit=0, pack=False):
             rect(11, top + 9, 19, top + 10, SKIN_D)
             rect(13, top + 1, 19, top + 4, HAIR); rect(16, top + 1, 19, top + 8, HAIR)
             rect(12, top + 5, 12, top + 6, OUTLINE)
+    if side:
+        lean(im, side, top)
     # outline around the silhouette
-    solid = [[px[x, y][3] > 0 for x in range(CHAR_W)] for y in range(CHAR_H)]
-    for y in range(CHAR_H):
-        for x in range(CHAR_W):
-            if solid[y][x]:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < CHAR_W and 0 <= ny < CHAR_H and solid[ny][nx]:
-                    px[x, y] = OUTLINE
-                    break
+    outline(im)
     if direction == 3:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)
     # soft shadow under the feet, so the figure sits on the floor
@@ -1014,6 +1047,9 @@ def draw_char(colour, direction, pose, outfit=0, pack=False):
 
 def draw_robot(colour, eye, direction, pose):
     # (v62) a squat machine on two thick legs: a box of a body, a head with one eye, a gun arm
+    side = 0
+    if direction in SLANT_BASE:
+        direction, side = SLANT_BASE[direction]
     im = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
     px = im.load()
     base = colour + (255,)
@@ -1055,16 +1091,9 @@ def draw_robot(colour, eye, direction, pose):
         rect(4, top + 12, 5, top + 14, OUTLINE)
         rect(11, top, 20, top + 7, base); rect(11, top, 20, top, lite)
         rect(11, top + 2, 15, top + 5, OUTLINE); rect(12, top + 3, 13, top + 4, eye)
-    solid = [[px[x, y][3] > 0 for x in range(CHAR_W)] for y in range(CHAR_H)]
-    for y in range(CHAR_H):
-        for x in range(CHAR_W):
-            if solid[y][x]:
-                continue
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < CHAR_W and 0 <= ny < CHAR_H and solid[ny][nx]:
-                    px[x, y] = OUTLINE
-                    break
+    if side:
+        lean(im, side, top - 4)
+    outline(im)
     if direction == 3:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)
     out = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
@@ -1080,6 +1109,18 @@ def draw_robot(colour, eye, direction, pose):
 def draw_armoured(colour, direction, pose):
     # (v62) a heavy stormtrooper: a jumpsuit-cut figure in steel, with plates on the
     # shoulders and chest and an open steel helmet over the face (no sealed suit: it breathes our air)
+    if direction in SLANT_BASE:
+        # (v74) the slants: the plated front or back, leaning (the plates go with the body)
+        base, side = SLANT_BASE[direction]
+        im = draw_armoured(colour, base, pose)
+        top = 7 + (1 if pose != 0 else 0)
+        body = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
+        body.paste(im.crop((0, 0, CHAR_W, 43)), (0, 0))
+        lean(body, side, top)
+        out = Image.new("RGBA", (CHAR_W, CHAR_H), (0, 0, 0, 0))
+        out.paste(im.crop((0, 43, CHAR_W, CHAR_H)), (0, 43))
+        out.alpha_composite(body)
+        return out
     im = draw_char(colour, direction, pose, 1, False)
     px = im.load()
     plate = (150, 156, 168, 255)
@@ -1111,12 +1152,13 @@ def draw_armoured(colour, direction, pose):
 def build_chars():
     # one row per colour, outfit and backpack: row = colour * OUTFITS * 2 + outfit * 2 + (1 with a backpack)
     rows = len(SUIT_COLOURS) * OUTFITS * 2
-    sheet = Image.new("RGBA", (CELL_W * 12, CELL_H * rows), (0, 0, 0, 0))
+    # (v74) 8 directions of 3 frames: down, up, left, right, then the slants (see SLANT_BASE)
+    sheet = Image.new("RGBA", (CELL_W * 24, CELL_H * rows), (0, 0, 0, 0))
     for ci, (name, colour) in enumerate(SUIT_COLOURS):
         for outfit in range(OUTFITS):
             for pack in (False, True):
                 row = ci * OUTFITS * 2 + outfit * 2 + (1 if pack else 0)
-                for d in range(4):
+                for d in range(8):
                     for pose in range(3):
                         if name in ROBOT_EYES:
                             frame = draw_robot(colour, ROBOT_EYES[name], d, pose)
@@ -1130,7 +1172,7 @@ def build_chars():
     bg = Image.new("RGBA", prev.size, (74, 78, 88, 255))
     bg.alpha_composite(prev)
     bg.save(os.path.join(ROOT, "tools", "preview", "chars.png"))
-    print(f"chars: {len(SUIT_COLOURS)} colours x {OUTFITS * 2} outfits x 12 frames -> assets/chars.png")
+    print(f"chars: {len(SUIT_COLOURS)} colours x {OUTFITS * 2} outfits x 24 frames -> assets/chars.png")
 
 
 # -------------------------------------------------------------------- HUD
