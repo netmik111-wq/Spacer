@@ -99,6 +99,7 @@ var search_slots := PackedByteArray()  # what they carry
 var search_worn := PackedByteArray()   # and what they wear
 var worn := PackedByteArray()        # what our character wears (Net.WEAR_*)
 var looks := {}                      # id -> how that character is dressed (Net.LOOKS); not there = in a suit
+var holding := {}                    # (v74) id -> the thing in that character's hand (Net.ITEM_*; not there = nothing)
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
@@ -453,7 +454,10 @@ func turn_to(at: Vector2) -> void:
 	var d := at - Vector2(pred.x, pred.y)
 	if d.length() < 0.3:
 		return
-	face((Net.DIR_RIGHT if d.x > 0.0 else Net.DIR_LEFT) if absf(d.x) >= absf(d.y) else (Net.DIR_DOWN if d.y > 0.0 else Net.DIR_UP))
+	# (v74) 8 ways: a slant within 22.5 degrees of the diagonal
+	var sx := signi(roundi(signf(d.x))) if absf(d.x) >= absf(d.y) * 0.4142 else 0
+	var sy := signi(roundi(signf(d.y))) if absf(d.y) >= absf(d.x) * 0.4142 else 0
+	face(Net.dir_of(sx, sy))
 
 
 func face(facing: int) -> void:
@@ -533,6 +537,13 @@ func has_suit() -> bool:
 
 func look_of(id: int) -> int:
 	return int(looks.get(id, 0))
+
+
+func held_by(id: int) -> int:
+	## (v74) The thing in that character's hand, as it is drawn: our own at once, others' as told.
+	if id == my_id:
+		return slots[hand] if hand >= 0 and hand < slots.size() else Net.ITEM_NONE
+	return int(holding.get(id, Net.ITEM_NONE))
 
 
 func send_guns(which: int) -> void:
@@ -1114,7 +1125,7 @@ func click_facing(c: Vector2i) -> int:
 	var cell := c.y * map.width + c.x
 	var here := pred.y * map.width + pred.x
 	var order: Array[int] = [pred.facing]
-	for f in range(1, 5):
+	for f in range(1, Net.DIRS + 1):     # (v74) the slants too
 		if f != pred.facing:
 			order.append(f)
 	for f: int in order:
@@ -1738,6 +1749,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_OUTFIT:
 			if pkt.size() >= 4:
 				looks[pkt.decode_u16(1)] = pkt[3]
+			if pkt.size() >= 5:
+				holding[pkt.decode_u16(1)] = pkt[4]
 		Net.S_STORE:
 			if not _ours(pkt):
 				return
@@ -2170,9 +2183,12 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
 	e.cond = Net.look_cond(look)
 	e.light = Net.look_light(look)
 	if e.x != x or e.y != y:
-		if absi(e.x - x) + absi(e.y - y) == 1:
-			# somebody hauling, or being hauled, takes longer over a step
-			e.steps.append([s_tick, e.x, e.y, x, y, facing, Net.DRAG_TICKS if Net.look_slow(look) else Net.MOVE_TICKS])
+		if maxi(absi(e.x - x), absi(e.y - y)) == 1:
+			# somebody hauling, or being hauled, takes longer over a step; (v74) a slant one too
+			var span := Net.DRAG_TICKS if Net.look_slow(look) else Net.MOVE_TICKS
+			if e.x != x and e.y != y:
+				span = Mover.slant_span(span, s_tick)
+			e.steps.append([s_tick, e.x, e.y, x, y, facing, span])
 			if e.steps.size() > 8:
 				e.steps.pop_front()
 		else:
@@ -2249,8 +2265,8 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	my_cond = Net.look_cond(pkt[o + 5])
 	_auth.down = my_cond != Net.COND_OK
 	_auth.slow = Net.look_slow(pkt[o + 5])
-	_auth.span = Net.DRAG_TICKS if (pkt[o + 5] & Net.LOOK_LONG_STEP) != 0 else Net.MOVE_TICKS
-	_auth.dir = pkt[o + 6]
+	_auth.span = maxi(pkt[o + 6] >> 4, 1)
+	_auth.dir = pkt[o + 6] & 15
 	var ack := pkt.decode_u16(o + 7)
 	_auth.move_tick = pkt.decode_s32(o + 9)
 	_auth.fx = pkt.decode_s16(o + 13)

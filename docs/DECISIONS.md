@@ -1195,3 +1195,27 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
 - **The bridge's alert panel** (his L2 comment: "alert panel on the bridge with green, yellow and red if something is low"):
   `Look.needs` on the sector console and the ship's controls, worst first. Thresholds are mine: hull 35/70%, fuel 1 and 3
   jumps, air reserve 15/40%, food 2 jumps for everyone, SMES 15%.
+
+### Art and walking (v74; his answers N2–N7, L1 on the v73 page, and his second-opinion answers)
+
+- **Slant step time** (his N3 "1.4x"): ticks are whole, so `Mover.slant_span` gives 5 or 6 ticks by the tick number
+  (`(straight * 14 + tick % 10) / 10`), exactly 1.4 times on average and the same on server and client.
+- **No corners, no doorways on a slant** (mine, he agreed): a slant needs its target and both side cells passable. Doors
+  are entered straight, so door bumps, shutters and the airlock keep their one-axis rules; a slant held at a wall slides
+  along it, as in most top-down games. Hauling goes straight so the dragged body keeps following the old cell.
+- **Bots and pirates walk straight in v74** (his "Okey but in the future we need make them move diagonal"): their routes
+  are 4-way paths; making them 8-way is a later build.
+- **E on a slant** (mine, he agreed): a fitting right beside on the wall, else the floor cell on the slant; never a door
+  (a door is used facing it straight).
+- **Directions 1..8** with `Mover.TURN` moved to 16; facing takes 4 bits of the look byte (light moved to 128, the old
+  long-step bit dropped: the self packet carries the step's span instead).
+- **The hand** (his N5; my suggestion of the existing item pictures, he agreed): the item kind in hand goes out as a 5th
+  byte of `S_OUTFIT`, sent only when it changes; our own hand is drawn from the client's hand at once.
+- **The sprites folder** (his N7, art note: simple base pictures an artist replaces): sheets must keep their size so frames
+  keep their places; item pictures are per kind (`item_<kind>.png`), any square size. Read once, when first wanted.
+- **The help book on H** (his L1, mine for the key, he agreed): H was free. Built when first opened, like console screens.
+- **The first shift** (his L1): the progress is kept in options, not in the save, as it is the player's, not the ship's.
+- **Bots' job hand-over** (his notebook, «беру пробоину» spam): a bot fetching a patch keeps its job reserved
+  (`Stations._fetch_for`), the spot's passer-by does not count against the bot holding the job, and «беру» is said once
+  per job per 30 s. A bot at a post whose consoles are all broken mends them first (`Stations._post_down`).
+

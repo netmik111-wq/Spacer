@@ -38,6 +38,7 @@ const ACTIONS: Array = [
 	["pause", "Меню", [KEY_ESCAPE]],
 	["fullscreen", "Полный экран", [KEY_F11]],
 	["info", "Сведения о корабле и подсказки клавиш", [KEY_F1]],
+	["help", "Книга помощи", [KEY_H]],
 	["debug", "Отладочные сведения", [KEY_F3]],
 	["toggle_predict", "Предсказание движения (отладка)", [KEY_F4]],
 ]
@@ -54,6 +55,8 @@ static var vsync := true
 static var max_fps := 60
 static var show_fps := false
 static var flash := true             # the white flash after a jump
+static var first_shift := true       # (v74, the author's L1) the «first shift» checklist in a game
+static var shift_done := 0           # (v74) its lines ticked off so far (bits, see FirstShift.STEPS), kept between games
 static var ui_scale := 1.0           # (v73, the author's H5) the size of the interface (and its text): 0.75..1.5
 static var keys := {}                # action -> Array of {"key": physical keycode, "ctrl", "shift", "alt"}
 
@@ -90,6 +93,8 @@ static func load_all() -> void:
 		show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
 		flash = bool(cfg.get_value("video", "flash", flash))
 		ui_scale = clampf(float(cfg.get_value("video", "ui_scale", ui_scale)), 0.75, 1.5)
+		first_shift = bool(cfg.get_value("game", "first_shift", first_shift))
+		shift_done = int(cfg.get_value("game", "shift_done", shift_done))
 		for a: Array in ACTIONS:
 			if cfg.has_section_key("keys", a[0]):
 				var list: Array = []
@@ -117,6 +122,8 @@ static func save_all() -> void:
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("video", "flash", flash)
 	cfg.set_value("video", "ui_scale", ui_scale)
+	cfg.set_value("game", "first_shift", first_shift)
+	cfg.set_value("game", "shift_done", shift_done)
 	for action: String in keys:
 		cfg.set_value("keys", action, keys[action])
 	cfg.save(PATH)

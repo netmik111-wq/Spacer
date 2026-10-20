@@ -97,6 +97,9 @@ var _logged := {}                    # (v72) bot slot -> the work it last told o
 var _forcing := {}                   # (v72) bot slot -> the shutter it last told it raises
 var _skip := {}                      # (v72) bot slot -> {task: tick}: work it found no way to, put off till then
 var _job_words := {}                 # (v72) bot slot -> how the job it has taken is called (for the log)
+var _announced := {}                 # (v74) job cell -> the tick a bot last said aloud it takes it
+const ANNOUNCE_TICKS := 30 * Net.TICK_HZ
+var _fetch_for := {}                 # (v74) bot slot -> the job it fetches patches or parts for (it holds it meanwhile)
 var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
 
 
@@ -701,6 +704,7 @@ func _plan(p: Player, here: int) -> void:
 	p.bot_from = here
 	var goals := {}                    # cell -> facing (0 = any)
 	var was := p.bot_task
+	_fetch_for.erase(p.slot)
 	p.bot_task = TASK_POST
 	if p.bot_healing:
 		for bed: int in server.medbay.free_beds(p):
@@ -713,7 +717,13 @@ func _plan(p: Player, here: int) -> void:
 		match p.order:
 			Net.POST_HELM, Net.POST_GUNS, Net.POST_ENGINE, Net.POST_SHIELD:
 				var taken := _taken(p)
-				for s: Array in spots[p.order]:
+				if _post_down(p.order):
+					# (v74, the author's note: a bot whose console was broken stood by it doing nothing)
+					# it mends what is broken, its own console first if nobody else has it
+					p.bot_task = _mend_goals(p, goals, taken, _devices(p.order))
+				if p.bot_task == TASK_POST:
+					goals.clear()
+				for s: Array in spots[p.order] if p.bot_task == TASK_POST else []:
 					if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
 						goals[int(s[0])] = int(s[1])
 			Net.POST_MOUNTS:
@@ -745,7 +755,7 @@ func _plan(p: Player, here: int) -> void:
 		p.bot_face = goals[here]
 		p.bot_step = 0
 		p.doing = _doing(p)
-		_took(p, int((_spot_jobs.get(p.slot, {}) as Dictionary).get(here, -1)) if p.bot_task == TASK_MEND else -1)
+		_took(p, _job_of(p, here))
 		_tell_task(p)
 		return
 	var wide: bool = p.order == Net.POST_FOLLOW or not server.map.on_ship(here)
@@ -778,8 +788,21 @@ func _plan(p: Player, here: int) -> void:
 		if not jobs.is_empty():
 			server.chat.bot_log(p, "не могу добраться: %s." % _job_text(int(jobs[0])), p.order == Net.POST_REPAIR)
 		return
-	_took(p, int((_spot_jobs.get(p.slot, {}) as Dictionary).get(p.bot_goal, -1)) if p.bot_task == TASK_MEND else -1)
+	_took(p, _job_of(p, p.bot_goal))
 	_tell_task(p)
+
+
+func _job_of(p: Player, goal: int) -> int:
+	## The repair job a plan going to `goal` holds: the one mended from that spot, or (v74, the
+	## author's note: every bot said «беру пробоину» in turn for one hole) the one it fetches
+	## patches or parts for, so other bots leave it alone instead of all running to the locker.
+	if goal < 0:
+		return -1
+	if p.bot_task == TASK_MEND:
+		return int((_spot_jobs.get(p.slot, {}) as Dictionary).get(goal, -1))
+	if p.bot_task == TASK_LOCKER:
+		return int(_fetch_for.get(p.slot, -1))
+	return -1
 
 
 func _doing(p: Player) -> int:
@@ -924,11 +947,23 @@ func _carry_goals(p: Player, gun: int, goals: Dictionary, taken: Dictionary) -> 
 	return TASK_LOCKER
 
 
-func _mend_goals(p: Player, goals: Dictionary, taken: Dictionary) -> int:
+func _post_down(post: int) -> bool:
+	## (v74) Every console of the post is broken: a bot cannot do the post from any of them.
+	var devices := _devices(post)
+	for c: int in devices.keys():
+		if not server.ship.broken.has(c):
+			return false
+	return not devices.is_empty()
+
+
+func _mend_goals(p: Player, goals: Dictionary, taken: Dictionary, first: Dictionary = {}) -> int:
 	## (v72) What is broken and not taken by another bot: TASK_MEND with the spots to mend it from
 	## in `goals` (each spot's job kept in _spot_jobs), TASK_LOCKER for a suit, patches or parts
 	## first, or TASK_POST with nothing to mend.
 	var jobs := _repair_jobs(p)
+	var own := jobs.filter(func(c: int) -> bool: return first.has(c))
+	if not own.is_empty():
+		jobs = own                          # (v74) a bot at a post mends its own console first
 	var spot_job := {}
 	_spot_jobs[p.slot] = spot_job
 	if jobs.is_empty():
@@ -943,7 +978,8 @@ func _mend_goals(p: Player, goals: Dictionary, taken: Dictionary) -> int:
 	for c: int in jobs:
 		for s: Array in _spots_for(c):
 			var at := int(s[0])
-			if taken.has(at) or spot_job.has(at):
+			# (v74) someone passing over the spot of the job it holds does not make it drop the job
+			if taken.has(at) and c != p.bot_job or spot_job.has(at):
 				continue
 			if not _breathable(p, at):
 				airless = c
@@ -954,6 +990,8 @@ func _mend_goals(p: Player, goals: Dictionary, taken: Dictionary) -> int:
 		if fetch:
 			_locker_goals(p, goals, taken)  # patches or parts first
 			if not goals.is_empty():
+				var mine: Array = spot_job.values()
+				_fetch_for[p.slot] = p.bot_job if mine.has(p.bot_job) else int(mine[0])
 				return TASK_LOCKER
 		goals.merge(mend)
 		return TASK_MEND
@@ -986,7 +1024,11 @@ func _took(p: Player, job: int) -> void:
 		return
 	_job_words[p.slot] = _job_text(job)
 	_logged.erase(p.slot)
-	server.chat.bot_log(p, "беру %s." % _job_words[p.slot], true)
+	# (v74) the same job is said aloud once in a while, whichever bot takes it (the rest go to the log)
+	var aloud: bool = server.tick >= int(_announced.get(job, -ANNOUNCE_TICKS)) + ANNOUNCE_TICKS
+	if aloud:
+		_announced[job] = server.tick
+	server.chat.bot_log(p, "беру %s." % _job_words[p.slot], aloud)
 
 
 func _tell_task(p: Player) -> void:
@@ -1272,7 +1314,7 @@ func _work(p: Player) -> void:
 			if not p.using:
 				p.bot_plan_tick = -1000          # done here: on to the next
 			return
-	match p.order:
+	match Net.POST_REPAIR if p.bot_task == TASK_MEND else p.order:
 		Net.POST_GUNS:
 			p.doing = Net.DOING_POST
 			var g = server.gunnery

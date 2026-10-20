@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 50
+const PROTOCOL := 51
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -25,8 +25,31 @@ const DIR_UP := 1
 const DIR_DOWN := 2
 const DIR_LEFT := 3
 const DIR_RIGHT := 4
-const DX: Array[int] = [0, 0, 0, -1, 1]
-const DY: Array[int] = [0, -1, 1, 0, 0]
+# (v74, the author's N2) the diagonals: a character walks and faces 8 ways
+const DIR_UP_LEFT := 5
+const DIR_UP_RIGHT := 6
+const DIR_DOWN_LEFT := 7
+const DIR_DOWN_RIGHT := 8
+const DIRS := 8
+const DX: Array[int] = [0, 0, 0, -1, 1, -1, 1, -1, 1]
+const DY: Array[int] = [0, -1, 1, 0, 0, -1, -1, 1, 1]
+
+
+static func diagonal(dir: int) -> bool:
+	return dir > DIR_RIGHT and dir <= DIRS
+
+
+static func dir_of(dx: int, dy: int) -> int:
+	## The direction of a step by dx, dy (each -1, 0 or 1); DIR_NONE for none.
+	for d in range(1, DIRS + 1):
+		if DX[d] == dx and DY[d] == dy:
+			return d
+	return DIR_NONE
+
+
+static func way(dir: int) -> Vector2:
+	## The direction as a vector of length 1 (zero for none).
+	return Vector2(DX[dir], DY[dir]).normalized() if dir > 0 and dir <= DIRS else Vector2.ZERO
 
 # --- packets, client -> server (first byte) ---
 const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job (JOB_*)
@@ -230,7 +253,7 @@ const GOALF_LOST := 1               # the cargo pod is smashed (or the bounty lo
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
                                     # then u8 how hurt they are (0 = unhurt .. 4 = dying)
-const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed
+const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed; (v74) u8 the thing in its hand
 const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (Weapons.*), u8 charge (0..100,
                                     # GUN_BROKEN, GUN_JAMMED), u8 GUNF_* flags; u8 power drawn, u8 power the reactor
                                     # gives; u8 our shield (0..100), u8 SHF_* flags; then u8 enemy hull
@@ -769,11 +792,10 @@ static func ent_hash(id: int, x: int, y: int, look: int) -> int:
 
 ## Facing, condition, "shines a light" (a lit flashlight in the hand) and
 ## "moves slowly" (hauling somebody, or being hauled) packed into the one byte
-## sent for a character. The top bit is used only in SEC_SELF: the step in
-## progress is a slow one.
-const LOOK_LIGHT := 8
+## sent for a character. (v74) Facing takes 4 bits for the diagonals; SEC_SELF
+## sends the length of the step in progress with the direction held instead.
+const LOOK_LIGHT := 128
 const LOOK_SLOW := 64
-const LOOK_LONG_STEP := 128
 
 static func pack_look(facing: int, cond: int, slow: bool = false, light: bool = false) -> int:
 	return facing | (cond << 4) | (LOOK_SLOW if slow else 0) | (LOOK_LIGHT if light else 0)
@@ -788,7 +810,7 @@ static func look_slow(look: int) -> bool:
 
 
 static func look_facing(look: int) -> int:
-	return look & 7
+	return look & 15
 
 
 static func look_cond(look: int) -> int:

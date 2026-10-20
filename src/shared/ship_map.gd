@@ -629,8 +629,8 @@ func door_at(x: int, y: int) -> int:
 
 func cell_ahead(x: int, y: int, facing: int) -> int:
 	## The cell a character standing at x,y and facing that way looks at, or -1 outside the map.
-	var tx: int = x + [0, 0, 0, -1, 1][facing]
-	var ty: int = y + [0, -1, 1, 0, 0][facing]
+	var tx: int = x + Net.DX[facing]
+	var ty: int = y + Net.DY[facing]
 	if tx < 0 or ty < 0 or tx >= width or ty >= height:
 		return -1
 	return ty * width + tx
@@ -659,6 +659,13 @@ func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
 	if ahead < 0 or keep.has(ahead):
 		return ahead
 	var here := y * width + x
+	if Net.diagonal(facing):
+		# (v74) facing on a slant: a thing on the floor there or somebody there; failing that,
+		# a fitting right beside us on either side of the slant; never a doorway or a wall
+		for c: int in [y * width + x + Net.DX[facing], (y + Net.DY[facing]) * width + x]:
+			if fitting_front(c) == here:
+				return c
+		return ahead if walk[ahead] == 1 and door_of[ahead] < 0 else -1
 	var front := fitting_front(ahead)
 	if front >= 0:
 		return ahead if front == here else -1

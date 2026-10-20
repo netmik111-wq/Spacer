@@ -5,6 +5,7 @@ extends Node
 signal exit_requested
 
 const Net := preload("res://src/shared/net.gd")
+const Sprites := preload("res://src/client/sprites.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const WorldView := preload("res://src/client/world_view.gd")
 const Items := preload("res://src/shared/items.gd")
@@ -16,6 +17,8 @@ const OptionsPanel := preload("res://src/ui/options_panel.gd")
 const AdminPanel := preload("res://src/ui/admin_panel.gd")
 const InventoryPanel := preload("res://src/ui/inventory_panel.gd")
 const CrewPanel := preload("res://src/ui/crew_panel.gd")
+const HelpBook := preload("res://src/ui/help_book.gd")
+const FirstShift := preload("res://src/ui/first_shift.gd")
 const StoreView := preload("res://src/ui/store_view.gd")
 const GunsView := preload("res://src/ui/guns_view.gd")
 const TradeView := preload("res://src/ui/trade_view.gd")
@@ -144,6 +147,8 @@ var _options: OptionsPanel
 var _admin: AdminPanel
 var _inventory: InventoryPanel
 var _crew: CrewPanel
+var _book: HelpBook                  # (v74) the help book (H)
+var _shift: FirstShift               # (v74) the first shift's checklist
 var _root: Control                   # (the windows above are made when first opened: making them
                                      # while joining would hold up the client's clock)
 var _held: Array[int] = []
@@ -218,10 +223,13 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_debug = _text(root, 13)
 	_debug.position = Vector2(14, 40)
 	_debug.visible = false
+	_shift = FirstShift.new()
+	root.add_child(_shift)
+	_shift.setup(client)
 
 	# heartbeat monitor from the reference HUD (decorative until health exists)
 	var meta: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets/hud_monitor.json"))
-	var sheet: Texture2D = load("res://assets/hud_monitor.png")
+	var sheet: Texture2D = Sprites.sheet("hud_monitor")
 	if typeof(meta) == TYPE_DICTIONARY and sheet != null:
 		var fw := int(meta["frame_width"])
 		var fh := int(meta["frame_height"])
@@ -257,7 +265,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		_alert_box.offset_right = -14
 		_alert_box.offset_bottom = -fh * 3 - 22
 		root.add_child(_alert_box)
-		var lamps: Texture2D = load("res://assets/hud_alerts.png")
+		var lamps: Texture2D = Sprites.sheet("hud_alerts")
 		var described: Dictionary = meta.get("alerts", {})
 		for lamp: String in ["kpa_low1", "kpa_low2", "o2_low", "o2_on", "o2_off"]:
 			if not described.has(lamp) or lamps == null:
@@ -514,8 +522,8 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		if Options.flash:
 			_flash.color.a = 0.9)
 	_rng.randomize()
-	_say("[color=#9aa3b5]Вы на борту. %s: чат, %s: сведения о корабле и подсказки клавиш.[/color]" % [
-		_escape(Options.key_text("chat")), _escape(Options.key_text("info"))])
+	_say("[color=#9aa3b5]Вы на борту. %s: чат, %s: сведения о корабле и подсказки клавиш, %s: книга помощи.[/color]" % [
+		_escape(Options.key_text("chat")), _escape(Options.key_text("info")), _escape(Options.key_text("help"))])
 
 
 func _inventory_panel() -> InventoryPanel:
@@ -534,6 +542,15 @@ func _crew_panel() -> CrewPanel:
 		_crew.setup(client)
 		_root.move_child(_crew, _pause.get_index())
 	return _crew
+
+
+func _help_book() -> HelpBook:
+	if _book == null:
+		_book = HelpBook.new()
+		_root.add_child(_book)
+		_book.setup()
+		_root.move_child(_book, _pause.get_index())
+	return _book
 
 
 func _admin_panel() -> AdminPanel:
@@ -560,9 +577,9 @@ static func _open(panel: Control) -> bool:
 func _show_keys() -> void:
 	## The keys, as the player has set them (see Options).
 	_hand_shown = -1                     # (the line over the slots names keys too)
-	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: экипаж    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: взять, пульт, машина или применить    %s: применить    %s: положить" % [
+	_keys.text = "%s%s%s%s: ходить    %s: действие    %s: тащить    %s: подача O2    %s: инвентарь    %s: экипаж    %s: книга помощи    %s: чат    %s: меню\n1–6 или колесо: что в руке    Щелчок: взять, пульт, машина или применить    %s: применить    %s: положить" % [
 		Options.key_text("move_up"), Options.key_text("move_left"), Options.key_text("move_down"), Options.key_text("move_right"), Options.key_text("use"), Options.key_text("drag"),
-		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("crew"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
+		Options.key_text("suit"), Options.key_text("inventory"), Options.key_text("crew"), Options.key_text("help"), Options.key_text("chat"), Options.key_text("pause"), Options.key_text("act"), Options.key_text("drop")]
 
 
 func _skills_text() -> String:
@@ -705,6 +722,8 @@ func _open_console(kind: int) -> void:
 	_console.visible = kind != 0
 	if kind == 0:
 		return
+	if kind == 12 or kind == 4:
+		_shift.mark(FirstShift.LOCKER if kind == 12 else FirstShift.HELM)
 	_close_chat()
 	_bridge.buttons_for = -1
 	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44
@@ -1096,6 +1115,9 @@ func open_panel(which: String) -> void:
 			_inventory_panel().toggle()
 		"crew":
 			_crew_panel().toggle()
+		"help":
+			_help_book().toggle()
+			_help_book().show_tab(tab)
 		"admin":
 			_admin_panel().toggle()
 			_admin_panel().show_tab(tab)
@@ -1321,8 +1343,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_close_chat()
 		elif _console.visible:
 			_open_console(0)
-		elif _open(_inventory) or _open(_admin) or _open(_crew):
-			for panel: Control in [_inventory, _admin, _crew]:
+		elif _open(_inventory) or _open(_admin) or _open(_crew) or _open(_book):
+			for panel: Control in [_inventory, _admin, _crew, _book]:
 				if panel != null:
 					panel.visible = false
 		else:
@@ -1367,6 +1389,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_inventory_panel().toggle()
 	elif Options.pressed(event, "crew"):
 		_crew_panel().toggle()
+	elif Options.pressed(event, "help"):
+		_help_book().toggle()
+		_shift.mark(FirstShift.HELP)
 	elif Options.pressed(event, "admin"):
 		if client.is_admin:
 			_admin_panel().toggle()
@@ -1597,7 +1622,7 @@ func _open_menu(at: Vector2) -> void:
 	for e: GameClient.Ent in client.ents.values():
 		if e.x != c.x or e.y != c.y or e.id == client.my_id:
 			continue
-		if e.cond != Net.COND_OK and absi(c.x - me.x) + absi(c.y - me.y) <= 1:
+		if e.cond != Net.COND_OK and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
 			var id := e.id
 			add.call("Тащить: %s  [%s]" % [client.player_name(id), Options.key_text("drag")], func() -> void:
 				var f := client.click_facing(c)
@@ -1679,6 +1704,21 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _walk_dir() -> int:
+	## Which way to walk: the most recently pressed of the held direction keys; (v74, the
+	## author's N2) with one up/down key and one left/right key held, the slant between them.
+	var up_down := 0
+	var sideways := 0
+	for dir: int in _held:
+		if dir == Net.DIR_UP or dir == Net.DIR_DOWN:
+			up_down = dir
+		else:
+			sideways = dir
+	if up_down != 0 and sideways != 0:
+		return Net.dir_of(Net.DX[sideways], Net.DY[up_down])
+	return 0 if _held.is_empty() else _held[_held.size() - 1]
+
+
 func _process(delta: float) -> void:
 	if client == null:
 		return
@@ -1696,11 +1736,11 @@ func _process(delta: float) -> void:
 			_held.append(dir)
 		elif not down and _held.has(dir):
 			_held.erase(dir)
-	var want := 0 if _held.is_empty() else _held[_held.size() - 1]
+	var want := _walk_dir()
 	if demo_walk:
 		var now := Time.get_ticks_msec() / 1000.0
 		if now >= _demo_until:
-			_demo_dir = _rng.randi_range(1, 4) if _rng.randf() < 0.85 else 0
+			_demo_dir = _rng.randi_range(1, Net.DIRS) if _rng.randf() < 0.85 else 0   # (v74) slants too
 			_demo_until = now + _rng.randf_range(0.15, 1.2)
 			if client.use_target() >= 6 and _rng.randf() < 0.5:
 				client.send_use(true)        # happened to stop on a ladder or by a thing on the floor: take it
@@ -1744,6 +1784,10 @@ func _process(delta: float) -> void:
 	if use_now != _use_held:
 		_use_held = use_now
 		client.send_use(use_now)
+		# (v74, the author's note: the bar stayed and blinked at the bottom after he let go, and the
+		# next try seemed to go on from it) a job held with "use" starts again from nothing either way;
+		# the server's word on it comes a moment later
+		client.work = 0
 	var target := client.use_target()
 	var hauling := client.dragging()
 	_hint.visible = (target != 0 or hauling) and not _console.visible
@@ -1962,9 +2006,8 @@ func _process(delta: float) -> void:
 		_hint_was = _hint.text
 		_hint_rich.text = "[center]%s[/center]" % _badges(_hint.text)
 	_hint.text = Options.keyed(_hint.text)
-	_world.ring_on = _use_held
 	_work_bar.visible = (target == 1 or target == 5 or target >= 9 or Items.uses(client.in_hand()) > 0) and client.work > 0 \
-		and not (_use_held and client.target_cell() >= 0)     # (v73) then the ring over the thing shows it
+		and client.target_cell() < 0         # (v73) then the ring over the thing shows it (v74: held or not)
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
 	_work_bar.offset_left = shift - 110.0
