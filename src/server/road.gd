@@ -225,7 +225,7 @@ func _arrived(sys: int) -> void:
 		h["coming"] = -1
 		if int(h["at"]) == sys:
 			h["coming"] = server.tick + roundi(HUNTER_COME * Net.TICK_HZ)
-			server.chat.say("Здесь ждёт пиратский охотник! Он выйдет на нас через %d с." % int(HUNTER_COME))
+			server.chat.alarm("Здесь ждёт пиратский охотник! Он выйдет на нас через %d с." % int(HUNTER_COME))
 	_dirty = true
 
 
@@ -452,7 +452,9 @@ func _hunters_second() -> void:
 		if hunters.size() + (1 if not _fight.is_empty() else 0) < _most():
 			spawn_hunter()
 	var d := s.distances(ours)
-	if server.gunnery.fighting() or (server.derelict.here and server.derelict.kind == Net.OTHER_PIRATE):
+	# (v73, the author's note: "another hunter waits" every second) a wreck left
+	# alongside is no fight: only a live pirate ship keeps the breather from starting
+	if server.gunnery.fighting() or (server.derelict.here and server.derelict.kind == Net.OTHER_PIRATE and not server.derelict.wreck):
 		busy_tick = server.tick
 	for h: Dictionary in hunters:
 		var at: int = h["at"]
@@ -480,7 +482,7 @@ func _hunters_second() -> void:
 		_dirty = true
 		if pick == ours:
 			h["coming"] = server.tick + roundi(HUNTER_WARN * Net.TICK_HZ)
-			server.chat.say("Пиратский охотник вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(HUNTER_WARN))
+			server.chat.alarm("Пиратский охотник вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(HUNTER_WARN))
 
 
 func spawn_hunter() -> bool:
@@ -513,7 +515,9 @@ func _meet(h: Dictionary) -> void:
 		# another hunter that waited in our system gives the crew a breather first
 		h["coming"] = after
 		_dirty = true
-		server.chat.say("Ещё один охотник поджидает в этом секторе: он выйдет на нас через %d с." % ceili((after - server.tick) / float(Net.TICK_HZ)))
+		if not h.get("told", false):
+			h["told"] = true                 # (v73) said once for each hunter
+			server.chat.say("Ещё один охотник поджидает в этом секторе: он выйдет на нас через %d с." % ceili((after - server.tick) / float(Net.TICK_HZ)))
 		return
 	if server.tick < int(h["coming"]):
 		return

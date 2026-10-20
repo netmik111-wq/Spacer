@@ -60,6 +60,16 @@ func put_down(p: Player) -> bool:
 	return true
 
 
+func swap(p: Player, a: int, b: int) -> void:
+	## (v73, the author's H2) Two of our slots trade what is in them: a thing
+	## dragged from one slot to another.
+	if p.cond != Net.COND_OK or p.corpse or a == b or a >= Net.SLOTS or b >= Net.SLOTS or not p.usable(a) or not p.usable(b):
+		return
+	var keep := p.slots[a]
+	p.slots[a] = p.slots[b]
+	p.slots[b] = keep
+
+
 func set_supply(p: Player, on: bool) -> void:
 	## The oxygen supply on or off: it needs a suit, and oxygen in its tank.
 	if p.cond == Net.COND_OK:

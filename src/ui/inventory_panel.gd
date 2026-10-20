@@ -24,6 +24,7 @@ var client: GameClient
 var _canvas: Control
 var _about: Label
 var _shown := PackedByteArray()
+var _drag := -1                       # (v73, the author's H2 note) the slot whose thing is being dragged
 var _act: Button
 var _drop: Button
 var _supply: Button
@@ -77,7 +78,7 @@ func setup(p_client: GameClient) -> void:
 	var tip := Label.new()
 	tip.add_theme_font_size_override("font_size", 12)
 	tip.modulate = Color(1, 1, 1, 0.6)
-	tip.text = "Щелчок по вещи: взять в руку. Правый щелчок: положить на пол. Щелчок по одежде: снять (в руку, если она пуста)."
+	tip.text = "Щелчок по вещи: взять в руку. Перетащить: в другой слот. Правый щелчок: положить на пол. Щелчок по одежде: снять (в руку, если она пуста)."
 	box.add_child(tip)
 
 
@@ -156,6 +157,8 @@ func _draw_canvas() -> void:
 			_canvas.draw_rect(cell.grow(1.0), Color(0.98, 0.82, 0.35), false, 2.0)
 		else:
 			_canvas.draw_rect(cell, Color(0.42, 0.46, 0.56, 0.9), false, 1.0)
+		if i == _drag:
+			_canvas.draw_rect(cell.grow(-2.0), Color(0.45, 0.75, 1.0, 0.9), false, 2.0)
 		if i < Net.BASE_SLOTS:
 			_canvas.draw_string(font, cell.position + Vector2(3, 11), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, dim)
 		var thing := client.slots[i]
@@ -166,9 +169,18 @@ func _draw_canvas() -> void:
 
 
 func _on_input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton) or not (event as InputEventMouseButton).pressed:
+	if not (event is InputEventMouseButton):
 		return
 	var click := event as InputEventMouseButton
+	if not click.pressed:
+		# (v73) a thing dragged onto another slot trades places with what is there
+		if click.button_index == MOUSE_BUTTON_LEFT and _drag >= 0:
+			for i in Net.SLOTS:
+				if i != _drag and _slot_cell(i).has_point(click.position) and client.usable(i):
+					client.send_swap(_drag, i)
+			_drag = -1
+			_canvas.queue_redraw()
+		return
 	for k in Net.WORN:
 		if _worn_cell(k).has_point(click.position) and click.button_index == MOUSE_BUTTON_LEFT:
 			client.send_wear(k)
@@ -177,6 +189,9 @@ func _on_input(event: InputEvent) -> void:
 	for i in Net.SLOTS:
 		if _slot_cell(i).has_point(click.position) and client.usable(i):
 			client.send_hand(i)
+			if click.button_index == MOUSE_BUTTON_LEFT and client.slots[i] != Net.ITEM_NONE:
+				_drag = i
+				_canvas.queue_redraw()
 			if click.button_index == MOUSE_BUTTON_RIGHT and client.slots[i] != Net.ITEM_NONE:
 				client.send_drop()
 			_canvas.accept_event()

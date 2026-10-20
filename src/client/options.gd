@@ -54,6 +54,7 @@ static var vsync := true
 static var max_fps := 60
 static var show_fps := false
 static var flash := true             # the white flash after a jump
+static var ui_scale := 1.0           # (v73, the author's H5) the size of the interface (and its text): 0.75..1.5
 static var keys := {}                # action -> Array of {"key": physical keycode, "ctrl", "shift", "alt"}
 
 
@@ -88,6 +89,7 @@ static func load_all() -> void:
 		max_fps = int(cfg.get_value("video", "max_fps", max_fps))
 		show_fps = bool(cfg.get_value("video", "show_fps", show_fps))
 		flash = bool(cfg.get_value("video", "flash", flash))
+		ui_scale = clampf(float(cfg.get_value("video", "ui_scale", ui_scale)), 0.75, 1.5)
 		for a: Array in ACTIONS:
 			if cfg.has_section_key("keys", a[0]):
 				var list: Array = []
@@ -114,6 +116,7 @@ static func save_all() -> void:
 	cfg.set_value("video", "max_fps", max_fps)
 	cfg.set_value("video", "show_fps", show_fps)
 	cfg.set_value("video", "flash", flash)
+	cfg.set_value("video", "ui_scale", ui_scale)
 	for action: String in keys:
 		cfg.set_value("keys", action, keys[action])
 	cfg.save(PATH)

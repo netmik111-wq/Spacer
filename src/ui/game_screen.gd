@@ -28,6 +28,7 @@ const PowerView := preload("res://src/ui/power_view.gd")
 const CommsView := preload("res://src/ui/comms_view.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
+const Look := preload("res://src/ui/look.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -71,10 +72,19 @@ var _won_known := false              # (v57) we have seen the flagship beaten (s
 var _victory_left := 0.0
 var _life := 0.0                     # seconds this screen has been up
 const VICTORY_SECONDS := 15.0
+const LAMP_NAMES := {               # (v73, the author's H1) what each lamp of the HUD means, when pointed at
+	"kpa_low1": "Низкое давление вокруг: долго здесь без скафандра нельзя",
+	"kpa_low2": "Давления почти нет: без скафандра и баллона здесь не выжить",
+	"o2_low": "В баллоне мало кислорода: заправьте у кислородной стойки",
+	"o2_on": "Вы дышите из баллона (Q: перекрыть)",
+	"o2_off": "Подача из баллона перекрыта (Q: открыть)"}
 var _tank_bar: ColorRect
 var _tank_fill: ColorRect
 var _hint: Label
 var _work_bar: ColorRect
+var _hint_rich: RichTextLabel        # (v73, the author's I4) the hint as shown: keys drawn as badges
+var _hint_was := ""
+static var _badge_rules: Array = []
 var _work_fill: ColorRect
 var _use_held := false
 var _click_facing := 0               # a click on something to use: the way our character is turning to reach it
@@ -83,6 +93,8 @@ var _mouse_use := false              # the left button holds "use" down, like th
 var _console: PanelContainer         # the screen of a bridge console, shown over the game
 var _console_kind := 0               # 3 = sector console, 4 = ship's controls (as GameClient.use_target)
 var _console_title: Label
+var _needs_box: VBoxContainer        # (v73) the bridge's alert panel (Look.needs)
+var _needs_shown := []
 var _console_text: Label
 var _chart: Control
 var _jump_box: GridContainer
@@ -101,6 +113,7 @@ var _power_view: PowerView           # (v61) an SMES's terminal, set up when fir
 var _comms_view: CommsView           # (v63) the comms console, set up when first shown
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
+var _drag_slot := -1                 # (v73) the slot whose thing is being dragged along the bar
 var _hand_shown := -1
 var _hand_label: Label               # what is in the hand, over the slots
 var _hurt_label: Label               # (v70) our injuries, over that
@@ -113,6 +126,17 @@ var _monitor_step := 0.08
 var _monitor_time := 0.0
 var _chat_box: VBoxContainer
 var _chat_lines: Array = []          # [RichTextLabel, time it was added]
+var _chat_hist: Array = []           # (v73, the author's H3) [tab, bbcode, time, text it is known by, times said]
+var _chat_tab := 0                   # CHAT_TABS: what the chat shows
+var _chat_tabs: HBoxContainer        # the tabs, shown while the chat is open
+var _bot_log_seen := 0
+const CHAT_TABS := ["Всё", "Корабль", "Рация", "Боты"]
+const TAB_ALL := 0
+const TAB_SHIP := 1
+const TAB_RADIO := 2
+const TAB_BOTS := 3
+const TAB_SAY := 9                   # (a line spoken aloud: shown under "Всё" only)
+const MERGE_SECONDS := 60.0          # a line said again within this long joins the last one ("×3")
 var _chat_input: LineEdit
 var _pause: PanelContainer
 var _pause_admin: Button             # opens the admin panel; shown while the server counts us an admin
@@ -128,6 +152,23 @@ var _fps_smooth := 60.0
 var _demo_until := 0.0
 var _demo_dir := 0
 var _rng := RandomNumberGenerator.new()
+var _banner: PanelContainer          # (v73, the author's H4) a danger, big at the top of the screen
+var _banner_text: Label
+var _banner_left := 0.0
+var _hull_warned := false            # the hull's own banner was shown (again once it is mended)
+const BANNER_SECONDS := 4.0
+var _look: PanelContainer            # (v73, the author's L3) the name of what is under the mouse
+var _look_text: Label
+var _look_cell := -2
+var _menu: PopupMenu                 # (v73, the author's I1 and B1) the right-click menu of what can be done there
+var _menu_acts: Array = []           # per item id: a Callable
+var _menu_hold := false              # "work" chosen from the menu: "use" stays held until the job is done
+var _menu_hold_until := 0.0
+var _menu_worked := false
+var _step_dir := 0                   # (v73, the author's I1 note) a step to the side, then use what was diagonal
+var _step_from := Vector2i.ZERO
+var _step_then := Vector2.ZERO
+var _step_until := 0.0
 
 
 func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
@@ -196,7 +237,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 		_monitor = TextureRect.new()
 		_monitor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_monitor.stretch_mode = TextureRect.STRETCH_SCALE
-		_monitor.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_monitor.mouse_filter = Control.MOUSE_FILTER_PASS      # (v73, H1) for its label when pointed at
 		_monitor.texture = _monitor_frames[0][0]
 		_monitor.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 		_monitor.offset_left = -fw * 3 - 14
@@ -231,7 +272,8 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 			var node := TextureRect.new()
 			node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 			node.stretch_mode = TextureRect.STRETCH_SCALE
-			node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			node.mouse_filter = Control.MOUSE_FILTER_PASS
+			node.tooltip_text = LAMP_NAMES.get(lamp, "")
 			node.custom_minimum_size = Vector2(int(d["w"]), int(d["h"])) * 3
 			node.size_flags_horizontal = Control.SIZE_SHRINK_END
 			node.texture = frames[0]
@@ -270,7 +312,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	# how much oxygen the suit's tank holds: a bar drawn in code beside the monitor
 	_tank_bar = ColorRect.new()
 	_tank_bar.color = Color(0.13, 0.1, 0.19)
-	_tank_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tank_bar.mouse_filter = Control.MOUSE_FILTER_PASS
 	_tank_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	_tank_bar.offset_left = -14 - 192 - 10 - 12
 	_tank_bar.offset_right = -14 - 192 - 10
@@ -292,6 +334,23 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_hint.offset_right = -HINT_RIGHT
 	_hint.offset_bottom = -92
 	_hint.visible = false
+	_hint.self_modulate.a = 0.0             # (v73) only measured: _hint_rich draws it
+	_hint_rich = RichTextLabel.new()
+	_hint_rich.bbcode_enabled = true
+	_hint_rich.fit_content = true
+	_hint_rich.scroll_active = false
+	_hint_rich.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hint_rich.add_theme_font_size_override("normal_font_size", 16)
+	_hint_rich.add_theme_color_override("default_color", Color(0.95, 0.96, 1.0))
+	_hint_rich.add_theme_constant_override("outline_size", 4)
+	_hint_rich.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	_hint_rich.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	_hint_rich.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_hint_rich.offset_left = HINT_LEFT
+	_hint_rich.offset_right = -HINT_RIGHT
+	_hint_rich.offset_bottom = -92
+	_hint_rich.visible = false
+	root.add_child(_hint_rich)
 	_work_bar = ColorRect.new()
 	_work_bar.color = Color(0.08, 0.09, 0.13, 0.9)
 	_work_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -349,6 +408,24 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_chat_box.offset_top = -330
 	_chat_box.offset_bottom = -52
 	root.add_child(_chat_box)
+	_chat_tabs = HBoxContainer.new()
+	_chat_tabs.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_chat_tabs.offset_left = 14
+	_chat_tabs.offset_right = 540
+	_chat_tabs.offset_top = -362
+	_chat_tabs.offset_bottom = -334
+	_chat_tabs.visible = false
+	root.add_child(_chat_tabs)
+	for k in CHAT_TABS.size():
+		var tab := Button.new()
+		tab.text = CHAT_TABS[k]
+		tab.toggle_mode = true
+		tab.button_pressed = k == 0
+		tab.focus_mode = Control.FOCUS_NONE
+		tab.add_theme_font_size_override("font_size", 13)
+		tab.tooltip_text = ["Все сообщения", "Сообщения корабля и предупреждения", "Рация и интерком", "Журнал ботов: что они делают"][k]
+		tab.pressed.connect(func() -> void: _show_tab(k))
+		_chat_tabs.add_child(tab)
 
 	_chat_input = LineEdit.new()
 	_chat_input.placeholder_text = "Вслух слышно рядом.  «;» в начале: рация,  «!»: интерком у панели.  Esc: отмена"
@@ -361,6 +438,47 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_chat_input.offset_bottom = -14
 	_chat_input.text_submitted.connect(_on_chat_submitted)
 	root.add_child(_chat_input)
+
+	_banner = PanelContainer.new()
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var banner_style := StyleBoxFlat.new()
+	banner_style.bg_color = Color(0.32, 0.04, 0.03, 0.88)
+	banner_style.border_color = Color(1.0, 0.45, 0.3, 0.9)
+	banner_style.set_border_width_all(2)
+	banner_style.set_corner_radius_all(4)
+	banner_style.content_margin_left = 22
+	banner_style.content_margin_right = 22
+	banner_style.content_margin_top = 10
+	banner_style.content_margin_bottom = 10
+	_banner.add_theme_stylebox_override("panel", banner_style)
+	_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_banner.offset_top = 84
+	_banner.visible = false
+	root.add_child(_banner)
+	_banner_text = _text(_banner, 20)
+	_banner_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_banner_text.custom_minimum_size.x = 520
+
+	_look = PanelContainer.new()
+	_look.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var look_style := StyleBoxFlat.new()
+	look_style.bg_color = Color(0.05, 0.06, 0.09, 0.88)
+	look_style.border_color = Color(0.45, 0.5, 0.6, 0.6)
+	look_style.set_border_width_all(1)
+	look_style.set_corner_radius_all(3)
+	look_style.set_content_margin_all(6)
+	_look.add_theme_stylebox_override("panel", look_style)
+	_look.visible = false
+	root.add_child(_look)
+	_look_text = _text(_look, 14)
+
+	_menu = PopupMenu.new()
+	_menu.id_pressed.connect(func(id: int) -> void:
+		if id >= 0 and id < _menu_acts.size():
+			(_menu_acts[id] as Callable).call())
+	root.add_child(_menu)
 
 	_build_console(root)
 	_build_pause(root)
@@ -487,10 +605,31 @@ func _build_console(root: Control) -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 	_console.add_child(box)
+	# (v73, the author's C1) the title, and an ✕ that closes the screen (as Esc and E do)
+	var head := HBoxContainer.new()
+	box.add_child(head)
+	var balance := Control.new()
+	balance.custom_minimum_size = Vector2(32, 0)
+	head.add_child(balance)
 	_console_title = Label.new()
 	_console_title.add_theme_font_size_override("font_size", 20)
 	_console_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_console_title)
+	_console_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(_console_title)
+	var cross := Button.new()
+	cross.text = "✕"
+	cross.flat = true
+	cross.focus_mode = Control.FOCUS_NONE
+	cross.custom_minimum_size = Vector2(32, 32)
+	cross.tooltip_text = "Закрыть (Esc)"
+	cross.add_theme_font_size_override("font_size", 18)
+	cross.pressed.connect(func() -> void: _open_console(0))
+	head.add_child(cross)
+	# (v73, the author's L2) the ship's alert panel on the bridge's consoles: what is low or broken
+	_needs_box = VBoxContainer.new()
+	_needs_box.add_theme_constant_override("separation", 2)
+	_needs_box.visible = false
+	box.add_child(_needs_box)
 	_store_view = StoreView.new()
 	box.add_child(_store_view)
 	_store_view.setup(client)
@@ -595,6 +734,8 @@ func _open_console(kind: int) -> void:
 	_comms_view.visible = kind == 30
 	_chart.visible = not own_view
 	_console_text.visible = not own_view
+	_needs_box.visible = kind == 3 or kind == 4
+	_needs_shown = []
 	_jump_box.visible = not own_view
 	_jump_box.columns = 2
 	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
@@ -664,10 +805,42 @@ func _update_console() -> void:
 	if _console_kind == 30:
 		_comms_view.refresh()
 		return
+	_update_needs()
 	if _console_kind == 4:
 		_bridge.update_helm()
 		return
 	_bridge.update_chart()
+
+
+const NEED_COLOURS := [Color(0.45, 0.85, 0.5), Color(0.98, 0.8, 0.3), Color(1.0, 0.42, 0.35)]
+
+
+func _update_needs() -> void:
+	## (v73, the author's L2) One line per need of the ship, coloured green, yellow
+	## or red, worst first; rebuilt only when it changes.
+	var needs := Look.needs(client)
+	if needs == _needs_shown:
+		return
+	_needs_shown = needs
+	for old in _needs_box.get_children():
+		old.queue_free()
+	var head := Label.new()
+	head.text = "Состояние корабля"
+	head.add_theme_font_size_override("font_size", 13)
+	head.add_theme_color_override("font_color", Color(0.65, 0.7, 0.78))
+	_needs_box.add_child(head)
+	var grid := GridContainer.new()                   # two columns, so a bad day still fits the frame
+	grid.columns = 2 if needs.size() > 2 else 1
+	grid.add_theme_constant_override("h_separation", 16)
+	_needs_box.add_child(grid)
+	for n: Array in needs:
+		var line := Label.new()
+		line.text = "●  " + str(n[1])
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size = Vector2(312 if grid.columns == 2 else 640, 0)
+		line.add_theme_font_size_override("font_size", 13)
+		line.add_theme_color_override("font_color", NEED_COLOURS[int(n[0])])
+		grid.add_child(line)
 
 
 func _lacking(cell: int) -> String:
@@ -754,6 +927,11 @@ func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, worn:
 		else:
 			canvas.draw_rect(cell, Color(0.42, 0.46, 0.56, 0.9), false, 1.0)
 		ItemArt.draw(canvas, cell, slots[i])
+		if hand >= 0 and i < 6:
+			# (v73, the author's H2) the number key of the slot, in its corner
+			canvas.draw_string(font, cell.position + Vector2(2, 10), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.8, 0.84, 0.92, 0.7))
+		if hand >= 0 and i == _drag_slot:
+			canvas.draw_rect(cell.grow(-2.0), Color(0.45, 0.75, 1.0, 0.9), false, 2.0)
 
 
 
@@ -945,6 +1123,8 @@ func _set_pause(on: bool) -> void:
 
 func _open_chat(start: String = "") -> void:
 	_chat_input.visible = true
+	_chat_tabs.visible = true
+	_rebuild_chat()                      # more lines while it is open
 	_chat_input.text = start
 	_chat_input.grab_focus()
 	_chat_input.caret_column = start.length()
@@ -953,6 +1133,9 @@ func _open_chat(start: String = "") -> void:
 func _close_chat() -> void:
 	_chat_input.release_focus()
 	_chat_input.visible = false
+	_chat_tabs.visible = false
+	if _chat_tab == TAB_BOTS:
+		_show_tab(TAB_ALL)                # the bots' log is read with the chat open
 
 
 func _on_chat_submitted(text: String) -> void:
@@ -962,7 +1145,54 @@ func _on_chat_submitted(text: String) -> void:
 	_close_chat()
 
 
-func _say(bbcode: String) -> void:
+func _say(bbcode: String, tab: int = TAB_SHIP, known_by: String = "") -> void:
+	## A line in the chat. (v73, the author's H3) Kept per tab; one said again
+	## soon after (`known_by` the same) joins the last line as "×N" instead.
+	var now := Time.get_ticks_msec() / 1000.0
+	if known_by != "" and not _chat_hist.is_empty():
+		var last: Array = _chat_hist[_chat_hist.size() - 1]
+		if last[3] == known_by and now - float(last[2]) < MERGE_SECONDS:
+			last[4] = int(last[4]) + 1
+			last[2] = now
+			_rebuild_chat()
+			return
+	_chat_hist.append([tab, bbcode, now, known_by, 1])
+	while _chat_hist.size() > 80:
+		_chat_hist.pop_front()
+	if _chat_tab == TAB_ALL or _chat_tab == tab:
+		_add_line(bbcode, now)
+
+
+func _show_tab(k: int) -> void:
+	_chat_tab = k
+	for i in _chat_tabs.get_child_count():
+		(_chat_tabs.get_child(i) as Button).button_pressed = i == k
+	_rebuild_chat()
+
+
+func _rebuild_chat() -> void:
+	for entry: Array in _chat_lines:
+		(entry[0] as RichTextLabel).queue_free()
+	_chat_lines.clear()
+	if _chat_tab == TAB_BOTS:
+		var from := maxi(client.bot_log.size() - CHAT_LINES * 2, 0)
+		for i in range(from, client.bot_log.size()):
+			var l: Array = client.bot_log[i]
+			_add_line("[color=#8a93a6]%d:%02d[/color] [color=#9fd0ff]%s:[/color] %s" % [int(l[0]) / 60, int(l[0]) % 60, _escape(str(l[1])), _escape(str(l[2]))],
+				Time.get_ticks_msec() / 1000.0)
+		return
+	var shown: Array = []
+	for i in range(_chat_hist.size() - 1, -1, -1):
+		var h: Array = _chat_hist[i]
+		if _chat_tab == TAB_ALL or int(h[0]) == _chat_tab:
+			shown.push_front(h)
+			if shown.size() >= CHAT_LINES * 2:
+				break
+	for h: Array in shown:
+		_add_line(str(h[1]) + ("  [color=#c9cfdb]×%d[/color]" % int(h[4]) if int(h[4]) > 1 else ""), float(h[2]))
+
+
+func _add_line(bbcode: String, at: float) -> void:
 	var line := RichTextLabel.new()
 	line.bbcode_enabled = true
 	line.fit_content = true
@@ -974,23 +1204,26 @@ func _say(bbcode: String) -> void:
 	line.add_theme_constant_override("outline_size", 5)
 	line.text = bbcode
 	_chat_box.add_child(line)
-	_chat_lines.append([line, Time.get_ticks_msec() / 1000.0])
-	while _chat_lines.size() > CHAT_LINES:
+	_chat_lines.append([line, at])
+	while _chat_lines.size() > (CHAT_LINES * 2 if _chat_input.visible else CHAT_LINES):
 		(_chat_lines.pop_front()[0] as RichTextLabel).queue_free()
 
 
 func _on_chat(from_id: int, channel: int, text: String) -> void:
 	if from_id == Net.SYSTEM_ID:
-		_say("[color=#ffb14a][b]Корабль:[/b] %s[/color]" % _escape(text))
+		_say("[color=#%s][b]Корабль:[/b] %s[/color]" % ["ff7a5c" if channel == Net.CHAT_ALARM else "ffb14a", _escape(text)], TAB_SHIP, text)
+		if channel == Net.CHAT_ALARM:
+			show_banner(text)
 		return
 	var colour := NAME_COLOURS[client.player_colour(from_id) % NAME_COLOURS.size()]
 	var how: String = {Net.CHAT_RADIO: "[color=#7fd88f][рация][/color] ", Net.CHAT_INTERCOM: "[color=#8fc4ff][интерком][/color] ",
 		Net.CHAT_DEAD: "[color=#8a8f9c][мёртвые][/color] "}.get(channel, "")
-	_say("%s[color=#%s][b]%s:[/b][/color] %s" % [how, colour, _escape(client.player_name(from_id)), _escape(text)])
+	_say("%s[color=#%s][b]%s:[/b][/color] %s" % [how, colour, _escape(client.player_name(from_id)), _escape(text)],
+		TAB_RADIO if channel == Net.CHAT_RADIO or channel == Net.CHAT_INTERCOM else TAB_SAY)
 
 
 func _on_notice(text: String) -> void:
-	_say("[color=#9aa3b5]%s[/color]" % _escape(text))
+	_say("[color=#9aa3b5]%s[/color]" % _escape(text), TAB_SHIP, text)
 
 
 func _bay_text() -> String:
@@ -1010,15 +1243,44 @@ func _escape(text: String) -> String:
 
 
 func _on_slots_input(event: InputEvent) -> void:
-	## A click on a slot takes what is in it into the hand.
-	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed \
-			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		var k := _bar_at(Vector2.ZERO, (event as InputEventMouseButton).position, SLOT_PX, SLOT_GAP)
+	## A click on a slot takes what is in it into the hand. (v73, the author's H2)
+	## Dragged onto another slot it trades places with what is there; dragged off
+	## the bar it is put down on the floor. Pointed at, the slot names its thing.
+	if event is InputEventMouseMotion:
+		var k := _bar_at(Vector2.ZERO, (event as InputEventMouseMotion).position, SLOT_PX, SLOT_GAP)
+		var tip := ""
+		if k >= 0 and k < Net.WORN and k < client.worn.size() and client.worn[k] != Net.ITEM_NONE:
+			tip = "%s (щелчок: снять)" % Items.name_of(client.worn[k])
+		elif k >= Net.WORN and client.usable(k - Net.WORN):
+			var thing := client.slots[k - Net.WORN]
+			tip = ("%s. Щелчок: в руку, перетащить: в другой слот или на пол" % Items.name_of(thing)) if thing != Net.ITEM_NONE else "Пустой слот"
+		_slots_view.tooltip_text = tip
+		return
+	if not (event is InputEventMouseButton) or (event as InputEventMouseButton).button_index != MOUSE_BUTTON_LEFT:
+		return
+	var at := (event as InputEventMouseButton).position
+	var k := _bar_at(Vector2.ZERO, at, SLOT_PX, SLOT_GAP)
+	if (event as InputEventMouseButton).pressed:
 		if k >= 0 and k < Net.WORN:
 			client.send_wear(k)                                      # take it off, into the hand
 		elif k >= Net.WORN and client.usable(k - Net.WORN):
 			client.send_hand(k - Net.WORN)
+			if client.slots[k - Net.WORN] != Net.ITEM_NONE:
+				_drag_slot = k - Net.WORN
 		_slots_view.accept_event()
+		_slots_view.queue_redraw()
+		return
+	if _drag_slot < 0:
+		return
+	var from := _drag_slot
+	_drag_slot = -1
+	_slots_view.queue_redraw()
+	if k >= Net.WORN and k - Net.WORN != from and client.usable(k - Net.WORN):
+		client.send_swap(from, k - Net.WORN)
+	elif k < 0 and not Rect2(Vector2.ZERO, _slots_view.size).grow(6.0).has_point(at):
+		client.send_hand(from)
+		client.send_drop()                                           # dragged off the bar: put down
+	_slots_view.accept_event()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1031,6 +1293,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		var button := (event as InputEventMouseButton).button_index
 		if button == MOUSE_BUTTON_LEFT:
 			_click_world()
+			get_viewport().set_input_as_handled()
+			return
+		if button == MOUSE_BUTTON_RIGHT:
+			_open_menu(_world.cell_under_mouse())
+			get_viewport().set_input_as_handled()
+			return
+		if (button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN) and (event as InputEventMouseButton).ctrl_pressed:
+			# (v73, the author's H6) Ctrl+wheel zooms; the wheel alone still turns through the slots
+			_world.zoom_step = clampi(_world.zoom_step + (1 if button == MOUSE_BUTTON_WHEEL_UP else -1), -1, 1)
 			get_viewport().set_input_as_handled()
 			return
 		if button == MOUSE_BUTTON_WHEEL_UP or button == MOUSE_BUTTON_WHEEL_DOWN:
@@ -1075,6 +1346,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif _console_kind == 4 and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and (event as InputEventKey).physical_keycode == KEY_SPACE:
 		client.send_evade()                             # (v68) the pilot's evade, timed by hand
+	elif _console.visible and _console_key(event as InputEventKey):
+		pass
 	elif _console.visible:
 		done = false
 	elif Options.pressed(event, "use") and _use_screen(client.use_target()):
@@ -1116,6 +1389,35 @@ const CONSOLE_KINDS := [3, 4, 17, 20, 21, 28, 30]   # (v70) use_target kinds tha
 const DAZED := "Контузия: в глазах двоится, с пультом не разобраться. Пройдёт сама; быстрее с аптечкой или в автодоке под присмотром."
 
 
+func _console_key(key: InputEventKey) -> bool:
+	## (v73, the author's C2) Keys at a console: at the gun console 1..9 fire that
+	## gun and Space all that are ready; at the bridge's consoles 1..9 jump by that
+	## button; at the supply locker 1..9 pick a tab. The keys are written on the buttons.
+	if not key.pressed or key.echo:
+		return false
+	var n := -1
+	if key.physical_keycode >= KEY_1 and key.physical_keycode <= KEY_9:
+		n = key.physical_keycode - KEY_1
+	if _console_kind == 17 and _guns_view.visible:
+		if key.physical_keycode == KEY_SPACE:
+			client.send_guns(255)
+			return true
+		if n >= 0:
+			client.send_guns(n)
+			return true
+	elif (_console_kind == 3 or _console_kind == 4) and n >= 0:
+		for b in _jump_box.get_children():
+			if b is Button and (b as Button).has_meta("fuel") and not (b as Button).disabled and not b.is_queued_for_deletion():
+				if n == 0:
+					(b as Button).pressed.emit()
+					return true
+				n -= 1
+	elif _console_kind == 12 and _store_view.visible and n >= 0:
+		_store_view.pick_tab(n)
+		return true
+	return false
+
+
 func _use_screen(target: int) -> bool:
 	## What the "use" key (or a click) opens: a bridge console, the locker, the
 	## pockets of somebody lying, an intercom to speak into. False = none of those.
@@ -1145,6 +1447,8 @@ func click_at(at: Vector2) -> void:
 	## A left click on that place (in cells of the whole grid; see _click_world).
 	var c := Vector2i(roundi(at.x), roundi(at.y))
 	var f := -1 if _fires_at(c) else client.click_facing(c)
+	if f < 0 and not _fires_at(c) and _step_beside(c):
+		return                               # (v73) a step to the side first: see _process
 	if f < 0:
 		client.turn_to(at)                   # the character turns to where it is clicked
 		client.send_fire(at)
@@ -1152,6 +1456,181 @@ func click_at(at: Vector2) -> void:
 	client.face(f)
 	_click_facing = f
 	_click_until = Time.get_ticks_msec() / 1000.0 + 0.6
+
+
+static func _badges(text: String) -> String:
+	## (v73, I4) A hint written with the default keys, with each key and what it
+	## does drawn as a badge: "Держите E, чтобы починить" -> [держать E] починить.
+	if _badge_rules.is_empty():
+		for rule: Array in [["Держите ([EFZGQR])(, чтобы |: )", "⟦держать $1⟧ "], ["Держите ([EFZGQR]) ", "⟦держать $1⟧ "],
+				["(?<![A-Za-zА-Яа-яЁё0-9])([EFZGQR]) или щелчок: ", "⟦$1 / ЛКМ⟧ "],
+				["(?<![A-Za-zА-Яа-яЁё0-9])([EFZGQR]): ", "⟦$1⟧ "]]:
+			_badge_rules.append([RegEx.create_from_string(rule[0]), rule[1]])
+	for rule: Array in _badge_rules:
+		text = (rule[0] as RegEx).sub(text, rule[1], true)
+	text = Options.keyed(text).replace("[", "[lb]")
+	return text.replace("⟦", "[bgcolor=#2a3550][color=#ffd970] ").replace("⟧", " [/color][/bgcolor]")
+
+
+func _fit_root() -> void:
+	## (v73, the author's H5) The interface drawn at the size chosen in the settings.
+	var view := get_viewport().get_visible_rect().size
+	var s := Options.ui_scale
+	if _root.scale.x != s or not _root.size.is_equal_approx(view / s):
+		_root.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		_root.position = Vector2.ZERO
+		_root.scale = Vector2(s, s)
+		_root.size = view / s
+
+
+func show_banner(text: String) -> void:
+	## (v73, the author's H4) A danger in big letters for a few seconds, with a chime
+	## (heard only where there is air: vacuum stays silent). The first sentence is
+	## enough there; the whole line stays in the chat.
+	var first := text
+	var cut := text.find("! ")
+	if cut < 0:
+		cut = text.find(". ")
+	if cut > 0 and cut < 90:
+		first = text.substr(0, cut + 1)
+	_banner_text.text = first
+	_banner.visible = true
+	_banner.modulate.a = 1.0
+	_banner.reset_size()
+	_banner_left = BANNER_SECONDS
+	_world.alarm_sound()
+
+
+func _update_banner(delta: float) -> void:
+	if _banner_left > 0.0:
+		_banner_left -= delta
+		_banner.modulate.a = clampf(_banner_left / 0.6, 0.0, 1.0)
+		_banner.visible = _banner_left > 0.0
+	# the hull's own warning, from what the client knows (the server says nothing at that moment)
+	var low := client.hull * 10 < client.hull_max * 3 and client.hull > 0
+	if low and not _hull_warned:
+		_hull_warned = true
+		show_banner("Корпус слабеет: %d из %d!" % [client.hull, client.hull_max])
+	elif client.hull * 10 >= client.hull_max * 5:
+		_hull_warned = false
+
+
+func _update_look(busy: bool) -> void:
+	## (v73, L3) The label beside the mouse: what is there and what a click does.
+	var cell := -1
+	var hovered := get_viewport().gui_get_hovered_control()
+	if not busy and client.my_cond == Net.COND_OK and (hovered == null or hovered == _root):
+		var at := _world.cell_under_mouse()
+		var c := Vector2i(roundi(at.x), roundi(at.y))
+		if c.x >= 0 and c.y >= 0 and c.x < client.map.width and c.y < client.map.height:
+			cell = c.y * client.map.width + c.x
+	if cell != _look_cell or (cell >= 0 and Engine.get_process_frames() % 10 == 0):
+		_look_cell = cell
+		var text := ""
+		if cell >= 0:
+			var c := Vector2i(cell % client.map.width, cell / client.map.width)
+			text = Look.name_at(client, cell, _world.can_see(c.x, c.y))
+			if text != "":
+				var reach := client.click_facing(c) >= 0
+				text += "\n[%s]" % ("ЛКМ: использовать    ПКМ: действия" if reach else "ПКМ: действия")
+		_look_text.text = text
+		_look.visible = text != ""
+		_look.reset_size()
+	if _look.visible:
+		var mouse := get_viewport().get_mouse_position() / _root.scale
+		var room := _root.size - _look.size - Vector2(4, 4)
+		_look.position = Vector2(minf(mouse.x + 18, room.x), minf(mouse.y + 18, room.y))
+
+
+func _step_beside(c: Vector2i) -> bool:
+	## (v73, the author's note on I1: "when you stand diagonally you can use it too")
+	## Something usable diagonally next to us: one step to the side brings it
+	## within reach, then it is used as a click would. False if no step does it.
+	var me := Vector2i(client.pred.x, client.pred.y)
+	var d := c - me
+	if absi(d.x) != 1 or absi(d.y) != 1 or client.dragging():
+		return false
+	var map := client.map
+	if not client.usable_at(c.y * map.width + c.x):
+		return false
+	for side: Vector2i in [Vector2i(d.x, 0), Vector2i(0, d.y)]:
+		var to := me + side
+		var cell := to.y * map.width + to.x
+		if map.walk[cell] == 1 and map.door_of[cell] < 0 and not client.holes.has(cell):
+			_step_dir = (4 if side.x > 0 else 3) if side.x != 0 else (2 if side.y > 0 else 1)
+			_step_from = me
+			_step_then = Vector2(c)
+			_step_until = Time.get_ticks_msec() / 1000.0 + 1.0
+			return true
+	return false
+
+
+func _open_menu(at: Vector2) -> void:
+	## (v73, the author's I1 and B1) The right-click menu: everything that can be
+	## done with what is there, each with its key, and orders to a bot of ours.
+	var map := client.map
+	var c := Vector2i(roundi(at.x), roundi(at.y))
+	if client.my_cond != Net.COND_OK or c.x < 0 or c.y < 0 or c.x >= map.width or c.y >= map.height:
+		return
+	var cell := c.y * map.width + c.x
+	_menu.clear()
+	_menu_acts.clear()
+	var add := func(text: String, act: Callable) -> void:
+		_menu.add_item(text, _menu_acts.size())
+		_menu_acts.append(act)
+	var title := Look.name_at(client, cell, _world.can_see(c.x, c.y))
+	if title != "":
+		_menu.add_separator(title.get_slice("\n", 0))
+	var reach := client.click_facing(c) >= 0
+	var me := Vector2i(client.pred.x, client.pred.y)
+	var diagonal := absi(c.x - me.x) == 1 and absi(c.y - me.y) == 1
+	if reach:
+		add.call("Использовать  [%s / ЛКМ]" % Options.key_text("use"), func() -> void: click_at(at))
+		if _holds(c):
+			add.call("Работать, пока не готово  [держать %s]" % Options.key_text("use"), func() -> void:
+				click_at(at)
+				_menu_hold = true
+				_menu_worked = false
+				_menu_hold_until = Time.get_ticks_msec() / 1000.0 + 30.0)
+	elif diagonal and client.usable_at(cell):
+		add.call("Шагнуть и использовать", func() -> void: _step_beside(c))
+	for e: GameClient.Ent in client.ents.values():
+		if e.x != c.x or e.y != c.y or e.id == client.my_id:
+			continue
+		if e.cond != Net.COND_OK and absi(c.x - me.x) + absi(c.y - me.y) <= 1:
+			var id := e.id
+			add.call("Тащить: %s  [%s]" % [client.player_name(id), Options.key_text("drag")], func() -> void:
+				var f := client.click_facing(c)
+				if f > 0:
+					client.face(f)
+				client.send_drag(id))
+		if client.is_bot(e.id) and e.cond == Net.COND_OK:
+			var id := e.id
+			var now := -1
+			for b: Array in client.crew_bots:
+				if int(b[0]) == id:
+					now = int(b[1])
+			for post in Net.POST_NAMES.size():
+				var p := post
+				add.call("Приказ: %s%s" % [Net.POST_NAMES[post], "  ✓" if post == now else ""], func() -> void: client.send_order(id, p))
+	if client.dragging():
+		add.call("Отпустить  [%s]" % Options.key_text("drag"), func() -> void: client.send_drag(Net.NOBODY))
+	if title != "":
+		add.call("Осмотреть", func() -> void: _say("[color=#9aa3b5]%s[/color]" % _escape(title.replace("\n", ". "))))
+	if _menu_acts.is_empty():
+		return
+	_menu.reset_size()
+	_menu.popup(Rect2i(Vector2i(get_viewport().get_mouse_position()), Vector2i.ZERO))
+
+
+func _holds(c: Vector2i) -> bool:
+	## Is what is there a job for a held "use" key (mending, forcing, filling)?
+	var f := client.click_facing(c)
+	if f < 0:
+		return false
+	var t := client.use_target(f)
+	return t == 1 or t == 2 or t == 5 or t == 9 or t == 10 or t == 11 or t == 16 or t == 18 or t == 23 or t == 25 \
+		or t == 29 or t == 33 or t == 34 or t == 40 or t == 41 or t == 42
 
 
 func _fires_at(c: Vector2i) -> bool:
@@ -1206,6 +1685,9 @@ func _process(delta: float) -> void:
 	# which way to walk: the most recently pressed of the held direction keys
 	var busy := _chat_input.visible or _pause.visible or _console.visible or _open(_options)
 	_world.hover = not busy
+	_update_look(busy)
+	_fit_root()
+	_update_banner(delta)
 	_update_console()
 	for m: Array in MOVES:
 		var dir: int = m[1]
@@ -1227,9 +1709,25 @@ func _process(delta: float) -> void:
 				client.send_hand(_rng.randi_range(0, Net.SLOTS - 1))
 				client.send_drop()           # and now and then leave something lying about
 		want = _demo_dir
+	if _step_dir > 0:
+		var now_at := Vector2i(client.pred.x, client.pred.y)
+		if not _held.is_empty() or Time.get_ticks_msec() / 1000.0 > _step_until:
+			_step_dir = 0                    # a key of our own, or the step did not come: given up
+		elif now_at != _step_from:
+			_step_dir = 0
+			click_at(_step_then)
+		else:
+			want = _step_dir
 	if forced_dir >= 0:
 		want = forced_dir
 	client.want_dir = want
+	if _menu_hold:
+		# "work, until done" from the menu: held as the key would be, until the job ends,
+		# a key of our own is pressed or the character moves
+		_menu_worked = _menu_worked or client.work > 0
+		if not _held.is_empty() or (_menu_worked and client.work == 0) or Time.get_ticks_msec() / 1000.0 > _menu_hold_until \
+				or (_click_facing == 0 and client.target_cell() < 0):
+			_menu_hold = false
 
 	# a click on something to use: once our character has turned to it, it is used as with the key
 	if _click_facing > 0:
@@ -1240,7 +1738,7 @@ func _process(delta: float) -> void:
 		elif Time.get_ticks_msec() / 1000.0 > _click_until:
 			_click_facing = 0
 	# the "use" key: tell the server when it goes down or up
-	var use_now := (Options.held("use") and not busy) or forced_use or (_mouse_use and not busy)
+	var use_now := (Options.held("use") and not busy) or forced_use or (_mouse_use and not busy) or (_menu_hold and not busy)
 	if _mouse_use and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 		_mouse_use = false                   # (after this frame: a quick click still presses once)
 	if use_now != _use_held:
@@ -1427,7 +1925,15 @@ func _process(delta: float) -> void:
 		elif client.docked_air(pump) >= 0.0:
 			var docked := client.docked_air(pump)
 			if absf(client.lock_air(pump) - docked) < 0.05:
-				_hint.text = "Давление в шлюзе как на пристыкованном корабле: наружная дверь откроется"
+				# (v73) the way home: back to the pressure on our own side
+				var inside := client.lock_inside_air(pump)
+				if absf(client.lock_air(pump) - inside) < 0.05:
+					_hint.text = "Давление в шлюзе как на пристыкованном корабле и у нас: обе двери откроются"
+				elif client.lock_air(pump) < inside and client.store_air <= 0.0:
+					_hint.text = "Давление как на пристыкованном корабле. Запас воздуха пуст: внутрь только вручную"
+				else:
+					_hint.text = "Давление как на пристыкованном корабле.  E: %s воздух, чтобы вернуться на наш корабль (откроется внутренняя дверь)" % \
+						("закачать" if client.lock_air(pump) < inside else "откачать")
 			elif client.lock_air(pump) < docked and client.store_air <= 0.0:
 				_hint.text = "Насос шлюза: запас воздуха пуст, закачать нечего"
 			else:
@@ -1451,14 +1957,23 @@ func _process(delta: float) -> void:
 			_hint.text = "Аварийный шлюз неисправен: упал и сам не поднимется.\nДержите E, чтобы починить%s" % no_part
 		else:
 			_hint.text = "Аварийный шлюз неисправен: при разгерметизации не сработает.\nДержите E, чтобы починить%s" % no_part
+	_hint_rich.visible = _hint.visible
+	if _hint.visible and _hint.text != _hint_was:
+		_hint_was = _hint.text
+		_hint_rich.text = "[center]%s[/center]" % _badges(_hint.text)
 	_hint.text = Options.keyed(_hint.text)
-	_work_bar.visible = (target == 1 or target == 5 or target >= 9 or Items.uses(client.in_hand()) > 0) and client.work > 0
+	_world.ring_on = _use_held
+	_work_bar.visible = (target == 1 or target == 5 or target >= 9 or Items.uses(client.in_hand()) > 0) and client.work > 0 \
+		and not (_use_held and client.target_cell() >= 0)     # (v73) then the ring over the thing shows it
 	_work_fill.size.x = 216.0 * client.work / 100.0
 	var shift := (HINT_LEFT - HINT_RIGHT) * 0.5          # under the middle of the hint line
 	_work_bar.offset_left = shift - 110.0
 	_work_bar.offset_right = shift + 110.0
 
 	var now_s := Time.get_ticks_msec() / 1000.0
+	if _chat_tab == TAB_BOTS and client.bot_log_count != _bot_log_seen:
+		_bot_log_seen = client.bot_log_count
+		_rebuild_chat()
 	for entry: Array in _chat_lines:
 		var age: float = now_s - float(entry[1])
 		var alpha := 1.0 if _chat_input.visible else clampf(1.0 - (age - CHAT_VISIBLE_SEC) / 2.0, 0.0, 1.0)
@@ -1469,6 +1984,8 @@ func _process(delta: float) -> void:
 	if _monitor != null and not _monitor_frames.is_empty():
 		var row: Array = _monitor_frames[mini(_health_state(), _monitor_frames.size() - 1)]
 		_monitor.texture = row[int(_monitor_time / _monitor_step) % row.size()]
+		_monitor.tooltip_text = "Здоровье: %s" % ("мертвы" if client.my_cond == Net.COND_DEAD else
+			("без сознания" if client.my_cond != Net.COND_OK else "%d из 100" % clampi(client.health, 0, 100)))
 
 	# warning lamps: thin air and low pressure where our character stands
 	var here := client.air_at(client.pred.x, client.pred.y)
@@ -1552,6 +2069,7 @@ func _process(delta: float) -> void:
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)
+	_tank_bar.tooltip_text = "Кислород в баллоне скафандра: %d%%" % roundi(share * 100.0)
 	_tank_fill.color = Color(0.25, 0.85, 0.75) if share > 0.5 else (Color(0.95, 0.75, 0.3) if share > 0.2 else Color(0.95, 0.35, 0.3))
 
 	# fading out: the screen darkens below 40 health

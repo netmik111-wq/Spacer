@@ -124,7 +124,7 @@ func setup(p_client: GameClient) -> void:
 			Net.ITEM_NONE if client.guard != Weapons.NONE else Weapons.item_of(Weapons.GUARD)))
 	guard_buttons.add_child(_guard_mount)
 	_volley = Button.new()
-	_volley.text = "Залп всеми готовыми"
+	_volley.text = "Залп всеми готовыми  [Пробел]"
 	_volley.focus_mode = Control.FOCUS_NONE
 	_volley.pressed.connect(func() -> void: client.send_guns(255))
 	left.add_child(_volley)
@@ -397,7 +397,7 @@ func _update_guns(fighting: bool) -> void:
 			buttons.add_theme_constant_override("separation", 6)
 			box.add_child(buttons)
 			var fire := Button.new()
-			fire.text = "Огонь"
+			fire.text = "Огонь  [%d]" % (i + 1) if i < 9 else "Огонь"   # (v73, C2) its number key
 			fire.focus_mode = Control.FOCUS_NONE
 			fire.pressed.connect(func() -> void: client.send_guns(which))
 			buttons.add_child(fire)

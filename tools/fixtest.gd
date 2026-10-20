@@ -244,6 +244,21 @@ func _hunters() -> void:
 	_expect(server.gunnery.fighting(), "docked to a derelict, the hunter comes anyway: the derelict is let go")
 	server.gunnery._wrecked()
 	_run(2)
+	# (v73, the author's note) with a wreck alongside (a raid's or a boarding ship's, not this
+	# hunter's) the next hunter is told of once, not every second
+	r._fight = {}
+	r.spawn_hunter()
+	r.hunters[0]["at"] = server.ship.sector
+	r.hunters[0]["coming"] = server.tick
+	var told := [0]
+	var count := func(line: String) -> void:
+		if line.contains("поджидает"):
+			told[0] += 1
+	server.log_line.connect(count)
+	_run(Net.TICK_HZ * 6)
+	server.log_line.disconnect(count)
+	_expect(der.here and der.wreck and told[0] <= 1, "a wreck alongside: «another hunter waits» is said at most once (%d times)" % told[0])
+	r.hunters = []
 	der._leave(true)
 	r.hulks = {}
 	_run(Net.TICK_HZ * 2)

@@ -227,7 +227,7 @@ func _roam() -> void:
 	server.story.changed()
 	if at == ours:
 		_come_at = server.tick + roundi(WARN_SECONDS * Net.TICK_HZ)
-		server.chat.say("Флагман пиратов вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(WARN_SECONDS))
+		server.chat.alarm("Флагман пиратов вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(WARN_SECONDS))
 
 
 func _watch_arrival() -> void:
@@ -290,7 +290,7 @@ func _teleport_tick() -> void:
 		if free.is_empty():
 			break
 	g.reveal(room, "Вспышка выдала отсек пиратов")
-	server.chat.say("Вспышка телепорта на мостике! Флагман высадил абордажников (%d) прямо к пультам. Если они удержат мостик %d с, корабль будет захвачен. Телепорт можно выбить из орудий (в запасе у флагмана ещё %d)." % [
+	server.chat.alarm("Вспышка телепорта на мостике! Флагман высадил абордажников (%d) прямо к пультам. Если они удержат мостик %d с, корабль будет захвачен. Телепорт можно выбить из орудий (в запасе у флагмана ещё %d)." % [
 		n, CAPTURE_SECONDS, troops])
 
 
@@ -329,7 +329,7 @@ func _watch_crew() -> void:
 		return
 	capture += 1
 	if capture == 1:
-		server.chat.say("Весь экипаж лежит, а абордажники флагмана на борту! Если за %d с никто не поднимется, корабль будет захвачен." % CAPTURE_SECONDS)
+		server.chat.alarm("Весь экипаж лежит, а абордажники флагмана на борту! Если за %d с никто не поднимется, корабль будет захвачен." % CAPTURE_SECONDS)
 	elif capture >= CAPTURE_SECONDS:
 		server.crew.end_campaign(Net.OVER_CAPTURED)
 

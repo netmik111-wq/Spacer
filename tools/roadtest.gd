@@ -233,6 +233,7 @@ func _places() -> void:
 		_enter_cluster(f[0])
 		_arrive_at(f[1])
 		var key := r._key(f[2])
+		r.taken.erase(key)                       # (an earlier check that flew about this system may have sprung it)
 		_expect(r.found.has(key) and not server.gunnery.fighting(), "an ambush is seen from afar (%.0f away), and waits" % server.ship.pos.distance_to(_place_at(f[2])))
 		_put(_off(_place_at(f[2]), Sectors.AMBUSH_REACH - 2.0))
 		_run(Net.TICK_HZ * 3)

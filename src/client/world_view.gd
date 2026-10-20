@@ -153,6 +153,10 @@ var hover := true                    # outline what the mouse is over (off while
 var hover_test := Vector2.INF       # (test helper) the mouse is taken to be this far from our character, in cells
 var _hover_pen: Node2D               # above the dark too: the outline of the thing under the mouse
 var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
+var _ring_pen: Node2D                # (v73) the ring that fills over the thing we work on
+var _ring_shown := false
+var ring_on := false                 # (set by GameScreen) the "use" key is held: the job's progress is drawn as a ring
+var zoom_step := 0                   # (v73, the author's H6) Ctrl+wheel: one whole zoom step closer or farther
 var _hover_ink: Node2D               # under _hover_pen: the silhouettes of things on the floor, drawn round them
 var _body_ink: Sprite2D              # on a body under the mouse: its outline (OUTLINE_SHADER)
 var _tile_lines := {}                # tile id -> the outline of the thing fitted into that wall tile (null: none)
@@ -384,6 +388,9 @@ func setup(p_client: GameClient) -> void:
 	_hover_ink.material = _ink_material(SILHOUETTE_SHADER)
 	_hover_ink.draw.connect(_draw_hover_ink)
 	_hover_pen.add_child(_hover_ink)
+	_ring_pen = Node2D.new()
+	_ring_pen.draw.connect(_draw_ring)
+	_me_layer.add_child(_ring_pen)
 	_body_ink = Sprite2D.new()
 	_body_ink.texture = _chars_tex
 	_body_ink.region_enabled = true
@@ -810,11 +817,45 @@ func _update_hover() -> void:
 		var reach := client.click_facing(c) >= 0
 		if client.usable_at(cell) and (reach or can_see(c.x, c.y)):
 			on = Vector2i(cell, 1 if reach else 0)
+	if on.x < 0 and hover and client.my_cond == Net.COND_OK:
+		# (v73, the author's I2) with the mouse on nothing, what the "use" key would act on is outlined
+		var target := client.target_cell()
+		if target >= 0:
+			on = Vector2i(target, 1)
 	if on != _hover_on:
 		_hover_on = on
 		_hover_pen.queue_redraw()
 		_hover_ink.queue_redraw()
 	_hover_body()
+
+
+func alarm_sound() -> void:
+	## (v73) The chime of a danger banner, from the ship's speakers: only where there is air.
+	var here := Vector2i(client.pred.x, client.pred.y)
+	var cell := here.y * client.map.width + here.x
+	if cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR:
+		_audio.play(Sounds.ALERT_YELLOW, _feet(Vector2(here.x, client.map.local_y(here.y))), 40.0, false, -6.0)
+
+
+func _update_ring() -> void:
+	var working := ring_on and client.work > 0 and client.target_cell() >= 0
+	if working or _ring_shown:
+		_ring_shown = working
+		_ring_pen.queue_redraw()
+
+
+func _draw_ring() -> void:
+	## (v73, the author's I3) The progress of a job held with "use", over the thing itself.
+	if not _ring_shown:
+		return
+	var cell := client.target_cell()
+	if cell < 0:
+		return
+	var mid := _on_deck(cell) * _tile + Vector2(_tile, _tile) * 0.5
+	var share := clampf(client.work / 100.0, 0.0, 1.0)
+	_ring_pen.draw_circle(mid, 9.0, Color(0.05, 0.07, 0.1, 0.55))
+	_ring_pen.draw_arc(mid, 8.0, 0.0, TAU, 32, Color(1, 1, 1, 0.18), 2.0, true)
+	_ring_pen.draw_arc(mid, 8.0, -PI / 2.0, -PI / 2.0 + TAU * share, 32, Color(1.0, 0.86, 0.35, 0.95), 2.0, true)
 
 
 func _exit_tree() -> void:
@@ -1690,6 +1731,7 @@ func _process(delta: float) -> void:
 	# The screen shows at least VIEW_CELLS cells either side of us across (v46,
 	# the author: 9, as in SS13), at a whole zoom so the pixels stay crisp.
 	var zoom := clampf(floorf(get_viewport_rect().size.x / ((2 * VIEW_CELLS + 1) * _tile)), 1.0, 6.0)
+	zoom = clampf(zoom + zoom_step, 1.0, 8.0)
 	_camera.zoom = Vector2(zoom, zoom)
 	_update_ship(delta)
 	_update_audio(delta)
@@ -1816,6 +1858,7 @@ func _process(delta: float) -> void:
 	# (worked out before the characters moved, it trailed a frame behind: v52)
 	_update_fan()
 	_update_hover()
+	_update_ring()
 
 	# name tags are drawn in screen space so the text stays sharp
 	var screen_centre := get_viewport_rect().size * 0.5

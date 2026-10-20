@@ -142,6 +142,18 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v73 (a friendlier game; the author's "very friendly UI for everything" and his 24 answers)
+- Fixes: the airlock pump and the inner door's button take a chamber at a docked ship's pressure back to ours (he was
+  trapped in it); the hunter's «поджидает» comes once, not every second. A pirate near its goal no longer paces back and forth
+  for good (the rare airlocktest failure).
+- Using things: the target of E is outlined, a ring fills while E is held, a right-click menu (use, work until done, step
+  and use, drag, look, a bot's orders), use from a diagonal by one step to the side, hints with key badges.
+- The screen: names under the mouse, labels on the heart monitor, oxygen bar and lamps, hotbar numbers and drag (also in
+  the inventory), chat tabs and ×N repeats, red banners with a chime for danger, interface size 75–150%, Ctrl+wheel zoom.
+- Consoles: ✕ on every frame, number keys for guns, jumps and locker tabs. The bridge's alert panel (his idea): the ship's
+  needs in red, yellow and green on the sector console and the ship's controls.
+- Protocol 50. Questions: https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS. Build in `/mnt/project-files/builds/v73/`.
+
 ### v72 (the author's two notebook notes: bots at work, the boarders' wreck)
 - Bots on a repair now raise an emergency shutter that is down when it is the only way to the job (suited only), mend
   before any other work, and free bots come to mend too. Each job is taken by one bot, which says so in chat.

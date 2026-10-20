@@ -96,16 +96,18 @@ func update_chart() -> void:
 		buttons_for = place_key
 		for old in buttons.get_children():
 			old.queue_free()
+		var number := 0                         # (v73, C2) each jump's number key (the old buttons go only at the frame's end)
 		for id in sectors.neighbours(client.sector):
+			number += 1
 			var go := Button.new()
-			go.text = "Прыжок: %s" % (sectors.describe(id) if client.knows_sector(id) else "«%s», неизвестно" % sectors.names[id])
+			go.text = "%d. Прыжок: %s" % [number, (sectors.describe(id) if client.knows_sector(id) else "«%s», неизвестно" % sectors.names[id])]
 			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			go.pressed.connect(client.send_jump.bind(id))
 			go.set_meta("fuel", 1)              # (lane jumps' worth)
 			buttons.add_child(go)
 		if k >= 0:
 			var out := Button.new()
-			out.text = "Долгий прыжок: в скопление «%s» (%d топлива)" % [Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.EXIT_FUEL * client.jump_cost]
+			out.text = ("%d. " % (number + 1)) + "Долгий прыжок: в скопление «%s» (%d топлива)" % [Sectors.CLUSTER_NAMES[sectors.beyond[k]], Sectors.EXIT_FUEL * client.jump_cost]
 			out.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			out.pressed.connect(client.send_jump.bind(Sectors.EXIT_JUMP))
 			out.set_meta("fuel", Sectors.EXIT_FUEL)

@@ -86,7 +86,7 @@ func setup(p_client: GameClient) -> void:
 	var group := ButtonGroup.new()
 	for i in TABS.size():
 		var b := Button.new()
-		b.text = TABS[i][0]
+		b.text = "%d %s" % [i + 1, TABS[i][0]] if i < 9 else TABS[i][0]    # (v73, C2) its number key
 		b.toggle_mode = true
 		b.button_group = group
 		b.button_pressed = i == _tab
@@ -128,6 +128,13 @@ func _held_now() -> String:
 			out.append(str(item))
 	out.sort()
 	return ",".join(out)
+
+
+func pick_tab(i: int) -> void:
+	## (v73, the author's C2) A number key picks a tab.
+	if i >= 0 and i < _tabs.size():
+		(_tabs[i] as Button).button_pressed = true
+		_show_tab(i)
 
 
 func _show_tab(i: int) -> void:
