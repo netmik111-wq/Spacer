@@ -20,6 +20,7 @@ signal notice(text: String)
 signal shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float)   # a shot or a blow, in cells
 	# of the whole grid; (v56) a ship's shot shows `delay` seconds from now and flies `flight` seconds
 signal jolt(kind: int, shot: int, at: Vector2)   # (v56) a sound of the ship fight (Net.JOLT_*), in cells
+signal hit(blood: int, id: int, x: int, y: int)   # (v75) somebody near was hurt (see Net.S_HIT)
 signal heard(kind: int, x: int, y: int)   # a sound reached our character (see Net.SOUND_*)
 signal arrived                       # the ship has just landed in another sector
 
@@ -1855,6 +1856,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_SOUND:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))
+		Net.S_HIT:
+			if pkt.size() >= 8:
+				hit.emit(pkt[1], pkt.decode_u16(2), pkt.decode_s16(4), pkt.decode_s16(6))
 		Net.S_CHAT:
 			var n := pkt.decode_u16(4)
 			chat.emit(pkt.decode_u16(1), pkt[3], pkt.slice(6, 6 + n).get_string_from_utf8())

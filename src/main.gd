@@ -79,6 +79,7 @@ const GameScreen := preload("res://src/ui/game_screen.gd")
 const MainMenu := preload("res://src/ui/main_menu.gd")
 const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
+const Music := preload("res://src/client/music.gd")
 const Options := preload("res://src/client/options.gd")
 
 var _placed := false
@@ -191,6 +192,7 @@ func _ready() -> void:
 	Engine.max_fps = FPS_ACTIVE
 	_define_inputs()                     # (sets the frame limit the player chose)
 	Sounds.prepare()
+	add_child(Music.new())               # (v75) the music, for the whole run
 	_client = GameClient.new()
 	add_child(_client)
 	_client.joined.connect(_on_joined)
@@ -222,6 +224,8 @@ func _show_menu(message: String, is_error: bool = false) -> void:
 		_menu.quit_requested.connect(func() -> void: get_tree().quit())
 	_menu.visible = true
 	_menu.set_busy(false)
+	if Music.current != null:
+		Music.current.play(Sounds.MUSIC_MENU)
 	_menu.show_status(message, is_error)
 
 
@@ -344,6 +348,8 @@ func _connect(player: String, address: String, port: int) -> bool:
 
 func _on_joined() -> void:
 	_menu.visible = false
+	if Music.current != null:
+		Music.current.play("")           # in the game the world decides (WorldView._music)
 	_screen = GameScreen.new()
 	add_child(_screen)
 	_screen.demo_walk = _flags.has("demo")

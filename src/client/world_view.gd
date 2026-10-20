@@ -20,6 +20,7 @@ const Options := preload("res://src/client/options.gd")
 const FightFx := preload("res://src/client/fight_fx.gd")
 const Sprites := preload("res://src/client/sprites.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Music := preload("res://src/client/music.gd")
 
 const CHAR_W := 32
 const CHAR_H := 48
@@ -119,7 +120,11 @@ void fragment() {
 }
 """
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
-const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик"]
+const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
+	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд"]   # (v75: the kinds from 10 on were never played)
+const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt figure shows red
+const STAINS_KEPT := 400             # (v75) drops of blood kept on the floors (the oldest go first)
+const RED_ALERT_TINT := 0.1          # (v75, the author's F3) how red the light is at red alert (it pulses round this)
 const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0.4, 0.9, 0.85), Color(0.6, 0.85, 1.0),
 	Color(1.0, 0.4, 0.35), Color(0.95, 0.85, 0.4), Color(0.9, 0.9, 0.9), Color(1.0, 0.65, 0.2), Color(1.0, 0.55, 0.4),
 	Color(1.0, 0.3, 0.3)]
@@ -242,6 +247,15 @@ var _afterimages := {}               # id -> [Sprite2D, seconds left, the cell i
 var _shown := {}                     # id -> was it shown last frame
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
+var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
+var _stains: Array = []              # (v75) blood on the floor: [deck, position on its deck (pixels), radius]
+var _sparks: Array = []              # (v75) sparks off a robot hit: [deck, position, seconds left]
+var _alert_tint: ColorRect           # (v75) red light over the world at red alert
+var _red := 0.0                      # how red it is now (eased)
+var _amb_timer := 6.0                # (v75, the author's F5) seconds to the next sound of the ship itself
+var _jumps_heard := -1               # client.jumps as last heard (the hull creaks after a jump)
+var _creak_in := -1.0                # seconds to that creak (-1: none due)
+var _boarders_until := 0.0           # (v75) the fight music keeps on this long after a pirate was last seen aboard
 
 
 func setup(p_client: GameClient) -> void:
@@ -378,6 +392,11 @@ func setup(p_client: GameClient) -> void:
 	shade_material.set_shader_parameter("cone", _cone_view.get_texture())
 	_shade.material = shade_material
 	_dark_layer.add_child(_dark_sheet)
+	_alert_tint = ColorRect.new()
+	_alert_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_alert_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_alert_tint.color = Color(1.0, 0.08, 0.04, 0.0)
+	_dark_layer.add_child(_alert_tint)
 	# We always see ourselves, even in pitch dark (without the glow around us
 	# the author asked to be rid of): a copy of our figure over the dark.
 	_me_layer = CanvasLayer.new()
@@ -429,6 +448,7 @@ func setup(p_client: GameClient) -> void:
 	_sound_pen.draw.connect(_draw_sounds)
 	_label_layer.add_child(_sound_pen)
 	client.heard.connect(_on_heard)
+	client.hit.connect(_on_hit)
 	_audio = Sounds.new()
 	add_child(_audio)
 	client.shot.connect(_on_shot)
@@ -579,6 +599,19 @@ func _update_ship(delta: float) -> void:
 	# (v61) the bridge backup lights its room; (v68) the lights' breaker off is dark, a red alert dims them
 	var lit_here := client.light_at(client.pred.y * map.width + client.pred.x)
 	_dark = move_toward(_dark, (RED_ALERT_DIM if client.alert == Net.ALERT_RED else 0.0) if lit_here else 1.0, delta * 2.5)
+	# (v75, the author's F3) at red alert the ship's lights turn a dim, slowly pulsing red
+	var now_s := Time.get_ticks_msec() / 1000.0
+	var red_alert := client.alert == Net.ALERT_RED and lit_here and map.on_ship(client.pred.y * map.width + client.pred.x)
+	_red = move_toward(_red, 1.0 if red_alert else 0.0, delta * 1.5)
+	_alert_tint.color.a = _red * RED_ALERT_TINT * (0.75 + 0.25 * sin(now_s * 2.2))
+	for id: int in _flash.keys():
+		_flash[id] = float(_flash[id]) - delta
+		if float(_flash[id]) <= 0.0:
+			_flash.erase(id)
+	for i in range(_sparks.size() - 1, -1, -1):
+		_sparks[i][2] = float(_sparks[i][2]) - delta
+		if float(_sparks[i][2]) <= 0.0:
+			_sparks.remove_at(i)
 	_lit = client.lit_cells()
 	_dim = _find_dim()
 	_near = _find_near()
@@ -606,6 +639,10 @@ func _draw_things(d: int) -> void:
 	## Things lying on the floor of one deck.
 	var map := client.map
 	var pen := _decks[d].things
+	# (v75, the author's F1) blood where somebody was hurt, under everything
+	for st: Array in _stains:
+		if int(st[0]) == d:
+			pen.draw_circle(st[1], float(st[2]), Color(0.42, 0.02, 0.03, 0.85))
 	# (v69) each room's air vent: a grille in the floor, under whatever lies on it
 	for cell: int in map.vents:
 		if map.deck_of_cell(cell) != d:
@@ -1538,10 +1575,12 @@ func _update_audio(delta: float) -> void:
 		if not first and in_air and client.alert != Net.ALERT_GREEN:
 			_audio.play(Sounds.ALERT_RED if client.alert == Net.ALERT_RED else Sounds.ALERT_YELLOW,
 				_feet(Vector2(here.x, map.local_y(here.y))), 40.0, false, -4.0)
+	_ambience(delta, here)
 	_hum_timer -= delta
 	if _hum_timer > 0.0:
 		return
 	_hum_timer = 0.25
+	_music_now()
 	var engine := -1
 	for cell: int in map.engine.keys():
 		if map.deck_of_cell(cell) == client.my_deck():
@@ -1552,6 +1591,78 @@ func _update_audio(delta: float) -> void:
 	var ex := engine % map.width
 	var ey := engine / map.width + 1
 	_audio.hum(on, _feet(Vector2(ex, map.local_y(ey))), on and (not can_see(ex, ey) or _thin_air_here()))
+
+
+func _on_hit(blood: int, id: int, x: int, y: int) -> void:
+	## (v75, the author's F1) Somebody near was hurt: the figure flashes red, a few drops
+	## of blood stay on the floor (sparks fly off a robot), the blow is heard where there is air.
+	var map := client.map
+	_flash[id] = HIT_FLASH
+	var deck := map.deck_of(y)
+	if deck < 0 or deck >= _decks.size():
+		return
+	var corner := Vector2(x, map.local_y(y)) * _tile
+	if blood == Net.BLOOD_FLESH:
+		for k in randi_range(2, 4):
+			_stains.append([deck, corner + Vector2(randf_range(5.0, 27.0), randf_range(15.0, 30.0)), randf_range(1.2, 3.4)])
+		while _stains.size() > STAINS_KEPT:
+			_stains.pop_front()
+		_decks[deck].things.queue_redraw()
+	else:
+		_sparks.append([deck, corner + Vector2(16.0, 10.0), 0.35])
+	var cell := y * map.width + x
+	var near := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y)) <= Net.SOUND_CONTACT
+	var aired := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR
+	if deck == client.my_deck() and (aired and not _thin_air_here() or near):
+		_audio.play(Sounds.HIT if blood == Net.BLOOD_FLESH else Sounds.HIT_METAL, _feet(Vector2(x, map.local_y(y))), 10.0,
+			not can_see(x, y), -3.0)
+
+
+func _ambience(delta: float, here: Vector2i) -> void:
+	## (v75, the author's F5) The ship sounds alive: a room's vent breathes now and then, a pipe
+	## knocks in a wall, the hull groans a moment after a jump. Each from its place, never in a vacuum.
+	var map := client.map
+	var cell := here.y * map.width + here.x
+	var in_air := cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR \
+		and map.on_ship(cell) and client.my_cond == Net.COND_OK
+	if _jumps_heard != client.jumps:
+		if _jumps_heard >= 0:
+			_creak_in = 1.8
+		_jumps_heard = client.jumps
+	if _creak_in >= 0.0:
+		_creak_in -= delta
+		if _creak_in < 0.0 and in_air:
+			_audio.play(Sounds.AMB_CREAK, _feet(Vector2(here.x, map.local_y(here.y))) + Vector2(randf_range(-90, 90), -40), 16.0, false, -6.0)
+	_amb_timer -= delta
+	if _amb_timer > 0.0:
+		return
+	_amb_timer = randf_range(7.0, 16.0)
+	if not in_air or not client.powered():
+		return
+	var room := map.room_of[cell]
+	var vent := -1
+	for v: int in map.vents:
+		if room >= 0 and map.room_of[v] == room:
+			vent = v
+	if vent >= 0 and randf() < 0.55:
+		_audio.play(Sounds.AMB_VENT, _feet(Vector2(vent % map.width, map.local_y(vent / map.width))), 7.0, false, -16.0)
+	else:
+		var spot := Vector2(here.x + randf_range(-4.0, 4.0), map.local_y(here.y) + randf_range(-2.0, 2.0))
+		_audio.play(Sounds.AMB_PIPE, _feet(spot), 8.0, true, -12.0)
+
+
+func _music_now() -> void:
+	## (v75, the author's F4) A low drone while a pirate ship fights us, at red alert, or while
+	## pirates were seen aboard lately; silent otherwise.
+	if Music.current == null:
+		return
+	var now := Time.get_ticks_msec() / 1000.0
+	for e: GameClient.Ent in client.ents.values():
+		if e.cond != Net.COND_DEAD and client.roster.has(e.id) and int(client.roster[e.id]["kind"]) == Net.KIND_PIRATE \
+				and client.map.on_ship(e.y * client.map.width + e.x):
+			_boarders_until = now + 20.0
+	var danger := client.fighting() or client.alert == Net.ALERT_RED or now < _boarders_until
+	Music.current.play(Sounds.MUSIC_FIGHT if danger and client.my_cond != Net.COND_DEAD else "")
 
 
 func _draw_sounds() -> void:
@@ -1598,6 +1709,15 @@ func _draw_fx(d: int) -> void:
 	var map := client.map
 	var pen := _decks[d].fx
 	var now := Time.get_ticks_msec() / 1000.0
+	# (v75) sparks off a robot that was hit
+	for sp: Array in _sparks:
+		if int(sp[0]) != d:
+			continue
+		var k := float(sp[2]) / 0.35
+		for j in 5:
+			var dir := Vector2.from_angle(float(j) * 1.3 + float((sp[1] as Vector2).x))
+			var from: Vector2 = (sp[1] as Vector2) + dir * (1.0 - k) * 10.0
+			pen.draw_line(from, from + dir * 3.0, Color(1.0, 0.85, 0.35, k), 1.0)
 	# the engine: its light falls on the floor in front of it, so its state can be
 	# read from across the room, or from the deck above through a glass floor
 	for cell: int in map.engine.keys():
@@ -1833,6 +1953,8 @@ func _process(delta: float) -> void:
 			sprite.rotation = PI / 2.0
 			sprite.position += Vector2(-22.0, -7.0)
 			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
+		if _flash.has(id):
+			sprite.modulate = sprite.modulate.lerp(Color(1.0, 0.2, 0.2), clampf(float(_flash[id]) / HIT_FLASH, 0.0, 1.0))
 	_fade_afterimages(delta)
 	for id: int in _views.keys():
 		if not client.ents.has(id):
