@@ -512,6 +512,8 @@ const S_BOTLOG := 45                # (v72) to all: u16 the bot's id, u32 second
                                     # then the line (UTF-8): what one of our bots set about (the bots' log)
 const S_HIT := 46                   # (v75, the author's F1) somebody hurt, to those near on that deck: u8 BLOOD_*, u16 their id,
                                     # s16 x, s16 y: the figure flashes red, blood drips (sparks off a robot), a hit is heard
+const S_SUMMARY := 47               # (v75, the author's E1) the run's story at its end: u16 pirate ships beaten, u16 boarders
+                                    # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8)
 const BLOOD_FLESH := 0
 const BLOOD_METAL := 1
 const GROW_EMPTY := 0

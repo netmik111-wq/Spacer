@@ -142,6 +142,9 @@ var won := false                       # (v57) the flagship is beaten: the game 
 var voyage_ticks := 0                  # ticks the campaign has lasted, over every evening it was played
 var jumps := 0
 var farthest := 0                      # the most jumps from the start the ship has been
+var ships_beaten := 0                 # (v75, the author's E1) pirate ships wrecked or taken, for the run's summary
+var boarders_killed := 0              # pirates (and their robots) killed aboard
+var deaths: Array = []                # our dead: [name, how]
 var dead_names := {}                   # players whose character died and who left before coming back: name -> true
 var saved_crew := {}                   # characters of the saved campaign whose players have not come back yet: name -> what was saved
 var save_path := ""                    # where the campaign is saved ("" = nowhere: tests, see Campaign)
@@ -266,6 +269,10 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	farthest = 0
 	dead_names.clear()
 	saved_crew.clear()
+	ships_beaten = 0
+	boarders_killed = 0
+	deaths = []
+	ship.earned = 0
 	space_seed = rng.randi()
 	been = {Sectors.key(Vector2i.ZERO): true}
 	road.setup(self)

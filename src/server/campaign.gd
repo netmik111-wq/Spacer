@@ -109,6 +109,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits, "tank": server.ship.tank,
 		"reserve": server.reserve, "hull": server.ship.hull, "voyage": server.voyage_ticks,
 		"jumps": server.jumps, "farthest": server.farthest, "won": server.won, "dead_names": server.dead_names.keys(),
+		"ships_beaten": server.ships_beaten, "boarders_killed": server.boarders_killed, "deaths": server.deaths, "earned": server.ship.earned,
 		"holes": holes, "broken": broken,
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty), "picked": Marshalls.raw_to_base64(picked),
@@ -252,6 +253,13 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.dead_names.clear()
 	for n in data["dead_names"]:
 		server.dead_names[str(n)] = true
+	server.ships_beaten = int(data.get("ships_beaten", 0))          # (v75; an older save starts the summary from here)
+	server.boarders_killed = int(data.get("boarders_killed", 0))
+	server.deaths = []
+	for d in data.get("deaths", []):
+		if d is Array and (d as Array).size() == 2:
+			server.deaths.append([str(d[0]), str(d[1])])
+	server.ship.earned = int(data.get("earned", 0))
 	var air_saved := Marshalls.base64_to_raw(str(data["air"])).to_float32_array()
 	if air_saved.size() == server.air.air.size():
 		server.air.air = air_saved

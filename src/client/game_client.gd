@@ -241,6 +241,7 @@ var meal := 0                        # (v71) the galley's dish at work on us (Ne
 var meal_left := 0                   # ... and about how many seconds it has left
 var boards := 0                      # (v71) circuit boards we carry
 var toolbox := false                 # (v71) we carry a toolbox
+var summary := {}                    # (v75, the author's E1) the run's story at its end (Net.S_SUMMARY): ships, boarders, earned, deaths
 var complex_repairs := false         # (v71) the game was made with complex repairs (S_CAMPAIGN)
 var hauling := false                 # (v70) the server says we hold somebody (with a broken leg pred.slow alone does not tell)
 var work := 0                        # progress of what we are doing with the "use" key, 0..100
@@ -1856,6 +1857,21 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_SOUND:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))
+		Net.S_SUMMARY:
+			if pkt.size() >= 10:
+				var deaths: Array = []
+				var at := 10
+				for i in pkt[9]:
+					var pair: Array = []
+					for k in 2:
+						if at >= pkt.size():
+							break
+						var n: int = pkt[at]
+						pair.append(pkt.slice(at + 1, at + 1 + n).get_string_from_utf8())
+						at += 1 + n
+					if pair.size() == 2:
+						deaths.append(pair)
+				summary = {"ships": pkt.decode_u16(1), "boarders": pkt.decode_u16(3), "earned": pkt.decode_u32(5), "deaths": deaths}
 		Net.S_HIT:
 			if pkt.size() >= 8:
 				hit.emit(pkt[1], pkt.decode_u16(2), pkt.decode_s16(4), pkt.decode_s16(6))

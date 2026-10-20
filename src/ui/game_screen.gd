@@ -32,6 +32,7 @@ const CommsView := preload("res://src/ui/comms_view.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
 const Look := preload("res://src/ui/look.gd")
+const BugReport := preload("res://src/client/bug_report.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
@@ -124,6 +125,8 @@ var _jump_label: Label
 var _flash: ColorRect
 var _alert_label: Label              # (v68) the alert level, over the screen while it is not green
 var _alert_tint: ColorRect           # (v68) a slow red pulse over the screen on red alert
+var _pause_people: Label             # (v75) the people in the game, in the Esc menu
+var _pause_shot: Image               # (v75) the screen when the Esc menu opened, for a bug report
 var _alert_time := 0.0
 var _monitor_step := 0.08
 var _monitor_time := 0.0
@@ -524,6 +527,9 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_rng.randomize()
 	_say("[color=#9aa3b5]Вы на борту. %s: чат, %s: сведения о корабле и подсказки клавиш, %s: книга помощи.[/color]" % [
 		_escape(Options.key_text("chat")), _escape(Options.key_text("info")), _escape(Options.key_text("help"))])
+	if hosting and not host_addresses().is_empty():
+		# (v75, the author's E2) the host is told where friends join; Esc has a button that copies it
+		_say("[color=#9aa3b5]Адрес для друзей: %s:%d (Esc: скопировать).[/color]" % [host_addresses()[0], host_port])
 
 
 func _inventory_panel() -> InventoryPanel:
@@ -587,6 +593,23 @@ func _skills_text() -> String:
 	for i in Net.SKILLS:
 		parts.append("%s %d" % [Net.SKILL_NAMES[i], client.skills[i]])
 	return ", ".join(parts)
+
+
+func _story() -> String:
+	## (v75, the author's E1) What the run came to, beyond the road: fights, money, the dead.
+	var sm := client.summary
+	if sm.is_empty():
+		return ""
+	var out := "\nПиратских кораблей разбито: %d\nПиратов убито на борту: %d\nЗаработано кредитов: %d" % [int(sm["ships"]), int(sm["boarders"]), int(sm["earned"])]
+	var deaths: Array = sm["deaths"]
+	if deaths.is_empty():
+		out += "\nПогибших нет"
+	else:
+		var lines := PackedStringArray()
+		for d: Array in deaths.slice(maxi(deaths.size() - 6, 0)):
+			lines.append("%s: %s" % [d[0], d[1]])
+		out += "\nПогибли (%d): %s" % [deaths.size(), ", ".join(lines)]
+	return out
 
 
 static func _voyage(seconds: int) -> String:
@@ -1050,10 +1073,7 @@ func _build_pause(root: Control) -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
 	if hosting:
-		var addresses := PackedStringArray()
-		for a in IP.get_local_addresses():
-			if a.contains(".") and not a.begins_with("127.") and not a.begins_with("169.254."):
-				addresses.append(a)
+		var addresses := host_addresses()
 		var info := Label.new()
 		info.add_theme_font_size_override("font_size", 14)
 		info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1061,6 +1081,20 @@ func _build_pause(root: Control) -> void:
 		var where := ", ".join(addresses) if not addresses.is_empty() else "не найден"
 		info.text = "Вы создали эту игру. Другие игроки в вашей сети подключаются по адресу: %s (порт %d).\nДля игры через интернет порт %d (UDP) нужно открыть на роутере." % [where, host_port, host_port]
 		box.add_child(info)
+		if not addresses.is_empty():
+			# (v75, the author's E2) one click puts the address in the clipboard, to paste to friends
+			var copy := Button.new()
+			copy.text = "Копировать адрес: %s:%d" % [addresses[0], host_port]
+			copy.pressed.connect(func() -> void:
+				DisplayServer.clipboard_set("%s:%d" % [addresses[0], host_port])
+				copy.text = "Скопировано: %s:%d" % [addresses[0], host_port])
+			box.add_child(copy)
+	# (v75, the author's E2) who is aboard: the people, not the bots
+	_pause_people = Label.new()
+	_pause_people.add_theme_font_size_override("font_size", 14)
+	_pause_people.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pause_people.custom_minimum_size = Vector2(380, 0)
+	box.add_child(_pause_people)
 	if client.admin_token != "":
 		# the campaign saves itself every minute and after jumps; this is for the host's peace of mind
 		var save := Button.new()
@@ -1083,6 +1117,15 @@ func _build_pause(root: Control) -> void:
 		_set_pause(false)
 		_options_panel().open())
 	box.add_child(settings)
+	# (v75, the author's S2) the logs, the save and a picture of the screen, in one zip
+	var report := Button.new()
+	report.text = "Сообщить об ошибке (собрать журналы в архив)"
+	report.pressed.connect(func() -> void:
+		var path := BugReport.make(_pause_shot)
+		report.text = ("Архив готов: " + path.get_file()) if path != "" else "Не удалось записать архив"
+		if path != "":
+			OS.shell_show_in_file_manager(path))
+	box.add_child(report)
 	var resume := Button.new()
 	resume.text = "Продолжить"
 	resume.pressed.connect(func() -> void: _set_pause(false))
@@ -1135,10 +1178,28 @@ func show_pause(on: bool) -> void:
 	_set_pause(on)
 
 
+func host_addresses() -> PackedStringArray:
+	## (v75) This computer's addresses others can reach, a Radmin VPN one (26.x.x.x) first.
+	var out := PackedStringArray()
+	for a in IP.get_local_addresses():
+		if a.contains(".") and not a.begins_with("127.") and not a.begins_with("169.254."):
+			if a.begins_with("26."):
+				out.insert(0, a)
+			else:
+				out.append(a)
+	return out
+
+
 func _set_pause(on: bool) -> void:
 	_pause.visible = on
 	if on:
 		_close_chat()
+		_pause_shot = get_viewport().get_texture().get_image()   # (the screen as it was, under the menu)
+		var names := PackedStringArray()
+		for id: int in client.roster.keys():
+			if int(client.roster[id]["kind"]) == Net.KIND_PLAYER:
+				names.append(client.player_name(id) + (" (вы)" if id == client.my_id else ""))
+		_pause_people.text = "В игре: %s" % ", ".join(names)
 		_pause_admin.visible = client.is_admin
 		_pause_admin.text = "Панель администратора (%s)" % Options.key_text("admin")
 
@@ -2138,12 +2199,12 @@ func _process(delta: float) -> void:
 	_life += delta
 	_over.visible = client.over != Net.OVER_NONE or _victory_left > 0.0
 	if _over.visible and client.over == Net.OVER_NONE:
-		_over_text.text = "ПОБЕДА\n\nФлагман пиратов повержен: цель пути достигнута.\n\nПройдено секторов: %d\nПрыжков сделано: %d\nПуть занял: %s\n\nИгра выиграна. Можно лететь дальше: космос не кончается." % [
-			client.sectors_seen, client.jumps, _voyage(client.voyage_seconds)]
+		_over_text.text = "ПОБЕДА\n\nФлагман пиратов повержен: цель пути достигнута.\n\nПройдено секторов: %d\nПрыжков сделано: %d\nПуть занял: %s%s\n\nИгра выиграна. Можно лететь дальше: космос не кончается." % [
+			client.sectors_seen, client.jumps, _voyage(client.voyage_seconds), _story()]
 	elif _over.visible:
-		_over_text.text = "КАМПАНИЯ ОКОНЧЕНА\n\n%s\n\nПройдено секторов: %d\nДальше всего от начала пути: %d прыжков\nПрыжков сделано: %d\nПродержались: %s\n\nНовую кампанию начинает хозяин игры: выйти в меню и создать игру заново." % [
+		_over_text.text = "КАМПАНИЯ ОКОНЧЕНА\n\n%s\n\nПройдено секторов: %d\nДальше всего от начала пути: %d прыжков\nПрыжков сделано: %d\nПродержались: %s%s\n\nНовую кампанию начинает хозяин игры: выйти в меню и создать игру заново." % [
 			Net.OVER_TEXT[clampi(client.over, 0, Net.OVER_TEXT.size() - 1)],
-			client.sectors_seen, client.farthest, client.jumps, _voyage(client.voyage_seconds)]
+			client.sectors_seen, client.farthest, client.jumps, _voyage(client.voyage_seconds), _story()]
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
 
 	# the jump
@@ -2159,7 +2220,7 @@ func _process(delta: float) -> void:
 		_alert_label.text = Net.ALERT_NAMES[client.alert].to_upper()
 		_alert_label.modulate = Color(1.0, 0.35, 0.3, 0.6 + 0.4 * sin(_alert_time * 4.0)) if client.alert == Net.ALERT_RED \
 			else Color(1.0, 0.85, 0.35)
-	_alert_tint.color.a = (0.04 + 0.03 * sin(_alert_time * 2.6)) if client.alert == Net.ALERT_RED else 0.0
+	_alert_tint.color.a = 0.0                # (v75) the red light of a red alert is in the world now (WorldView)
 
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
 	_info_timer -= delta

@@ -447,7 +447,7 @@ func _most() -> int:
 func _hunters_second() -> void:
 	var s: Sectors = server.sectors
 	var ours: int = server.ship.sector
-	if auto and server.director.auto and ticks_here >= next_hunter:
+	if auto and server.director.auto and ticks_here >= next_hunter and not server.director.quiet():
 		next_hunter = ticks_here + roundi(HUNTER_EVERY * _pace() * Net.TICK_HZ)
 		if hunters.size() + (1 if not _fight.is_empty() else 0) < _most():
 			spawn_hunter()

@@ -376,4 +376,5 @@ func won(captured: bool) -> void:
 	server.chat.say("ПОБЕДА! Флагман пиратов %s. Цель пути достигнута: игра выиграна. Его обломки можно обыскать, а дальше лететь куда угодно." % (
 		"взят на абордаж, его экипаж перебит" if captured else "разбит"))
 	server.crew.tell_campaign()
+	server.to_all(server.crew.summary_packet())   # (v75) the run's story so far, for the victory screen
 	server.save_campaign()
