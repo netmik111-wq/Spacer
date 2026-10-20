@@ -1741,6 +1741,11 @@ Questions".
   a repair, the bot wears a suit with oxygen, and there is **no other way**. Then it holds "use" on the shutter (**3 s**,
   as a player does), it stays up **5 s**, and the bot walks through. Some air escapes, as when a player does it. A bot
   without a suit fetches one from the locker first if there is one; if not, it says it cannot get there.
+- **Shut in with no air**: a suited bot standing in a room with no air whose shutters are down raises one to get out to
+  any work (its log says «поднимает аварийный шлюз, чтобы пройти: наружу из отсека без воздуха»). Air flows into the empty
+  room, never out of a good one into a bad one.
+- **Work with no way to it**: a bot on «Работы» that finds no way to a tray, the engine, a mount or a breech puts that kind
+  of work off for **10 s** and does the next work meanwhile (it used to stand still waiting).
 - **Repairs first**: a bot on «Работы» mends before anything else (before the gun it carries, unless that gun fills its
   last free hand; before rounds, trays and fuel). A **free** bot also comes to mend when something is broken that no
   other bot has taken, and goes back to wandering when it is done. Bots at a post stay there.

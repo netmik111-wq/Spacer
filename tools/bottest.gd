@@ -39,6 +39,7 @@ func _initialize() -> void:
 	_one_bot_per_job()
 	_free_bot_mends()
 	_hand_over()
+	_shut_in()
 	_boarders_wreck()
 	print("bottest: %d failed" % failed)
 	quit(1 if failed > 0 else 0)
@@ -217,6 +218,39 @@ func _hand_over() -> void:
 	var shut := _wait(90, func(): return not server.air.holes.has(hole))
 	_expect(_logged(a, "Передаю работу: %s" % b.name), "the bot with no suit names the suited one")
 	_expect(shut and _logged(b, "беру пробоину"), "and the suited one takes the hole and patches it")
+
+
+func _shut_in() -> void:
+	print("  -- a suited bot shut in a room with no air gets out to its work (CI's salvagetest, 1 run in 20)")
+	_settle()
+	var helm := int(server.stations.spots[Net.POST_HELM][0][0])
+	var hole: int = _hull_cells({server.map.room_of[helm]: true})[0]
+	var room := _room_of_hole(hole)
+	server.systems.breach(hole)
+	_wait(30, func():
+		for c: int in server.map.rooms[room]:
+			if server.map.walk[c] == 1 and server.air.air[c] > 0.1:
+				return false
+		return true)
+	server.air.set_hole(hole, false)          # mended, but its shutters stay down and the room empty
+	var inside := -1
+	for c: int in server.map.rooms[room]:
+		if server.map.walk[c] == 1 and server.map.door_of[c] < 0 and server.air.air[c] < 0.5:
+			inside = c
+	var bot = bots[0]
+	var sealed := true
+	for d: int in _room_doors(room):
+		sealed = sealed and server.doors.is_sealed(d)
+	_expect(inside >= 0 and sealed, "(a room with no air, its shutters down: inside %d, sealed %s, hole %d room %d)" % [inside, sealed, hole, room])
+	_suit(bot)
+	_place(bot, inside)
+	server.chat.bot_lines.clear()
+	server.ship.tank = 100.0
+	server.ship.store[Net.ITEM_FUEL] = 2
+	server.stations.order_asked(cap, bot.slot, Net.POST_REPAIR)
+	var poured := _wait(90, func(): return server.ship.tank >= 200.0)
+	_expect(poured, "it raises a shutter and pours fuel (tank %d, task %d, goal %d)" % [floori(server.ship.tank), bot.bot_task, bot.bot_goal])
+	_expect(_logged(bot, "наружу из отсека без воздуха"), "and says why it raised the shutter")
 
 
 func _boarders_wreck() -> void:

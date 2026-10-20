@@ -148,6 +148,9 @@ Open problems:
 - The bots' log: the crew window (O) keeps every order and job of every bot for the whole game, and the same lines go
   to `crew_log.txt` next to the game.
 - A boarding ship wrecked before it docks stays alongside as a wreck (on the chart, dockable, its fuel can aboard).
+- Looking at the author's old failed CI emails (v68): two of the three tests pass every time now; the third (salvagetest,
+  1 run in 20) was a real bot bug: a suited bot shut in a room with no air stood still. Now it raises a shutter to get out,
+  and work with no way to it is put off for 10 s.
 - New test `tools/bottest.gd` (33 scripts), protocol 49. Questions: https://claude.ai/artifact/Ht1weGfuxFTaiJXPwywy63
   (built on my picks). Build in `/mnt/project-files/builds/v72/`.
 

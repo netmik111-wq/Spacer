@@ -56,6 +56,7 @@ const LAPSE_SECONDS := 5.0           # far or flank, nobody at the controls this
 const SABOTAGE_SECONDS := 8.0        # one of our boarders in a system's room wrecks a point of it this often
 const BOT_PLAN_TICKS := 10           # how often a bot under orders looks again at where to go
 const BOT_AIR := 0.5                 # a bot does not go where the air is thinner than this
+const BOT_SKIP_TICKS := 200          # (v72) how long a bot on work puts off a kind of work it found no way to
 # (v68, the author's F1) the pilot's evade: their shots fired in its moment hit EVADE_DODGE less often
 const EVADE_SECONDS := 1.5           # the moment, for one without piloting skill...
 const EVADE_SKILL := 1.0             # ... and this much longer with the best skill
@@ -92,6 +93,9 @@ var _alert_auto := false             # it went to yellow by itself when a pirate
 var _fight_seen := false
 var volunteers := true               # (v72) free bots come to mend (tests that want things left broken switch it off)
 var _spot_jobs := {}                 # (v72) bot slot -> {spot to mend from: the job's cell}, from its last plan
+var _logged := {}                    # (v72) bot slot -> the work it last told of in the log
+var _forcing := {}                   # (v72) bot slot -> the shutter it last told it raises
+var _skip := {}                      # (v72) bot slot -> {task: tick}: work it found no way to, put off till then
 var _job_words := {}                 # (v72) bot slot -> how the job it has taken is called (for the log)
 var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
 
@@ -526,6 +530,7 @@ func _bots() -> Array:
 func _set_order(q: Player, post: int, by: Player) -> void:
 	if q.order != post:
 		server.chat.bot_log(q, "приказ: %s." % Net.POST_NAMES[post].to_lower())
+		_logged.erase(q.slot)
 	_took(q, -1)
 	q.order = post
 	q.order_by = by.slot if by != null else -1
@@ -642,7 +647,7 @@ func _through_shutter(p: Player) -> bool:
 	## (v72, the author's note: bots did not open the emergency shutter, and mended only after he
 	## had raised it) Its way to a repair leads through a shutter that is down (see _route's
 	## `shutters`): a bot in a suit holds "use" on it until it is forced up (Repairs), then walks on.
-	if p.bot_step <= 0 or p.st.cd > 0 or p.bot_task != TASK_MEND:
+	if p.bot_step <= 0 or p.st.cd > 0 or not p.bot_shutters:
 		return false
 	var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
 	if ahead < 0 or server.systems.lock_door(ahead) or not server.doors.is_sealed(ahead):
@@ -653,7 +658,9 @@ func _through_shutter(p: Player) -> bool:
 		p.self_dirty = true
 	p.using = true
 	p.doing = Net.DOING_GOING
-	server.chat.bot_log(p, "поднимает аварийный шлюз, чтобы пройти: %s" % _job_words.get(p.slot, "к работе"))
+	if _forcing.get(p.slot, -1) != ahead:
+		_forcing[p.slot] = ahead
+		server.chat.bot_log(p, "поднимает аварийный шлюз, чтобы пройти: %s" % _job_words.get(p.slot, "наружу из отсека без воздуха"))
 	return true
 
 
@@ -661,7 +668,7 @@ func _forced_ahead(p: Player) -> bool:
 	## (v72) The door of its next step has just had its shutter forced up (by it, on its way to a
 	## repair): it goes through, though the pressure behind differs.
 	var d := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
-	return d >= 0 and p.bot_task == TASK_MEND and server.tick < server.forced_until[d]
+	return d >= 0 and p.bot_shutters and server.tick < server.forced_until[d]
 
 
 func _volunteers(p: Player) -> bool:
@@ -744,14 +751,27 @@ func _plan(p: Player, here: int) -> void:
 	var wide: bool = p.order == Net.POST_FOLLOW or not server.map.on_ship(here)
 	var suited := p.has_suit()
 	var r := _route(here, goals, wide, suited)
-	if int(r[1]) < 0 and p.bot_task == TASK_MEND and suited and p.tank > 0.2:
-		r = _route(here, goals, wide, suited, true)     # (v72) through shutters that are down, only if no other way
+	p.bot_shutters = false
+	# (v72) through shutters that are down, only if no other way: in a suit, to a repair, or out of a
+	# room with no air it is shut in (it lets air in there, never out of a good room into a bad one)
+	if int(r[1]) < 0 and suited and p.tank > 0.2 and (p.bot_task == TASK_MEND or server.air.air[here] < BOT_AIR):
+		r = _route(here, goals, wide, suited, true)
+		p.bot_shutters = int(r[1]) >= 0
+	if not p.bot_shutters:
+		_forcing.erase(p.slot)
 	p.bot_step = r[0]
 	p.bot_goal = r[1]
 	p.bot_face = int(goals.get(r[1], 0))
 	p.using = false
 	p.doing = Net.DOING_NO_WAY if p.bot_goal < 0 else (Net.DOING_CARRY if p.bot_task in [TASK_LOCKER, TASK_MOUNT] else
 		(Net.DOING_HEAL if p.bot_task == TASK_HEAL else Net.DOING_GOING))
+	if p.bot_goal < 0 and p.order == Net.POST_REPAIR and p.bot_task in [TASK_GARDEN, TASK_FUEL, TASK_LOAD, TASK_MOUNT]:
+		# (v72) no way to this work (a tray behind a shutter that is down...): it does the next work meanwhile
+		var skip: Dictionary = _skip.get(p.slot, {})
+		skip[p.bot_task] = server.tick + BOT_SKIP_TICKS
+		_skip[p.slot] = skip
+		p.bot_plan_tick = -1000
+		return
 	if p.bot_task == TASK_MEND and p.bot_goal < 0:
 		var jobs: Array = (_spot_jobs.get(p.slot, {}) as Dictionary).values()
 		_took(p, -1)
@@ -843,18 +863,19 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 	if server.gunnery.fighting():
 		var need := _mounts_wanting_rounds()
 		if not need.is_empty():
-			for i: int in need:
-				if p.count(mounts.ammo_of(i)) > 0:
-					_add_spots(p, map.guns[i], goals, taken)
-			if not goals.is_empty():
-				return TASK_LOAD
+			if not _put_off(p, TASK_LOAD):
+				for i: int in need:
+					if p.count(mounts.ammo_of(i)) > 0:
+						_add_spots(p, map.guns[i], goals, taken)
+				if not goals.is_empty():
+					return TASK_LOAD
 			for i: int in need:
 				if int(server.ship.store.get(mounts.ammo_of(i), 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
 					_locker_goals(p, goals, taken)
 					if not goals.is_empty():
 						return TASK_LOCKER
 	# (v63) the hydroponic trays
-	for c: int in server.map.trays:
+	for c: int in server.map.trays if not _put_off(p, TASK_GARDEN) else []:
 		if server.garden.can(p, c) == "" and (server.garden.stage[server.garden.tray_of(c)] != Net.GROW_EMPTY or server.garden._best_seed() > 0):
 			_add_spots(p, c, goals, taken)
 	if not goals.is_empty():
@@ -862,7 +883,7 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 	# (v67) fuel: a can from the locker into the tank at the engine
 	if server.ship.tank < BOT_POURS_BELOW:
 		if p.count(Net.ITEM_FUEL) > 0:
-			for c: int in map.engine.keys():
+			for c: int in map.engine.keys() if not _put_off(p, TASK_FUEL) else []:
 				if not server.ship.broken.has(c):
 					_add_spots(p, c, goals, taken)
 			if not goals.is_empty():
@@ -875,7 +896,7 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 	var i := _haul_job(p)
 	p.haul = i
 	if i >= 0:
-		if mounts.wanted[i] == mounts.WANT_DOWN:
+		if mounts.wanted[i] == mounts.WANT_DOWN and not _put_off(p, TASK_MOUNT):
 			_add_spots(p, map.guns[i], goals, taken)
 			return TASK_MOUNT
 		if int(server.ship.store.get(mounts.wanted[i], 0)) > 0:
@@ -883,6 +904,11 @@ func _work_goals(p: Player, goals: Dictionary) -> int:
 			return TASK_LOCKER
 		p.haul = -1                          # (somebody else carries that gun already)
 	return TASK_POST
+
+
+func _put_off(p: Player, task: int) -> bool:
+	## (v72) This kind of work had no way to it a moment ago.
+	return server.tick < int((_skip.get(p.slot, {}) as Dictionary).get(task, -1))
 
 
 func _carry_goals(p: Player, gun: int, goals: Dictionary, taken: Dictionary) -> int:
@@ -959,6 +985,7 @@ func _took(p: Player, job: int) -> void:
 		_job_words.erase(p.slot)
 		return
 	_job_words[p.slot] = _job_text(job)
+	_logged.erase(p.slot)
 	server.chat.bot_log(p, "беру %s." % _job_words[p.slot], true)
 
 
@@ -992,6 +1019,9 @@ func _tell_task(p: Player) -> void:
 				return
 			words = "работы нет, ждёт" if p.order == Net.POST_REPAIR and p.bot_goal < 0 else \
 				("не может встать на пост: %s" % Net.POST_NAMES[p.order].to_lower() if p.bot_goal < 0 else "пост: %s" % Net.POST_NAMES[p.order].to_lower())
+	if _logged.get(p.slot, "") == words:
+		return                               # (a fresh look at the same work is not news)
+	_logged[p.slot] = words
 	server.chat.bot_log(p, words + ".")
 
 

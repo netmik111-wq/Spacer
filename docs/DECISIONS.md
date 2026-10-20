@@ -1148,3 +1148,9 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   (`Derelict.drop_thing`) instead of going into the hold. A boarding ship whose crew we kill in its quarters still breaks
   off and goes unpaid (unchanged: no hull damage, it is not wrecked).
 
+
+- (v72, found looking at the author's old failed CI runs) salvagetest failed 1 run in 20 on main too: a suited bot on «Работы»
+  stood 90 s in a room left with no air behind its own shutters (no way out for anything but a repair), or kept picking a tray
+  it had no way to. So a suited bot may raise a shutter to get **out** of a room with no air for any work (air only flows in),
+  and a kind of work with no way to it is put off for 10 s (`Stations._skip`, `BOT_SKIP_TICKS`). The log tells each piece of
+  work once (`_logged`) and each shutter once (`_forcing`), not on every fresh look.
