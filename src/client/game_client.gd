@@ -153,6 +153,9 @@ var their_hit := 0                   # and to theirs
 var posts_manned := 0                # Net.STATION_* bits
 var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*)]
 var alert := Net.ALERT_GREEN         # (v68) the ship's alert level
+var bot_log: Array = []              # (v72) the bots' log for this game: per line [seconds since the game began, bot's name, text]
+var bot_log_count := 0               # lines received in all (the crew window adds the new ones)
+var _log_file: FileAccess = null     # (v72) and crew_log.txt, where the same lines go
 var evade_left := 0.0                # (v68) seconds of the pilot's evade still going
 var evade_rest := 0                  # and seconds until it can be pressed again
 var meteor_left := 0.0               # (v70) seconds until a meteor seen coming strikes (0 = none)
@@ -1800,6 +1803,48 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_CHAT:
 			var n := pkt.decode_u16(4)
 			chat.emit(pkt.decode_u16(1), pkt[3], pkt.slice(6, 6 + n).get_string_from_utf8())
+		Net.S_BOTLOG:
+			if pkt.size() >= 9:
+				var n := pkt.decode_u16(7)
+				_bot_line(pkt.decode_u32(3), player_name(pkt.decode_u16(1)), pkt.slice(9, 9 + n).get_string_from_utf8())
+
+
+const LOG_KEPT := 2000               # (v72) lines of the bots' log the crew window keeps (the file keeps all)
+const LOG_FILE_MAX := 4 * 1024 * 1024
+
+
+static func log_path() -> String:
+	## (v72) crew_log.txt next to the game (run from the project: in user://), so the author can send it.
+	if OS.has_feature("template"):
+		return OS.get_executable_path().get_base_dir().path_join("crew_log.txt")
+	return "user://crew_log.txt"
+
+
+func _bot_line(seconds: int, who: String, text: String) -> void:
+	bot_log.append([seconds, who, text])
+	bot_log_count += 1
+	if bot_log.size() > LOG_KEPT:
+		bot_log = bot_log.slice(bot_log.size() - LOG_KEPT)
+	if DisplayServer.get_name() == "headless":
+		return                               # (test clients and the server keep no file)
+	if _log_file == null:
+		var path := log_path()
+		_log_file = FileAccess.open(path, FileAccess.READ_WRITE) if FileAccess.file_exists(path) else null
+		if _log_file != null and _log_file.get_length() > LOG_FILE_MAX:
+			_log_file.close()
+			_log_file = null
+		if _log_file == null:
+			_log_file = FileAccess.open(path, FileAccess.WRITE)
+		if _log_file == null:
+			return
+		_log_file.seek_end()
+		_log_file.store_line("=== Игра %s ===" % Time.get_datetime_string_from_system(false, true))
+	_log_file.store_line("%s  %s: %s" % [clock(seconds), who, text])
+	_log_file.flush()
+
+
+static func clock(seconds: int) -> String:
+	return "%d:%02d:%02d" % [seconds / 3600, seconds / 60 % 60, seconds % 60]
 
 
 func _ours(pkt: PackedByteArray) -> bool:

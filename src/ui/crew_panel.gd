@@ -17,6 +17,9 @@ var _labels: Array = []              # per bot row: its Label
 var _buttons: Array = []             # per bot row: its Buttons, one per Net.POST_*
 var _all: Button
 var _free: Button
+var _log: RichTextLabel              # (v72) the bots' log
+var _log_shown := 0                  # GameClient.bot_log_count already in it
+var _log_any := false
 
 
 func setup(p_client: GameClient) -> void:
@@ -78,6 +81,18 @@ func setup(p_client: GameClient) -> void:
 	_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_hint.custom_minimum_size = Vector2(720, 0)
 	box.add_child(_hint)
+	# (v72, the author's note) the bots' log: what each bot set about, kept for the whole game
+	var head2 := Label.new()
+	head2.text = "Журнал ботов (весь за игру; он же в файле crew_log.txt рядом с игрой)"
+	head2.add_theme_font_size_override("font_size", 15)
+	box.add_child(head2)
+	_log = RichTextLabel.new()
+	_log.custom_minimum_size = Vector2(720, 200)
+	_log.scroll_following = true
+	_log.selection_enabled = true
+	_log.focus_mode = Control.FOCUS_NONE
+	_log.add_theme_font_size_override("normal_font_size", 13)
+	box.add_child(_log)
 
 
 func toggle() -> void:
@@ -90,6 +105,7 @@ func _process(_delta: float) -> void:
 		return
 	var may := client.may_order()
 	_status.text = _status_text()
+	_add_log()
 	_all.disabled = not may or client.crew_bots.is_empty()
 	_free.disabled = not may or client.crew_bots.is_empty()
 	_hint.text = ("" if may else "Приказы отдаёт капитан. ") + \
@@ -110,6 +126,17 @@ func _process(_delta: float) -> void:
 			var button: Button = buttons[post]
 			button.button_pressed = int(b[1]) == post
 			button.disabled = not may
+
+
+func _add_log() -> void:
+	var fresh := mini(client.bot_log_count - _log_shown, client.bot_log.size())
+	_log_shown = client.bot_log_count
+	for i in range(client.bot_log.size() - fresh, client.bot_log.size()):
+		var e: Array = client.bot_log[i]
+		if _log_any:
+			_log.newline()
+		_log_any = true
+		_log.add_text("%s  %s: %s" % [GameClient.clock(int(e[0])), e[1], e[2]])
 
 
 func _build_rows() -> void:

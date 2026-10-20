@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v71 (version 0.64).
+Last updated: build v72 (version 0.65).
 
 Contents:
 
@@ -37,6 +37,7 @@ Contents:
 27. [Fights for the whole crew (v68)](#27-fights-for-the-whole-crew-v68)
 28. [People over bots (v70)](#28-people-over-bots-v70)
 29. [Upkeep: hunger, the galley, complex repairs (v71)](#29-upkeep-hunger-the-galley-complex-repairs-v71)
+30. [Bots at work and the bots' log (v72)](#30-bots-at-work-and-the-bots-log-v72)
 
 ---
 
@@ -693,7 +694,8 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 ### Bots under orders (v55)
 
 - The **crew window** (key **O**) shows which posts are manned, our dodge and position, and a row per bot with
-  its order and what it is doing. Orders: **free** (wanders, as before), **controls**, **guns**, **engine**,
+  its order and what it is doing. Orders: **free** (wanders, as before; since v72 it comes to mend what is broken),
+  **controls**, **guns**, **engine**,
   **shields**, **repair**, **follow me**. «Все по местам» sends every bot to a post no player mans (controls, guns,
   shields, engine; the rest repair); «Отбой» frees them all.
 - Orders come from the **captain**; while no captain is aboard, from anybody.
@@ -724,7 +726,8 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 
 ### Wrecked raider
 
-- A raider our guns wreck (hull at 0, or its whole crew killed in its quarters) **stays alongside** as a
+- A raider our guns wreck (hull at 0, or its whole crew killed in its quarters), and since v72 a boarding ship whose hull
+  our guns bring to 0 before it docks, **stays alongside** as a
   dead hulk: no power, no light, doors open by hand. The ship is paid its class's **reward** (25–80 credits; no canister).
 - It can be reached through open space or **docked with** from the ship-control console
   («Пристыковаться к разбитому кораблю»). Aboard: what it carried (2–4 things on the floor plus 1–3 more),
@@ -854,8 +857,9 @@ cutting beam → Reaper; autocannon → railgun → Hammer.
   sells it: the top shield generator «Эгида» does the same (see "Ship gear"). A ship that bought it keeps it.
 - Since v59 the shield's refill and the reactor's power depend on the **gear** installed (see "Ship gear").
 - The only target is the pirate ship, until it docks. Its hull takes its class's damage (**8–20**). A boarding
-  ship, once wrecked, leaves with its crew, and the ship is credited its class's reward and **1** fuel canister;
-  a raider stays as a wreck (see "Wrecked raider").
+  ship or a raider, once wrecked, stays alongside as a wreck and the ship is credited its class's reward (see "Wrecked
+  raider"). (v72) A boarding ship wrecked before it docks no longer flies off: its **1** fuel canister lies aboard the
+  wreck instead of going into the hold.
 - **Its shield and guns** depend on its class (see "Kinds of pirate ship"); its shield has the same rules as
   ours. Its guns charge slower than ours by its class, and slower still as its weapons room is worn. Its rockets
   never run out.
@@ -1726,3 +1730,34 @@ The author's L1, L2 and H1 answers (`/mnt/project-files/plans/every-part-plan.md
 - **New things**: toolbox (**20** cr., the locker starts with **2**), circuit board (**12** cr., **2**). Boards are also
   found on derelicts and in containers, and a captured pirate ship gives one.
 
+## 30. Bots at work and the bots' log (v72)
+
+The author's notebook note (a video: bots stood by while a hole was behind an emergency shutter, and mended only after he
+raised it by hand): "bots don't open up the door ... 1) tell in chat that one of the bots is taking the work, 2) priority of
+the job: repairs always first, 3) logs of what bots are doing, not deleted like normal chat". Questions page "Spacer v72
+Questions".
+
+- **Shutters on the way to a repair**: a bot's way never goes through an emergency shutter that is down, unless the job is
+  a repair, the bot wears a suit with oxygen, and there is **no other way**. Then it holds "use" on the shutter (**3 s**,
+  as a player does), it stays up **5 s**, and the bot walks through. Some air escapes, as when a player does it. A bot
+  without a suit fetches one from the locker first if there is one; if not, it says it cannot get there.
+- **Shut in with no air**: a suited bot standing in a room with no air whose shutters are down raises one to get out to
+  any work (its log says «поднимает аварийный шлюз, чтобы пройти: наружу из отсека без воздуха»). Air flows into the empty
+  room, never out of a good one into a bad one.
+- **Work with no way to it**: a bot on «Работы» that finds no way to a tray, the engine, a mount or a breech puts that kind
+  of work off for **10 s** and does the next work meanwhile (it used to stand still waiting).
+- **Repairs first**: a bot on «Работы» mends before anything else (before the gun it carries, unless that gun fills its
+  last free hand; before rounds, trays and fuel). A **free** bot also comes to mend when something is broken that no
+  other bot has taken, and goes back to wandering when it is done. Bots at a post stay there.
+- **One bot per job**: each hole, broken machine or door gone wrong is taken by one bot; the others take other jobs.
+- **In chat**: a bot that takes a repair says so to everybody: «Бот 7: беру пробоину (нижняя палуба, рядом двигатель).»;
+  a bot on «Работы» that cannot get to one says «не могу добраться: ...» with the reason; when the reason is a missing
+  suit and another mending bot wears one, it adds «Передаю работу: Бот N.», and that bot takes the job (the author's
+  comment on L1). Nothing else goes to chat.
+- **The bots' log**: the crew window (**O**) has «Журнал ботов» below the rows of bots: every order a bot got, every job
+  it set about (locker and what for, mount, oxygen, autodoc, trays, fuel, loading, repairs taken and done, shutters raised,
+  "cannot get there"), with the game time, kept for the whole game (the newest **2000** lines in the window). The same
+  lines go to the file **crew_log.txt** next to the game (or in the game's user folder when run from the project); a new
+  game adds a header line, and the file starts afresh past **4 MB**.
+- **The boarders' wreck**: see "Ship weapons": a boarding ship we wreck before it docks stays as a wreck to dock with and
+  search, with survivors rolled as for a raider (**70%** all dead, else they fight or join).

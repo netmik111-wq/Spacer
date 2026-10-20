@@ -411,7 +411,8 @@ func _bots_pour() -> void:
 		_run(Net.TICK_HZ)
 		t += Net.TICK_HZ
 	_expect(server.ship.tank >= 300.0 - 0.1 or (server.ship.tank >= 200.0 and int(server.ship.store.get(Net.ITEM_FUEL, 0)) < 2),
-		"a bot on work pours cans from the locker into a low tank (%d after %d s)" % [floori(server.ship.tank), t / Net.TICK_HZ])
+		"a bot on work pours cans from the locker into a low tank (%d after %d s; task %d, goal %d, air where it stands %.2f)" % [floori(server.ship.tank),
+		t / Net.TICK_HZ, bot.bot_task, bot.bot_goal, server.air.air[bot.st.y * server.map.width + bot.st.x]])
 	server.crew.remove(bot)
 	server.ship.tank = Net.FUEL_START
 

@@ -12,6 +12,7 @@ const CHAT_BURST := 5               # messages allowed per CHAT_WINDOW_MS
 const CHAT_WINDOW_MS := 5000
 
 var server: GameServer
+var bot_lines: Array = []            # (v72, tests: with keep_heard) every line of the bots' log, [bot slot, text]
 
 
 func setup(p_server: GameServer) -> void:
@@ -211,3 +212,29 @@ func tell(p: Player, text: String) -> void:
 		return
 	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_SHIP, text)
 	p.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
+func bot_log(p: Player, text: String, aloud: bool = false) -> void:
+	## (v72, the author's note: "logs of what bots are doing, not deleted like normal chat, so I
+	## can track what is happening on the ship and bugs in the bots") A line in the bots' log,
+	## kept by every client for the whole game (the crew window and crew_log.txt). The same line
+	## twice in a row is not logged again. `aloud`: the bot also says it in everybody's chat
+	## (repairs only: the author's "tell in chat that one of the bots is taking the work").
+	if text == p.bot_said:
+		return
+	p.bot_said = text
+	var body := text.to_utf8_buffer()
+	var msg := PackedByteArray([Net.S_BOTLOG, 0, 0, 0, 0, 0, 0, 0, 0])
+	msg.encode_u16(1, p.slot)
+	msg.encode_u32(3, server.tick / Net.TICK_HZ)
+	msg.encode_u16(7, body.size())
+	msg.append_array(body)
+	for q: Player in server.players:
+		if q != null and q.peer != null:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+	if server.keep_heard:
+		bot_lines.append([p.slot, text])
+	if aloud:
+		say("%s: %s" % [p.name, text])
+	else:
+		server.log_line.emit("[боты] %s: %s" % [p.name, text])

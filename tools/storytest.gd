@@ -457,6 +457,9 @@ func _trays() -> void:
 	# no power: it stands still, but mushrooms grow in the dark
 	server.ship.store[Net.ITEM_FOOD] = 50
 	gd.plant(1, Plants.seed_item(Plants.POTATO))
+	for q in server.players:
+		if q != null and q.bot and not q.corpse:
+			server.stations._set_order(q, Net.POST_HELM, null)   # (v72) a free bot would come to mend the engine
 	server.ship.broken[server.map.engine.keys()[0]] = true
 	server.power.set_charge(0.0)
 	var a := gd.growth[0]

@@ -85,6 +85,9 @@ var bot_step := 0                    # its next step: a direction, -1 for the la
 var bot_task := 0                    # (v60) what the bot's way leads to (Stations.TASK_*)
 var haul := -1                       # (v60) the gun mount whose order the bot is carrying out (-1 = none)
 var bot_healing := false             # (v60) the bot lies in the autodoc until it is whole enough
+var bot_job := -1                    # (v72) the repair job (its cell) this bot has taken: no other bot takes it
+var bot_said := ""                   # (v72) the last line it put in the bots' log (the same is not logged twice)
+var bot_shutters := false            # (v72) its way goes through emergency shutters that are down: it forces them up
 var home := -1                       # (v55) a pirate on its own ship: its post, a cell of that ship's drawing
 var hold := -1                       # (v57) a pirate the flagship put aboard: the cell of our bridge it holds
 var job := 0                         # Net.JOB_*: its access (st.access) and which skills grow quickly
