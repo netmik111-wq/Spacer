@@ -267,6 +267,8 @@ func _think() -> void:
 	if _breathe():
 		return
 	cap.using = false                        # (held again below while it mends a broken console)
+	if _repel():
+		return
 	var g = server.gunnery
 	if g.fighting():
 		_fight_tick()
@@ -295,6 +297,43 @@ func _think() -> void:
 	if _salvage():
 		return
 	_travel()
+
+
+func _repel() -> bool:
+	## (v75) Boarders aboard: it fights them as a player would, with a pistol from the armoury
+	## (stepping up beside the nearest at once, as it steps to consoles). The bots never fight,
+	## so without this one boarder could kill the whole crew one by one.
+	var map = server.map
+	var foe = null
+	var best := INF
+	for q in server.players:
+		if q == null or not q.pirate or q.prisoner or q.taken or q.corpse or q.cond == Net.COND_DEAD:
+			continue
+		if not map.on_ship(q.st.y * map.width + q.st.x):
+			continue
+		var d := Vector2(q.st.x, q.st.y).distance_to(Vector2(cap.st.x, cap.st.y))
+		if d < best:
+			best = d
+			foe = q
+	if foe == null:
+		return false
+	if Items.rounds(cap.in_hand()) < 0:
+		cap.slots[cap.hand] = Items.loaded(Net.ITEM_PISTOL)
+		rec["boarders_fought"] = int(rec.get("boarders_fought", 0)) + 1
+	elif Items.rounds(cap.in_hand()) == 0:
+		cap.slots[cap.hand] = Items.loaded(cap.in_hand())   # (a magazine from the armoury)
+	if best > 1.5:
+		for dir in range(1, 5):
+			var x: int = foe.st.x + Net.DX[dir] * 2
+			var y: int = foe.st.y + Net.DY[dir] * 2
+			var mx: int = foe.st.x + Net.DX[dir]
+			var my: int = foe.st.y + Net.DY[dir]
+			if map.walkable(x, y) and map.walkable(mx, my) and map.door_at(mx, my) < 0 and map.on_ship(y * map.width + x):
+				cap.st.place(x, y)
+				cap.self_dirty = true
+				break
+	server.combat.use_at(cap, server.tick, Vector2(foe.st.x, foe.st.y))
+	return true
 
 
 func _breathe() -> bool:

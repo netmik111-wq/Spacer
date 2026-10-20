@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v74 (version 0.67, art and walking) is the latest. Plans one to four are done except the darkness front (the
+Build v75 (version 0.68, polish) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -63,7 +63,12 @@ key badges in hints, names under the mouse, hotbar drag, chat tabs and repeats, 
 zoom, ✕ and number keys on consoles, the bridge's alert panel.
 v74 art and walking: things drawn in hands, a `sprites/` folder of simple base pictures an artist replaces, diagonal
 walking (1.4x a step, 8 drawn directions), a first-shift checklist and a help book (H); bots keep their job while fetching
-and mend their own post's console. Later: bots and pirates walking on a slant (his word), fear (its own build) and a fire
+and mend their own post's console. v75 polish (his 20 answers, `https://claude.ai/artifact/AoY7KnfqbGL6JzfNhYGoS5`, and five notebook notes): a four-cell brig
+and cuffs that slip only when awake, whole and unwatched; bots mend their mount, leave airless rooms, notice when stuck,
+wait at a busy door and say only breaches aloud; hits flash and bleed, red light at red alert, music and ship sounds; the
+run's story at the end, the host's address and players, a quiet first 5 minutes, a bug-report zip; deep wounds kill
+slowly (the simulator found a game that could never end); the simulator salvages, and a soak test.
+Later: bots and pirates walking on a slant (his word), fear (its own build) and a fire
 question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -95,7 +100,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 34 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 35 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -130,6 +135,8 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/upkeeptest.gd (since v71: hunger slows and kills, the galley and its dishes, complex repairs, bots' parts)
     godot --headless --path . --script res://tools/bottest.gd (since v72: bots through shutters, one bot per job, free bots mend, the log, the boarders' wreck)
     godot --headless --path . --script res://tools/walktest.gd (since v74: 8 ways, slant steps, corners, doorways, use and sight on a slant, the look byte)
+    godot --headless --path . --script res://tools/polishtest.gd (since v75: gunner mends its mount, bots leave airless rooms, stuck shutters, busy doors, breaches aloud, quiet start, summary)
+    GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -153,7 +160,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 34 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 35 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -231,10 +238,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`, `bench_view.gd` (v58, the workbench), `power_view.gd` (v61),
   `comms_view.gd` (v63, the comms console), `galley_view.gd` (v71, the galley's stove), `help_book.gd` and
   `first_shift.gd` (v74, H and the first-shift checklist).
+  (v75) `src/client/music.gd` (one music player with a crossfade, menu and fight), `src/client/bug_report.gd` (the zip).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
   under xvfb-run), `playthrough.gd` (2026-10-19: a script captain plays whole campaigns and records every number,
-  `-- OUT_DIR runs first mode hours stay`), `simreport.py` (gathers those records into tables for the records page), `spritelist.gd` (v74: writes
+  `-- OUT_DIR runs first mode hours stay`; since v75 it salvages and sells, and SOAK=1 makes it the soak test), `simreport.py` (gathers those records into tables for the records page), `spritelist.gd` (v74: writes
   `dist_files/sprites/README.txt`, the names of every replaceable picture; rerun when items are added).
   `maps/`: ship blueprints (`*.txt`, built to `*.json`).
 
@@ -377,6 +385,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   directions go to `Net.DIRS`, never 4. A slant step's time is `Mover.slant_span`; the self packet carries the span. Bots
   and pirates still give only 1..4. Load pictures through `Sprites.sheet(name)`, never `load("res://assets/...png")`, or the
   `sprites/` folder won't replace them. `S_OUTFIT` carries the kind in hand (`GameClient.held_by`).
+- (v75) The first 5 minutes of a campaign are quiet on easy and normal (`Director.quiet()`; the road's hunters wait too):
+  a test that wants events or hunters at once sets `server.director.quiet_start = false`. A brig is a `@ deck x y brig` line
+  (`ShipMap.is_brig`), not a lock. A prisoner slips cuffs only awake, above `Prisons.WHOLE_ENOUGH` and unwatched (none of
+  ours awake in his room). Bots may drop a goal as stuck (`Stations.stuck`, 20 s with no new cell, 60 s avoided): a test that
+  holds a bot still on purpose lets go of `bot_goal`. Only breaches are said aloud by bots. Unconscious with wounds of 100+
+  dies slowly (`Vitals.DYING`). `S_HIT` and `S_SUMMARY` are new (protocol 52). The client's sound kinds go through
+  `WorldView.SOUND_LOOK`: one entry per `Net.SOUND_*`, or the new kind is never played (10–15 were silent until v75).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

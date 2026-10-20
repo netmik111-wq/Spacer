@@ -154,6 +154,28 @@ Open problems:
   needs in red, yellow and green on the sector console and the ship's controls.
 - Protocol 50. Questions: https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS. Build in `/mnt/project-files/builds/v73/`.
 
+### v75 (polish; his 20 answers on "Spacer v75 Polish", all the recommended picks, and five notebook notes)
+- Prisoners: a four-cell brig under the armoury (`@ deck x y brig`), cuffs slip only when awake, above half health and
+  with none of ours in the room (his note: a prisoner in critical health got a pipe and escaped); no food for prisoners;
+  brig hints on the holomap and under the mouse.
+- Bots: a gunner mends its broken mount (his note), a bot with nothing to do leaves a room with no air (his note), a bot
+  that reaches no new cell for 20 s is stuck and tries something else (also the same shutter forced 3 times: his «×5»
+  note), two bots do not crowd a doorway, only breaches are said in «Всё». The old line «Воздух сам не вернётся» now says
+  the vents bring the air back.
+- Feel: hits flash red, leave blood and sound; broken machines spark; red alert tints the light; code-made menu music
+  and a fight drone with their own slider; vent, pipe and hull-creak sounds. Sound kinds 10–15 had never played: fixed.
+- Start and end: the run's story on the last screen (`S_SUMMARY`), the host's address with a copy button and the
+  player list in Esc, a quiet first 5 minutes on easy and normal, a bug-report zip button.
+- The simulator (S1): the script captain now sweeps systems for places, takes them, works anomalies and gas clouds,
+  cuts scrap, fetches floating finds, sells at traders and fights boarders. 20 games
+  (`/mnt/project-files/sims/2026-10-20/`): 0 won (3 of 20 before v67), on average about 150 credits earned against
+  400 before, now mostly from selling finds (visiting no longer pays since v67); the hull loses about 280 a game (240 of
+  it in 17 fights) and only about 100 is mended. No numbers were changed: they wait for the author.
+- The simulator found a game that could never end: everyone out cold with boarders aboard, wounds over 100, nobody
+  waking or dying. Such wounds now kill in about 3 minutes unless treated.
+- The soak test (S3, `tools/soak.sh`): 2 game hours with 7 bots: tick at most 25 ms, 1 ms on average, no growth.
+- New test `tools/polishtest.gd` (35 scripts). Protocol 52. Build in `/mnt/project-files/builds/v75/`.
+
 ### v74 (art and walking; his answers N2–N7, L1 and Z1 "B", his second-opinion answers and his notebook)
 - Walking on a slant: two keys at once, 1.4 times a straight step (5 or 6 ticks), no cutting wall corners, doorways
   straight, sliding along a wall; 8 facings for sight, the flashlight, turning and using. Bots and pirates still walk

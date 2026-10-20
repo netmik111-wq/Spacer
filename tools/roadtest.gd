@@ -47,6 +47,7 @@ func _new_server(port: int) -> GameServer:
 		print(problem)
 		return null
 	s.director.auto = false
+	s.director.quiet_start = false   # (v75) hunters come at once
 	s.story.auto = false
 	s.road.auto = false
 	s.road.breather = 0.0          # (v69) the next hunter waits after a fight: fixtest checks that
