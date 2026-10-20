@@ -1171,7 +1171,8 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
 - **Pirates pacing** (the rare airlocktest failure left from v72, 1 run in ~200 on main too): a pirate kept its planned
   step for `PLAN_EVERY` (10) ticks, and steps in a chamber take 4, so near its goal it walked one cell past, turned, walked
   past again, and could pace between the airlock and space for good. `Pirates.think` now also plans again before each new
-  step once it stands on a new cell (`Player.ai_plan_cell`). 600 runs clean after.
+  step once it stands on a new cell (`Player.ai_plan_cell`). 600 runs clean after. A walking pirate now never stands at cd 0, so a kidnapper grabs
+  at `cd <= 1` (as turning does since v70), or it walked past the one it came for.
 - **The shutter "one tap"** (his note) was a hold already: `Repairs._work_done` resets on letting go. Kept; the ring now
   shows the hold.
 - **Using things**: the right-click menu (U2 "A") lists only what can be done there; «Работать, пока не готово» holds E for

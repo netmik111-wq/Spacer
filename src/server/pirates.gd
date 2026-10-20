@@ -579,7 +579,8 @@ func _pursue(p) -> bool:
 			var victim = _victim(p)
 			if victim == null:
 				return false                 # nobody down yet: it roams and fights as any other
-			if absi(victim.st.x - p.st.x) + absi(victim.st.y - p.st.y) <= 1 and p.st.cd == 0:
+			# (v73) cd 1, not 0: a pirate that plans before each step never stands at cd 0 while it walks
+			if absi(victim.st.x - p.st.x) + absi(victim.st.y - p.st.y) <= 1 and p.st.cd <= 1:
 				_stop(p)
 				p.dragging = victim.slot
 				victim.dragged_by = p.slot
