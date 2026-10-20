@@ -151,6 +151,34 @@ func _video_tab() -> Control:
 	_check(page, "Показывать число кадров в секунду", Options.show_fps, func(on: bool) -> void: Options.show_fps = on)
 	_check(page, "Белая вспышка после прыжка", Options.flash, func(on: bool) -> void: Options.flash = on)
 	_slider(page, "Тряска при попаданиях", Options.shake, func(v: float) -> void: Options.shake = v)
+	# (v73, the author's H5) the size of the interface and its text
+	var size_row := HBoxContainer.new()
+	size_row.add_theme_constant_override("separation", 12)
+	page.add_child(size_row)
+	var size_label := Label.new()
+	size_label.text = "Размер интерфейса и текста"
+	size_label.custom_minimum_size = Vector2(220, 0)
+	size_row.add_child(size_label)
+	var size_slider := HSlider.new()
+	size_slider.min_value = 75
+	size_slider.max_value = 150
+	size_slider.step = 5
+	size_slider.value = roundf(Options.ui_scale * 100.0)
+	size_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	size_row.add_child(size_slider)
+	var size_shown := Label.new()
+	size_shown.custom_minimum_size = Vector2(48, 0)
+	size_shown.text = "%d%%" % int(size_slider.value)
+	size_row.add_child(size_shown)
+	# taken when the slider is let go: the window itself grows with it
+	size_slider.value_changed.connect(func(v: float) -> void:
+		size_shown.text = "%d%%" % int(v)
+		if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			Options.ui_scale = v / 100.0)                 # (keys, the wheel)
+	size_slider.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and not (event as InputEventMouseButton).pressed:
+			Options.ui_scale = size_slider.value / 100.0)
 	return page.get_parent()
 
 

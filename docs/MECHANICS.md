@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v72 (version 0.65).
+Last updated: build v73 (version 0.66).
 
 Contents:
 
@@ -38,6 +38,7 @@ Contents:
 28. [People over bots (v70)](#28-people-over-bots-v70)
 29. [Upkeep: hunger, the galley, complex repairs (v71)](#29-upkeep-hunger-the-galley-complex-repairs-v71)
 30. [Bots at work and the bots' log (v72)](#30-bots-at-work-and-the-bots-log-v72)
+31. [A friendlier game (v73)](#31-a-friendlier-game-v73)
 
 ---
 
@@ -141,6 +142,9 @@ Contents:
   - With no air reserve there is nothing to pump in: the only option is to raise the inner shutter by hand.
   - (v54) With a ship **docked** at the outer door that holds air, the pump brings the chamber to **that ship's
     pressure** instead (in or out), so the outer door opens onto it; the inner door then follows the usual rule.
+  - (v73, the author's note: stuck in the airlock beside a pirate ship) a chamber **already at the docked ship's
+    pressure** is pumped back to **our own side's pressure** (in or out), so the inner door opens; the inner door's
+    button does the same. Before v73 the pump only knew the docked ship's pressure, and the way home was by hand.
 - An open outer door vents the air in its doorway into space.
 - (v66, the author's request) **A button by each airlock door**, from the corridor, from the chamber and from space:
   pressing **E** on a shut airlock door held by its shutter runs the chamber's pump so that this door can open (in for
@@ -1447,7 +1451,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 | 1–6, mouse wheel | what's in hand |
 | Z | use the item in hand (flashlight) |
 | G | drop the item on the floor |
-| Mouse click | on something within reach: as E (pick up, console, machine, repair while held); elsewhere: shot, blow, healing |
+| Mouse click | on something within reach: as E (pick up, console, machine, repair while held); (v73) on something diagonally next to you: one step to the side, then as E; elsewhere: shot, blow, healing |
+| Right click | (v73) a menu of what can be done there: use, work until done, drag, look; on a bot of ours, its orders |
+| Ctrl + wheel | (v73) zoom the view one step in or out (three steps in all) |
 | R | return after death (takes one from the reserve) |
 | Mouse over | (v53) something usable you can see gets an outline, as in SS13: bright yellow within reach, faint grey farther off; since v54 it hugs the thing itself (a machine on a wall, things on the floor, a body), a door, hole or ladder keeps its cell's square |
 | I, Tab | inventory window |
@@ -1467,7 +1473,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   fight (v56) (each 0–100%), mute.
 - **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
   in the top left corner (shown even while F1's status is hidden), the white flash after a jump,
-  the screen shaking when the hull is hit (v56, 0–100%).
+  the screen shaking when the hull is hit (v56, 0–100%), (v73) the size of the interface and its text (75–150%).
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
@@ -1761,3 +1767,49 @@ Questions".
   game adds a header line, and the file starts afresh past **4 MB**.
 - **The boarders' wreck**: see "Ship weapons": a boarding ship we wreck before it docks stays as a wreck to dock with and
   search, with survivors rolled as for a raider (**70%** all dead, else they fight or join).
+
+## 31. A friendlier game (v73)
+
+The author's request: "polish the game ... very friendly UI for everything so it's very easy to interact with", and his
+answers on the page "Spacer v73 Friendly Game" (24 questions). Art (items drawn in hands, the sprites folder), diagonal
+walking and the first-shift checklist are the next build.
+
+- **Fixes.** The airlock pump takes a chamber at a docked ship's pressure back to ours (see "Two-door airlock"). «Ещё один
+  охотник поджидает…» is said once per hunter: a wreck left alongside no longer counts as a fight (it restarted the hunter's
+  breather every second, and the line came every second).
+- **The thing E acts on** is outlined (the same thin outline as under the mouse) while the mouse is on nothing usable.
+- **A ring** fills over the thing while "use" is held on it (mending, forcing, pouring, cutting...); the old bar stays for
+  work with the thing in hand (bandaging).
+- **Names under the mouse**: a small label beside the pointer names what is there: a person (bot, pirate, our robot,
+  unconscious, dead), the machine on the wall (and «не работает»), a door and its state (open, shut, its shutter down, a
+  lock, jammed, welded, blast-locked), a hole, what lies on the floor; then «ЛКМ: использовать    ПКМ: действия» or only
+  «ПКМ: действия» when it is out of reach. People and floor things are named only where we can see.
+- **Right-click menu**: «Использовать» (as E or a click), «Работать, пока не готово» (holds E until the job is done, a
+  move key is pressed or 30 s pass), «Шагнуть и использовать» (diagonally next to us), «Тащить» (somebody lying next to
+  us), «Отпустить», «Осмотреть» (the label into the chat), and on a bot of ours every order (the crew window's posts) with
+  a tick at its present one.
+- **Diagonal use**: a click on a usable thing diagonally next to us takes one step to the side (a free floor cell, not a
+  door) and then uses it.
+- **Hints** at the bottom draw keys as badges: «Держите E, чтобы починить» shows as [держать E] починить, «E: …» as [E] …,
+  «E или щелчок: …» as [E / ЛКМ] … (with the keys as set).
+- **HUD labels**: pointing at the heart monitor shows health («Здоровье: 80 из 100»), at the oxygen bar the tank's %, at
+  each lamp what it means.
+- **Hotbar**: number keys in the corner of slots 1–6; pointing at a slot names its thing; a thing dragged onto another slot
+  trades places with it (also in the inventory window), dragged off the bar it is put on the floor.
+- **Chat**: with the chat open (Enter) it shows up to **18** lines and tabs: «Всё», «Корабль» (the ship's lines and
+  warnings), «Рация» (radio and intercom), «Боты» (the bots' log). A line said again within **60 s** joins the last one as
+  «×N».
+- **Danger banners**: a breach, boarders (cut in, teleported, an assault drone in), a bomb, an enemy ship attacking,
+  forced docking, a hunter coming, the flagship coming or boarding, the crew down: a red banner at the top for **4 s**
+  with a chime (heard only in air), as well as the chat line. The client adds its own when the hull falls below **30%**
+  (again after it is mended past 50%).
+- **Interface size**: in the settings («Изображение»), 75–150% in steps of 5; the text grows with it.
+- **Zoom**: Ctrl + wheel, one whole step closer or farther (the wheel alone still turns through the slots).
+- **Consoles**: every console's frame has an ✕ in the corner (as Esc and E). Keys: at the gun console **1–9** fire that gun
+  and **Space** fires all that are ready; at the sector console and the ship's controls **1–9** press that jump button (the
+  buttons are numbered); at the supply locker **1–9** pick a tab.
+- **Alert panel**: the sector console and the ship's controls show «Состояние корабля» on top: one line per need,
+  red/yellow/green, worst first: hull (red below 35%, yellow below 70%), holes, no power, broken machines (red for the
+  engine or the helm), fuel (red below one jump, yellow below three), the air reserve (red below 15%, yellow below 40%),
+  food (red at none, yellow below two jumps for everyone), the main SMES below 15%, an empty crew reserve; «Всё в порядке»
+  in green when nothing is wrong.

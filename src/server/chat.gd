@@ -178,6 +178,15 @@ func say(text: String) -> void:
 	server.log_line.emit("[корабль] %s" % text)
 
 
+func alarm(text: String) -> void:
+	## (v73, the author's H4) A danger from the ship: as say(), and shown big on every screen.
+	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_ALARM, text)
+	for q: Player in server.players:
+		if q != null and q.peer != null:
+			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+	server.log_line.emit("[корабль] %s" % text)
+
+
 var _bridge := {}                    # (v68) the rooms (ShipMap.rooms) of the bridge: those its consoles face
 var _bridge_map: Object = null
 

@@ -119,6 +119,31 @@ func _initialize() -> void:
 	_expect(server.ship.pumps.is_empty() and absf(server.systems.lock_air(pump) - server.systems.docked_air(pump)) < 0.06,
 		"to the same pressure (%.2f)" % server.systems.lock_air(pump))
 
+	# (v73, the author's note) stuck in the chamber at the pirate ship's lower pressure:
+	# the inner door's button and the pump both bring the chamber back to ours
+	var home_door: int = map.lock_pump[pump]["inner"]
+	for c in map.other_cells:
+		if map.walk[c] == 1:
+			server.air.air[c] = 0.6
+	for c in (map.lock_pump[pump]["chamber"] as PackedInt32Array):
+		server.air.air[c] = 0.6
+	server.air.air[map.lock_inside(pump)] = 1.0
+	server.ship.store_air = Net.STORE_AIR_FULL
+	_run(4)
+	_expect(server.doors.locked[home_door] == 1, "at their pressure the inner door is held by its shutter")
+	_expect(server.systems.call_lock(p, home_door), "the inner door's button starts the pump")
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_IN, "filling the chamber back to our pressure")
+	_run(200)
+	_expect(server.ship.pumps.is_empty() and server.doors.locked[home_door] == 0,
+		"and the inner door opens home again (chamber %.2f, inside %.2f)" % [server.systems.lock_air(pump), server.systems.inside_air(pump)])
+	for c in (map.lock_pump[pump]["chamber"] as PackedInt32Array):
+		server.air.air[c] = 0.6
+	_run(4)
+	server.systems.toggle_pump(p, pump)
+	_expect(int(server.ship.pumps.get(pump, 0)) == GameServer.Systems.PUMP_IN, "at the docked ship's pressure, the pump itself also fills it back to ours")
+	_run(200)
+	_expect(server.doors.locked[home_door] == 0, "and the inner door opens (%.2f)" % server.systems.lock_air(pump))
+
 	# back aboard, undocked, and away
 	p.st.place(ours.x, ours.y + 2)
 	_expect(d.dock(false) == "" and not d.docked, "it is drawn off again")

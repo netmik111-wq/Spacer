@@ -431,6 +431,20 @@ func send_hand(slot: int) -> void:
 		_peer.send(0, PackedByteArray([Net.C_HAND, slot]), ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_swap(a: int, b: int) -> void:
+	## (v73) Swaps what is in two of our slots; the hand goes along with its thing.
+	if phase != PLAYING or a == b or a < 0 or b < 0 or a >= Net.SLOTS or b >= Net.SLOTS or not usable(a) or not usable(b):
+		return
+	_peer.send(0, PackedByteArray([Net.C_SWAP, a, b]), ENetPacketPeer.FLAG_RELIABLE)
+	var keep := slots[a]
+	slots[a] = slots[b]
+	slots[b] = keep
+	if hand == a:
+		send_hand(b)
+	elif hand == b:
+		send_hand(a)
+
+
 func turn_to(at: Vector2) -> void:
 	## Turns our character to face a place (in cells of the whole grid), the way a
 	## click does: sent as an input like walking, so it is predicted at once.
@@ -1046,6 +1060,25 @@ func mount_here(cell: int) -> String:
 	return "-"
 
 
+func target_cell() -> int:
+	## (v73) The cell of what the "use" key acts on now (see use_target): what is
+	## in front, the thing on the floor, the one lying there, the ladder underfoot. -1: nothing.
+	var t := use_target()
+	if t == 0:
+		return -1
+	if t == 13:
+		var id := lying_near()
+		if ents.has(id):
+			var e: Ent = ents[id]
+			return e.y * map.width + e.x
+		return -1
+	if t == 14 or t == 41:
+		return floor_cell()
+	if t == 6 or t == 7:
+		return pred.y * map.width + pred.x
+	return use_cell()
+
+
 func usable_at(cell: int) -> bool:
 	## Is there something in that cell the "use" key (or a click) works on, near
 	## or not: a thing on a wall, a door, a hole, things on the floor, somebody
@@ -1056,9 +1089,12 @@ func usable_at(cell: int) -> bool:
 			or gear_here(cell) != "-":
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay, map.autodoc, map.scanner, map.stove]:
+			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay, map.autodoc, map.scanner, map.stove,
+			map.smes, map.smes_small, map.comms]:
 		if things.has(cell):
 			return true
+	if map.trays.has(cell) or map.cryo.has(cell):
+		return true
 	for e: Ent in ents.values():
 		if e.id != my_id and e.cond != Net.COND_OK and e.y * map.width + e.x == cell:
 			return true
@@ -1117,6 +1153,12 @@ func docked_air(pump: int) -> float:
 		return -1.0
 	var there := float(air[beyond]) / Net.AIR_FULL
 	return there if there >= Net.SHUTTER_LIFT else -1.0
+
+
+func lock_inside_air(pump: int) -> float:
+	## (v73) The air on our own side of that airlock's inner door (0..1).
+	var c := map.lock_inside(pump)
+	return float(air[c]) / Net.AIR_FULL if c >= 0 else 1.0
 
 
 func lying_near(facing: int = -1) -> int:

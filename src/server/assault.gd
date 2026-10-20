@@ -102,7 +102,7 @@ func teleport() -> int:
 		if cells.is_empty():
 			break
 	g.reveal(room, "Вспышка выдала отсек пиратов")
-	server.chat.say("Вспышка телепорта! Пираты высадили к нам на борт абордажников (%d, %s). Их телепорт можно выбить из орудий; у них осталось %d человек." % [
+	server.chat.alarm("Вспышка телепорта! Пираты высадили к нам на борт абордажников (%d, %s). Их телепорт можно выбить из орудий; у них осталось %d человек." % [
 		n, where, g.boarders_left()])
 	return n
 
@@ -174,5 +174,5 @@ func _drone_lands() -> void:
 	if inside.x < 0:
 		return
 	server.pirates.spawn_robot(inside.x, inside.y)
-	server.chat.say("Штурмовой дрон прорезал обшивку и ворвался на борт (%s)! %s" % [
+	server.chat.alarm("Штурмовой дрон прорезал обшивку и ворвался на борт (%s)! %s" % [
 		server.map.deck_names[server.map.deck_of(inside.y)].to_lower(), "Он вооружён, воздух ему не нужен."])

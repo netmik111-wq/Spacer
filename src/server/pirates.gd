@@ -92,7 +92,7 @@ func board(how_many: int) -> bool:
 		return false
 	for i in mini(how_many, MAX_ABOARD):
 		give_goal(spawn(inside.x, inside.y, _rng.randf() < 0.6))
-	server.chat.say("Тревога! Абордаж: пираты прорезали обшивку и идут на борт (%s, их %d)." % [
+	server.chat.alarm("Тревога! Абордаж: пираты прорезали обшивку и идут на борт (%s, их %d)." % [
 		map.deck_names[map.deck_of(inside.y)].to_lower(), mini(how_many, MAX_ABOARD)])
 	return true
 
@@ -319,8 +319,14 @@ func think(p) -> void:
 		if p.ai_goal == Vector2i(p.st.x, p.st.y):
 			_stop(p)
 			return                           # (v55) back at its post on its own ship: it stays
-	if now - p.ai_plan_tick >= PLAN_EVERY or p.st.dir == Net.DIR_NONE:
+	# (v73) worked out again before each new step too: a way kept for PLAN_EVERY ticks
+	# took a quick step past the goal, and near it the pirate could pace back and
+	# forth for good (a pirate in the airlock chamber never got aboard, 1 run in 200)
+	var cell_now: int = p.st.y * server.map.width + p.st.x
+	if now - p.ai_plan_tick >= PLAN_EVERY or p.st.dir == Net.DIR_NONE \
+			or (p.st.cd <= 1 and cell_now != p.ai_plan_cell):
 		p.ai_plan_tick = now
+		p.ai_plan_cell = cell_now
 		p.ai_step = _first_step(p, p.ai_goal)
 		if p.ai_step == 0:
 			p.ai_goal = Vector2i(-1, -1)                  # nowhere to go from here: choose again
@@ -573,7 +579,8 @@ func _pursue(p) -> bool:
 			var victim = _victim(p)
 			if victim == null:
 				return false                 # nobody down yet: it roams and fights as any other
-			if absi(victim.st.x - p.st.x) + absi(victim.st.y - p.st.y) <= 1 and p.st.cd == 0:
+			# (v73) cd 1, not 0: a pirate that plans before each step never stands at cd 0 while it walks
+			if absi(victim.st.x - p.st.x) + absi(victim.st.y - p.st.y) <= 1 and p.st.cd <= 1:
 				_stop(p)
 				p.dragging = victim.slot
 				victim.dragged_by = p.slot
@@ -672,7 +679,7 @@ func plant(cell: int) -> void:
 		return
 	bombs[cell] = server.tick + roundi(BOMB_SECONDS * Net.TICK_HZ)
 	var map = server.map
-	server.chat.say("Пираты заложили бомбу (%s)! До взрыва %d с: держите E над ней, чтобы обезвредить." % [
+	server.chat.alarm("Пираты заложили бомбу (%s)! До взрыва %d с: держите E над ней, чтобы обезвредить." % [
 		map.deck_names[map.deck_of(cell / map.width)].to_lower(), roundi(BOMB_SECONDS)])
 
 

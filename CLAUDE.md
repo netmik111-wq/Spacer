@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v72 (version 0.65, the author's notes: bots at work, the boarders' wreck) is the latest. Plans one to four are done except the darkness front (the
+Build v73 (version 0.66, a friendlier game) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -57,7 +57,13 @@ v71 upkeep: hunger that slows (10 min) and kills (25 min on), the galley's stove
 (a toolbox and two part kinds) as a campaign option the hard mode turns on.
 v72 his two notes: bots raise shutters on the way to a repair (suited, no other way), repairs first, free bots mend, one
 bot per job said in chat, the bots' log (crew window and crew_log.txt); a boarding ship wrecked before docking stays a wreck.
-Next (his answer in v72): polish the game first; then fear (its own build) and a fire question round.
+v73 a friendlier game (his 24 answers, `https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS`): the airlock pump takes a chamber
+at a docked ship's pressure back home, the hunter's line once, an outline and a ring for E, a right-click menu, diagonal use,
+key badges in hints, names under the mouse, hotbar drag, chat tabs and repeats, danger banners, interface size, Ctrl+wheel
+zoom, ✕ and number keys on consoles, the bridge's alert panel.
+Next (his answer Z1 "B"): v74 art and walking: things drawn in hands, a `sprites/` folder of simple base pictures an artist
+replaces, diagonal walking (1.4x a step, 8 drawn directions), a first-shift checklist and a help book. Then fear (its own
+build) and a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -355,6 +361,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   them only with `keep_heard`). Free bots volunteer to mend: a test that wants a breach or a broken machine left alone sets
   `server.stations.volunteers = false` (or gives the bots posts). A boarding ship wrecked by the guns now stays (`Derelict.wreck`): a test that wants the next pirate
   ship calls `derelict.pirates_wrecked()` to clear it away.
+- (v73) A warning everyone must see goes through `chat.alarm` (red banner, chime), not `say`. A pump run has a goal
+  (`Systems.pump_goal`, set by `toggle_pump`'s `goal`): with a ship docked the outer door's way aims at its air, the inner
+  door's at `inside_air`. The client's chat keeps lines with a tab (`GameScreen._say(text, tab)`); new lines go through it,
+  never straight into `_chat_lines`. The HUD hint the player reads is `_hint_rich` (badges); `_hint` keeps the plain text,
+  invisible. The interface size scales `GameScreen`'s root (`_fit_root`): place new HUD pieces inside it. Hotbar drag is
+  `C_SWAP` (`Inventory.swap`), which the client mirrors on its own hand.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

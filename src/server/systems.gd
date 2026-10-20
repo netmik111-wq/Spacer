@@ -15,6 +15,7 @@ const PUMP_CLOSE := 0.05               # a chamber this close to the docked ship
 const PUMP_PER_STEP := 0.02            # air moved per chamber cell per air step (two ticks): about 5 s for a full chamber
 
 var server: GameServer
+var pump_goal := {}                    # (v73) pump cell -> the chamber air it stops at (0..1)
 var cycles := {}                     # (v69) airlock pump cell -> [the door pressed, the tick it was pressed] (see call_lock)
 var vents_on := true                 # (v69) the room vents (tests switch them off)
 const CYCLE_SECONDS := 40            # a press gives up after this long
@@ -235,19 +236,48 @@ func docked_air(pump: int) -> float:
 func _pump_way(pump: int) -> int:
 	## Which way the pump must work: towards the docked ship's pressure when one
 	## with air is docked, else out to open on space or in to open on the ship.
+	## (v73, the author's note: stuck in the airlock beside a pirate ship) a chamber
+	## already at the docked ship's pressure is brought back to the ship's own.
 	var docked := docked_air(pump)
 	var have := lock_air(pump)
 	if docked >= 0.0:
 		if absf(have - docked) < PUMP_CLOSE:
-			return 0
+			return _way_to(pump, inside_air(pump))
 		return PUMP_OUT if have > docked else PUMP_IN
 	return PUMP_OUT if have > 0.5 else PUMP_IN
 
 
-func toggle_pump(p: Player, cell: int, way: int = 0) -> void:
-	## The "use" key on a pump: start it the way the chamber needs (or `way`), or stop it.
+func inside_air(pump: int) -> float:
+	## (v73) The air on our own side of the airlock's inner door (0..1).
+	var c := server.map.lock_inside(pump)
+	return server.air.air[c] if c >= 0 else 1.0
+
+
+func _way_to(pump: int, goal: float) -> int:
+	var have := lock_air(pump)
+	if absf(have - goal) < PUMP_CLOSE:
+		return 0
+	return PUMP_OUT if have > goal else PUMP_IN
+
+
+func _default_goal(pump: int, way: int) -> float:
+	## Where a pump started without a goal stops: the docked ship's pressure (our
+	## own, when the chamber is at it already), else empty when letting out and
+	## full when filling.
+	var docked := docked_air(pump)
+	if docked >= 0.0:
+		if absf(lock_air(pump) - docked) < PUMP_CLOSE:
+			return inside_air(pump)
+		return docked
+	return 0.0 if way == PUMP_OUT else 1.0
+
+
+func toggle_pump(p: Player, cell: int, way: int = 0, goal: float = -1.0) -> void:
+	## The "use" key on a pump: start it the way the chamber needs (or `way`, to
+	## `goal`), or stop it.
 	if server.ship.pumps.has(cell):
 		server.ship.pumps.erase(cell)
+		pump_goal.erase(cell)
 	elif not server.powered() or not lock_shut(cell):
 		return
 	else:
@@ -256,6 +286,7 @@ func toggle_pump(p: Player, cell: int, way: int = 0) -> void:
 		if way == 0 or (way == PUMP_IN and server.ship.store_air <= 0.0):
 			return
 		server.ship.pumps[cell] = way
+		pump_goal[cell] = goal if goal >= 0.0 else _default_goal(cell, way)
 	server.chat.sound(Net.SOUND_HISS, cell % server.map.width, cell / server.map.width, p.slot)
 	server.to_all(server.ship.devices_packet())
 
@@ -269,9 +300,8 @@ func run_pumps() -> void:
 			done.append(cell)
 			continue
 		var cells: PackedInt32Array = server.map.lock_pump[cell]["chamber"]
-		var docked := docked_air(cell)
 		var out: bool = server.ship.pumps[cell] == PUMP_OUT
-		var goal := (docked if docked >= 0.0 else 0.0) if out else (docked if docked >= 0.0 else 1.0)
+		var goal: float = pump_goal.get(cell, _default_goal(cell, server.ship.pumps[cell]))
 		var left := 0.0
 		for c in cells:
 			if out:
@@ -289,6 +319,7 @@ func run_pumps() -> void:
 			done.append(cell)
 	for cell: int in done:
 		server.ship.pumps.erase(cell)
+		pump_goal.erase(cell)
 	if not done.is_empty():
 		server.to_all(server.ship.devices_packet())
 
@@ -402,7 +433,7 @@ func breach(cell: int) -> bool:
 	if not server.air.set_hole(cell, true):
 		return false
 	server.replication.hull_record(cell, 1)
-	server.chat.say("Разгерметизация! Пробоина в обшивке.")
+	server.chat.alarm("Разгерметизация! Пробоина в обшивке.")
 	if server.map.hull.has(cell):
 		server.crew.hull_hit(Net.HULL_PER_HOLE)
 	return true
@@ -532,7 +563,8 @@ func call_lock(p: Player, door: int) -> bool:
 		server.chat.tell(p, "Шлюз: %s." % ("выход наружу" if door == int(server.map.lock_pump[pump]["outer"]) else "вход в корабль"))
 	cycles[pump] = [door, server.tick]
 	if not doors.held_by_partner(door) and not server.ship.pumps.has(pump):
-		toggle_pump(p, pump, _way_through(pump, door))
+		var inner := door == int(server.map.lock_pump[pump]["inner"])
+		toggle_pump(p, pump, _way_through(pump, door), inside_air(pump) if inner and docked_air(pump) >= 0.0 else -1.0)
 	return true
 
 
@@ -610,8 +642,6 @@ func _pump_helps(pump: int, door: int) -> bool:
 	if server.doors.locked[door] == 0 or not server.powered() or server.ship.broken.has(pump) or not lock_shut(pump) \
 			or not server.map.on_ship(server.map.fitting_front(pump)):
 		return false
-	if door == int(server.map.lock_pump[pump]["inner"]) and docked_air(pump) >= 0.0:
-		return false                         # the pump only matches the docked ship's air: the door is forced
 	var way := _way_through(pump, door)
 	return way != 0 and (way == PUMP_OUT or server.ship.store_air > 0.0)
 
@@ -620,8 +650,9 @@ func _way_through(pump: int, door: int) -> int:
 	## Which way to pump to open that door: in for the inner one; out for the outer
 	## one, or toward the pressure of a ship docked there.
 	if door == int(server.map.lock_pump[pump]["inner"]):
-		return PUMP_IN
-	return _pump_way(pump) if docked_air(pump) >= 0.0 else PUMP_OUT
+		# (v73) docked, the chamber may hold the other ship's air: back to our own
+		return _way_to(pump, inside_air(pump)) if docked_air(pump) >= 0.0 else PUMP_IN
+	return _way_to(pump, docked_air(pump)) if docked_air(pump) >= 0.0 else PUMP_OUT
 
 
 func _pump_of(door: int) -> int:

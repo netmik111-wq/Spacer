@@ -24,6 +24,7 @@ var ai_target := -1                  # the slot of the one it is after
 var ai_goal := Vector2i(-1, -1)      # where it is going
 var ai_step := 0                     # its next step: a direction, or -1 for the ladder underfoot
 var ai_plan_tick := 0                # when it last worked out its way
+var ai_plan_cell := -1               # (v73) and where it stood then
 var ai_fire_tick := 0                # when it may shoot next
 var st := Mover.State.new()
 

@@ -1154,3 +1154,44 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   it had no way to. So a suited bot may raise a shutter to get **out** of a room with no air for any work (air only flows in),
   and a kind of work with no way to it is put off for 10 s (`Stations._skip`, `BOT_SKIP_TICKS`). The log tells each piece of
   work once (`_logged`) and each shutter once (`_forcing`), not on every fresh look.
+
+### A friendlier game (v73, the author's "very friendly UI for everything"; questions page https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS, all 24 answered)
+
+- **The split** (Z1 "B"): v73 is fixes, using things, the screen, consoles and the bridge's alert panel; items drawn in hands,
+  a `sprites/` folder, diagonal walking with 8 drawn directions (N4 "B") and a first-shift checklist are v74. His word on art:
+  simple base pictures that an artist replaces, not drawn in code from scratch.
+- **The airlock trap** (his words: "when pressure was same like on enemy ship, I am trying to go back to our ship and nothing
+  works"): with a ship docked, the pump and the inner door's button only aimed at the docked ship's pressure, so a chamber
+  already there had nothing to do and the inner door stayed held. Now a pump run has a goal (`Systems.pump_goal`): the outer
+  door's way aims at the docked ship's air, the inner door's way (and the pump pressed when the chamber is already at the
+  docked air) at our side's (`inside_air`, the floor past the inner door, `ShipMap.lock_inside`).
+- **Hunter spam**: `Road._hunters_second` set `busy_tick` whenever anything was alongside, a wreck too, so the hunter's
+  breather restarted each second and «поджидает» came every second. Only a live pirate ship counts now, and `_meet` says it
+  once per hunter (`h["told"]`).
+- **Pirates pacing** (the rare airlocktest failure left from v72, 1 run in ~200 on main too): a pirate kept its planned
+  step for `PLAN_EVERY` (10) ticks, and steps in a chamber take 4, so near its goal it walked one cell past, turned, walked
+  past again, and could pace between the airlock and space for good. `Pirates.think` now also plans again before each new
+  step once it stands on a new cell (`Player.ai_plan_cell`). 600 runs clean after. A walking pirate now never stands at cd 0, so a kidnapper grabs
+  at `cd <= 1` (as turning does since v70), or it walked past the one it came for.
+- **The shutter "one tap"** (his note) was a hold already: `Repairs._work_done` resets on letting go. Kept; the ring now
+  shows the hold.
+- **Using things**: the right-click menu (U2 "A") lists only what can be done there; «Работать, пока не готово» holds E for
+  the player (stops on a move key or after 30 s). A click on a usable thing diagonally next to us steps one cell to the side
+  first (U5): diagonal use without diagonal walking. The E target is outlined only while the mouse is on nothing usable, so
+  two outlines never show.
+- **The ring** is drawn by the client from its own "use" hold and the work's length it already knows; another person's work
+  is not shown (that would need a packet per worker; not asked for).
+- **Hints with badges**: the server's hint texts are unchanged (tests read them); `GameScreen._badges` turns their key words
+  into badges on the client, so one rule covers every hint.
+- **Chat tabs and repeats** (S4 "A"): the client keeps the last 80 lines with their tab; a repeat within 60 s merges as ×N. Warnings
+  that need everyone's eyes go through the new `Chat.alarm` (`Net.CHAT_ALARM`): a red banner for 4 s and a chime, as well as
+  the line. Banners are server words only, plus the client's own for hull below 30% (S5 "A").
+- **Interface size** (S6 "A") scales the whole HUD root (`GameScreen._fit_root`), so text grows with it; the world's zoom is
+  Ctrl+wheel (H6 "B"), in whole steps to keep pixels sharp.
+- **Hotbar drag** (H3 "A") is a new packet `C_SWAP` (protocol 50): the server swaps two slots and the client moves its own
+  hand along (the server never sets a player's hand).
+- **Consoles** (C1 "A"): one frame with a title and ✕; number keys press the numbered buttons of the gun console, the jump
+  list and the locker's tabs.
+- **The bridge's alert panel** (his L2 comment: "alert panel on the bridge with green, yellow and red if something is low"):
+  `Look.needs` on the sector console and the ship's controls, worst first. Thresholds are mine: hull 35/70%, fuel 1 and 3
+  jumps, air reserve 15/40%, food 2 jumps for everyone, SMES 15%.

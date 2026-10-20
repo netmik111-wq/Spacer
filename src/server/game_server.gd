@@ -526,6 +526,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_HAND:
 		if pkt.size() > 1 and pkt[1] < Net.SLOTS:
 			p.hand = pkt[1]
+	elif kind == Net.C_SWAP:
+		if pkt.size() > 2:
+			inventory.swap(p, pkt[1], pkt[2])
 	elif kind == Net.C_DROP:
 		inventory.put_down(p)
 	elif kind == Net.C_ACT:

@@ -586,6 +586,21 @@ func lock_beyond(pump: int) -> int:
 	return -1
 
 
+func lock_inside(pump: int) -> int:
+	## (v73) The floor just past the inner door of that pump's airlock (the ship's
+	## own side), or -1.
+	var lock: Dictionary = lock_pump[pump]
+	var d: int = lock["inner"]
+	if d < 0:
+		return -1
+	var chamber: PackedInt32Array = lock["chamber"]
+	for k in 2:
+		var c := door_sides[d * 2 + k]
+		if c >= 0 and not chamber.has(c):
+			return c
+	return -1
+
+
 func floats(x: int, y: int) -> bool:
 	## Open space a suited character can drift through: inside the grid, on a
 	## deck's own rows, where there is no ship.

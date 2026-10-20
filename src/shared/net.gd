@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 49
+const PROTOCOL := 50
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -215,6 +215,7 @@ const BREAKER_NAMES: Array[String] = ["Освещение", "Воздушная 
 const C_EVADE := 32
 # (v68, the author's J4) u8 ALERT_*: the alert level, from the ship's controls (the captain, or anybody without one)
 const C_ALERT := 33
+const C_SWAP := 34                  # (v73) u8 slot, u8 slot: swap what is in two of our slots (dragged in the inventory)
 const ALERT_GREEN := 0
 const ALERT_YELLOW := 1
 const ALERT_RED := 2
@@ -651,6 +652,7 @@ const CHAT_NEAR := 1                 # spoken aloud: those close by, on the same
 const CHAT_RADIO := 2                # by radio (";" in front): everyone with a radio, anywhere, in a vacuum too
 const CHAT_INTERCOM := 3             # into an intercom ("!" in front): those near any intercom; needs power
 const CHAT_DEAD := 4                 # between the dead only
+const CHAT_ALARM := 5                # (v73, the author's H4) a danger from the ship: a chat line and a banner on everyone's screen
 const CHAT_RADIO_MARK := ";"
 const CHAT_INTERCOM_MARK := "!"
 const SPEECH_RANGE := 7.0            # cells a voice carries
