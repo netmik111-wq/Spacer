@@ -477,6 +477,8 @@ func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 	## Crew.update_vitals on the next tick. (v70) It may also injure (see injure).
 	if q.cond == Net.COND_OK:
 		server.chat.sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
+	if damage > 0:
+		tell_hit(q)
 	var taken := damage * q.toughness        # (v62) heavy armour takes half, our robot more
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
 	q.health = maxf(q.health - taken, Net.HEALTH_DEAD - 1.0)
@@ -484,6 +486,18 @@ func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 	injure(q, taken, cause)
 	if (q.pirate or q.ally) and by != null:
 		server.pirates.attacked(q, by)
+
+
+func tell_hit(q: Player) -> void:
+	## (v75, the author's F1) A wound shows: those near on its deck see the figure flash and blood drip.
+	var msg := PackedByteArray([Net.S_HIT, Net.BLOOD_METAL if q.robot else Net.BLOOD_FLESH, 0, 0, 0, 0, 0, 0])
+	msg.encode_u16(2, q.slot)
+	msg.encode_s16(4, q.st.x)
+	msg.encode_s16(6, q.st.y)
+	for o: Player in server.players:
+		if o != null and o.peer != null and server.map.deck_of(o.st.y) == server.map.deck_of(q.st.y) \
+				and Vector2(o.st.x, o.st.y).distance_to(Vector2(q.st.x, q.st.y)) <= SHOT_SEEN:
+			o.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
 func tell_shot(kind: int, hit, from: Vector2, to: Vector2, row: int, delay := 0, flight := 0) -> void:

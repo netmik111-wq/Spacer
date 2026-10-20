@@ -50,6 +50,14 @@ const GUN_BOMB := "gun_bomb"               # (v62) a bomb launcher: a teleport's
 const GUN_SHRAPNEL := "gun_shrapnel"       # (v62) «Шрапнель»: a dry, scattered crackle
 const ALERT_YELLOW := "alert_yellow"       # (v68) the alert going up to yellow: two falling chimes
 const ALERT_RED := "alert_red"             # (v68) red alert: a rising and falling siren, heard by everyone aboard
+const HIT := "hit"                         # (v75, the author's F1) a blow or a shot landing on somebody
+const HIT_METAL := "hit_metal"             # (v75) the same on a robot: a clang
+const AMB_VENT := "amb_vent"               # (v75, the author's F5) a room's vent breathing
+const AMB_PIPE := "amb_pipe"               # (v75) a pipe in the wall knocking
+const AMB_CREAK := "amb_creak"             # (v75) the hull settling after a jump: a long low groan
+const MUSIC_MENU := "music_menu"           # (v75, the author's F4) the menu's music (a loop; a file of one's own replaces it)
+const MUSIC_FIGHT := "music_fight"         # (v75) a low dark drone while there is a fight or boarders (a loop)
+const MORE_NAMES := [HIT, HIT_METAL, AMB_VENT, AMB_PIPE, AMB_CREAK, MUSIC_MENU, MUSIC_FIGHT]
 const FIGHT_NAMES := [ALERT_YELLOW, ALERT_RED, GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
 	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA,
 	GUN_BOMB, GUN_SHRAPNEL]
@@ -107,12 +115,21 @@ static func prepare() -> void:
 	_streams[GUN_NOVA] = [_gun_nova()]
 	_streams[GUN_BOMB] = [_gun_bomb()]
 	_streams[GUN_SHRAPNEL] = [_gun_shrapnel()]
+	_streams[HIT] = [_hit(1.0), _hit(0.85)]
+	_streams[HIT_METAL] = [_hit_metal()]
+	_streams[AMB_VENT] = [_amb_vent()]
+	_streams[AMB_PIPE] = [_amb_pipe(1.0), _amb_pipe(1.3)]
+	_streams[AMB_CREAK] = [_amb_creak()]
+	_streams[MUSIC_MENU] = [_music_menu()]
+	_streams[MUSIC_FIGHT] = [_music_fight()]
 	_hum_stream = _engine_hum()
 	# (v56) files of one's own in place of these
 	for kind in NAMES:
 		_own_file(kind, NAMES[kind])
-	for name: String in FIGHT_NAMES:
+	for name: String in FIGHT_NAMES + MORE_NAMES:
 		_own_file(name, name)
+	for name: String in [MUSIC_MENU, MUSIC_FIGHT]:
+		_loop_it(name)
 	var hum = _load_own("hum")
 	if hum != null:
 		_hum_stream = hum
@@ -126,6 +143,22 @@ static func _own_file(key, name: String) -> void:
 	if stream != null:
 		_streams[key] = [stream]
 		own_files.append(name)
+
+
+static func _loop_it(name: String) -> void:
+	## (v75) Music plays round and round, a file of one's own too.
+	var st = (_streams[name] as Array)[0]
+	if st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = true
+	elif st is AudioStreamWAV and (st as AudioStreamWAV).loop_mode == AudioStreamWAV.LOOP_DISABLED:
+		(st as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+		(st as AudioStreamWAV).loop_end = (st as AudioStreamWAV).data.size() / 2
+
+
+static func stream(name: String) -> AudioStream:
+	## (v75) One sound made beforehand, for a player of its own (the music).
+	var variants: Array = _streams.get(name, [])
+	return variants[0] if not variants.is_empty() else null
 
 
 static func sound_dirs() -> PackedStringArray:
@@ -713,6 +746,101 @@ static func _their_shield() -> AudioStreamWAV:
 	_tone(out, 0.0, 75.0, 0.3, 8.0)
 	_fade(out, 0.002)
 	return _wav(out)
+
+
+static func _hit(pitch: float) -> AudioStreamWAV:
+	# (v75) a blow landing on a body: a short dull smack
+	var out := _buffer(0.18)
+	_noise(out, 0.0, 0.18, 0.5, 30.0, 0.8)
+	_tone(out, 0.0, 95.0 * pitch, 0.4, 28.0, -120.0)
+	_noise(out, 0.0, 0.03, 0.25, 90.0, 0.2)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _hit_metal() -> AudioStreamWAV:
+	# (v75) a blow on a robot's plating: a clang with a short ring
+	var out := _buffer(0.45)
+	_tone(out, 0.0, 830.0, 0.22, 9.0)
+	_tone(out, 0.0, 1310.0, 0.14, 12.0)
+	_tone(out, 0.0, 210.0, 0.25, 20.0)
+	_noise(out, 0.0, 0.05, 0.3, 60.0, 0.3)
+	_fade(out, 0.001)
+	return _wav(out)
+
+
+static func _amb_vent() -> AudioStreamWAV:
+	# (v75) a room's vent breathing: soft air swelling and fading
+	var out := _buffer(2.4)
+	_noise(out, 0.0, 2.4, 0.12, 0.0, 0.6)
+	for i in out.size():
+		var t := float(i) / RATE
+		out[i] *= sin(PI * t / 2.4)
+	return _wav(out)
+
+
+static func _amb_pipe(pitch: float) -> AudioStreamWAV:
+	# (v75) a pipe knocking in the wall, two or three times
+	var out := _buffer(0.9)
+	for k in 3:
+		var at := 0.0 + 0.22 * k + 0.03 * k * k
+		_tone(out, at, 420.0 * pitch, 0.18 / (k + 1), 18.0)
+		_tone(out, at, 160.0 * pitch, 0.2 / (k + 1), 25.0)
+		_noise(out, at, at + 0.04, 0.12 / (k + 1), 80.0, 0.5)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _amb_creak() -> AudioStreamWAV:
+	# (v75) the hull settling: a long, low, bending groan
+	var out := _buffer(2.2)
+	var phase := 0.0
+	for i in out.size():
+		var t := float(i) / RATE
+		phase += TAU * (55.0 + 18.0 * sin(TAU * 0.6 * t) + 9.0 * sin(TAU * 3.1 * t)) / RATE
+		var env := sin(PI * t / 2.2)
+		out[i] += (sin(phase) * 0.25 + sin(phase * 2.01) * 0.1) * env * env
+	_noise(out, 0.0, 2.2, 0.08, 0.5, 0.93)
+	_fade(out, 0.05)
+	return _wav(out)
+
+
+static func _music_menu() -> AudioStreamWAV:
+	# (v75, the author's F4) a slow, dark pad in a minor key: four chords, 16 seconds, round and round
+	var seconds := 16.0
+	var out := _buffer(seconds)
+	var chords := [[55.0, 65.41, 82.41], [43.65, 65.41, 87.31], [49.0, 61.74, 73.42], [41.2, 61.74, 82.41]]
+	var n := out.size()
+	for c in chords.size():
+		var from := int(c * seconds / chords.size() * RATE)
+		var to := int((c + 1) * seconds / chords.size() * RATE)
+		for f: float in chords[c]:
+			for i in range(from, to):
+				var t := float(i) / RATE
+				var u := float(i - from) / (to - from)
+				var env := clampf(u / 0.25, 0.0, 1.0) * clampf((1.0 - u) / 0.25, 0.0, 1.0)
+				out[i] += (sin(TAU * f * t) * 0.09 + sin(TAU * f * 2.0 * t) * 0.035 + sin(TAU * f * 1.003 * t) * 0.05) * env
+	var low := 0.0
+	for i in n:
+		low = lerpf(_rng.randf_range(-1.0, 1.0), low, 0.985)
+		out[i] += low * 0.25 * (0.6 + 0.4 * sin(TAU * float(i) / n))
+	return _wav(out, true)
+
+
+static func _music_fight() -> AudioStreamWAV:
+	# (v75) a low dark drone with a slow heartbeat pulse under it, 8 seconds, round and round
+	var seconds := 8.0
+	var out := _buffer(seconds)
+	for i in out.size():
+		var t := float(i) / RATE
+		out[i] += sin(TAU * 41.2 * t) * 0.22 + sin(TAU * 61.74 * t) * 0.08 + sin(TAU * 43.65 * t) * 0.1 * (0.5 + 0.5 * sin(TAU * 0.25 * t))
+		var beat := fposmod(t, 1.0)
+		out[i] += sin(TAU * 52.0 * beat) * 0.35 * exp(-beat * 14.0) + sin(TAU * 48.0 * maxf(beat - 0.22, 0.0)) * 0.25 * exp(-maxf(beat - 0.22, 0.0) * 14.0) * (1.0 if beat > 0.22 else 0.0)
+	var low := 0.0
+	for i in out.size():
+		low = lerpf(_rng.randf_range(-1.0, 1.0), low, 0.97)
+		out[i] += low * 0.12
+	return _wav(out, true)
 
 
 static func _engine_hum() -> AudioStreamWAV:

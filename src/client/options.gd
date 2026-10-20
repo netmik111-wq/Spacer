@@ -10,6 +10,7 @@ extends RefCounted
 const PATH := "user://options.cfg"
 const WORLD_BUS := "World"           # everything heard in the game
 const HUM_BUS := "Hum"               # the engine's hum (a part of World)
+const MUSIC_BUS := "Music"           # (v75) the music, beside World
 const KEYS_PER_ACTION := 2
 
 ## action, what it is called on screen, default keys
@@ -48,6 +49,7 @@ static var world_volume := 1.0       # 0..1, sounds of the game
 static var hum_volume := 1.0         # 0..1, the engine's hum
 static var steps_volume := 0.5       # (v56) 0..1, footsteps (the author found them too loud)
 static var fight_volume := 1.0       # (v56) 0..1, the ship fight: guns, hits, the shield
+static var music_volume := 0.6       # (v75) 0..1, the music (the menu's, and the drone in a fight)
 static var shake := 1.0              # (v56) 0..1, how hard the screen shakes when the hull is hit
 static var muted := false
 static var fullscreen := false
@@ -85,6 +87,7 @@ static func load_all() -> void:
 		hum_volume = clampf(float(cfg.get_value("sound", "hum", hum_volume)), 0.0, 1.0)
 		steps_volume = clampf(float(cfg.get_value("sound", "steps", steps_volume)), 0.0, 1.0)
 		fight_volume = clampf(float(cfg.get_value("sound", "fight", fight_volume)), 0.0, 1.0)
+		music_volume = clampf(float(cfg.get_value("sound", "music", music_volume)), 0.0, 1.0)
 		shake = clampf(float(cfg.get_value("video", "shake", shake)), 0.0, 1.0)
 		muted = bool(cfg.get_value("sound", "muted", muted))
 		fullscreen = bool(cfg.get_value("video", "fullscreen", fullscreen))
@@ -114,6 +117,7 @@ static func save_all() -> void:
 	cfg.set_value("sound", "hum", hum_volume)
 	cfg.set_value("sound", "steps", steps_volume)
 	cfg.set_value("sound", "fight", fight_volume)
+	cfg.set_value("sound", "music", music_volume)
 	cfg.set_value("video", "shake", shake)
 	cfg.set_value("sound", "muted", muted)
 	cfg.set_value("video", "fullscreen", fullscreen)
@@ -303,12 +307,12 @@ static func held(action: String) -> bool:
 
 static func ensure_buses() -> void:
 	## World (everything heard in the game) and Hum (the engine) go into Master.
-	for bus: String in [WORLD_BUS, HUM_BUS]:
+	for bus: String in [WORLD_BUS, HUM_BUS, MUSIC_BUS]:
 		if AudioServer.get_bus_index(bus) < 0:
 			var i := AudioServer.bus_count
 			AudioServer.add_bus(i)
 			AudioServer.set_bus_name(i, bus)
-			AudioServer.set_bus_send(i, "Master" if bus == WORLD_BUS else WORLD_BUS)
+			AudioServer.set_bus_send(i, WORLD_BUS if bus == HUM_BUS else "Master")
 
 
 static func _db(share: float) -> float:
@@ -323,6 +327,8 @@ static func apply_sound() -> void:
 	AudioServer.set_bus_mute(AudioServer.get_bus_index(WORLD_BUS), world_volume <= 0.001)
 	AudioServer.set_bus_volume_db(AudioServer.get_bus_index(HUM_BUS), _db(hum_volume))
 	AudioServer.set_bus_mute(AudioServer.get_bus_index(HUM_BUS), hum_volume <= 0.001)
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index(MUSIC_BUS), _db(music_volume))
+	AudioServer.set_bus_mute(AudioServer.get_bus_index(MUSIC_BUS), music_volume <= 0.001)
 
 
 static func apply_video() -> void:

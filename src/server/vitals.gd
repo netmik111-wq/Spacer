@@ -17,6 +17,7 @@ const DECOMPRESSION := 2.0           # health lost per second in a vacuum, on to
 const RECOVERY := 1.0                # health regained per second in good air, while conscious
 const CRIT_RECOVERY := 0.5           # the same while unconscious
 const WAKE_AT := 10.0                # an unconscious person comes round at this much health
+const DYING := 0.5                   # (v75) health lost per second by one out cold whose wounds leave no health to come back to
 const TANK_SECONDS := 120.0          # how long a full suit tank lasts with the supply on
 const REFILL_SECONDS := 3.0          # how long an oxygen station takes to fill an empty tank
 
@@ -41,6 +42,10 @@ static func advance(health: float, cond: int, air: float, seconds: float, wounds
 	if loss > 0.0:
 		return maxf(health - loss * seconds, Net.HEALTH_DEAD)
 	var ceiling := Net.HEALTH_FULL - wounds
+	if cond == Net.COND_CRIT and ceiling <= 0.0:
+		# (v75, found by the playthrough: a captain lay at -5 for good, neither waking nor dying)
+		# wounds this deep kill slowly unless they are treated (an autodoc, a medkit)
+		return maxf(health - DYING * seconds, Net.HEALTH_DEAD)
 	if health < ceiling:
 		return minf(health + (RECOVERY if cond == Net.COND_OK else CRIT_RECOVERY) * seconds, ceiling)
 	return health

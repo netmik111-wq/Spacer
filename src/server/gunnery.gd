@@ -1840,6 +1840,7 @@ func swap_done(paid: int) -> void:
 
 func _wrecked() -> void:
 	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
+	server.ships_beaten += 1                # (v75) for the run's summary
 	_over = true
 	var captured: bool = server.stations.ours_aboard and systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0 \
 		or (crewless and server.stations.ours_aboard and enemy_hull > 0 and systems.size() > Net.ESYS_DRONES and systems[Net.ESYS_DRONES] == 0)

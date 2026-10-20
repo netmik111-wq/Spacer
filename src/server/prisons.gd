@@ -8,9 +8,11 @@ extends RefCounted
 ## keeps him down), takes no part, and is hauled like anybody lying. Nobody
 ## fights him: our robots and the pirates leave him be.
 ##
-## The armory (the guard's locked room) is the brig: a prisoner anywhere else
-## slips the cuffs after LOOSE_SECONDS, grabs a pipe and fights again. In the
-## brig he never does.
+## The brig's cells (v75, the author's P1; the armory too, as before) hold
+## prisoners: a prisoner anywhere else slips the cuffs after LOOSE_SECONDS, grabs
+## a pipe and fights again. In the brig he never does. (v75, the author's P2) Nor
+## does he while he is hurt (below WHOLE_ENOUGH health) or while one of ours is
+## in the room with him: the time only runs out once he is fit and unwatched.
 ##
 ## What a prisoner is good for:
 ##  - sold: a supply station or a trader takes every prisoner aboard for
@@ -30,6 +32,7 @@ const Tales := preload("res://src/server/tales.gd")
 const LOOSE_SECONDS := 120.0         # a prisoner outside the brig slips the cuffs after this long
 const SWAP_DELAY := 6.0              # seconds after a pirate ship comes before it calls about its man
 const RANSOM_PAYS := 30              # what they pay for him when they agree to a ransom
+const WHOLE_ENOUGH := 50.0           # (v75) a prisoner below this health is too weak to slip the cuffs
 
 var server: GameServer
 var sold := 0                        # (tests) prisoners handed over so far
@@ -58,7 +61,21 @@ func count() -> int:
 func in_brig(q: Player) -> bool:
 	var map := server.map
 	var c := q.st.y * map.width + q.st.x
-	return c >= 0 and c < map.access_in.size() and (map.access_in[c] & Net.ACCESS_ARMORY) != 0
+	return map.is_brig(c) or c >= 0 and c < map.access_in.size() and (map.access_in[c] & Net.ACCESS_ARMORY) != 0
+
+
+func watched(q: Player) -> bool:
+	## (v75, the author's P2) One of ours (a player, a bot or our robot) awake in the same room.
+	var map := server.map
+	var room := map.room_at(q.st.x, q.st.y)
+	if room < 0:
+		return false
+	for o: Player in server.players:
+		if o == null or o == q or o.pirate or o.corpse or o.cond != Net.COND_OK:
+			continue
+		if map.room_at(o.st.x, o.st.y) == room:
+			return true
+	return false
 
 
 func take(q: Player, by: Player) -> void:
@@ -75,14 +92,14 @@ func take(q: Player, by: Player) -> void:
 			server.put_on_floor(cell, q.slots[at])   # (what does not fit on the floor is lost)
 			q.slots[at] = Net.ITEM_NONE
 	server.crew.announce_join(q, null)       # (he shows as a prisoner now: Net.KIND_PRISONER)
-	server.chat.say("%s заковывает в наручники: %s. Пленного держат в арсенале: в другом месте он через %d мин освободится." % [
+	server.chat.say("%s заковывает в наручники: %s. Пленного держат в камере гауптвахты: в другом месте, когда он окрепнет и рядом никого, он через %d мин освободится." % [
 		by.name if by != null else "Экипаж", q.name, roundi(LOOSE_SECONDS / 60.0)])
 
 
 func tick() -> void:
 	if server.tick % Net.TICK_HZ == 0:
 		for q: Player in all():
-			if in_brig(q) or q.dragged_by >= 0:
+			if in_brig(q) or q.dragged_by >= 0 or q.health < WHOLE_ENOUGH or q.cond == Net.COND_DEAD or watched(q):
 				q.loose_at = server.tick + roundi(LOOSE_SECONDS * Net.TICK_HZ)
 			elif server.tick >= q.loose_at:
 				_breaks_free(q)

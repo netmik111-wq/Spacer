@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 51
+const PROTOCOL := 52
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -510,6 +510,12 @@ const S_ROAD := 44                  # (v64) to all: u8 flags (1 = the ship is in
                                     # u8 kind (Sectors.P_*), u8 x, u8 y, u8 1 if taken
 const S_BOTLOG := 45                # (v72) to all: u16 the bot's id, u32 seconds since the game began, u16 length,
                                     # then the line (UTF-8): what one of our bots set about (the bots' log)
+const S_HIT := 46                   # (v75, the author's F1) somebody hurt, to those near on that deck: u8 BLOOD_*, u16 their id,
+                                    # s16 x, s16 y: the figure flashes red, blood drips (sparks off a robot), a hit is heard
+const S_SUMMARY := 47               # (v75, the author's E1) the run's story at its end: u16 pirate ships beaten, u16 boarders
+                                    # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8)
+const BLOOD_FLESH := 0
+const BLOOD_METAL := 1
 const GROW_EMPTY := 0
 const GROW_GROWING := 1
 const GROW_RIPE := 2

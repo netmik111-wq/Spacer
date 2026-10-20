@@ -9,6 +9,7 @@ const Net := preload("res://src/shared/net.gd")
 const SETTINGS := "user://settings.cfg"
 const Campaign := preload("res://src/server/campaign.gd")
 const OptionsPanel := preload("res://src/ui/options_panel.gd")
+const BugReport := preload("res://src/client/bug_report.gd")
 
 var _name: LineEdit
 var _address: LineEdit
@@ -153,6 +154,11 @@ func _ready() -> void:
 	settings.custom_minimum_size = Vector2(0, 36)
 	settings.pressed.connect(func() -> void: _options.open())
 	box.add_child(settings)
+	var report := Button.new()
+	report.text = "Сообщить об ошибке (собрать журналы в архив)"
+	report.custom_minimum_size = Vector2(0, 36)
+	report.pressed.connect(_report)
+	box.add_child(report)
 	var quit := _button("Выход")
 	quit.pressed.connect(func() -> void: quit_requested.emit())
 	box.add_child(quit)
@@ -169,6 +175,16 @@ func _ready() -> void:
 		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)) - Net.JOB_CAPTAIN, 0, Net.JOBS - 1 - Net.JOB_CAPTAIN))
 	_show_job()
 	_name.grab_focus()
+
+
+func _report() -> void:
+	## (v75, the author's S2) The logs and the save in one zip, shown in its folder.
+	var path := BugReport.make(get_viewport().get_texture().get_image())
+	if path == "":
+		show_status("Не удалось записать архив в папку %s." % BugReport.folder(), true)
+		return
+	show_status("Архив готов: %s. Приложите его к заметке в блокноте." % path)
+	OS.shell_show_in_file_manager(path)
 
 
 func _show_job() -> void:

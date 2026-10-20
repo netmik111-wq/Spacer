@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v74 (version 0.67).
+Last updated: build v75 (version 0.68).
 
 Contents:
 
@@ -40,6 +40,7 @@ Contents:
 30. [Bots at work and the bots' log (v72)](#30-bots-at-work-and-the-bots-log-v72)
 31. [A friendlier game (v73)](#31-a-friendlier-game-v73)
 32. [Art and walking (v74)](#32-art-and-walking-v74)
+33. [Polish (v75)](#33-polish-v75)
 
 ---
 
@@ -196,7 +197,9 @@ Contents:
   unconscious. You come to at **10** health.
 - **Wounds** (from bullets and blows) are kept separately and **don't heal by themselves**: health
   rises only up to "100 minus wounds". A badly wounded unconscious person won't wake up
-  until treated.
+  until treated. (v75) Wounds of **100** or more leave nothing to come back to: such a person lies
+  dying, **0.5** health a second (about 3 minutes from 0 to death), unless an autodoc or a medkit
+  treats them first.
 - The screen darkens below 40 health. The unconscious and the dead lie down.
 - **Bodies remain** where they fell (the author's rule). Above 30 bodies, the oldest is removed.
 
@@ -1676,6 +1679,8 @@ The author's P, M, H, G, B and W answers (`/mnt/project-files/plans/every-part-p
   - A pirate who is down (out cold, or knocked down by a stun baton or a flashbang) is cuffed with a click of
     **handcuffs**: what he fought with falls to the floor, he lies bound and nobody fights him.
   - The **armoury is the brig**: anywhere else he slips the cuffs after **2 min**, grabs a pipe and fights again.
+    (v75: also the four cells of the brig, and he slips them only when awake, above half health and with none of ours
+    in his room; see section 33.)
   - A supply station or a trader takes every prisoner aboard for **40** credits each (the trade screen's «Сдать пленных»).
   - Searched for the first time he **talks**: every hidden place of this system is marked on the chart, and to a guard
     he also names the pirate hunters' sectors in this cluster.
@@ -1848,3 +1853,44 @@ The author's answers N2–N7 and L1 on the page "Spacer v73 Friendly Game", his 
 - **The helm's chart** marks a ship alongside next to our dot: «пираты», «обломки пиратов» or «корабль рядом».
 - **Work bar.** The bar at the bottom shows only for work with the thing in hand; work on a thing shows the ring alone, and
   the bar no longer stays up after letting go.
+
+## 33. Polish (v75)
+
+The author's 20 answers on the page "Spacer v75 Polish" (every one the recommended pick) and five notes from his notebook.
+
+- **The brig.** Four cells on the upper deck below the armoury, each with its own door. A prisoner left in a cell or in the
+  armoury never slips his cuffs. Anywhere else he slips them after **2 min**, but only while he is **awake**, above **half**
+  health (50) and with **none of ours in his room**; the clock starts again whenever any of that is not so. Prisoners need no
+  food. The cells are marked with bars on the holomap («гауптвахта»), named under the mouse («Камера гауптвахты: здесь
+  пленный не освободится», «Дверь камеры»), and the cuffing message says to take him there.
+- **Bots.**
+  - A gunner at a mount whose gun is broken mends it first (if no other bot took that job), then stands at its gun.
+  - A bot that has nothing to do where the air is thinner than **half**, or whose suit tank runs low, walks to the nearest
+    place with air («здесь нет воздуха, уходит туда, где он есть»).
+  - A bot on its way that reaches no new cell for **20 s** is stuck: it leaves that goal and that job alone for **60 s**,
+    writes «застрял по дороге (…): ищу другой путь или другое дело.» in the bots' log and looks for other work. Forcing
+    the same shutter up **more than twice in 60 s** counts as stuck too, and the forcing is said in the chat only the first
+    time.
+  - Two bots do not crowd one doorway: while one forces a shutter or presses an airlock button, another bot waits.
+  - Only a breach («беру пробоину») is said in everybody's chat («Всё»); every other job goes to the bots' tab and log.
+  - Bots still walk straight (a later build, the author's B2).
+- **Hits.** A hurt figure flashes red for **0.25 s**, drops of blood stay on the floor (a robot throws sparks) (the newest **400**
+  are kept), and a wet hit sound plays (a metal one for robots). Seen within **24** cells on the same deck.
+- **Broken machines** spark and flicker.
+- **Red alert** tints the light of a lit ship red, softly pulsing; the old red pulse at the screen's edge is gone. Yellow and
+  green change nothing.
+- **Music.** Menu music (a slow pad, 16 s loop) and a drone in a fight (also at red alert, and for **20 s** after a pirate is
+  seen aboard), crossfading over **2.5 s**. Made in code; `sounds/music_menu.ogg` and `sounds/music_fight.ogg` replace them.
+  Its own volume slider («Музыка», **60%** at first).
+- **Ship sounds.** Aboard, now and then (every **7–16 s**): a vent's hiss or a pipe's knock nearby; a hull creak **1.8 s**
+  after a jump. All can be replaced from «sounds».
+- **The end of a run** (lost or won) shows its story: pirate ships beaten, boarders killed, credits earned, and every one of
+  ours who died, with how («погиб от ран», «задохнулся», «умер от голода»).
+- **Hosting.** The host's chat says the address to give friends (a Radmin VPN 26.x address first). The pause menu (Esc)
+  shows it with a copy button and lists who is in the game.
+- **Rejoining** by the same name at any time takes back the same character (as before: kept by name).
+- **A quiet start.** On easy and normal, the eventer sends nothing and no pirate hunter comes for the first **5 minutes**
+  of a campaign. Hard is never quiet.
+- **Bug report.** «Сообщить об ошибке» in the main menu, and a button in the pause menu, put the latest logs, the save,
+  the settings, the bots' log and a screenshot into one zip in a «bug_reports» folder next to the game, and open the
+  folder.

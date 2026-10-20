@@ -119,6 +119,7 @@ func _sound_tab() -> Control:
 	_slider(page, "Гул двигателя", Options.hum_volume, func(v: float) -> void: Options.hum_volume = v)
 	_slider(page, "Шаги", Options.steps_volume, func(v: float) -> void: Options.steps_volume = v)
 	_slider(page, "Бой кораблей", Options.fight_volume, func(v: float) -> void: Options.fight_volume = v)
+	_slider(page, "Музыка", Options.music_volume, func(v: float) -> void: Options.music_volume = v)
 	_check(page, "Выключить звук", Options.muted, func(on: bool) -> void:
 		Options.muted = on
 		Options.apply_sound())

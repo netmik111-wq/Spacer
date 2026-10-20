@@ -1219,3 +1219,52 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   (`Stations._fetch_for`), the spot's passer-by does not count against the bot holding the job, and «беру» is said once
   per job per 30 s. A bot at a post whose consoles are all broken mends them first (`Stations._post_down`).
 
+
+### Polish (v75; his 20 answers on the page "Spacer v75 Polish", every one the recommended pick, and five notebook notes)
+
+- **The brig** (P1 "A"): four 1-cell rooms on the upper deck under the armoury, marked in the blueprint by `@ deck x y brig`
+  (a marker, not a lock: `ShipMap.brig`, `is_brig`, `brig_cells`). The armoury stays a brig too, so old habits still work.
+- **When cuffs slip** (P2 "B", and his note: a prisoner in critical health got a pipe and escaped): only while awake, above
+  `Prisons.WHOLE_ENOUGH` (50) health and with none of ours awake in his room (`Prisons.watched`, by `ShipMap.room_at`); the
+  2-minute clock starts over whenever one of these fails, so a guard standing by is enough.
+- **Prisoners need no food** (P3 "B"): they are pirates, and `Garden` already skips pirates.
+- **Stuck bots** (B1 "A"): "stuck" is no new cell on this way for `STUCK_TICKS` (20 s): it catches pushing on a door,
+  going back and forth and waiting on something that never comes, without knowing why. The goal and the job are avoided for
+  60 s, so it tries another way or other work. Forcing the same shutter more than `FORCE_AGAIN` (2) times in 60 s is
+  stuck too (his note «поднимает аварийный шлюз ×5»); only the first forcing is said in the chat.
+- **Air for bots** (his note: bots broke when there was no air): a bot with nothing to do where the air is under `BOT_AIR`
+  or whose tank runs low gets `TASK_AIR`, the nearest cell with air. Free bots see to it before volunteering.
+- **A gunner mends its own mount** (his note): broken mounts are mended first by the gunner at them (as v74 did for post
+  consoles), and a broken mount is no post to stand at.
+- **One bot per doorway** (B3 "A"): `Stations._door_busy`: a bot waits while another bot is using that door (forcing the
+  shutter or pressing the airlock button).
+- **Only breaches aloud** (B4 "C"): the rest of «беру» lines go to the bots' tab; breaches are what everyone must act on.
+- **Bots on a slant later** (B2 "B").
+- **Hits** (F1 "A"): `S_HIT` (u8 kind of blood, u16 id, s16 x, y) to those within `Combat.SHOT_SEEN` on the deck; the client
+  flashes the figure (0.25 s), keeps up to 400 drops (client-only, not in the world state: they cost the network nothing)
+  and plays `hit`/`hit_metal`. A robot throws sparks instead of blood, and clangs.
+- **Red alert light** (F3 "B"): a ColorRect on the dark layer, only when lit and aboard, 0.1 strong and pulsing; the v68
+  screen-edge pulse is set to 0 (two red signals at once were too much). Green and yellow change nothing.
+- **Music** (F4 "D"): made in code like the other sounds (a 16 s menu pad, an 8 s fight drone), replaceable by files. The
+  drone plays in a fight, at red alert and 20 s after a pirate was seen aboard; a `Music` bus with its own slider.
+- **Ambience** (F5 "A"): vent and pipe sounds near the listener every 7–16 s, a hull creak 1.8 s after a jump. Quiet
+  (−6 dB and lower), as he asked footsteps to be quiet.
+- **Sound kinds 10–15** were never played (the client's `SOUND_LOOK` had 10 entries): fixed on the way.
+- **The run's story** (E1 "A"): `S_SUMMARY` carries ships beaten, boarders killed, credits earned (`Ship.earned`, which the
+  `credits` setter counts up) and up to 20 deaths with how. Saved with the campaign.
+- **The host's address** (E2 "A"): Radmin VPN gives 26.x addresses, so those go first; the copy button is in the pause menu.
+- **Rejoining** (E3 "B"): already so (`saved_crew` keeps a character by name).
+- **The quiet start** (E4 "A"): `Director.quiet()` for the first 5 min on easy and normal; the road's hunters wait for it
+  too. Tests that need events at once set `director.quiet_start = false`.
+- **The simulator first** (S1 "A"): numbers are changed only after he sees the tables. The script captain now does what a
+  v67 player does between jumps: sweeps each system (a loop a quarter in from the sides) to find places, takes them, works
+  anomalies at the holomap and gas clouds at the engine (not asteroids: a suit walk), cuts scrap off dark ships, fetches
+  what floats outside and sells scrap, ore and data at traders; at most 6 min a system.
+- **Bug-report zip** (S2 "A"): `src/client/bug_report.gd` writes `bug_reports/` next to the exe (user:// from the editor):
+  the 6 newest logs, the save, the settings, the bots' log and a screenshot (taken when the pause menu opened, so it shows
+  the game, not the menu).
+- **Soak test** (S3 "A"): `tools/soak.sh` runs the playthrough with 7 bots campaign after campaign for 2 game hours and
+  fails on a tick over 200 ms, over 1% of ticks over 50 ms, or objects or memory growing between campaigns.
+- **Deep wounds kill slowly** (mine, found by the simulator: all our people lay out cold with boarders aboard, and the
+  captain at −5 health could neither wake nor die, a game that never ends): unconscious with wounds of 100 or more loses
+  `Vitals.DYING` (0.5) health a second, so about 3 minutes to death unless treated. Then R and the reserve work as always.

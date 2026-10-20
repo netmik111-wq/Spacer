@@ -564,6 +564,7 @@ def build_tiles():
 #   @ <deck number, from 1> <x> <y> <access>
 # x, y is any floor cell of the room (counted in the deck's drawing, first row 0). Every door of
 # that room then opens only for those whose job gives that access (see Net.ACCESS_*).
+# (v75) The access "brig" is no lock: it marks a brig cell, where a prisoner never slips the cuffs.
 #
 # A ship others fight (the pirate ship) names the rooms its systems stand in, the same way:
 #   % <deck number, from 1> <x> <y> <system>
@@ -740,10 +741,17 @@ def resolve_ship(name, lines, ids):
         raise MapError(f"{name}: no spawn points ('s')")
     door_access = [0] * len(doors)
     access_rooms = []                    # (v69) a floor cell of each restricted room and its access: leaving it is free
+    brig_rooms = []                      # (v75) a floor cell of each brig cell (a line "@ deck x y brig")
     for l in lines:
         if not l.startswith("@"):
             continue
         parts = l[1:].split()
+        if len(parts) == 4 and parts[3] == "brig":
+            d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+            if decks[d][1][y0][x0:x0 + 1] not in FLOOR_CHARS or decks[d][1][y0][x0:x0 + 1] == "":
+                raise MapError(f"{name}: brig line '{l}' does not point at a floor cell")
+            brig_rooms.append([x0, y0 + d * stride])
+            continue
         if len(parts) != 4 or parts[3] not in ACCESS_BITS:
             raise MapError(f"{name}: bad access line '{l}'")
         d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
@@ -788,7 +796,7 @@ def resolve_ship(name, lines, ids):
         zones.append([SYSTEMS.index(parts[3]), sorted((y + d * stride) * w + x for x, y in seen)])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
-            "door_access": door_access, "access_rooms": access_rooms, "zones": zones}
+            "door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones}
 
 
 def build_maps(images, ids):

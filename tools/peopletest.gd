@@ -294,6 +294,16 @@ func _storm() -> void:
 
 # --------------------------------------------------------------- prisoners
 
+func _far_from(cell: int) -> int:
+	## A floor cell in another room than `cell`'s.
+	var map := server.map
+	var room: int = map.room_of[cell]
+	for c in map.walk.size():
+		if map.walk[c] == 1 and map.door_of[c] < 0 and map.room_of[c] >= 0 and map.room_of[c] != room and map.on_ship(c):
+			return c
+	return -1
+
+
 func _brig_cell() -> int:
 	var map := server.map
 	for c in map.access_in.size():
@@ -336,10 +346,30 @@ func _prisoners() -> void:
 	pirate.loose_at = server.tick
 	_run(Net.TICK_HZ * 2)
 	_expect(pirate.prisoner, "in the brig he never slips his cuffs")
+	var cells: Array = server.map.brig_cells()
+	_expect(cells.size() == 4, "(v75) the ship has a brig of 4 cells (%d)" % cells.size())
+	if not cells.is_empty():
+		_place(pirate, int((cells[0] as PackedInt32Array)[0]))
+		pirate.loose_at = server.tick
+		_run(Net.TICK_HZ * 2)
+		_expect(pirate.prisoner and server.prisons.in_brig(pirate), "(v75) nor in a brig cell")
 	_place(pirate, here + 2)
+	pirate.health = 20.0
 	pirate.loose_at = server.tick
 	_run(Net.TICK_HZ * 2)
-	_expect(not pirate.prisoner and pirate.slots.has(Net.ITEM_BATON), "elsewhere, in time, he gets loose and grabs a pipe")
+	_expect(pirate.prisoner and not pirate.slots.has(Net.ITEM_BATON), "(v75, the author's note) badly hurt, he never gets loose")
+	pirate.health = 100.0
+	_place(guard, here + 3)
+	pirate.loose_at = server.tick
+	_run(Net.TICK_HZ * 2)
+	_expect(pirate.prisoner, "(v75) nor while one of ours is in the room with him")
+	_place(guard, _far_from(here))
+	for q in server.players:
+		if q != null and q != pirate and q != guard and not q.pirate and not q.corpse and server.map.room_at(q.st.x, q.st.y) == server.map.room_at(pirate.st.x, pirate.st.y):
+			_place(q, _far_from(here))
+	pirate.loose_at = server.tick
+	_run(Net.TICK_HZ * 2)
+	_expect(not pirate.prisoner and pirate.slots.has(Net.ITEM_BATON), "elsewhere, fit and unwatched, in time he gets loose and grabs a pipe")
 	server.crew.remove(pirate)
 	var second = server.pirates.spawn(here % server.map.width + 1, here / server.map.width, false)
 	second.stun_until = server.tick + 100

@@ -91,6 +91,8 @@ const RESCUE_FUEL := 1               # cans in that find (v67: was 2)
 
 var server: Node                     # the GameServer: the director reads it and calls its methods
 var auto := true                     # false: only events fired by hand happen
+var quiet_start := true              # (v75, the author's E4) on easy and normal nothing comes in a campaign's first QUIET_START seconds
+const QUIET_START := 300.0
 var fired := 0                       # how many events have happened (for tests)
 
 var _rng := RandomNumberGenerator.new()
@@ -125,7 +127,7 @@ func tick() -> void:
 		return                               # the campaign is over: nothing more happens
 	if auto and now % Net.TICK_HZ == 0:
 		_watch_fuel(now)                     # (once a second: it counts every can aboard)
-	if not auto or now < _next_tick:
+	if not auto or now < _next_tick or quiet():
 		return
 	var report := assess()
 	if int(report["crew_up"]) == 0:
@@ -140,6 +142,11 @@ func tick() -> void:
 		return
 	fire(int(event["id"]))
 	_schedule(0.0)
+
+
+func quiet() -> bool:
+	## (v75, the author's E4) The first minutes of a campaign (easy and normal) are for learning the ship.
+	return quiet_start and server.mode != Net.MODE_HARD and server.voyage_ticks < roundi(QUIET_START * Net.TICK_HZ)
 
 
 func _watch_fuel(now: int) -> void:

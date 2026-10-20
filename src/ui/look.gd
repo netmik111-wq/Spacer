@@ -69,6 +69,8 @@ static func name_at(client: GameClient, cell: int, seen: bool) -> String:
 			lines.append("На полу: " + ", ".join(names))
 	if map.climb[cell] >= 0 and lines.is_empty():
 		lines.append("Лестница")
+	if map.is_brig(cell) and door < 0:
+		lines.append("Камера гауптвахты: здесь пленный не освободится")   # (v75, the author's P1)
 	return "\n".join(lines)
 
 
@@ -103,6 +105,9 @@ static func _door(client: GameClient, door: int) -> String:
 	var d := client.doors
 	var airlock := d.partner[door] >= 0
 	var name := "Дверь шлюза" if airlock else "Дверь"
+	var sides := client.map.door_sides
+	if not airlock and (client.map.is_brig(sides[door * 2]) or client.map.is_brig(sides[door * 2 + 1])):
+		name = "Дверь камеры"                 # (v75) a cell of the brig
 	if d.welded[door] == 1:
 		return name + ": заварена"
 	if d.jammed[door] == 1:

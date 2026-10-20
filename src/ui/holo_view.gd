@@ -27,6 +27,7 @@ const BROKEN := Color(0.95, 0.3, 0.25)
 const SHUTTER := Color(0.98, 0.8, 0.25)
 const JAMMED := Color(0.98, 0.5, 0.2)
 const BLAST := Color(0.75, 0.4, 0.98)
+const BRIG := Color(0.95, 0.75, 0.3)             # (v75) the brig's cells
 # the pressure scale: share of normal pressure -> colour (between stops the colour is blended)
 const SCALE: Array = [[0.0, Color(0.16, 0.03, 0.05)], [0.2, Color(0.75, 0.16, 0.12)], [0.5, Color(0.9, 0.62, 0.18)],
 	[0.76, Color(0.25, 0.62, 0.72)], [1.0, Color(0.2, 0.5, 0.85)]]
@@ -285,6 +286,10 @@ func _draw_plan() -> void:
 				var a := _air(cell)
 				_plan.draw_rect(r, pressure_colour(float(a) / Net.AIR_FULL) if known and a >= 0 else Color(0.12, 0.14, 0.16))
 				_plan.draw_rect(r, Color(0, 0, 0, 0.25), false, 1.0)
+				if map.is_brig(cell):
+					for k2 in 3:                # (v75) a brig cell: bars
+						var bx := r.position.x + _px * (0.25 + 0.25 * k2)
+						_plan.draw_line(Vector2(bx, r.position.y + 2), Vector2(bx, r.end.y - 2), BRIG, 1.5)
 				var door := map.door_of[cell]
 				if door >= 0 and door < client.holo_doors.size():
 					var v: int = client.holo_doors[door]
@@ -306,7 +311,7 @@ func _draw_plan() -> void:
 	var y0 := _plan.custom_minimum_size.y - 12.0
 	var x := 0.0
 	for e: Array in [[pressure_colour(1.0), "норма"], [pressure_colour(0.6), "понижено"], [pressure_colour(0.3), "опасно"],
-			[pressure_colour(0.0), "вакуум"], [BROKEN, "сломано, пробоина"], [SHUTTER, "заслонка опущена"], [JAMMED, "дверь заклинило"], [BLAST, "заблокирована"], [Color.WHITE, "вы здесь"]]:
+			[pressure_colour(0.0), "вакуум"], [BROKEN, "сломано, пробоина"], [SHUTTER, "заслонка опущена"], [JAMMED, "дверь заклинило"], [BLAST, "заблокирована"], [BRIG, "гауптвахта"], [Color.WHITE, "вы здесь"]]:
 		_plan.draw_rect(Rect2(Vector2(x, y0 - 10), Vector2(12, 12)), e[0])
 		_plan.draw_string(font, Vector2(x + 16, y0), e[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, DIM)
 		x += 16.0 + font.get_string_size(e[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 14.0
@@ -322,6 +327,8 @@ func _describe(cell: int) -> String:
 		var a := _air(cell)
 		if a >= 0:
 			parts.append("давление %d кПа" % roundi(a * Net.KPA_FULL / Net.AIR_FULL))
+		if map.is_brig(cell):
+			parts.append("камера гауптвахты")
 		var door := map.door_of[cell]
 		if door >= 0 and door < client.holo_doors.size():
 			var v: int = client.holo_doors[door]

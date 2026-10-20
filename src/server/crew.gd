@@ -112,6 +112,8 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.supplies.trade_packet(), ENetPacketPeer.FLAG_RELIABLE)
 
 	peer.send(0, campaign_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	if server.over != Net.OVER_NONE or server.won:
+		peer.send(0, summary_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	announce_join(p, peer)
 	_bot_makes_way(p)
 	if demoted:
@@ -549,6 +551,16 @@ func update_vitals(p: Player) -> void:
 	elif cond == Net.COND_DEAD:
 		p.died_tick = server.tick
 		server.chat.say("%s погибает." % p.name)
+		# (v75, the author's E1) for the run's summary: who died and how
+		if p.pirate and not p.prisoner:
+			server.boarders_killed += 1
+		elif not p.pirate and not p.ally and not p.corpse:
+			var how := "погиб от ран"
+			if breathes < Vitals.BREATH_MIN and p.wounds < 40.0:
+				how = "задохнулся"
+			elif p.weak and p.wounds < 40.0:
+				how = "умер от голода"
+			server.deaths.append([p.name, how])
 		if p.robot:
 			_robot_breaks(p)
 		if p.pirate or p.ally:
@@ -683,6 +695,7 @@ func end_campaign(how: int) -> void:
 	server.chat.say("%s Кампания окончена. Пройдено секторов: %d, дальше всего от начала: %d прыжков, продержались %s." % [
 		why, server.been.size(), server.farthest, voyage_text(server.voyage_ticks)])
 	tell_campaign()
+	server.to_all(summary_packet())
 	campaign_ended()
 
 
@@ -695,6 +708,22 @@ func campaign_ended() -> void:
 static func voyage_text(ticks: int) -> String:
 	var minutes := ticks / Net.TICK_HZ / 60
 	return "%d ч %02d мин" % [minutes / 60, minutes % 60] if minutes >= 60 else "%d мин" % minutes
+
+
+func summary_packet() -> PackedByteArray:
+	## (v75, the author's E1) The story of the run for its last screen (Net.S_SUMMARY).
+	var out := PackedByteArray([Net.S_SUMMARY, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	out.encode_u16(1, mini(server.ships_beaten, 65535))
+	out.encode_u16(3, mini(server.boarders_killed, 65535))
+	out.encode_u32(5, clampi(server.ship.earned, 0, 0x7FFFFFFF))
+	var shown := server.deaths.slice(maxi(server.deaths.size() - 20, 0))
+	out[9] = shown.size()
+	for d: Array in shown:
+		for text: String in [str(d[0]), str(d[1])]:
+			var b := text.to_utf8_buffer().slice(0, 120)
+			out.append(b.size())
+			out.append_array(b)
+	return out
 
 
 func campaign_packet() -> PackedByteArray:
