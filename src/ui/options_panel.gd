@@ -156,6 +156,8 @@ func _video_tab() -> Control:
 		Options.first_shift = on
 		if on:
 			Options.shift_done = 0)
+	# (v77, the author's V1) the view follows the mouse, or where one walks
+	_check(page, "Взгляд за мышью (выкл.: смотреть туда, куда идёте)", Options.mouse_look, func(on: bool) -> void: Options.mouse_look = on)
 	_slider(page, "Тряска при попаданиях", Options.shake, func(v: float) -> void: Options.shake = v)
 	# (v73, the author's H5) the size of the interface and its text
 	var size_row := HBoxContainer.new()

@@ -70,6 +70,10 @@ var _came_in := 0                    # the sector it came in (Sectors.key): it d
 var wreck_at := Vector2.ZERO         # (v69) where in the system a raider was wrecked: it stays alongside while we are near
 var held_off_until := -1             # (v69) a derelict pushed away by a hunter does not come back alongside before this tick
 var _left := {}                      # sector key -> [[cell inside it, things], ...]: what was left on it
+var sos := false                     # (v77, the author's S1) the derelict alongside is the ship that called SOS: its crew is dead
+var sos_at := Vector2.ZERO           # where it lies: it stays alongside while our ship stays near
+const SOS_BODIES := 3                # its dead crew, with what they carried
+const SOS_POCKETS: Array[int] = [Net.ITEM_MEDPATCH, Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_FOOD, Net.ITEM_MAG]
 var _rng := RandomNumberGenerator.new()
 
 
@@ -174,7 +178,7 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 			("Он бьёт прицельно: сначала по генератору щита, потом по двигателю. Держите ремонтников наготове." if int(design["boss"]) == 1 else
 			"Его нейроизлучатели оглушают всех в отсеке, а телепорт высаживает абордажников прямо на мостик. Не отдавайте мостик!"))
 	elif drone:
-		server.chat.alarm("Тревога! Из темноты выходит %s: без экипажа, им правит машина. Он не бежит и не торгуется, шлёт штурмовых дронов, пока работает его ядро. Внутри нет воздуха: на абордаж только в скафандре, а взять его можно, разбив ядро руками." % who.substr(0, 1).to_lower() + who.substr(1))
+		server.chat.alarm("Тревога! Из темноты выходит %s: без экипажа, им правит машина. Он не бежит и не торгуется, шлёт штурмовых дронов, пока работает его ядро. Внутри нет воздуха: на абордаж только в скафандре, а взять его можно, разбив ядро руками." % (who.substr(0, 1).to_lower() + who.substr(1)))
 	elif raid:
 		server.chat.alarm("Тревога! %s выходит на дистанцию огня и атакует. На абордаж он не идёт: это бой до конца. Разбейте его из орудий (пульт орудий на мостике), и его можно будет обыскать. Его отсеки пока не видны: их покажут сканеры, попадания и зонд." % who)
 	else:
@@ -248,12 +252,16 @@ func update() -> void:
 			_leave()
 		return
 	var hulk: Dictionary = server.road.at_hulk()
-	if not here and not hulk.is_empty() and server.tick >= held_off_until and not server.gunnery.fighting() and _spots.has(int(hulk["layout"])):
+	# (v77, the author's note: chat spam while the jump charged) a wreck sent away for the jump must not come straight back
+	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and server.tick >= held_off_until \
+			and not server.gunnery.fighting() and _spots.has(int(hulk["layout"])):
 		_hulk_arrives(hulk)                  # (v69) a pirate ship we wrecked here before
 		return
 	if not possible():
 		return
 	var want: bool = (server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach) or server.road.at_wreck()   # (v64) or an abandoned ship among the places
+	if sos and here:
+		want = server.ship.jump_to == Net.NO_SECTOR and server.ship.pos.distance_to(sos_at) <= Sectors.WRECK_REACH
 	if want and not here and server.tick >= held_off_until and not server.gunnery.fighting():
 		_arrive()
 	elif not want and here and holds_ship() == "":
@@ -449,8 +457,33 @@ func _drop(cells: PackedInt32Array, table: Array) -> void:
 	server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], _loot(table))
 
 
-func _arrive() -> void:
-	_comes(Net.OTHER_DERELICT, Net.OTHER_DERELICT, "Брошенный корабль")
+func sos_ship() -> bool:
+	## (v77, the author's S1: "the crew died, but the ship can be salvaged" brought no ship) The ship
+	## that called SOS comes alongside, dark, its crew dead aboard. False when none can come now.
+	if here or not possible() or server.gunnery.fighting():
+		return false
+	sos = true
+	sos_at = server.ship.pos
+	_arrive("Корабль, подавший SOS")
+	var cells := _floor_cells()
+	for i in mini(SOS_BODIES, cells.size()):
+		var c: int = cells[_rng.randi_range(0, cells.size() - 1)]
+		var b = server.crew.alloc("Член экипажа")
+		b.colour = _rng.randi_range(0, Net.SUIT_COLOURS - 1)
+		b.job = _rng.randi_range(Net.JOB_PILOT, Net.JOBS - 1)
+		b.st.place(c % map.width, c / map.width)
+		b.st.facing = _rng.randi_range(1, 4)
+		b.st.down = true
+		b.cond = Net.COND_DEAD
+		b.health = Net.HEALTH_DEAD
+		for k in _rng.randi_range(1, 2):
+			b.add(SOS_POCKETS[_rng.randi_range(0, SOS_POCKETS.size() - 1)])
+		server.crew.becomes_corpse(b)
+	return true
+
+
+func _arrive(called := "Брошенный корабль") -> void:
+	_comes(Net.OTHER_DERELICT, Net.OTHER_DERELICT, called)
 	_place(_spots[layout][0])
 	var key := Sectors.key(server.sectors.cell[server.ship.sector])
 	var cells := _floor_cells()
@@ -467,7 +500,7 @@ func _arrive() -> void:
 			server.air.set_hole(c, true)
 			server.replication.hull_record(c, 1)
 	# what lies about: made up the first time, as it was left after that
-	if _left.has(key):
+	if _left.has(key) and not sos:
 		for e: Array in _left[key]:
 			_put(map.other_at, int(e[0]), e[1])
 	else:
@@ -509,7 +542,7 @@ func _hulk_arrives(h: Dictionary) -> void:
 	for e: Array in h["things"]:
 		_put(map.other_at, int(e[0]), e[1])
 	server.air.wake()
-	server.chat.say("Рядом %s: его можно обыскать и резать на лом. Пристыковаться можно с пульта управления." % ship.name.substr(0, 1).to_lower() + ship.name.substr(1))
+	server.chat.say("Рядом %s: его можно обыскать и резать на лом. Пристыковаться можно с пульта управления." % (ship.name.substr(0, 1).to_lower() + ship.name.substr(1)))
 
 
 func _hulk_leaves() -> void:
@@ -535,7 +568,7 @@ func _hulk_leaves() -> void:
 func _leave(quiet: bool = false) -> void:
 	var was_wreck := wreck
 	# what is left on a derelict is remembered for this sector
-	if kind == Net.OTHER_DERELICT:
+	if kind == Net.OTHER_DERELICT and not sos:
 		var key := Sectors.key(server.sectors.cell[server.ship.sector])
 		var kept := []
 		for c in map.other_cells:
@@ -548,6 +581,7 @@ func _leave(quiet: bool = false) -> void:
 			server.crew.remove(p)
 	_clear_region()
 	here = false
+	sos = false
 	raid = false
 	wreck = false
 	_set_docked(false)

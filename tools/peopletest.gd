@@ -445,6 +445,7 @@ func _bombs() -> void:
 	var cell := _floor()
 	var near := server.crew.new_player("Рядом")
 	_place(near, cell + 1)
+	server.floor_things.erase(cell)         # (things left there by the checks before, by lot, one run in 10)
 	server.pirates.plant(cell)
 	_expect(server.pirates.bombs.has(cell) and (server.floor_things[cell] as PackedByteArray).has(Net.ITEM_BOMB), "a planted bomb lies on the floor")
 	near.slots.fill(Net.ITEM_NONE)

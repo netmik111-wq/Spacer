@@ -11,6 +11,7 @@ extends RefCounted
 ## way, and leaves a body with what it carried.
 
 const Net := preload("res://src/shared/net.gd")
+const Paths := preload("res://src/server/paths.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
 
@@ -413,7 +414,7 @@ func _somewhere(p) -> Vector2i:
 
 
 func _first_step(p, goal: Vector2i) -> int:
-	## The first step of the shortest way to `goal`: a direction (1..4), -1 to
+	## The first step of the shortest way to `goal`: a direction (1..8), -1 to
 	## take the ladder it stands on, 0 if there is no way. Walks the ship's
 	## grid, ladders included, around shutters that are down.
 	var map = server.map
@@ -423,29 +424,8 @@ func _first_step(p, goal: Vector2i) -> int:
 		return 0
 	var suited: bool = p.has_suit()
 	var forces: bool = not p.ally
-	var first: Dictionary = {start: 0}
-	var queue: PackedInt32Array = PackedInt32Array([start])
-	var at := 0
-	while at < queue.size():
-		var cell := queue[at]
-		at += 1
-		var x: int = cell % map.width
-		var y: int = cell / map.width
-		var nexts: Array = []
-		for d in range(1, 5):
-			if _passable(x + Net.DX[d], y + Net.DY[d], suited, forces):
-				nexts.append([(y + Net.DY[d]) * map.width + x + Net.DX[d], d])
-		if map.climb[cell] >= 0 and not map.floats(x, y):
-			nexts.append([map.climb[cell], -1])
-		for n: Array in nexts:
-			var to: int = n[0]
-			if first.has(to):
-				continue
-			first[to] = n[1] if cell == start else first[cell]
-			if to == end:
-				return first[to]
-			queue.append(to)
-	return 0
+	# (v77, the author's B1) in 8 ways, as players walk
+	return int(Paths.first_step(map, start, {end: 0}, func(nx: int, ny: int) -> bool: return _passable(nx, ny, suited, forces))[0])
 
 
 # ------------------------------------------------------------ (v70) boarders' goals

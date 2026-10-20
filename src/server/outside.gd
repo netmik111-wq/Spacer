@@ -14,6 +14,7 @@ extends RefCounted
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
+const Paths := preload("res://src/server/paths.gd")
 const Player := preload("res://src/server/player.gd")
 
 const HULL_PER_PATCH := 15          # (v67, the author's H2: the hull comes back mostly from our own work; was 10)
@@ -278,38 +279,13 @@ func _at(p: Player, t: Dictionary, goals: Dictionary, space: bool = false) -> bo
 func _route(start: int, goals: Dictionary, space: bool) -> Array:
 	## Like Stations._route, but through the airlock and (with `space`) out into open space too.
 	var map = server.map
-	var w: int = map.width
-	var first := {start: 0}
-	var queue := PackedInt32Array([start])
-	var i := 0
-	while i < queue.size():
-		var cell := queue[i]
-		i += 1
-		var x := cell % w
-		var y := cell / w
-		var nexts: Array = []
-		for d in range(1, 5):
-			var nx: int = x + Net.DX[d]
-			var ny: int = y + Net.DY[d]
-			var j := ny * w + nx
-			var ok: bool = map.walkable(nx, ny) and map.on_ship(j) or space and map.floats(nx, ny)
-			if not ok:
-				continue
-			var door: int = map.door_of[j]
-			if door >= 0 and server.doors.is_sealed(door):
-				continue
-			nexts.append([j, d])
-		if map.climb[cell] >= 0 and not map.floats(x, y):
-			nexts.append([map.climb[cell], -1])
-		for n: Array in nexts:
-			var to: int = n[0]
-			if first.has(to):
-				continue
-			first[to] = n[1] if cell == start else first[cell]
-			if goals.has(to):
-				return [first[to], to]
-			queue.append(to)
-	return [0, -1]
+	var doors = server.doors
+	return Paths.first_step(map, start, goals, func(nx: int, ny: int) -> bool:
+		var j: int = ny * map.width + nx
+		if not (map.walkable(nx, ny) and map.on_ship(j) or space and map.floats(nx, ny)):
+			return false
+		var door: int = map.door_of[j]
+		return not (door >= 0 and doors.is_sealed(door)))
 
 
 func _most_air(cells: PackedInt32Array) -> float:

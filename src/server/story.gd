@@ -330,6 +330,12 @@ func _apply(fx: Dictionary) -> String:
 				extra += _mission(n)
 			"swap":
 				extra += server.prisons.give_back(n)
+			"sos_ship":
+				# (v77, the author's S1) a real dead ship alongside; the old gift if none can come
+				if not server.derelict.sos_ship():
+					_store(Net.ITEM_PART, 3)
+					_give("credits", 15)
+					extra += " Подойти к нему нельзя: с него сняли запчасти ×3 и 15 кр. на расстоянии."
 	return extra
 
 

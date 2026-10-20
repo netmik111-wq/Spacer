@@ -340,14 +340,20 @@ func _initialize() -> void:
 	_run(2)
 	_expect(server.supplies.can_trade(), "docked with a trader, the ship can trade")
 	var money := server.ship.credits
-	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
-	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PART)
+	# (v77, the author's T1) a trader never sells the two things it looks for: two others are bought
+	var buy: Array[int] = []
+	for item: int in [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_MEDPATCH, Net.ITEM_MAG]:
+		if not server.supplies.wanted().has(item) and buy.size() < 2:
+			buy.append(item)
+	var had: Array[int] = [int(server.ship.store.get(buy[0], 0)), int(server.ship.store.get(buy[1], 0))]
+	server.supplies.store_asked(q, Net.STORE_BUY, buy[0])
+	server.supplies.store_asked(q, Net.STORE_BUY, buy[1])
 	server.supplies.store_asked(q, Net.STORE_BUY_AIR, 0)
-	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches + 1 and server.ship.store[Net.ITEM_PART] == had_parts + 1 and server.ship.store_air == Net.AIR_LOT
-		and server.ship.credits == money - Items.price(Net.ITEM_PATCH) - Items.price(Net.ITEM_PART) - Net.PRICE_AIR, "a patch, a part and air are bought for credits (%d left)" % server.ship.credits)
+	_expect(server.ship.store[buy[0]] == had[0] + 1 and server.ship.store[buy[1]] == had[1] + 1 and server.ship.store_air == Net.AIR_LOT
+		and server.ship.credits == money - Items.price(buy[0]) - Items.price(buy[1]) - Net.PRICE_AIR, "two things and air are bought for credits (%d left)" % server.ship.credits)
 	server.ship.credits = 0
-	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
-	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches + 1, "and not without credits")
+	server.supplies.store_asked(q, Net.STORE_BUY, buy[0])
+	_expect(server.ship.store[buy[0]] == had[0] + 1, "and not without credits")
 	server.sectors.kind[here] = Sectors.STATION
 	server.ship.in_reach = false
 	_run(2)

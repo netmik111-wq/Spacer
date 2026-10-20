@@ -154,6 +154,15 @@ Open problems:
   needs in red, yellow and green on the sector console and the ship's controls.
 - Protocol 50. Questions: https://claude.ai/artifact/L5C4LmRshPrQehcRoQJJKS. Build in `/mnt/project-files/builds/v73/`.
 
+### v77 (the evening's bugs, the view following the mouse, bots on a slant; his answers on "Spacer v77 Movement and View")
+- Seven notes from his evening with KaineQwQ: the trader's buy-cheap-sell-dear loop, the wreck spam while the jump
+  charged, «KaineQwQ 2» after a lag drop, the dead ship missing after the rejoin, the chat sitting too low, the gas cloud's
+  wrong hint, and the SOS dead ship that never came. All fixed; the bridge explains every kind of place.
+- The view follows the mouse (a setting, on at first; half a turn in 1/3 s; the body turns in 8 ways for others to see).
+- Bots, pirates and our robots walk on a slant (one 8-way search, `src/server/paths.gd`).
+- New test `tools/eveningtest.gd` (36 scripts now); protocol 53. Version 0.70, build in `/mnt/project-files/builds/v77/`.
+- Next (v78, his picks): quarter-tile steps for players, lying down, swapping places, and RimWorld-like friendly fire.
+
 ### v76 (his answers after v75)
 - Out cold, a player may hold R for 2 s to give up: the character dies at once and R brings a new one from the reserve.
   Deep wounds killing in about 3 minutes stays (his yes). No numbers changed after the simulator (he will test himself);

@@ -10,6 +10,24 @@ const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Stations := preload("res://src/server/stations.gd")    # only for its numbers
+# (v77) What each kind of place found takes (Sectors.P_*), and the work places' hint once the ship is there.
+const PLACE_HINTS: Array[String] = [
+	"Обломки, контейнер, тела, поле боя: подлетите к метке, найденное подберут или оно всплывёт у шлюза.",
+	"Обломки, контейнер, тела, поле боя: подлетите к метке, найденное подберут или оно всплывёт у шлюза.",
+	"Обломки, контейнер, тела, поле боя: подлетите к метке, найденное подберут или оно всплывёт у шлюза.",
+	"Брошенный корабль: подлетите к метке, он встанет над шлюзом.",
+	"Обломки, контейнер, тела, поле боя: подлетите к метке, найденное подберут или оно всплывёт у шлюза.",
+	"Засаду лучше облететь стороной: подлетев близко, пираты выходят в бой.",
+	"Аномалия: подлетите к метке и остановитесь, потом изучайте её с голокарты.",
+	"Астероид: подлетите к метке и остановитесь, потом выйдите в скафандре: от него откалывается руда.",
+	"Газовое облако: подлетите к метке и остановитесь, потом встаньте к двигателю: топливозаборник наполняет бак.",
+	"Разбитый пират: подлетите к метке, обломки встанут над шлюзом.",
+]
+const WORK_HERE: Array[String] = [
+	"Корабль у аномалии: пока он стоит, изучайте её с голокарты.",
+	"Корабль у астероида: пока он стоит, выйдите в скафандре, от него откалывается руда.",
+	"Корабль в газовом облаке: пока он стоит и кто-то стоит у двигателя, бак наполняется.",
+]
 const ALERT_ABOUT: Array[String] = [
 	"обычная служба.",
 	"боты без дела идут на посты ремонта.",
@@ -243,7 +261,18 @@ func update_helm() -> void:
 	for pl: Array in client.road.get("places", []):
 		found.append(Sectors.PLACE_NAMES[int(pl[0])] + (" (пусто)" if pl[2] and int(pl[0]) != Sectors.P_WRECK else ""))
 	if not found.is_empty():
-		lines.append("Сенсоры нашли: %s. Подлетите к метке, чтобы подобрать; засаду лучше облететь." % ", ".join(found))
+		lines.append("Сенсоры нашли: %s." % ", ".join(found))
+		# (v77, the author's note: the gas cloud "does nothing") each kind says what it takes
+		var hints := PackedStringArray()
+		for pl: Array in client.road.get("places", []):
+			var kind := int(pl[0])
+			var hint: String = PLACE_HINTS[kind] if kind < PLACE_HINTS.size() else ""
+			if pl[2] or hint == "" or hints.has(hint):
+				continue
+			if kind >= Sectors.P_ANOMALY and kind <= Sectors.P_GAS and at.distance_to(pl[1]) <= Sectors.WORK_REACH:
+				hint = WORK_HERE[kind - Sectors.P_ANOMALY]
+			hints.append(hint)
+		lines.append_array(hints)
 	if client.road.get("fog", false):
 		lines.append("Сектор в туманности: сенсоры видят только вблизи.")
 	lines.append("%s: %s" % [Net.ALERT_NAMES[client.alert], ALERT_ABOUT[client.alert]])

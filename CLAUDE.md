@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v76 (version 0.69, give up while out cold) is the latest. Plans one to four are done except the darkness front (the
+Build v77 (version 0.70, the evening's bugs, the view following the mouse, bots on a slant) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -70,8 +70,12 @@ run's story at the end, the host's address and players, a quiet first 5 minutes,
 slowly (the simulator found a game that could never end); the simulator salvages, and a soak test.
 v76: out cold, hold R 2 s to give up and come back from the reserve. He said: the simulator does not replace his own
 playtests, so no numbers change for now; nothing public (no GitHub Releases, the repository stays private).
-Later: bots and pirates walking on a slant (his word), fear (its own build) and a fire
-question round.
+v77 (his answers, `https://claude.ai/artifact/JFTeczxumE8CGGGcZ58vaJ`): seven bugs from an evening with KaineQwQ (the
+trader's money loop, wreck spam on a jump, rejoining as «Name 2», the dead ship left behind, the chat too low, place
+hints, the SOS dead ship), the view following the mouse (a setting), bots and pirates walking on a slant.
+Next, v78 (his picks M1 D, C1 B): quarter-tile steps for players (not free movement), lying down, swapping places with a
+friend, and friendly fire as in RimWorld (a friend right by the shooter is never hit). Later: fear (its own build) and a
+fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -102,7 +106,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 35 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 36 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -138,6 +142,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/bottest.gd (since v72: bots through shutters, one bot per job, free bots mend, the log, the boarders' wreck)
     godot --headless --path . --script res://tools/walktest.gd (since v74: 8 ways, slant steps, corners, doorways, use and sight on a slant, the look byte)
     godot --headless --path . --script res://tools/polishtest.gd (since v75: gunner mends its mount, bots leave airless rooms, stuck shutters, busy doors, breaches aloud, quiet start, summary)
+    godot --headless --path . --script res://tools/eveningtest.gd (since v77: trader's wants, wreck on a jump, saved in space, SOS ship, free look, slant ways, rejoin with real clients)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -162,7 +167,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 35 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 36 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -229,7 +234,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers), `gear.gd` (v59: crates of ship gear),
   `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
-  "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`.
+  "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
+  pirate and robot uses.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
   sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `sprites.gd` (v74: pictures
@@ -394,6 +400,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   holds a bot still on purpose lets go of `bot_goal`. Only breaches are said aloud by bots. Unconscious with wounds of 100+
   dies slowly (`Vitals.DYING`). `S_HIT` and `S_SUMMARY` are new (protocol 52). The client's sound kinds go through
   `WorldView.SOUND_LOOK`: one entry per `Net.SOUND_*`, or the new kind is never played (10–15 were silent until v75).
+- (v77) The view following the mouse is the client's alone (`GameClient.look_way`, `aim_at`); the server only learns the
+  8-way facing (TURN inputs) and `Mover.State.free_look` (inputs `Mover.LOOK_FREE`/`LOOK_WALK`, byte 18 of SEC_SELF): with it
+  set, walking does not turn a character. Anything new that hides or shows by our sight asks `look_way()`, never
+  `Net.way(pred.facing)`. Scripted walks in `main.gd` turn it off (`GameScreen.scripted_look`). Bots, pirates and robots find
+  ways with `Paths.first_step` (directions 1..8): never write a 4-way search again. A trader never offers what it `wanted()`:
+  a test buying plain things picks ones it does not look for. Same name and same address in a hello takes the old
+  character over (`Crew._same_person`). Protocol 53.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

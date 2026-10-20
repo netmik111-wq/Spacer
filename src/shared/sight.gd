@@ -226,13 +226,18 @@ static func sees(map: ShipMap, doors: Doors, from: Vector2, facing: int, to: Vec
 	## `lines`: a Dictionary to remember lines in (see clear_cached), or null.
 	if facing < 1 or facing > Net.DIRS:
 		return false
+	return sees_way(map, doors, from, Net.way(facing), to, arcs, reach, lines)
+
+
+static func sees_way(map: ShipMap, doors: Doors, from: Vector2, ahead: Vector2, to: Vector2i, arcs: Array, reach: int, lines: Variant = null) -> bool:
+	## (v77) The same, looking along `ahead` (a way of length 1: the mouse's, between the 8).
 	var at := Vector2i(roundi(from.x), roundi(from.y))
 	if map.deck_of(at.y) != map.deck_of(to.y):
 		return false
 	var v := Vector2(to) - from
 	if v.length() > reach + 0.5:
 		return false
-	if not in_arcs(Net.way(facing), v, arcs):
+	if not in_arcs(ahead, v, arcs):
 		return false
 	if v.length() < 0.75:
 		return true

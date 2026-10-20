@@ -34,6 +34,7 @@ extends RefCounted
 ## ransom, while any of ours is aboard.
 
 const Net := preload("res://src/shared/net.gd")
+const Paths := preload("res://src/server/paths.gd")
 const Player := preload("res://src/server/player.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Vitals := preload("res://src/server/vitals.gd")
@@ -1364,37 +1365,15 @@ func _route(start: int, goals: Dictionary, wide: bool = false, suited: bool = fa
 	## and with `wide` onto a ship alongside too, and out into space in a suit. (v72) With
 	## `shutters`, through emergency shutters that are down too (a suited bot forces them).
 	var map := server.map
-	var w := map.width
-	var first := {start: 0}
-	var queue := PackedInt32Array([start])
-	var i := 0
-	while i < queue.size():
-		var cell := queue[i]
-		i += 1
-		var x := cell % w
-		var y := cell / w
-		var nexts: Array = []
-		for d in range(1, 5):
-			var nx: int = x + Net.DX[d]
-			var ny: int = y + Net.DY[d]
-			var j := ny * w + nx
-			if not (map.walkable(nx, ny) and (wide or map.on_ship(j)) or wide and suited and map.floats(nx, ny)):
-				continue
-			var door := map.door_of[j]
-			if door >= 0 and (server.doors.is_sealed(door) and not server.systems.lock_door(door) and not shutters or server.doors.welded[door] == 1):
-				continue                     # (v70) nor through a welded door
-			nexts.append([j, d])
-		if map.climb[cell] >= 0 and not map.floats(x, y):
-			nexts.append([map.climb[cell], -1])
-		for n: Array in nexts:
-			var to: int = n[0]
-			if first.has(to):
-				continue
-			first[to] = n[1] if cell == start else first[cell]
-			if goals.has(to):
-				return [first[to], to]
-			queue.append(to)
-	return [0, -1]
+	var doors = server.doors
+	var systems = server.systems
+	return Paths.first_step(map, start, goals, func(nx: int, ny: int) -> bool:
+		var j := ny * map.width + nx
+		if not (map.walkable(nx, ny) and (wide or map.on_ship(j)) or wide and suited and map.floats(nx, ny)):
+			return false
+		var door := map.door_of[j]
+		# (v70) nor through a welded door
+		return not (door >= 0 and (doors.is_sealed(door) and not systems.lock_door(door) and not shutters or doors.welded[door] == 1)))
 
 
 func _work(p: Player) -> void:

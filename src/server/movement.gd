@@ -93,7 +93,7 @@ func bot_think(p: Player) -> void:
 		p.bot_until = server.tick + server.rng.randi_range(10, 40)
 		return
 	for attempt in 6:
-		var d := server.rng.randi_range(1, 4)
+		var d := server.rng.randi_range(1, Net.DIRS)   # (v77) a slant too
 		if server.map.walkable(st.x + Net.DX[d], st.y + Net.DY[d]) and not _would_vent(st.x, st.y, d):
 			st.dir = d
 			break

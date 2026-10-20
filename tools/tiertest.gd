@@ -292,13 +292,13 @@ func _traders() -> void:
 	for item in junk.keys():
 		if item is int and Weapons.of_item(item) != Weapons.NONE:
 			guns += 1
-	_expect(guns == 0 and not junk.has(Net.ITEM_ROCKET) and int(junk[Net.ITEM_PATCH]) < Items.price(Net.ITEM_PATCH),
-		"a junk dealer has no guns and no ammunition, and its things are cheaper")
 	var plain := Net.ITEM_PATCH
 	for item: int in [Net.ITEM_PATCH, Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_PART]:
 		if not server.supplies.wanted().has(item):
-			plain = item                     # (v67: not one it looks for, which it pays well for)
+			plain = item                     # (v67: not one it looks for, which it pays well for; v77: nor sells)
 			break
+	_expect(guns == 0 and not junk.has(Net.ITEM_ROCKET) and int(junk[plain]) < Items.price(plain),
+		"a junk dealer has no guns and no ammunition, and its things are cheaper")
 	_expect(server.supplies.sell_price(plain) == Weapons.sell_price(Items.price(plain), 0.2), "it buys at a fifth")
 	sectors.deal[at] = Sectors.DEAL_BLACK
 	server.supplies._offers_for = -1

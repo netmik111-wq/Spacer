@@ -78,6 +78,7 @@ func offers() -> Dictionary:
 			_offers[bay] = Items.price(bay)
 		_offers[Net.ITEM_ROBOT] = Items.price(Net.ITEM_ROBOT)
 		return _offers
+	var want := wanted()
 	for item in Items.kept_in_locker():
 		if Items.price(item) <= 0 or Weapons.of_item(item) != Weapons.NONE or Items.gear_of(item) != Gear.NONE:
 			continue
@@ -85,6 +86,8 @@ func offers() -> Dictionary:
 			continue                         # (parts come from guns taken apart, not from traders)
 		if LOOT.has(item):
 			continue                         # (v67) scrap, ore and scan data are found, never sold
+		if want.has(item):
+			continue                         # (v77, the author's T1) it needs what it looks for itself
 		if is_ammo(item):
 			if kind != Sectors.DEAL_JUNK:
 				_offers[item] = Items.price(item)
