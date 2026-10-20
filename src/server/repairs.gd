@@ -51,7 +51,7 @@ func update(p: Player) -> void:
 			p.remove(Net.ITEM_PATCH)
 			server.air.set_hole(cell, false)
 			server.replication.hull_record(cell, 0)
-			server.chat.say("%s заделывает пробоину. Воздух сам не вернётся: его дадут соседние отсеки." % p.name)
+			server.chat.say("%s заделывает пробоину. Вентиляция понемногу вернёт воздух в отсек." % p.name)
 	elif server.outside.can_mend(p, cell):
 		# (v61) the hull's strength mended from outside, a patch at a time
 		if _work_done(p, cell, server.outside.mend_ticks(p)):
@@ -114,7 +114,8 @@ func update(p: Player) -> void:
 		if _work_done(p, cell, Net.FORCE_TICKS):
 			server.doors.locked[door] = 0
 			server.forced_until[door] = server.tick + Net.FORCED_OPEN_TICKS
-			server.chat.say("%s вручную поднимает аварийный шлюз." % p.name)
+			if not p.bot or server.stations.shutter_forced(p, door):
+				server.chat.say("%s вручную поднимает аварийный шлюз." % p.name)
 	elif door >= 0 and server.doors.barred(door, server.map.door_access[door], p.st.access) and not server.map.leaving(p.st.x, p.st.y, door):
 		# no access: the lock can still be broken, slowly and for all to hear;
 		# (v69) broken, it opens for anybody until somebody mends it

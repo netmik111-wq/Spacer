@@ -101,6 +101,12 @@ var _announced := {}                 # (v74) job cell -> the tick a bot last sai
 const ANNOUNCE_TICKS := 30 * Net.TICK_HZ
 var _fetch_for := {}                 # (v74) bot slot -> the job it fetches patches or parts for (it holds it meanwhile)
 var _alert_bots := {}                # slot -> the order the alert gave that bot (freed when it is called off, if it still has it)
+var _progress := {}                  # (v75) bot slot -> [its task, the tick it last reached a cell new to this way, {cells}]
+var _avoid := {}                     # (v75) bot slot -> {goal or job cell: tick}: where it got stuck, left alone till then
+var _forced := {}                    # (v75) bot slot -> {door: [ticks it forced that door's shutter up]}
+const STUCK_TICKS := 20 * Net.TICK_HZ   # (v75, the author's B1) no new cell on its way for this long: the bot is stuck
+const AVOID_TICKS := 60 * Net.TICK_HZ   # and leaves that goal alone this long
+const FORCE_AGAIN := 2                  # forcing the same shutter this many times within AVOID_TICKS is being stuck too
 
 
 func setup(p_server: GameServer) -> void:
@@ -577,6 +583,7 @@ const TASK_HEAL := 5                 # an autodoc's bed: to be healed
 const TASK_GARDEN := 6               # (v63) a hydroponic tray: to plant, tend, harvest or clear it
 const TASK_FUEL := 7                 # (v67) the engine: to pour a can of fuel into the tank
 const TASK_LOAD := 8                 # (v68) a gun mount: to push a round it carries into its breech
+const TASK_AIR := 9                  # (v75, the author's note: bots broke when the ship ran out of air) to a room with air
 const BOT_POURS_BELOW := 400.0       # (v67) a bot on work pours cans from the locker while the tank is below this
 const TANK_LOW := 0.35               # (v60) a bot with less in its tank goes to fill it before it works on
 const TANK_FULL := 0.95
@@ -612,6 +619,7 @@ func bot_think(p: Player) -> bool:
 	var here := p.st.y * map.width + p.st.x
 	if server.tick - p.bot_plan_tick >= BOT_PLAN_TICKS or here != p.bot_from:
 		_plan(p, here)
+	watch_progress(p)
 	if p.bot_step == -1:
 		p.st.dir = Net.DIR_NONE
 		p.using = false
@@ -643,7 +651,13 @@ func _through_lock(p: Player) -> bool:
 	if p.bot_step <= 0 or p.st.cd > 0:
 		return false
 	var ahead := server.map.door_at(p.st.x + Net.DX[p.bot_step], p.st.y + Net.DY[p.bot_step])
-	return server.systems.lock_bars(ahead) and server.systems.get_past(p, ahead, true)
+	if not server.systems.lock_bars(ahead):
+		return false
+	if _door_busy(p, ahead):
+		p.st.dir = Net.DIR_NONE
+		p.using = false
+		return true
+	return server.systems.get_past(p, ahead, true)
 
 
 func _through_shutter(p: Player) -> bool:
@@ -656,6 +670,9 @@ func _through_shutter(p: Player) -> bool:
 	if ahead < 0 or server.systems.lock_door(ahead) or not server.doors.is_sealed(ahead):
 		return false
 	p.st.dir = Net.DIR_NONE
+	if _door_busy(p, ahead):
+		p.using = false                      # (v75) another bot is forcing it already: wait for it
+		return true
 	if p.st.facing != p.bot_step:
 		p.st.facing = p.bot_step
 		p.self_dirty = true
@@ -677,12 +694,28 @@ func _forced_ahead(p: Player) -> bool:
 func _volunteers(p: Player) -> bool:
 	## (v72, the author's "repairs always first"; my B2 pick) A free bot comes to mend when
 	## something is broken that no other bot has taken, then goes back to wandering.
-	if p.bot_goal >= 0 and p.bot_task in [TASK_MEND, TASK_LOCKER, TASK_OXYGEN]:
+	if p.bot_goal >= 0 and p.bot_task in [TASK_MEND, TASK_LOCKER, TASK_OXYGEN, TASK_AIR]:
 		return true                          # on its way to it already
+	if _short_of_air(p):
+		return true                          # (v75) no air here, or its tank runs low: it sees to itself
 	if not volunteers or (server.tick + p.slot) % BOT_PLAN_TICKS != 0 or _repair_jobs(p).is_empty():
 		return false
 	p.bot_plan_tick = -1000
 	return true
+
+
+func _short_of_air(p: Player) -> bool:
+	## (v75) Standing where the air is too thin for a bot, or its suit's tank running low.
+	var here := p.st.y * server.map.width + p.st.x
+	return server.map.on_ship(here) and (server.air.air[here] < BOT_AIR or p.has_suit() and p.tank < TANK_LOW)
+
+
+func _air_goals(p: Player, goals: Dictionary) -> void:
+	## (v75) Every cell of our ship where a bot may breathe: the nearest is where it goes.
+	var map := server.map
+	for c in map.walk.size():
+		if map.walk[c] == 1 and map.door_of[c] < 0 and map.on_ship(c) and server.air.air[c] >= BOT_AIR:
+			goals[c] = 0
 
 
 func _wants_healing(p: Player) -> void:
@@ -727,7 +760,16 @@ func _plan(p: Player, here: int) -> void:
 					if not taken.has(int(s[0])) and _breathable(p, int(s[0])):
 						goals[int(s[0])] = int(s[1])
 			Net.POST_MOUNTS:
-				goals = _mount_post_goals(p)
+				# (v75, the author's note: bots stood at a broken mount and nobody mended it)
+				# a gunner mends a broken mount first, if no other bot has that job
+				var broken_mounts := {}
+				for i in server.map.guns.size():
+					if server.ship.mounts[i] != Weapons.NONE and server.ship.broken.has(server.map.guns[i]):
+						broken_mounts[server.map.guns[i]] = true
+				if _repair_jobs(p).any(func(c: int) -> bool: return broken_mounts.has(c)):
+					p.bot_task = _mend_goals(p, goals, _taken(p), broken_mounts)
+				if p.bot_task == TASK_POST:
+					goals = _mount_post_goals(p)
 			Net.POST_REPAIR:
 				p.bot_task = _work_goals(p, goals)
 			Net.POST_FREE:
@@ -742,6 +784,14 @@ func _plan(p: Player, here: int) -> void:
 						if server.map.door_of[c] < 0 and (server.map.walkable(c % w, c / w) or p.has_suit() and server.map.floats(c % w, c / w)) \
 								and _breathable(p, c):
 							goals[c] = 0
+	_drop_avoided(p, goals)
+	if goals.is_empty() and server.air.air[here] < BOT_AIR and p.order != Net.POST_FOLLOW and server.map.on_ship(here):
+		# (v75, the author's note: bots stood in a room with no air till their tanks ran dry)
+		# nothing to do here: it goes where there is air
+		_air_goals(p, goals)
+		_drop_avoided(p, goals)
+		if not goals.is_empty():
+			p.bot_task = TASK_AIR
 	if goals.is_empty():
 		p.bot_goal = -1
 		p.bot_step = 0
@@ -790,6 +840,84 @@ func _plan(p: Player, here: int) -> void:
 		return
 	_took(p, _job_of(p, p.bot_goal))
 	_tell_task(p)
+
+
+func _drop_avoided(p: Player, goals: Dictionary) -> void:
+	## (v75, the author's B1) Goals and jobs it got stuck on lately are left out for a while.
+	var avoid: Dictionary = _avoid.get(p.slot, {})
+	if avoid.is_empty():
+		return
+	for c: int in avoid.keys():
+		if server.tick >= int(avoid[c]):
+			avoid.erase(c)
+	var jobs: Dictionary = _spot_jobs.get(p.slot, {})
+	for c: int in goals.keys():
+		if avoid.has(c) or p.bot_task == TASK_MEND and avoid.has(int(jobs.get(c, -1))):
+			goals.erase(c)
+
+
+func watch_progress(p: Player) -> void:
+	## (v75, the author's B1: "should bots notice when they are stuck?") A bot on its way that has
+	## reached no cell new to this way for STUCK_TICKS (it pushes on a door, walks back and forth,
+	## forces the same shutter again) drops that goal for AVOID_TICKS, says so in the bots' log and
+	## looks for another way or other work.
+	var here := p.st.y * server.map.width + p.st.x
+	if p.cond != Net.COND_OK or p.bot_goal < 0 or p.bot_goal == here or p.bot_step == 0 and not p.using:
+		_progress.erase(p.slot)
+		return
+	var pr: Array = _progress.get(p.slot, [])
+	if pr.is_empty() or int(pr[0]) != p.bot_task:
+		_progress[p.slot] = [p.bot_task, server.tick, {here: true}]
+		return
+	var seen: Dictionary = pr[2]
+	if not seen.has(here):
+		seen[here] = true
+		pr[1] = server.tick
+		return
+	if server.tick - int(pr[1]) >= STUCK_TICKS:
+		stuck(p)
+
+
+func stuck(p: Player) -> void:
+	## (v75) The bot gives up its present goal for a while.
+	var avoid: Dictionary = _avoid.get(p.slot, {})
+	if p.bot_goal >= 0:
+		avoid[p.bot_goal] = server.tick + AVOID_TICKS
+	if p.bot_job >= 0:
+		avoid[p.bot_job] = server.tick + AVOID_TICKS
+	_avoid[p.slot] = avoid
+	var what: String = _job_words.get(p.slot, "")
+	server.chat.bot_log(p, "застрял по дороге%s: ищу другой путь или другое дело." % (" (%s)" % what if what != "" else ""))
+	_took(p, -1)
+	_progress.erase(p.slot)
+	_forcing.erase(p.slot)
+	p.using = false
+	p.st.dir = Net.DIR_NONE
+	p.bot_plan_tick = -1000
+
+
+func shutter_forced(p: Player, door: int) -> bool:
+	## (v75) A bot forced a shutter up. True: say it in everybody's chat (the first time in a while).
+	## The same shutter forced again and again is a bot going round in circles: it is stuck.
+	var by: Dictionary = _forced.get(p.slot, {})
+	var ticks: Array = (by.get(door, []) as Array).filter(func(t: int) -> bool: return server.tick - t < AVOID_TICKS)
+	ticks.append(server.tick)
+	by[door] = ticks
+	_forced[p.slot] = by
+	if ticks.size() > FORCE_AGAIN:
+		stuck(p)
+	return ticks.size() == 1
+
+
+func _door_busy(p: Player, door: int) -> bool:
+	## (v75, the author's B3) Another bot already works at this door (forcing its shutter, pressing
+	## its button): this one waits rather than crowd the doorway.
+	for q: Player in server.players:
+		if q == null or q == p or not q.bot or q.corpse or q.cond != Net.COND_OK or not q.using:
+			continue
+		if server.map.door_at(q.st.x + Net.DX[q.st.facing], q.st.y + Net.DY[q.st.facing]) == door:
+			return true
+	return false
 
 
 func _job_of(p: Player, goal: int) -> int:
@@ -842,7 +970,7 @@ func _mount_post_goals(p: Player) -> Dictionary:
 	var goals := {}
 	var map := server.map
 	for i in map.guns.size():
-		if server.ship.mounts[i] == Weapons.NONE:
+		if server.ship.mounts[i] == Weapons.NONE or server.ship.broken.has(map.guns[i]):
 			continue
 		var g := server.mounts.gunner(i)
 		if g != null and g != p:
@@ -1025,7 +1153,8 @@ func _took(p: Player, job: int) -> void:
 	_job_words[p.slot] = _job_text(job)
 	_logged.erase(p.slot)
 	# (v74) the same job is said aloud once in a while, whichever bot takes it (the rest go to the log)
-	var aloud: bool = server.tick >= int(_announced.get(job, -ANNOUNCE_TICKS)) + ANNOUNCE_TICKS
+	# (v75, the author's B4) only a breach is said in everybody's chat; the rest goes to the bots' tab
+	var aloud: bool = server.air.holes.has(job) and server.tick >= int(_announced.get(job, -ANNOUNCE_TICKS)) + ANNOUNCE_TICKS
 	if aloud:
 		_announced[job] = server.tick
 	server.chat.bot_log(p, "беру %s." % _job_words[p.slot], aloud)
@@ -1056,6 +1185,8 @@ func _tell_task(p: Player) -> void:
 			words = "заливает топливо в двигатель"
 		TASK_LOAD:
 			words = "заряжает орудие"
+		TASK_AIR:
+			words = "здесь нет воздуха, уходит туда, где он есть"
 		_:
 			if p.order == Net.POST_FREE:
 				return

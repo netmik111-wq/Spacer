@@ -72,6 +72,7 @@ var door_access := PackedByteArray() # per door: the access it asks for (Net.ACC
 var vents := PackedInt32Array()     # (v69) floor cells with a room's air vent, one per room (see _place_vents)
 var access_in := PackedByteArray()   # (v69) per cell: the access of the restricted room it lies in (0 = none):
                                      # its doors open for anybody leaving it (see leaving)
+var brig := PackedByteArray()        # (v75) per cell: 1 = a brig cell, where prisoners never slip the cuffs
 var see_through := PackedByteArray() # per cell: 1 = its floor shows the deck below (glass, catwalk, hatch)
 var air_down := PackedInt32Array()   # per cell: the cell below that shares its air (under a catwalk or
                                      # a hatch), or -1
@@ -228,6 +229,13 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		if at >= 0 and at < room_of.size() and room_of[at] >= 0:
 			for c: int in rooms[room_of[at]]:
 				access_in[c] |= int(r[2])
+	brig = PackedByteArray()
+	brig.resize(width * height)
+	for r: Array in data.get("brig_rooms", []):
+		var at := int(r[1]) * width + int(r[0])
+		if at >= 0 and at < room_of.size() and room_of[at] >= 0:
+			for c: int in rooms[room_of[at]]:
+				brig[c] = 1
 	for i in cells.size():
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
@@ -546,6 +554,28 @@ func leaving(x: int, y: int, door: int) -> bool:
 	## standing at x, y on the inside of that restricted door? Leaving a locked room is free.
 	var c := y * width + x
 	return c >= 0 and c < access_in.size() and (access_in[c] & door_access[door]) != 0
+
+
+func is_brig(cell: int) -> bool:
+	return cell >= 0 and cell < brig.size() and brig[cell] == 1
+
+
+func brig_cells() -> Array:
+	## (v75) The rooms (cells each) of the brig, top-left first.
+	var out: Array = []
+	var seen := {}
+	for c in brig.size():
+		if brig[c] == 1 and room_of[c] >= 0 and not seen.has(room_of[c]):
+			seen[room_of[c]] = true
+			out.append(rooms[room_of[c]])
+	return out
+
+
+func room_at(x: int, y: int) -> int:
+	## The room a cell lies in (-1: none, or off the map).
+	if x < 0 or y < 0 or x >= width or y >= height:
+		return -1
+	return room_of[y * width + x]
 
 
 func on_ship(cell: int) -> bool:
