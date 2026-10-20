@@ -568,6 +568,7 @@ func send() -> void:
 			out.encode_s32(o + 10, st.move_tick)
 			out.encode_s16(o + 14, st.fx)
 			out.encode_s16(o + 16, st.fy)
+			out.encode_u8(o + 18, 1 if st.free_look else 0)   # (v77) it looks where its mouse is
 			p.self_dirty = false
 			p.last_self_tick = server.tick
 		if check:

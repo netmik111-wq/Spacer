@@ -466,20 +466,74 @@ func face(facing: int) -> void:
 	## Turns our character to face that way (Net.DIR_*), predicted at once.
 	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == pred.facing:
 		return
+	_send_input(Mover.TURN + facing)
+
+
+func _send_input(value: int) -> void:
+	## An input that is not a held direction (a turn, how we look), stamped and predicted as walking is.
 	var at_tick := maxi(pred_tick + 1, _last_apply + 1)
 	_seq += 1
-	_inputs.append([_seq, at_tick, Mover.TURN + facing, false])
+	_inputs.append([_seq, at_tick, value, false])
 	_last_apply = at_tick
 	var msg := PackedByteArray()
 	msg.resize(8)
 	msg.encode_u8(0, Net.C_INPUT)
 	msg.encode_u16(1, _seq & 0xFFFF)
 	msg.encode_u32(3, at_tick)
-	msg.encode_u8(7, Mover.TURN + facing)
+	msg.encode_u8(7, value)
 	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 	_host.flush()
 	_repeat_msg = msg
 	_repeat_left = INPUT_COPIES
+
+
+# (v77, the author's V1..V4) The view follows the mouse: the cone turns smoothly towards it,
+# half a turn in LOOK_TURN_SEC, and the body (what others see) takes the nearest of the 8 ways.
+const LOOK_TURN_SEC := 1.0 / 3.0     # (his V2) how long half a turn takes
+const LOOK_STICK_DEG := 6.0          # the body keeps its way this much past the half-way line, so it does not flicker
+var want_free_look := true           # the player's setting (GameScreen sets it every frame)
+var look_angle := PI * 0.5           # where the eyes point, radians on screen (0 = right, PI/2 = down)
+var _look_sent_ms := -100000         # when the setting was last sent (sent again if the server did not take it)
+
+
+func free_looking() -> bool:
+	## Does our character look where the mouse is (rather than where it walks)?
+	return _have_self and pred.free_look
+
+
+func look_way() -> Vector2:
+	## (v77) Which way our eyes point: the mouse's way (smooth), or the way we face.
+	return Vector2.from_angle(look_angle) if free_looking() else Net.way(pred.facing)
+
+
+func aim_at(at: Vector2, delta: float) -> void:
+	## (v77) Every frame: the place the mouse points at (in cells of the whole grid, or INF when it
+	## points nowhere). The eyes turn towards it; the body follows them in 8 ways.
+	if phase != PLAYING or not _have_self:
+		return
+	if want_free_look != pred.free_look and Time.get_ticks_msec() - _look_sent_ms > 1000:
+		_look_sent_ms = Time.get_ticks_msec()
+		_send_input(Mover.LOOK_FREE if want_free_look else Mover.LOOK_WALK)
+	if not pred.free_look or my_cond != Net.COND_OK:
+		look_angle = Net.way(pred.facing).angle()
+		return
+	var d := at - Mover.visual_pos(pred, pred_time())
+	if not at.is_finite() or d.length() < 0.35:
+		return
+	var turn := angle_difference(look_angle, d.angle())
+	var most := PI / LOOK_TURN_SEC * delta
+	look_angle = wrapf(look_angle + clampf(turn, -most, most), -PI, PI)
+	var now := Net.way(pred.facing)
+	if absf(rad_to_deg(angle_difference(now.angle(), look_angle))) > 22.5 + LOOK_STICK_DEG:
+		var way := Vector2.from_angle(look_angle)
+		var best := pred.facing
+		var best_dot := -2.0
+		for k in range(1, Net.DIRS + 1):
+			var dot := Net.way(k).dot(way)
+			if dot > best_dot:
+				best_dot = dot
+				best = k
+		face(best)
 
 
 func send_fire(at: Vector2) -> void:
@@ -2292,6 +2346,7 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.move_tick = pkt.decode_s32(o + 9)
 	_auth.fx = pkt.decode_s16(o + 13)
 	_auth.fy = pkt.decode_s16(o + 15)
+	_auth.free_look = pkt[o + 17] != 0
 	_auth_tick = s_tick
 	for i in _inputs.size():
 		if (int(_inputs[i][0]) & 0xFFFF) == ack:

@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v76 (version 0.69).
+Last updated: build v77 (version 0.70).
 
 Contents:
 
@@ -41,6 +41,7 @@ Contents:
 31. [A friendlier game (v73)](#31-a-friendlier-game-v73)
 32. [Art and walking (v74)](#32-art-and-walking-v74)
 33. [Polish (v75)](#33-polish-v75)
+34. [The evening's bugs, the view and bots on a slant (v77)](#34-the-evenings-bugs-the-view-and-bots-on-a-slant-v77)
 
 ---
 
@@ -431,6 +432,11 @@ Contents:
 - (v69, the author's note: people popped in late when turning) The server sends each player everyone their
   character could see **by turning round** (walls still hide them); the game itself hides those behind instantly.
   So turning shows people at once, without waiting for the ping.
+- (v77, the author's V1–V4) **The view follows the mouse**: the cone turns towards the mouse cursor, smoothly, half a turn
+  (180°) in **1/3 s**, so something can still creep up behind you. Walking no longer turns you: you can walk backwards
+  at full speed while looking ahead. The body turns with the eyes in 8 ways (others see where you look); E uses what you
+  face. The setting «Взгляд за мышью» (Settings, Picture) turns it off: then you look where you walk, as before. While a
+  console or a window is open the eyes stay still. Bots and pirates look where they walk.
 - A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
   in the middle (later, losing an eye will remove its part of the cone).
 - The eyes reach **9 cells** (v46, the author: as in SS13; before it was 20). The screen is zoomed so
@@ -1258,6 +1264,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
     **4–8** in all.
   - **Газовое облако** (gas cloud, 10%; never in a dead zone): while somebody stands at the engine the fuel scoop adds
     **2.5 units a second** to the tank, **150–300** in all.
+  - (v77, the author's note) The bridge says for each kind found what it takes («подлетите к метке и остановитесь, потом
+    встаньте к двигателю…»), and once the ship holds still there, what to do now. Before, it said "fly to the mark to pick
+    up" for all of them.
 
 ### Pirate hunters (v64)
 
@@ -1441,6 +1450,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
     and **each character by player name**: where they stood, health and wounds, items, clothing,
     tank, job and skills. Returning under the same name, a player gets their
     character back. This works the same evening too: leave and rejoin — you're in the same place with the same things.
+    (v77, the author's R1) Coming back after a lag drop, before the server noticed it (up to 12 s), the same name from
+    the same address takes the same character back at once (before, it made a second one, «Имя 2»). A character saved
+    out in space, or on a ship that is no longer alongside, comes back at the spawn point aboard.
   - Not saved: a derelict or pirate ship alongside, pirates on board, bots,
     the eventer's mood.
   - A lost campaign leaves no save.
@@ -1480,7 +1492,8 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 - **Picture**: full screen, vertical sync, frame limit (30, 60, 120, 144 or none), frame counter
   in the top left corner (shown even while F1's status is hidden), the white flash after a jump,
   the screen shaking when the hull is hit (v56, 0–100%), (v73) the size of the interface and its text (75–150%),
-  (v74) «Подсказки первой смены» (the first-shift checklist; turning it on starts it from the beginning).
+  (v74) «Подсказки первой смены» (the first-shift checklist; turning it on starts it from the beginning),
+  (v77) «Взгляд за мышью» (the view follows the mouse; on at first; off: you look where you walk).
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works
@@ -1528,8 +1541,11 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   once, and its growth goes **one step back**. Turned down, the first mission is offered again 3 jumps later; a
   courier that gets away is found again in another sector.
 - **SOS** (the author's R5): about **15%** of calm systems send an SOS, marked «SOS» on the chart. Arriving there brings
-  its call: help (**40%** survivors: 2 to the reserve and 3 rations; **30%** salvage: 3 parts and 15 credits; **30%** a
-  pirate trap), the guard's blue answer (no trap: survivors, or the pirates reported for 25 credits), or leave.
+  its call: help (**40%** survivors: 2 to the reserve and 3 rations; **30%** the crew is dead: (v77, the author's S1) the
+  ship itself comes alongside, dark and nearly airless, with **3** of its dead aboard (1–2 things in each one's pockets)
+  and the usual derelict's loot, to board, search and cut for scrap; it stays while our ship stays within **10** of where
+  it came, and is left behind (with its dead) once we fly off or jump; if no ship can come alongside, 3 parts and
+  15 credits as before; **30%** a pirate trap), the guard's blue answer (no trap: survivors, or the pirates reported for 25 credits), or leave.
 
 ### Food and hunger
 
@@ -1593,6 +1609,8 @@ work, not from visiting; fuel is counted in units; places need a trip outside.
 - **Traders want things** (the author's M3): each trader looks for **two** things among scrap, ore, scan data, rations,
   spare parts, patches, medkits and shells, and pays **1.5×** their price for them. The chart's line for a trader
   says «ищет: …», the chat says it on arrival, and the trader's window marks them. Nobody sells scrap, ore or scan data.
+  (v77, the author's T1) A trader **never sells** the two things it looks for: it needs them itself (before, buying one
+  cheap and selling it back at 1.5× made endless money).
 - **The refinery** (the workbench, an engineer, **10 s**): a can of fuel from **4 scrap** or **3 ore**. It costs more
   than buying (4 scrap sell for 16, 3 ore for 18, a can's worth costs 12 at a trader): it is for when no trader is near.
 - **Work places** (anomaly, asteroid, gas cloud) and **floating finds** with the tractor beam: section 19, "Places".
@@ -1831,8 +1849,8 @@ The author's answers N2–N7 and L1 on the page "Spacer v73 Friendly Game", his 
   straight one: 5 or 6 ticks in turn (5.6 on average) against 4, and 11 or 12 against 8 when going slowly. A slant step
   needs the cell it goes to and both cells beside the corner free: no cutting past a wall's corner. Doorways are never
   crossed on a slant (a door is entered and left straight). Held against a wall or a doorway, the slant slides along it
-  (across first, then up or down). Somebody dragging a body walks straight. Ladders change decks as before. Bots and pirates
-  still walk straight (the author: they should walk on a slant too, in a later build).
+  (across first, then up or down). Somebody dragging a body walks straight. Ladders change decks as before. (v77) Bots,
+  pirates and our security robots walk on a slant too (section 34).
 - **Eight ways to face.** Characters are drawn facing 8 ways (the slants lean the figure). Sight, the flashlight's cone and
   turning by mouse click use all 8. E while facing a slant uses the console or machine right beside (on the wall next to
   us), or the floor cell on the slant (a thing lying there); never a door on a slant.
@@ -1874,7 +1892,7 @@ The author's 20 answers on the page "Spacer v75 Polish" (every one the recommend
     time.
   - Two bots do not crowd one doorway: while one forces a shutter or presses an airlock button, another bot waits.
   - Only a breach («беру пробоину») is said in everybody's chat («Всё»); every other job goes to the bots' tab and log.
-  - Bots still walk straight (a later build, the author's B2).
+  - (v77) Bots walk on a slant too (section 34).
 - **Hits.** A hurt figure flashes red for **0.25 s**, drops of blood stay on the floor (a robot throws sparks) (the newest **400**
   are kept), and a wet hit sound plays (a metal one for robots). Seen within **24** cells on the same deck.
 - **Broken machines** spark and flicker.
@@ -1895,3 +1913,25 @@ The author's 20 answers on the page "Spacer v75 Polish" (every one the recommend
 - **Bug report.** «Сообщить об ошибке» in the main menu, and a button in the pause menu, put the latest logs, the save,
   the settings, the bots' log and a screenshot into one zip in a «bug_reports» folder next to the game, and open the
   folder.
+
+## 34. The evening's bugs, the view and bots on a slant (v77)
+
+The author's answers on the page "Spacer v77 Movement and View" and his seven notes from an evening of play with KaineQwQ.
+
+- **The view follows the mouse** (V1–V4): section 12. A setting, on at first; half a turn in **1/3 s**; walking backwards
+  at full speed; others see the turn (8 ways).
+- **Bots, pirates and our security robots walk on a slant** (B1): their way is worked out in 8 ways, a slant counting
+  **1.4** straight steps (it takes that long), so they never zigzag where straight is as short. A slant is taken only where
+  a player could take it: no corner cut, no doorway crossed on a slant. A bot wandering about may step on a slant too.
+- **Fixes from the evening:**
+  - A trader never sells what it looks for (section 26): no endless money.
+  - A wreck left behind while the jump drive charged came straight back, 20 times a second, filling the chat; now it comes
+    back only if the jump is called off. Its name in «Рядом …» is said whole (it was cut after its first letter).
+  - Rejoining after a lag drop takes the same character back at once (section 23).
+  - The dead ship that "did not load" after the rejoin: the player who dropped on it no longer counted as outside, so the
+    ship could jump and leave the wreck behind; he then came back afloat in space. Now he comes back aboard.
+  - The chat: long lines that wrap no longer push the newest under the input line (the oldest go until the rest fit).
+  - The gas cloud and the other places: the bridge says what each takes (section 19).
+  - SOS, "the crew died": a real dead ship comes alongside (section 25).
+- Left for **v78** (the author's M1 D and C1 B): quarter-tile steps for players, lying down, swapping places with a friend,
+  and shots that pass a friend standing right by the shooter (as in RimWorld).

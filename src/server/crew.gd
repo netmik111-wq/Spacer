@@ -28,14 +28,22 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	if pkt.decode_u16(1) != Net.PROTOCOL:
 		server._reject(peer, Net.REJECT_VERSION)
 		return
-	if server.player_count() >= server.max_players:
-		server._reject(peer, Net.REJECT_FULL)
-		return
 	var n := pkt[3]
 	if pkt.size() < 4 + n:
 		server._reject(peer, Net.REJECT_BAD_HELLO)
 		return
 	var wanted := server.chat.clean(pkt.slice(4, 4 + n).get_string_from_utf8(), Net.MAX_NAME, "Игрок")
+	var old := _same_person(wanted, peer)
+	if old == null and server.player_count() >= server.max_players:
+		server._reject(peer, Net.REJECT_FULL)
+		return
+	if old != null:
+		# (v77, the author's R1: "KaineQwQ 2" after a lag kick) the same name from the same
+		# address is the same person back before the server noticed the drop: the old link
+		# is let go at once (kept as a saved character, as any leaving is), and taken back below
+		var old_peer: ENetPacketPeer = old.peer
+		drop(old_peer, true)
+		old_peer.peer_disconnect_now()
 	var back_from_reserve := false
 	if server.over == Net.OVER_NONE and server.dead_names.has(wanted):
 		# their character died and they left: coming back takes somebody from the reserve
@@ -172,7 +180,17 @@ func restore_character(p: Player, c: Dictionary) -> void:
 	p.health = float(c["health"])
 	p.wounds = float(c["wounds"])
 	p.cond = Net.COND_OK if p.health > 0.0 else Net.COND_CRIT
-	p.st.place(int(c["x"]), int(c["y"]))
+	var x := int(c["x"])
+	var y := int(c["y"])
+	var map := server.map
+	if x < 0 or y < 0 or x >= map.width or y * map.width + x >= map.walk.size() \
+			or not (map.on_ship(y * map.width + x) or map.is_other(y * map.width + x)):
+		# (v77, the author's note: back after a drop, afloat where a ship alongside had been)
+		# out in space, or on a ship no longer here: back aboard ours
+		var at := spawn_point()
+		x = at.x
+		y = at.y
+	p.st.place(x, y)
 	p.st.facing = int(c["facing"])
 	p.st.down = p.cond != Net.COND_OK
 	p.self_dirty = true
@@ -396,7 +414,17 @@ func cryo_spot() -> Vector2i:
 	return Vector2i(-1, -1)
 
 
-func drop(peer: ENetPacketPeer) -> void:
+func _same_person(wanted: String, peer: ENetPacketPeer) -> Player:
+	## (v77) Our character of that name still linked to another connection from the same address, or null.
+	for q: Player in server.players:
+		if q != null and q.peer != null and q.peer != peer and q.name == wanted and not q.corpse and not q.bot and not q.pirate \
+				and q.peer.get_remote_address() == peer.get_remote_address():
+			return q
+	return null
+
+
+func drop(peer: ENetPacketPeer, coming_back: bool = false) -> void:
+	## A connection is gone. (v77) `coming_back`: its player is joining again at once, so no bot takes the place.
 	server.pending.erase(peer)
 	if not server.slot_of.has(peer):
 		return
@@ -412,7 +440,7 @@ func drop(peer: ENetPacketPeer) -> void:
 		if not p.bot and not p.pirate and server.over == Net.OVER_NONE:
 			server.saved_crew[p.name] = Campaign.character(p)   # kept for when they come back
 		remove(p)
-		if not p.bot and not p.pirate:
+		if not p.bot and not p.pirate and not coming_back:
 			_bot_takes_over(p.name)
 	server.log_line.emit("%s вышел (игроков: %d)." % [p.name, server.player_count()])
 

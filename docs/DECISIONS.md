@@ -1275,3 +1275,41 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   stay the same for now". The v75 tables (0 of 20 won) change no numbers until he has played.
 - **Nothing public** (his answer): the repository stays private and no GitHub Release is made; builds go through the chat
   as before.
+
+### The evening's bugs, the view and bots on a slant (v77; his answers on the page "Spacer v77 Movement and View", https://claude.ai/artifact/JFTeczxumE8CGGGcZ58vaJ)
+- **The trader's money loop** (T1 "A"): a trader never sells the two things it looks for (`Supplies.offers` skips
+  `wanted()`), "it needs them itself". B (sell them at 1.5×) left a shelf nobody buys from; C needed every item to remember
+  where it came from. Buying back what we sold stays at the price it paid, so it makes nothing either.
+- **The wreck spam on a jump**: `Derelict.update` sent a wreck away while the jump charged and `Road.at_hulk` brought it back
+  the next tick. A hulk comes back only with no jump charging. The `%` in «Рядом %s» bound tighter than `+` (the name was cut
+  after its first letter; the flagship drone ship's alarm had the same slip).
+- **Rejoining** (R1 "A"): the same name from the same address (`ENetPacketPeer.get_remote_address`) takes the character
+  at once: the old link is let go as a normal drop (`Crew.drop(peer, true)`: saved by name, no bot takes the place), then
+  the usual `saved_crew` restore. B (the name alone) would let anyone take a character while its player is in the game;
+  over Radmin each friend has his own address. A full server still lets the same person back in.
+- **The dead ship after the rejoin**: not a drawing fault (an in-process client test showed the wreck laid in at once).
+  The cause: the dropped player was no longer in the world, so `someone_outside()` let the ship jump and leave the wreck;
+  he came back afloat at his saved cell. A saved character whose cell is neither on our ship nor on the ship alongside
+  now comes back at the spawn point. (A gone player must not hold the ship forever, so his absence still does not count
+  as "outside".)
+- **The chat** (his picture): the box had room for 9 lines, but a wrapped line takes two rows, and a VBox taller than its
+  rect grows down, under the input. It now grows up, and the oldest lines go until the rest fit `CHAT_ROOM` (278 px).
+- **Places' hints**: the bridge said "fly to the mark to pick up" for everything; the gas cloud needs the ship still and
+  somebody at the engine. Each kind says what it takes; the work places say what to do once the ship holds there.
+- **SOS, the crew dead** (S1 "A"): `Derelict.sos_ship` brings a real derelict with 3 bodies (1–2 pocket things each) and
+  the usual loot, not remembered per sector (`_left`), kept alongside while the ship stays within `WRECK_REACH` of where it
+  came. Where no derelict can lie alongside (ship01), the old 3 parts and 15 credits.
+- **The view follows the mouse** (V1 "C": a setting, the mouse at first; V2 "B": 1/3 s for half a turn; V3 "A": no slower
+  backwards; V4 "A": others see it). The server already sends everyone all round (v69), so sight needs no aim from the
+  client: the cone, the fan and who is hidden are the client's (`GameClient.look_way`, `Sight.sees_way`). The body's 8-way
+  facing follows the eyes as TURN inputs, predicted as before, with a 6° stick past the half-way line so it does not
+  flicker. `Mover.State.free_look` (inputs `LOOK_FREE`/`LOOK_WALK`, sent in the self packet) stops walking from turning
+  the body; this keeps prediction exact. The flashlight still shines the 8 ways (what others see of it); the cone is smooth.
+  Scripted test walks (--demo, goto, path, click, hover) look where they walk; `aim=DX,DY` points the eyes for screenshots.
+- **Bots and pirates on a slant** (B1 "A"): one 8-way search for all three walkers (`Paths.first_step`, a bucket queue,
+  5 for a straight step, 7 for a slant: 1.4, as a slant takes 1.4 times as long, so no zigzags). A slant needs both cells
+  beside it to be cells the walker may step into and no doorway on any of the three or underfoot, as for players
+  (`Mover.slant_open`). Wandering bots may pick a slant too (Mover slides along a wall if it is shut).
+- **Left for v78** (M1 "D", Z1 "A" with "not free walking, a quarter of a tile"; C1 "B"): quarter-tile player steps, lying
+  down, swapping places; and his M2 and thread words on friendly fire: "when you're almost in one tile you can shoot from
+  behind your ally and not hit them, like in RimWorld" (a friend right next to the shooter is never hit).

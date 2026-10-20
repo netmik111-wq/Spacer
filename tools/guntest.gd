@@ -523,7 +523,8 @@ func _v49(p) -> void:
 			guns += 1
 	var kind := server.supplies.deal()
 	var guns_ok := (guns >= 3 and guns <= 5) if kind == Sectors.DEAL_ARMS else ((guns >= 1 and guns <= 2) if kind == Sectors.DEAL_BLACK else guns == 0)
-	_expect(guns_ok and offers.has(Net.ITEM_ROCKET) == (kind != Sectors.DEAL_JUNK) and offers.has(Net.ITEM_PATCH),
+	_expect(guns_ok and (offers.has(Net.ITEM_ROCKET) == (kind != Sectors.DEAL_JUNK) or server.supplies.wanted().has(Net.ITEM_ROCKET)) \
+			and (offers.has(Net.ITEM_PATCH) or server.supplies.wanted().has(Net.ITEM_PATCH)),   # (v77: not what it looks for)
 		"a trader (%s) sells %d kinds of ship gun, rockets unless it deals in junk, and the usual things" % [Sectors.DEAL_NAMES[kind], guns])
 	_expect(server.supplies.offers() == offers, "always the same at the same place")
 	ship.credits = 1000

@@ -36,6 +36,7 @@ const BugReport := preload("res://src/client/bug_report.gd")
 
 const MOVES := [["move_up", 1], ["move_down", 2], ["move_left", 3], ["move_right", 4]]
 const CHAT_LINES := 9
+const CHAT_ROOM := 278.0             # (v77) the height the chat lines may take, in pixels (the box's own)
 const SLOT_PX := 34.0                # a slot of the inventory on screen
 const SLOT_GAP := 4.0
 const BIG_SLOT_PX := 60.0            # and in the search panel
@@ -56,6 +57,8 @@ var hosting := false
 var host_port := 0
 var demo_walk := false               # test mode: wander without a keyboard
 var forced_dir := -1                 # test mode: direction dictated by a script (-1 = off)
+var scripted_look := false           # (v77) test mode: look where one walks, whatever the setting (scripted walks turn by walking)
+var aim_cells := Vector2.INF         # (v77) test mode: the mouse is taken to be this many cells from our character
 var forced_use := false              # test mode: the "use" key held by a script
 
 var _world: WorldView
@@ -420,6 +423,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_chat_box.offset_right = 540
 	_chat_box.offset_top = -330
 	_chat_box.offset_bottom = -52
+	_chat_box.grow_vertical = Control.GROW_DIRECTION_BEGIN   # (v77) taller than its room it grows up, never under the input line
 	root.add_child(_chat_box)
 	_chat_tabs = HBoxContainer.new()
 	_chat_tabs.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
@@ -1789,6 +1793,12 @@ func _process(delta: float) -> void:
 	var busy := _chat_input.visible or _pause.visible or _console.visible or _open(_options)
 	_world.hover = not busy
 	_update_look(busy)
+	# (v77, the author's V1) the eyes follow the mouse (not while a console or a window has it)
+	client.want_free_look = Options.mouse_look and not scripted_look
+	if aim_cells.is_finite():
+		client.aim_at(Vector2(client.pred.x, client.pred.y) + aim_cells, delta)
+	else:
+		client.aim_at(Vector2.INF if busy else _world.cell_under_mouse(), delta)
 	_fit_root()
 	_update_banner(delta)
 	_update_console()
@@ -2080,6 +2090,12 @@ func _process(delta: float) -> void:
 	if _chat_tab == TAB_BOTS and client.bot_log_count != _bot_log_seen:
 		_bot_log_seen = client.bot_log_count
 		_rebuild_chat()
+	# (v77, the author's note: the chat sat too low) long lines wrap into two rows: the oldest
+	# go until the rest fit the box, so the newest always stay just above the input line
+	while _chat_lines.size() > 1 and _chat_box.get_combined_minimum_size().y > CHAT_ROOM:
+		var gone := _chat_lines.pop_front()[0] as RichTextLabel
+		_chat_box.remove_child(gone)
+		gone.queue_free()
 	for entry: Array in _chat_lines:
 		var age: float = now_s - float(entry[1])
 		var alpha := 1.0 if _chat_input.visible else clampf(1.0 - (age - CHAT_VISIBLE_SEC) / 2.0, 0.0, 1.0)

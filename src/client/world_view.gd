@@ -1216,7 +1216,6 @@ func _update_fan() -> void:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
-	var facing: int = s[1]
 	var origin := me.position + Vector2(0, -12)
 	var half := 0.0
 	for arc: Array in Sight.eye_arcs(false):
@@ -1224,7 +1223,7 @@ func _update_fan() -> void:
 	var reach := (float(Sight.SIGHT_REACH) + 1.5) * _tile
 	var m := _cone_fan.material as ShaderMaterial
 	m.set_shader_parameter("origin", origin)
-	m.set_shader_parameter("ahead", Net.way(facing))
+	m.set_shader_parameter("ahead", client.look_way())   # (v77) the mouse's way, or the way we face
 	m.set_shader_parameter("half_field", deg_to_rad(half))
 	m.set_shader_parameter("band", CONE_BAND * _tile)
 	m.set_shader_parameter("spread", tan(deg_to_rad(CONE_SOFT)))
@@ -1256,10 +1255,9 @@ func _draw_look() -> void:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
-	var facing: int = s[1]
 	var green := Color(0, 1, 0, 1)
 	var origin := me.position + Vector2(0, -12)
-	var ahead := Net.way(facing)
+	var ahead := client.look_way()               # (v77) the mouse's way, or the way we face
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
 	_draw_light(_look, _near, Color(0, 1, 0, NEAR), 0)       # and dimly all round us, as in SS13
@@ -1446,12 +1444,13 @@ func can_see(x: int, y: int) -> bool:
 	var on_ours := Vector2i(x, y - (its_deck - _deck_shown) * _stride)
 	var dark := _my_dark()
 	var arcs := Sight.eye_arcs(dark)
+	var ahead := client.look_way()               # (v77) the mouse's way, or the way we face
 	if not dark and not client.dark_cell(y * map.width + x):
-		return Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
+		return Sight.sees_way(map, client.doors, me, ahead, on_ours, arcs, Sight.SIGHT_REACH)
 	if Vector2(on_ours).distance_to(me) <= Sight.DARK_REACH + 0.5 \
-			and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.DARK_REACH):
+			and Sight.sees_way(map, client.doors, me, ahead, on_ours, arcs, Sight.DARK_REACH):
 		return true
-	return _lit.has(y * map.width + x) and Sight.sees(map, client.doors, me, client.pred.facing, on_ours, arcs, Sight.SIGHT_REACH)
+	return _lit.has(y * map.width + x) and Sight.sees_way(map, client.doors, me, ahead, on_ours, arcs, Sight.SIGHT_REACH)
 
 
 func _on_heard(kind: int, x: int, y: int) -> void:
@@ -1974,7 +1973,7 @@ func _process(delta: float) -> void:
 	# what our eyes reach is worked out again only when something it depends on changed
 	var mine_now := client.sample(client.my_id)
 	var look_key := hash([me.position if me != null else Vector2.INF, me != null and me.get_parent() == _decks[my_deck].chars,
-		mine_now[1] if not mine_now.is_empty() else 0, my_deck, client.my_cond, hash(client.doors.ready), client.other_changes])
+		mine_now[1] if not mine_now.is_empty() else 0, roundi(rad_to_deg(client.look_angle)) if client.free_looking() else 0, my_deck, client.my_cond, hash(client.doors.ready), client.other_changes])
 	if look_key != _look_key:
 		_look_key = look_key
 		_look.queue_redraw()

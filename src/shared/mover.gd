@@ -21,26 +21,32 @@ class State:
 	var slow := false          # hauling somebody (or being hauled): a step takes Net.DRAG_TICKS
 	var span := 4              # how many ticks the last step takes (for drawing the slide)
 	var access := Net.ACCESS_ALL   # the rooms its job lets it into (Net.ACCESS_*): restricted doors open only for those
+	var free_look := false     # (v77, the author's V1) it looks where the mouse is: walking does not turn it
 
 	func copy_from(o: State) -> void:
 		x = o.x; y = o.y; cd = o.cd; facing = o.facing; dir = o.dir
 		move_tick = o.move_tick; fx = o.fx; fy = o.fy; down = o.down
-		slow = o.slow; span = o.span; access = o.access
+		slow = o.slow; span = o.span; access = o.access; free_look = o.free_look
 
 	func same_as(o: State) -> bool:
 		return x == o.x and y == o.y and cd == o.cd and facing == o.facing \
-			and dir == o.dir and move_tick == o.move_tick and down == o.down and slow == o.slow
+			and dir == o.dir and move_tick == o.move_tick and down == o.down and slow == o.slow and free_look == o.free_look
 
 	func place(px: int, py: int) -> void:
 		x = px; y = py; fx = px; fy = py; cd = 0; move_tick = -1000
 
 
 const TURN := 16                     # an input of TURN + a direction only turns the character that way
+const LOOK_FREE := 32                # (v77) an input of LOOK_FREE: from now on it looks where the mouse is
+const LOOK_WALK := 33                # and LOOK_WALK: it looks where it walks again
 
 
 static func apply_input(st: State, value: int) -> void:
-	## An input from the queue: hold a direction (0 = none), or just turn (TURN + direction).
-	if value > TURN:
+	## An input from the queue: hold a direction (0 = none), just turn (TURN + direction),
+	## or (v77) look with the mouse or where one walks.
+	if value == LOOK_FREE or value == LOOK_WALK:
+		st.free_look = value == LOOK_FREE
+	elif value > TURN:
 		if not st.down:
 			st.facing = value - TURN
 	else:
@@ -56,7 +62,7 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
 	# the character turns the way it is told at once, even in mid-step or against a wall
-	if not st.down and st.dir != 0:
+	if not st.down and st.dir != 0 and not st.free_look:
 		st.facing = st.dir
 	if st.down or st.cd > 0 or st.dir == 0:
 		return false

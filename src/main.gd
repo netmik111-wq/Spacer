@@ -54,6 +54,8 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
+## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
 ## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
 ## click=X,Y with click_after=SECONDS (a left click on that cell, as the mouse would).
 ## drone_after=SECONDS (send the scouting drone from the drone monitor the character faces),
@@ -353,6 +355,10 @@ func _on_joined() -> void:
 	_screen = GameScreen.new()
 	add_child(_screen)
 	_screen.demo_walk = _flags.has("demo")
+	_screen.scripted_look = _flags.has("demo") or _opt.has("goto") or _opt.has("path") or _opt.has("click") or _opt.has("hover")
+	if _opt.has("aim"):
+		var aim := str(_opt["aim"]).split(",")
+		_screen.aim_cells = Vector2(float(aim[0]), float(aim[1]) if aim.size() > 1 else 0.0)
 	if _opt.has("predict"):
 		_client.predict = str(_opt["predict"]) != "0"
 	if _hosting:
