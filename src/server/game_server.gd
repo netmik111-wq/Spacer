@@ -476,6 +476,8 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
 			crew.respawn_from_reserve(p)
+		elif p.cond == Net.COND_CRIT:
+			crew.give_up(p)
 	elif kind == Net.C_JUMP:
 		if pkt.size() > 1:
 			navigation.jump_asked(p, pkt[1])

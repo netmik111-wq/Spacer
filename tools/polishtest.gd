@@ -46,6 +46,7 @@ func _initialize() -> void:
 	_only_breaches_aloud()
 	_quiet_start()
 	_summary()
+	_give_up()
 	print("polishtest: %d failed" % failed)
 	quit(1 if failed > 0 else 0)
 
@@ -224,6 +225,30 @@ func _summary() -> void:
 	var pk: PackedByteArray = server.crew.summary_packet()
 	_expect(pk[0] == Net.S_SUMMARY and pk.decode_u16(1) == 3 and pk.decode_u32(5) == server.ship.earned and pk[9] == server.deaths.size(),
 		"the summary packet carries ships beaten, credits earned and the dead")
+
+
+func _give_up() -> void:
+	print("  -- (v76, the author) out cold, a player may give up: the character dies, R brings a new one")
+	var p = server.crew.new_player("Сдающийся")
+	p.health = 30.0
+	p.stun_until = server.tick + 100
+	server._tick()
+	_expect(p.cond == Net.COND_CRIT, "a stunned player lies down")
+	server.crew.give_up(p)
+	server._tick()
+	_expect(p.cond != Net.COND_DEAD, "but cannot give up while only stunned")
+	p.stun_until = 0
+	p.wounds = 120.0
+	p.health = -5.0
+	server._tick()
+	_expect(p.cond == Net.COND_CRIT, "out cold with deep wounds")
+	server.crew.give_up(p)
+	server._tick()
+	_expect(p.cond == Net.COND_DEAD, "gives up: dead at once")
+	var reserve: int = server.reserve
+	server.tick += Net.RESPAWN_TICKS
+	server.crew.respawn_from_reserve(p)
+	_expect(p.cond == Net.COND_OK and server.reserve == maxi(reserve - 1, 0), "and comes back from the reserve")
 
 
 func _said(prefix: String, words: String) -> bool:
