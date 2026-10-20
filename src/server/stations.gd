@@ -38,6 +38,7 @@ const Player := preload("res://src/server/player.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Vitals := preload("res://src/server/vitals.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const Upkeep := preload("res://src/shared/upkeep.gd")
 
 const HELM_DODGE := 0.15             # the enemy's shots miss this much more often with somebody at the controls
 const PILOT_DODGE := 0.10            # (v60) and up to this much more again with the piloting skill (a pilot by job starts at half)
@@ -892,8 +893,22 @@ func _supplies_wanted(p: Player) -> Array:
 	var machines := not server.ship.broken.is_empty()
 	for d in mini(server.map.other_first_door, server.map.doors.size()):
 		machines = machines or server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1
-	if machines and p.count(Net.ITEM_PART) == 0 and int(store.get(Net.ITEM_PART, 0)) > 0:
-		want.append(Net.ITEM_PART)
+	if not server.complex_repairs:
+		if machines and p.count(Net.ITEM_PART) == 0 and int(store.get(Net.ITEM_PART, 0)) > 0:
+			want.append(Net.ITEM_PART)
+	elif machines:
+		# (v71, the author's H1) complex repairs: a toolbox, and the kinds of part the broken things want
+		if p.count(Net.ITEM_TOOLBOX) == 0 and int(store.get(Net.ITEM_TOOLBOX, 0)) > 0:
+			want.append(Net.ITEM_TOOLBOX)
+		var kinds := {}
+		for c: int in server.ship.broken.keys():
+			kinds[Upkeep.part_for(server.map, c)] = true
+		for d in mini(server.map.other_first_door, server.map.doors.size()):
+			if server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1:
+				kinds[Net.ITEM_PART] = true
+		for k: int in kinds.keys():
+			if p.count(k) == 0 and int(store.get(k, 0)) > 0:
+				want.append(k)
 	if p.count(Net.ITEM_NONE) == 0:
 		return []
 	return want

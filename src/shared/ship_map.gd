@@ -56,6 +56,7 @@ var smes_small := {}                 # (v61) wall cells with the bridge's small 
 var comms := {}                      # (v63) wall cells with the comms console: calls and text events, quests
 var trays := PackedInt32Array()      # (v63) wall cells with a hydroponic tray, in the order they are numbered
 var cryo := PackedInt32Array()       # (v63) wall cells with a cryosleep pod: the reserve sleeps in them
+var stove := {}                      # (v71) wall cells with the galley's stove: meals cooked from rations (see Galley)
 var backup_rooms := {}               # (v61) the rooms (numbers in `rooms`) the backup SMES faces: it keeps them lit
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
                                      # PackedInt32Array of cells each, top-left room first (see _find_rooms)
@@ -102,7 +103,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo"]
+	"comms", "tray", "cryo", "stove"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -208,6 +209,7 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	comms = {}
 	trays = PackedInt32Array()
 	cryo = PackedInt32Array()
+	stove = {}
 	backup_rooms = {}
 	guns = PackedInt32Array()
 	gun_console = {}
@@ -257,6 +259,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 			trays.append(i)
 		if cells[i] == tile_ids.get("cryo", -1):
 			cryo.append(i)
+		if cells[i] == tile_ids.get("stove", -1):
+			stove[i] = true
 		if cells[i] == tile_ids.get("smes_small", -1):
 			smes_small[i] = true
 			var front := fitting_front(i)

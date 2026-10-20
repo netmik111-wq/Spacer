@@ -121,6 +121,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
 		"smes": server.power.save(),
 		"mode": server.mode, "hull_max": server.ship.hull_max,               # (v63)
+		"complex": server.complex_repairs,                                      # (v71)
 		"story": server.story.save(), "roam": server.flagship.save(), "garden": server.garden.save(),
 		"road": server.road.save(),                                          # (v64)
 	}
@@ -188,6 +189,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.ship.tank = float(data.get("tank", Net.FUEL_START))     # (v67; an older save: a fresh tank)
 	server.reserve = int(data["reserve"])
 	server.mode = int(data.get("mode", Net.MODE_NORMAL))           # (v63; older saves: the normal mode)
+	server.complex_repairs = bool(data.get("complex", false))      # (v71; older saves: plain repairs)
 	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))
 	server.ship.hull = int(data["hull"])
 	server.power.load_panel(data.get("panel", {}))          # (v68) the power panel's breakers and engines

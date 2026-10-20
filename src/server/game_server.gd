@@ -38,6 +38,7 @@ extends Node
 ##   robots       (v62) our security robots: set down from their crates, they guard where they stand
 ##   assault      (v62) boarders teleported across by ordinary pirates, and drone ships' assault drones
 ##   road         (v64) the road of clusters, the places inside a system, the pirate hunters
+##   galley       (v71) the galley's stove, its dishes and what they do
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -93,6 +94,7 @@ const Story := preload("res://src/server/story.gd")
 const Garden := preload("res://src/server/garden.gd")
 const Salvage := preload("res://src/server/salvage.gd")
 const Prisons := preload("res://src/server/prisons.gd")
+const Galley := preload("res://src/server/galley.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -182,7 +184,10 @@ var garden := Garden.new()             # (v63) food and the hydroponic trays
 var road := Road.new()                 # (v64) the road of clusters, places inside a system, pirate hunters
 var salvage := Salvage.new()           # (v67) cutting scrap off wrecks, things floating outside
 var prisons := Prisons.new()           # (v70) pirates in our handcuffs
+var galley := Galley.new()             # (v71) the galley's stove and its dishes
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
+var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
+                                       # (the hard mode sets it, the menu may too), kept in the campaign
 var keep_heard := false                # tests: remember in Player.heard what each character was sent to hear
 
 # counters for the status line
@@ -281,6 +286,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	flagship.setup(self)
 	story.setup(self)
 	garden.setup(self)
+	galley.setup(self)
 	hazards.setup(self)
 	power.setup(self)
 	outside.setup(self)
@@ -670,6 +676,7 @@ func _tick() -> void:
 	flagship.tick()
 	story.tick()
 	garden.tick()
+	galley.tick()
 	assault.tick()
 	robots.tick()
 	stations.tick()

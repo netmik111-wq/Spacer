@@ -86,6 +86,9 @@ func asked(p: Player, action: int, item: int) -> void:
 		p.bench = PackedByteArray()
 		p.work = 0
 		return
+	if server.galley.cooks(action):
+		server.galley.asked(p, action)       # (v71) the galley's stove uses the same packet
+		return
 	if p.cond != Net.COND_OK or not at_bench(p):
 		return
 	if p.job != Net.JOB_ENGINEER:
@@ -98,7 +101,7 @@ func asked(p: Player, action: int, item: int) -> void:
 	p.bench = PackedByteArray([action, item])
 	p.work = 0
 	p.work_cell = -2                     # (no cell: the bench's own work, see update)
-	p.work_total = roundi(ticks_for(action) * (1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)))
+	p.work_total = maxi(roundi(ticks_for(action) * (1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)) * p.pace(server.tick)), 1)
 
 
 func update(p: Player) -> void:
@@ -108,6 +111,9 @@ func update(p: Player) -> void:
 		return
 	var action := p.bench[0]
 	var item := p.bench[1]
+	if server.galley.cooks(action):
+		server.galley.update(p)              # (v71) cooking at the galley's stove
+		return
 	if p.cond != Net.COND_OK or not at_bench(p) or p.st.dir != Net.DIR_NONE:
 		p.bench = PackedByteArray()
 		p.work = 0

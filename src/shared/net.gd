@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 47
+const PROTOCOL := 48
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -92,7 +92,7 @@ const SEC_FLOOR := 10               # u16 count, then FLOOR_BYTES-byte records: 
 const SEC_VITALS := 9               # the client's own character: s16 health (100 = unhurt, 0 and below =
                                     # unconscious, HEALTH_DEAD = dead), u8 oxygen tank (0..TANK_FULL),
                                     # u8 flags (bit 0: supply on; v70: 1 bleeding, 2 broken arm,
-                                    # 3 broken leg, 4 concussed, 5 hauling somebody), u8 work done on what it is using (0..100),
+                                    # 3 broken leg, 4 concussed, 5 hauling somebody; v71: 6 weak with hunger), u8 work done on what it is using (0..100),
                                     # then SLOTS bytes: what it carries, one item per slot (ITEM_*),
                                     # then WORN bytes: what it wears (WEAR_*)
 const SLOTS := 12                   # slots for things: BASE_SLOTS always, POCKETS with a jumpsuit, PACK_SLOTS with a backpack
@@ -103,7 +103,7 @@ const WORN := 3                     # what is worn, one thing each:
 const WEAR_SUIT := 0                #   a spacesuit (helmet and oxygen tank): without it there is no supply
 const WEAR_JUMPSUIT := 1            #   a jumpsuit: its pockets
 const WEAR_PACK := 2                #   a backpack
-const VITALS_BYTES := 5 + SLOTS + WORN
+const VITALS_BYTES := 7 + SLOTS + WORN  # (v71) then u8 the meal at work (ITEM_STEW.. or 0), u8 its seconds left / 5
 # how a character looks (S_OUTFIT): outfit * 2 + 1 with a backpack; a row of assets/chars.png per colour and look
 const OUTFIT_SUIT := 0
 const OUTFIT_JUMPSUIT := 1
@@ -159,6 +159,12 @@ const ITEM_WELDER := 244            # a welder: holding "use" at a shut door wel
 const ITEM_CUFFS := 245             # handcuffs: put on a pirate who is down, he is our prisoner
 const ITEM_SPLINT := 246            # a splint: sets a broken arm or leg
 const ITEM_BOMB := 247              # (v70, the author's B1) a boarder's bomb: planted on the floor, never carried by us
+# (v71, the author's H1 and L2) upkeep: complex repairs' tools and parts, the galley's meals
+const ITEM_TOOLBOX := 248           # a toolbox: with complex repairs on, machines and doors are mended slowly without one
+const ITEM_BOARD := 249             # a circuit board: the spare part of consoles and screens (ITEM_PART is the mechanical one)
+const ITEM_STEW := 250              # a hot stew from the galley: eaten, wounds close slowly for a while
+const ITEM_COFFEE := 251            # strong coffee from the galley: drunk, all work by hand goes quicker for a while
+const ITEM_BROTH := 252             # a herb broth from the galley: stops bleeding, eases a concussion, closes some wounds
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
 
@@ -299,6 +305,9 @@ const BENCH_ROCKETS := 5            # (v60) make rockets of a spare part
 const BENCH_EMP := 6                # (v60) make an EMP rocket of a spare part
 const BENCH_FUEL_SCRAP := 7         # (v67, the author's R3) refine a can of fuel from scrap
 const BENCH_FUEL_ORE := 8           # (v67) refine a can of fuel from ore
+const BENCH_STEW := 9               # (v71, the author's L2) at the galley's stove (the same packet): cook a stew
+const BENCH_COFFEE := 10            # brew coffee
+const BENCH_BROTH := 11             # make a herb broth
 const C_BLAST := 29                 # (v60) u8 door of the ship (BLAST_ALL / BLAST_NONE: every door): lock it as a blast
                                     # door, or unlock it, from the holomap the player watches
 const BLAST_ALL := 255
@@ -527,6 +536,7 @@ const AIR_LOT := 10.0
 const EXPLORE_REWARD := 0           # credits for the first visit to a sector (v67, the author's M1: nothing, "so people
                                     # roam around and don't rush"; it was 15)
 const NO_PART_SLOWER := 3           # how many times longer a repair without a spare part takes
+const NO_TOOLS_SLOWER := 3          # (v71) with complex repairs, how many times longer it takes without a toolbox
 const STATION_FUEL := 300           # (v67) a supply station tops the fuel tank up to this many units
 const WRECK_FUEL := 1               # cans of fuel salvaged from a wrecked pirate ship
 # (v67, the author's R3: fuel in units, "like litres") The ship's fuel tank. A lane jump burns
@@ -546,7 +556,9 @@ const PRICE_FUEL := 12              # ... for this
 const S_CAMPAIGN := 29              # u8 hull, u8 reserve, u8 over (OVER_*), u16 sectors visited, u16 farthest
                                     # (jumps from the start), u16 jumps made, u32 seconds the voyage has lasted,
                                     # (v57) u8 1 = the flagship is beaten (the game is won; the voyage goes on),
-                                    # (v63) u8 the hull's top strength, u8 the mode (MODE_*)
+                                    # (v63) u8 the hull's top strength, u8 the mode (MODE_*),
+                                    # (v71) u8 CAMPAIGN_* flags chosen when the game was made
+const CAMPAIGN_COMPLEX := 1         # (v71, the author's H1) complex repairs: a toolbox and the right kind of spare part
 const OVER_NONE := 0
 const OVER_WRECKED := 1             # the hull gave way
 const OVER_CREW_LOST := 2           # everyone dead, nobody left in the reserve

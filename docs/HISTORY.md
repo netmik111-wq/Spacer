@@ -142,6 +142,17 @@ Open problems:
   quest cargo aboard hit a script error; the roaming flagship could stay stuck in a dead end beside a station; a starving,
   lightly wounded crewman knocked out could never come round (`docs/MECHANICS.md`, Food and hunger).
 
+### v71 (upkeep; the fourth step of the "every part interesting" plan, the author's H1, L1 and L2)
+- Hunger slows and finally kills: after 10 min of starving everybody walks slowly, after 25 min health sinks with no
+  floor (death about 68 min after the rations ran out). Any food at a jump ends it.
+- The galley: a stove in the hydroponics room. Anybody cooks stew (wounds close for 5 min), coffee (work by hand
+  takes ¾ of its time for 4 min) or herb broth (stops bleeding and concussion, +15 health) from rations and plasters.
+  Bots do not cook.
+- Complex repairs, a checkbox in the menu (ticked by itself for hard): consoles want a circuit board, the rest a
+  mechanical part, and the one at work wants a toolbox. Without them the work is slower (3× each), never impossible.
+- New test `tools/upkeeptest.gd` (32 scripts), protocol 48. Questions: https://claude.ai/artifact/Qtp5awvEXeZn5G4rjoXVL6
+  (built on my picks while he slept). Build in `/mnt/project-files/builds/v71/`.
+
 ### v70 (people over bots; the third step of the "every part interesting" plan)
 - A bot at a post gives half the help a person gives (helm, engine, shield, guns, the gun console, tending the autodoc);
   only a person presses the evade. The sailor is gone: a newcomer takes a free job.

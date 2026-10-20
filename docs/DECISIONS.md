@@ -783,7 +783,7 @@ no answers when it was built). Change any of these if he answers otherwise.
 - **Food** (S10): one ration per two crew per jump, bots included (they stand for people), the reserve not
   (cryosleep). Start 16, price 3. Hunger lowers the health ceiling (`Garden.hunger`, passed to `Vitals.advance` with the
   wounds) by 0.1/s down to 30, never lower: the rule "no two obstacles at once" (hunger never kills, it only weakens
-  for the next fight). It goes back at 1/s once there is food.
+  for the next fight; v71, the author's L1: it now slows after 10 min and kills after a long time, see "Upkeep"). It goes back at 1/s once there is food.
 - **Hydroponics** (S11, his notebook note page1016-04): 4 trays, 4 bought plants and 2 hybrids, traits by mutation
   (rich, early, choice), hybrids from ripe neighbours (35%). Harvests go straight to the locker (carrying rations by
   hand would only be walking); planting with empty hands takes the best seed from the locker so bots can do it too.
@@ -1087,3 +1087,31 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   check of the robber showed why: the hole a boarder cuts drops its room's shutters, and while the hole stays open
   the pressure keeps them down, so a robber or wrecker with a goal stood in that room for good. Forcing takes the
   same 3 s as for a person (Repairs). Our security robots do not force them (that lets air out).
+
+### Upkeep (v71, the "every part interesting" plan's fourth step; questions page https://claude.ai/artifact/Qtp5awvEXeZn5G4rjoXVL6, built on my picks)
+
+- **Hunger that slows and kills** (L1 "C", "and it slows down at some point"): it replaces v63's "hunger never kills".
+  Measured in **seconds of starving** (`Garden.starved`), not in jumps: a crew that stops jumping must not escape it by
+  standing still. `WEAK_AFTER` 600 s: everybody walks slowly, through the same `st.slow` a broken leg uses
+  (`Player.slowed()`), so the client already predicts it; SEC_VITALS bit 6 tells the client, because `pred.slow`
+  alone no longer means hauling. `DEADLY_AFTER` 1500 s: the 30 floor goes and health sinks 0.05/s, so out cold
+  ~35 min and dead ~68 min after the food ran out. Long on purpose: hunger is a clock to watch, not a sudden death, and
+  any ration in the locker stops it at once. The escape rule is untouched: hunger never blocks a jump, and traders,
+  stations and the trays are always one jump away.
+- **The galley** (L2 "A"): `src/server/galley.gd`, the stove `G` in the hydroponics room of `ship02` (the food room).
+  It reuses the workbench's packet (`C_BENCH` with `BENCH_STEW..BROTH`) and `Player.bench` for the work in progress,
+  so no new packet; `Workshop.asked/update` hand the dishes on. Dishes (`Items.DISHES`, shared with the screen) are
+  locker things eaten by hand like a patch. Three effects, each a different kind of help: the stew heals over time
+  (the medic's slow work), coffee is speed (`Player.pace`, applied in `Repairs._work_done`, `Combat._treat_ticks`, the
+  workbench and the stove), the broth clears injuries. One effect at a time to keep it readable. Dishes are never eaten
+  at jumps (rations are the ship's food, dishes are a person's): otherwise cooking would only lose rations.
+  Bots do not cook: people over bots (G2).
+- **Complex repairs** (H1 "A" with his comment "optional, chosen at the start; hard difficulty means more mechanics,
+  not more enemy HP"): `server.complex_repairs`, set before start like the mode, saved in the campaign, told to clients
+  in S_CAMPAIGN byte 17. The hard mode turns it on by default; the menu checkbox lets any mode choose (the option travels
+  as "hard+plain" / "normal+complex" in the `mode=` text). Two part kinds only (a board for consoles and screens, the
+  old mechanical part for everything else): three kinds would mean three trader lines and three loot lines for little
+  play. `src/shared/upkeep.gd` holds the rules, so the server and the client's hints agree. **Nothing ever needs a part
+  outright** (only slower: 3× without the right part, 3× more without a toolbox): a broken helm must always be mendable
+  (the escape rule). The toolbox is never used up; the ship starts with 2 and engineers bring their own in complex games.
+  Without complex repairs a board works as any part, so it is never dead weight.

@@ -14,6 +14,7 @@ var _name: LineEdit
 var _address: LineEdit
 var _bots: SpinBox
 var _mode: OptionButton               # (v63) a new campaign's mode
+var _complex: CheckBox               # (v71) complex repairs in a new campaign
 var _job: OptionButton
 var _job_about: Label
 var _status: Label
@@ -110,6 +111,12 @@ func _ready() -> void:
 	_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_mode.tooltip_text = "Лёгкий: разбитая обшивка не губит корабль, а только снижает её наибольшую прочность (на 50).\nОбычный: как задумано.\nТяжёлый: пираты злее и платят меньше, на абордаж идёт на одного больше, флагман растёт быстрее."
 	mode_row.add_child(_mode)
+	# (v71, the author's H1: "optional, chosen at the start of the game") complex repairs
+	_complex = CheckBox.new()
+	_complex.text = "Сложный ремонт"
+	_complex.tooltip_text = "Для починки машин и дверей нужен ящик с инструментами, а каждой машине — своя запчасть:\nпультам и экранам плата, остальному механическая запчасть. Без них чинить втрое дольше.\nВ тяжёлом режиме включён сам."
+	mode_row.add_child(_complex)
+	_mode.item_selected.connect(func(i: int) -> void: _complex.button_pressed = i == Net.MODE_HARD)
 	var saved := Campaign.summary()
 	if saved != "":
 		var go_on := _button("Продолжить кампанию")
@@ -158,6 +165,7 @@ func _ready() -> void:
 		_address.text = str(cfg.get_value("player", "address", ""))
 		_bots.value = int(cfg.get_value("player", "bots", 2))
 		_mode.select(clampi(int(cfg.get_value("player", "mode", Net.MODE_NORMAL)), 0, Net.MODE_NAMES.size() - 1))
+		_complex.button_pressed = bool(cfg.get_value("player", "complex", _mode.selected == Net.MODE_HARD))
 		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)) - Net.JOB_CAPTAIN, 0, Net.JOBS - 1 - Net.JOB_CAPTAIN))
 	_show_job()
 	_name.grab_focus()
@@ -215,6 +223,7 @@ func _save() -> void:
 	cfg.set_value("player", "address", _address.text.strip_edges())
 	cfg.set_value("player", "bots", int(_bots.value))
 	cfg.set_value("player", "mode", _mode.selected)
+	cfg.set_value("player", "complex", _complex.button_pressed)
 	cfg.set_value("player", "job", job())
 	cfg.save(SETTINGS)
 
@@ -226,7 +235,8 @@ func _on_host() -> void:
 		return
 	_new_armed = false
 	_save()
-	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new", Net.MODE_KEYS[maxi(_mode.selected, 0)])
+	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new",
+		Net.MODE_KEYS[maxi(_mode.selected, 0)] + ("+complex" if _complex.button_pressed else "+plain"))
 
 
 func _on_continue() -> void:

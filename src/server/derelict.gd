@@ -47,6 +47,7 @@ var derelict_gear_chance := DERELICT_GEAR   # (tests set it)
 const LOOT := [
 	[Net.ITEM_PATCH, 6], [Net.ITEM_PART, 5], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_MAG, 3],
 	[Net.ITEM_FLASHLIGHT, 2], [Net.ITEM_BATON, 2], [-Net.ITEM_MEDKIT, 2], [-Net.ITEM_PISTOL, 1], [Net.ITEM_FUEL, 5],
+	[Net.ITEM_BOARD, 3],                 # (v71) a circuit board
 ]
 
 var server: Node

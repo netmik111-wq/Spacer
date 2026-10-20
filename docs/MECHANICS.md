@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v70 (version 0.63).
+Last updated: build v71 (version 0.64).
 
 Contents:
 
@@ -36,6 +36,7 @@ Contents:
 26. [Work and money on the road (v67)](#26-work-and-money-on-the-road-v67)
 27. [Fights for the whole crew (v68)](#27-fights-for-the-whole-crew-v68)
 28. [People over bots (v70)](#28-people-over-bots-v70)
+29. [Upkeep: hunger, the galley, complex repairs (v71)](#29-upkeep-hunger-the-galley-complex-repairs-v71)
 
 ---
 
@@ -290,7 +291,8 @@ Contents:
   out, mends, comes back and pumps the chamber full. A pirate showing up calls it back.
 - **Repair**: face the broken thing and hold E. With a **spare part** 6 s (the part is used up),
   without one 18 s. That is for a person without skill; the repair skill cuts the time by up to half
-  (with skill 50 — 4.5 s, with skill 100 — 3 s; see section 21).
+  (with skill 50 — 4.5 s, with skill 100 — 3 s; see section 21). (v71) A **circuit board** («Плата») counts as a spare
+  part too; with **complex repairs** on, a machine wants its own kind and a toolbox (section 29).
 
 ## 9. Items and inventory
 
@@ -1517,10 +1519,14 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 - **Rations** («Паёк») are kept in the supply locker; the ship starts with **16**; traders sell them (**3** credits).
 - Every **jump** the crew eat **one ration for every two** of them (players and bots alive; the reserve sleeps and eats
   nothing). The chat warns when two jumps' worth or less are left.
-- With nothing to eat at a jump the crew **starve**: everybody's health sinks by **0.1 a second**, down to **30** and
-  never lower: nobody dies of hunger. Food in the locker again: the hunger passes (1 health a second back).
-  Hunger never holds health below **30** on top of wounds, so someone knocked out while starving still comes round
-  (only wounds of **90** and more need the autodoc).
+- With nothing to eat at a jump the crew **starve**: everybody's health sinks by **0.1 a second**, down to **30**.
+  Food in the locker again: the hunger passes at once (1 health a second back).
+  Until hunger turns deadly it never holds health below **30** on top of wounds, so someone knocked out while starving
+  still comes round (only wounds of **90** and more need the autodoc).
+- (v71, the author's L1: hunger slows and finally kills) After **10 min** of starving everybody **walks slowly** (as with
+  a broken leg; the HUD says «Слабость от голода»). After **25 min** hunger turns **deadly**: health sinks **0.05 a second**
+  below 30, so about **35 min** in people pass out and about **68 min** in they die. Bots starve the same way; the reserve
+  sleeps and does not. Any food in the locker stops it at once. The old rule "nobody dies of hunger" is gone.
   The comms console shows «Пайков нет: экипаж голодает».
 
 ### Hydroponics
@@ -1689,3 +1695,34 @@ The author's P, M, H, G, B and W answers (`/mnt/project-files/plans/every-part-p
 - **Boarders force shutters**: the hole a boarder cuts drops the room's emergency shutters; a pirate in its way now
   forces one up by hand (**3 s**, then it stays up **5 s**), as anybody can. Before, it stayed shut in that room.
   Our security robots do not.
+
+## 29. Upkeep: hunger, the galley, complex repairs (v71)
+
+The author's L1, L2 and H1 answers (`/mnt/project-files/plans/every-part-plan.md`; questions page "Spacer v71: вопросы").
+
+- **Hunger** (L1): see "Food and hunger" in section 25: slow after 10 min of starving, deadly after 25 min.
+- **The galley** (L2): a **stove** (sign `G`) in the hydroponics room on the lower deck. **E** opens its screen; anybody
+  cooks, standing at it (**5 s**, the stove needs power). The ingredients come from the supply locker and the dish goes
+  back into it. Bots do not cook.
+  - **Рагу** (stew): **2 rations**. Eaten: for **5 min** wounds close by **0.1 a second** (up to **30**).
+  - **Кофе** (coffee): **1 ration**. Drunk: for **4 min** all work by hand takes **¾** of its time: repairs, patching,
+    treatments, the trays, the workbench, cooking, cutting scrap.
+  - **Травяной отвар** (herb broth): **1 ration + 1 plaster**. Drunk: at once stops bleeding, ends a concussion and closes
+    **15** wounds.
+  - A dish is eaten like a patch: a click on oneself (or **Z**) or on a neighbour. One effect at a time (a new dish
+    replaces it); the HUD shows it and the time left. Dishes are never eaten at jumps: the crew's rations are.
+- **Complex repairs** (H1: "optional, chosen at the start of the game: hard difficulty means more mechanics"): a
+  checkbox «Сложный ремонт» next to the mode in the menu, ticked by itself for the hard mode; a continued campaign keeps
+  its own. With it on:
+  - consoles and screens (chart, helm, gun console, drone monitor, holomap, comms, intercom, autodoc, scanner, module
+    bay, shield generator) want a **circuit board**; everything else and the doors want a **mechanical part**. With
+    the wrong part, or none, the work takes **3×** as long (the part is kept);
+  - the one at work needs a **toolbox** («Ящик с инструментами», never used up) on them: without one it takes **3×** as
+    long again (so **9×** with nothing at all);
+  - nothing ever needs a part outright, so a broken helm can always be mended (the escape rule).
+  - Engineers come aboard with a toolbox and a board too. Bots on «Работы» fetch a toolbox and the kinds of part the
+    broken things want.
+  - With it off, any part (mechanical or board) works anywhere, as before, and no toolbox is needed.
+- **New things**: toolbox (**20** cr., the locker starts with **2**), circuit board (**12** cr., **2**). Boards are also
+  found on derelicts and in containers, and a captured pirate ship gives one.
+

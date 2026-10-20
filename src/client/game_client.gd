@@ -231,6 +231,12 @@ var bleeding := false                # (v70) our character's injuries (SEC_VITAL
 var arm_broken := false
 var leg_broken := false
 var concussed := false
+var weak := false                    # (v71) weak with long hunger: we walk slowly (SEC_VITALS)
+var meal := 0                        # (v71) the galley's dish at work on us (Net.ITEM_STEW.., 0 = none)...
+var meal_left := 0                   # ... and about how many seconds it has left
+var boards := 0                      # (v71) circuit boards we carry
+var toolbox := false                 # (v71) we carry a toolbox
+var complex_repairs := false         # (v71) the game was made with complex repairs (S_CAMPAIGN)
 var hauling := false                 # (v70) the server says we hold somebody (with a broken leg pred.slow alone does not tell)
 var work := 0                        # progress of what we are doing with the "use" key, 0..100
 var want_dir := 0                    # direction the player holds right now; set by the game screen
@@ -878,7 +884,7 @@ func use_target(facing: int = -1) -> int:
 	## 33 = (v67) the engine with a can of fuel in hand, 34 = a wall of a dark ship alongside (scrap to cut),
 	## 40 = (v69) a door whose broken lock can be mended,
 	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
-	## 43 = a welded door (nothing to do without a welder).
+	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -940,6 +946,8 @@ func use_target(facing: int = -1) -> int:
 			return 31
 		if map.cryo.has(cell):
 			return 32
+		if map.stove.has(cell):
+			return 44                        # (v71) the galley's stove
 		var door := map.door_of[cell]
 		if door >= 0:
 			if hand < slots.size() and slots[hand] == Net.ITEM_WELDER and doors.is_shut(door):
@@ -1045,7 +1053,7 @@ func usable_at(cell: int) -> bool:
 			or gear_here(cell) != "-":
 		return true
 	for things: Dictionary in [map.oxygen, map.chart, map.helm, map.engine, map.air_plant, map.locker, map.lock_pump,
-			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay, map.autodoc, map.scanner]:
+			map.gun_console, map.intercom, map.holo, map.drone_console, map.bench, map.bay, map.autodoc, map.scanner, map.stove]:
 		if things.has(cell):
 			return true
 	for e: Ent in ents.values():
@@ -1130,7 +1138,8 @@ func lying_near(facing: int = -1) -> int:
 func dragging() -> bool:
 	## Our character is hauling somebody along (the server says so).
 	## (v70) A broken leg slows it too: then only while it holds somebody.
-	return _have_self and pred.slow and my_cond == Net.COND_OK and (not leg_broken or hauling)
+	## (v71) Weak with hunger too.
+	return _have_self and pred.slow and my_cond == Net.COND_OK and (not (leg_broken or weak) or hauling)
 
 
 func _send_hands(kind: int, id: int) -> void:
@@ -1710,6 +1719,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				if pkt.size() >= 17:
 					hull_max = maxi(pkt[15], 1)
 					mode = pkt[16]
+				if pkt.size() > 17:
+					complex_repairs = (pkt[17] & Net.CAMPAIGN_COMPLEX) != 0     # (v71)
 		Net.S_ME:
 			if pkt.size() >= 2 + Net.SKILLS:
 				job = pkt[1]
@@ -1910,12 +1921,17 @@ func _on_world(pkt: PackedByteArray) -> void:
 			leg_broken = (pkt[pos + 3] & 8) != 0
 			concussed = (pkt[pos + 3] & 16) != 0
 			hauling = (pkt[pos + 3] & 32) != 0
+			weak = (pkt[pos + 3] & 64) != 0
+			meal = pkt[pos + 5 + Net.SLOTS + Net.WORN]
+			meal_left = pkt[pos + 6 + Net.SLOTS + Net.WORN] * 5
 			work = pkt[pos + 4]
 			slots = pkt.slice(pos + 5, pos + 5 + Net.SLOTS)
 			worn = pkt.slice(pos + 5 + Net.SLOTS, pos + 5 + Net.SLOTS + Net.WORN)
 			patches = carried(Net.ITEM_PATCH)
 			scrap = carried(Net.ITEM_SCRAP)
 			parts = carried(Net.ITEM_PART)
+			boards = carried(Net.ITEM_BOARD)
+			toolbox = carried(Net.ITEM_TOOLBOX) > 0
 			pos += Net.VITALS_BYTES
 		elif sec == Net.SEC_DOOR:
 			var count := pkt.decode_u16(pos)

@@ -6,9 +6,12 @@ extends RefCounted
 ## Food: the crew eat rations (Net.ITEM_FOOD) from the supply locker at every
 ## jump, one for every two of them (players and bots; the reserve sleeps in the
 ## cryopods and eats nothing). With the locker empty the crew starve: their
-## health sinks slowly, down to STARVE_FLOOR, never lower (nobody dies of
-## hunger, the author's rule of no two obstacles at once), and comes back once
-## there is food again.
+## health sinks slowly, down to STARVE_FLOOR, and comes back once there is food
+## again. (v71, the author's L1: "hunger can kill after a long time, and slows
+## people down at some point") After WEAK_AFTER seconds of starving everybody
+## walks slowly, as with a broken leg; after DEADLY_AFTER the floor is gone and
+## health keeps sinking at DEADLY_RATE until they pass out and die. Any food in
+## the locker stops it at once (the old rule "nobody dies of hunger" is his to drop).
 ##
 ## The trays ('P'): hold "use" at one. An empty tray takes the seed in hand, or
 ## else a packet from the locker (PLANT_SECONDS). A plant wants tending every
@@ -36,6 +39,9 @@ const EAT_SHARE := 2                 # one ration for this many of the crew at e
 const STARVE_RATE := 0.1             # health the hungry lose per second...
 const STARVE_FLOOR := 30.0           # ... down to here, never lower
 const FED_RATE := 1.0                # what hunger takes back per second once there is food
+const WEAK_AFTER := 600.0            # (v71) starving this long, the crew walk slowly...
+const DEADLY_AFTER := 1500.0         # ... and this long, hunger can kill
+const DEADLY_RATE := 0.05            # health it then takes per second below STARVE_FLOOR (30 to dead in ~43 min more)
 const NOT_HERE := "-"
 
 var server: GameServer
@@ -46,6 +52,7 @@ var care_at := PackedFloat32Array()  # per tray: the growth seconds when it next
 var neglect := PackedFloat32Array()  # per tray: seconds it has wanted tending
 var hunger := 0.0                    # health the crew's hunger takes off what they can have
 var _hungry := false                 # the last meal was short: they starve until food comes
+var starved := 0.0                   # (v71) seconds they have starved with the locker empty (0 once fed)
 var _sent := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
 
@@ -64,6 +71,7 @@ func setup(p_server: GameServer) -> void:
 	neglect.resize(n)
 	neglect.fill(0.0)
 	hunger = 0.0
+	starved = 0.0
 	_sent = PackedByteArray()
 	_rng.randomize()
 
@@ -97,7 +105,7 @@ func jumped() -> void:
 	server.ship.store[Net.ITEM_FOOD] = maxi(have - need, 0)
 	_hungry = have < need
 	if have < need:
-		server.chat.say("Пайки кончились: экипаж голодает. Здоровье будет медленно падать (но не ниже %d). Купите пайки у торговца или вырастите в гидропонике." % int(STARVE_FLOOR))
+		server.chat.say("Пайки кончились: экипаж голодает. Здоровье будет медленно падать; через %d мин голода все ослабеют, через %d мин голод начнёт убивать. Купите пайки у торговца или вырастите в гидропонике." % [int(WEAK_AFTER / 60.0), int(DEADLY_AFTER / 60.0)])
 	elif have - need <= need * 2:
 		server.chat.say("Пайков осталось на %d прыжк(а/ов)." % ((have - need) / maxi(need, 1)))
 	server.supplies.tell_store()
@@ -112,9 +120,22 @@ func hunger_of(p: Player) -> float:
 	## What hunger takes off the health this one can have (Crew passes it to Vitals with the wounds).
 	## Never below STARVE_FLOOR on top of the wounds: hunger alone must not keep someone out cold
 	## for good (the playthrough found a starving crewman with light wounds who could never wake).
+	## (v71) Once hunger is deadly the floor is gone.
 	if p.pirate or p.ally or p.robot:
 		return 0.0
+	if deadly():
+		return hunger
 	return minf(hunger, maxf(Net.HEALTH_FULL - p.wounds - STARVE_FLOOR, 0.0))
+
+
+func weak() -> bool:
+	## (v71) The crew have starved long enough to walk slowly.
+	return _hungry and starved >= WEAK_AFTER
+
+
+func deadly() -> bool:
+	## (v71) The crew have starved long enough for hunger to kill.
+	return _hungry and starved >= DEADLY_AFTER
 
 
 func _feed_tick() -> void:
@@ -124,18 +145,40 @@ func _feed_tick() -> void:
 	if food > 0 and _hungry:
 		_hungry = false                      # food again: the hunger passes
 		server.chat.say("В шкафу снабжения снова есть пайки: голод отступает.")
+	var was_weak := weak()
+	var was_deadly := deadly()
 	if _hungry and food <= 0:
-		hunger = minf(hunger + STARVE_RATE, Net.HEALTH_FULL - STARVE_FLOOR)
+		starved += 1.0
+		if deadly():
+			hunger = minf(maxf(hunger, Net.HEALTH_FULL - STARVE_FLOOR) + DEADLY_RATE, Net.HEALTH_FULL - Net.HEALTH_DEAD)
+		else:
+			hunger = minf(hunger + STARVE_RATE, Net.HEALTH_FULL - STARVE_FLOOR)
 	else:
-		hunger = maxf(hunger - FED_RATE, 0.0)
+		starved = 0.0
+		hunger = maxf(minf(hunger, Net.HEALTH_FULL - STARVE_FLOOR) - FED_RATE, 0.0)
+	if weak() and not was_weak:
+		server.chat.say("Экипаж ослаб от голода: все ходят медленно. Нужна еда: пайки у торговца или урожай гидропоники.")
+	if deadly() and not was_deadly:
+		server.chat.say("Голод стал смертельным: здоровье экипажа падает всё ниже. Без еды люди будут терять сознание и умирать.")
 	if hunger > 0.0:
 		for p: Player in server.players:
 			if p == null or p.corpse or p.cond == Net.COND_DEAD or hunger_of(p) <= 0.0:
 				continue
 			var cap := Net.HEALTH_FULL - p.wounds - hunger_of(p)
-			if p.health > cap and p.health > STARVE_FLOOR:
-				p.health = maxf(cap, STARVE_FLOOR)
+			var least: float = Net.HEALTH_DEAD if deadly() else STARVE_FLOOR
+			if p.health > cap and p.health > least:
+				p.health = maxf(cap, least)
 				p.self_dirty = true
+	# (v71) the weak walk slowly (Player.slowed), as with a broken leg
+	var w := weak()
+	for p: Player in server.players:
+		if p == null or p.corpse or p.pirate or p.ally or p.robot:
+			continue
+		if p.weak != w:
+			p.weak = w
+			if p.dragging < 0 and p.dragged_by < 0:
+				p.st.slow = p.slowed()
+			p.self_dirty = true
 	if starving() != was:
 		server.story.changed()
 
@@ -334,7 +377,7 @@ func packet() -> PackedByteArray:
 
 func save() -> Dictionary:
 	return {"seed": Array(plants), "stage": Array(stage), "growth": Array(growth), "care": Array(care_at),
-		"neglect": Array(neglect), "hunger": hunger, "hungry": _hungry}
+		"neglect": Array(neglect), "hunger": hunger, "hungry": _hungry, "starved": starved}
 
 
 func load_from(d: Dictionary) -> void:
@@ -348,3 +391,4 @@ func load_from(d: Dictionary) -> void:
 		neglect[t] = float(d["neglect"][t])
 	hunger = float(d.get("hunger", 0.0))
 	_hungry = bool(d.get("hungry", false))
+	starved = float(d.get("starved", 0.0))     # (v71; older saves: the clock starts again)
