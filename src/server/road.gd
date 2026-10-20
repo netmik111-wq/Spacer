@@ -56,7 +56,7 @@ const MINE_HULL := 12
 const SURVIVOR_SHARE := 0.25         # (my V4) bodies with a survivor among them
 const CONTAINER_GEAR := 0.3          # a container that holds a crate of ship gear
 const CONTAINER_THINGS: Array[int] = [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_FUEL, Net.ITEM_FOOD,
-	Net.ITEM_SHELL, Net.ITEM_ROCKET, Net.ITEM_PROBE]
+	Net.ITEM_SHELL, Net.ITEM_ROCKET, Net.ITEM_PROBE, Net.ITEM_BOARD]
 const POCKET_THINGS: Array[int] = [Net.ITEM_MEDPATCH, Net.ITEM_MAG, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_FOOD, Net.ITEM_PATCH]
 const BATTLEFIELD_GUN := 0.3         # a battlefield leaves a damaged ship gun this often
 const ANOMALY_SECONDS := 30          # (v67) at a holomap, ship holding still, to scan an anomaly

@@ -98,6 +98,7 @@ TILES.append(("smes_small", None, "wall"))
 TILES.append(("comms", None, "wall"))
 TILES.append(("tray", None, "wall"))
 TILES.append(("cryo", None, "wall"))
+TILES.append(("stove", None, "wall"))
 # The pirate ship is every tile again in the pirates' colours (the author's
 # words: brown, red, dark black). A map named pirate* is laid in these.
 PIRATE = "pirate_"
@@ -447,6 +448,21 @@ def make_machine(wall, what):
         rect(15, 24, 16, 25, (80, 170, 255, 255))                                             # the lamp
         for x in range(7, 25):
             o[x, 26] = (80, 170, 255, 255) if (x // 2) % 2 == 0 else dark
+    elif what == "stove":
+        # (v71) the galley's stove: a hob with two burners and a pot, an oven door, a hood above
+        rect(4, 2, 27, 6, mid); rect(6, 6, 25, 7, dark)                                      # the hood
+        rect(4, 11, 27, 26, body); rect(4, 11, 27, 12, cap)
+        for bx in (10, 21):                                                                   # burners
+            for y in range(12, 16):
+                for x in range(bx - 4, bx + 5):
+                    d = ((x - bx) ** 2 + ((y - 13.5) * 1.8) ** 2) ** 0.5
+                    if 2.0 < d < 3.6:
+                        o[x, y] = (230, 110, 40, 255)
+        rect(17, 7, 25, 12, (150, 155, 165, 255)); rect(18, 8, 24, 9, (95, 60, 35, 255))    # a pot on one
+        rect(16, 8, 16, 9, dark); rect(26, 8, 26, 9, dark)                                   # its handles
+        rect(7, 17, 24, 24, dark); rect(8, 18, 23, 19, mid)                                  # the oven door
+        rect(10, 20, 21, 23, (60, 40, 30, 255))
+        rect(25, 17, 26, 18, (90, 220, 110, 255))                                            # a lamp
     elif what == "locker":
         rect(5, 3, 26, 25, body); rect(5, 3, 26, 4, cap); rect(5, 25, 26, 25, mid)
         rect(7, 6, 15, 23, (176, 138, 62, 255)); rect(16, 6, 24, 23, (176, 138, 62, 255))   # two doors
@@ -497,6 +513,7 @@ def build_tiles():
         "comms": lambda: make_machine(images["wall_h"], "comms"),
         "tray": lambda: make_machine(images["wall_h"], "tray"),
         "cryo": lambda: make_machine(images["wall_h"], "cryo"),
+        "stove": lambda: make_machine(images["wall_h"], "stove"),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -541,6 +558,7 @@ def build_tiles():
 #   'K'  (v63) wall with the comms console: calls, text events with choices, quests
 #   'P'  (v63) wall with a hydroponic tray: plants grow in it (two side by side may cross)
 #   'C'  (v63) wall with a cryosleep pod: the crew reserve sleeps in them and wakes from them
+#   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -561,7 +579,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPC")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCG")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -650,7 +668,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")

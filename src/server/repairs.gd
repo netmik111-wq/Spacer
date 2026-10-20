@@ -9,6 +9,7 @@ const Net := preload("res://src/shared/net.gd")
 const Doors := preload("res://src/shared/doors.gd")
 const Player := preload("res://src/server/player.gd")
 const Vitals := preload("res://src/server/vitals.gd")
+const Upkeep := preload("res://src/shared/upkeep.gd")
 
 var server: GameServer
 
@@ -38,8 +39,10 @@ func update(p: Player) -> void:
 	var door := server.map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
 	# and the skill of the one at work makes it quicker, down to half the time
+	# (v71, the author's H1) with complex repairs, only the machine's own kind of part, and a toolbox (see Upkeep)
 	var knack := 1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)
-	var mend_ticks := roundi((Net.REPAIR_TICKS if p.count(Net.ITEM_PART) > 0 else Net.REPAIR_TICKS * Net.NO_PART_SLOWER) * knack)
+	var spare := spare_for(p, cell)
+	var mend_ticks := roundi(Net.REPAIR_TICKS * Upkeep.slower(server.complex_repairs, spare, p.count(Net.ITEM_TOOLBOX) > 0) * knack)
 	if cell >= 0 and server.air.holes.has(cell):
 		if p.count(Net.ITEM_PATCH) == 0:
 			p.work = 0                       # nothing to close it with
@@ -56,7 +59,7 @@ func update(p: Player) -> void:
 	elif cell >= 0 and server.ship.broken.has(cell):
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
-			p.remove(Net.ITEM_PART)
+			_use_spare(p, spare)
 			server.ship.broken.erase(cell)
 			server.to_all(server.ship.devices_packet())
 			server.chat.say("%s заканчивает ремонт: %s снова работает." % [p.name, server.map.device_name(cell)])
@@ -90,14 +93,14 @@ func update(p: Player) -> void:
 	elif door >= 0 and server.doors.jammed[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
-			p.remove(Net.ITEM_PART)
+			_use_spare(p, spare)
 			server.doors.jammed[door] = 0
 			server.door_hold[door] = server.tick          # it may shut again as soon as the doorway is clear
 			server.chat.say("%s чинит заклинившую дверь." % p.name)
 	elif door >= 0 and server.doors.faulty[door] == 1:
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
-			p.remove(Net.ITEM_PART)
+			_use_spare(p, spare)
 			server.doors.faulty[door] = 0           # from here on the pressure decides again
 			server.chat.say("%s чинит аварийный шлюз." % p.name)
 	elif door >= 0 and server.doors.is_shut(door) and server.doors.held_by_partner(door):
@@ -125,7 +128,7 @@ func update(p: Player) -> void:
 		# (v69) a broken lock mended: the door asks for its access again
 		if _work_done(p, cell, mend_ticks):
 			p.train(Net.SKILL_REPAIR)
-			p.remove(Net.ITEM_PART)
+			_use_spare(p, spare)
 			server.doors.picked[door] = 0
 			server.chat.say("%s чинит взломанный замок: %s." % [p.name, Net.ACCESS_NAMES.get(server.map.door_access[door], "отсек")])
 	elif cell >= 0 and server.map.oxygen.has(cell) and server.powered() and p.has_suit():
@@ -160,8 +163,22 @@ func pour(p: Player) -> void:
 	server.chat.say("%s заливает канистру в бак: топлива %d из %d." % [p.name, floori(server.ship.tank), Net.FUEL_MAX])
 
 
+func spare_for(p: Player, cell: int) -> int:
+	## (v71) The spare part mending what is in that cell would use up (ITEM_NONE = none would do).
+	if cell < 0:
+		return Net.ITEM_NONE
+	return Upkeep.spare(server.complex_repairs, Upkeep.part_for(server.map, cell), func(item: int) -> bool: return p.count(item) > 0)
+
+
+func _use_spare(p: Player, spare: int) -> void:
+	if spare != Net.ITEM_NONE:
+		p.remove(spare)
+
+
 func _work_done(p: Player, cell: int, ticks: int) -> bool:
 	## One more tick of work on the thing in that cell. True when the job is finished.
+	## (v71) Strong coffee makes all of it quicker (Player.pace).
+	ticks = maxi(roundi(ticks * p.pace(server.tick)), 1)
 	if p.work_cell != cell or p.work_total != ticks:
 		p.work_cell = cell
 		p.work_total = ticks
@@ -193,7 +210,7 @@ func usable_ahead(p: Player) -> bool:
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
 			or map.drone_console.has(cell) or map.bench.has(cell) or map.bay.has(cell) or map.autodoc.has(cell) or map.scanner.has(cell) \
-			or map.comms.has(cell) or map.trays.has(cell) or map.cryo.has(cell):
+			or map.comms.has(cell) or map.trays.has(cell) or map.cryo.has(cell) or map.stove.has(cell):
 		return true
 	var door := map.door_of[cell]
 	if door >= 0 and p.in_hand() == Net.ITEM_WELDER and server.doors.is_shut(door):

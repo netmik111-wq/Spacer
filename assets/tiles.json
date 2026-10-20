@@ -394,392 +394,402 @@
   },
   {
    "id": 78,
-   "name": "pirate_wall_h",
+   "name": "stove",
    "kind": "wall"
   },
   {
    "id": 79,
-   "name": "pirate_wall_tl",
+   "name": "pirate_wall_h",
    "kind": "wall"
   },
   {
    "id": 80,
-   "name": "pirate_wall_tr",
+   "name": "pirate_wall_tl",
    "kind": "wall"
   },
   {
    "id": 81,
-   "name": "pirate_wall_bl",
+   "name": "pirate_wall_tr",
    "kind": "wall"
   },
   {
    "id": 82,
-   "name": "pirate_wall_br",
+   "name": "pirate_wall_bl",
    "kind": "wall"
   },
   {
    "id": 83,
-   "name": "pirate_wall_tdown",
+   "name": "pirate_wall_br",
    "kind": "wall"
   },
   {
    "id": 84,
-   "name": "pirate_wall_cross",
+   "name": "pirate_wall_tdown",
    "kind": "wall"
   },
   {
    "id": 85,
-   "name": "pirate_wall_v",
+   "name": "pirate_wall_cross",
    "kind": "wall"
   },
   {
    "id": 86,
-   "name": "pirate_wall_v_end",
+   "name": "pirate_wall_v",
    "kind": "wall"
   },
   {
    "id": 87,
-   "name": "pirate_wall_v_end_l",
+   "name": "pirate_wall_v_end",
    "kind": "wall"
   },
   {
    "id": 88,
-   "name": "pirate_wall_v_end_r",
+   "name": "pirate_wall_v_end_l",
    "kind": "wall"
   },
   {
    "id": 89,
-   "name": "pirate_wall_v_end_a",
+   "name": "pirate_wall_v_end_r",
    "kind": "wall"
   },
   {
    "id": 90,
+   "name": "pirate_wall_v_end_a",
+   "kind": "wall"
+  },
+  {
+   "id": 91,
    "name": "pirate_airlock",
    "kind": "door"
   },
   {
-   "id": 91,
+   "id": 92,
    "name": "pirate_door",
    "kind": "wall"
   },
   {
-   "id": 92,
+   "id": 93,
    "name": "pirate_door_open",
    "kind": "door"
   },
   {
-   "id": 93,
+   "id": 94,
    "name": "pirate_window",
    "kind": "wall"
   },
   {
-   "id": 94,
+   "id": 95,
    "name": "pirate_window_l",
    "kind": "wall"
   },
   {
-   "id": 95,
+   "id": 96,
    "name": "pirate_window_r",
    "kind": "wall"
   },
   {
-   "id": 96,
+   "id": 97,
    "name": "pirate_console_1",
    "kind": "wall"
   },
   {
-   "id": 97,
+   "id": 98,
    "name": "pirate_console_2",
    "kind": "wall"
   },
   {
-   "id": 98,
+   "id": 99,
    "name": "pirate_console_3",
    "kind": "wall"
   },
   {
-   "id": 99,
+   "id": 100,
    "name": "pirate_console_4",
    "kind": "wall"
   },
   {
-   "id": 100,
+   "id": 101,
    "name": "pirate_console_5",
    "kind": "wall"
   },
   {
-   "id": 101,
+   "id": 102,
    "name": "pirate_floor_l_t",
    "kind": "floor"
   },
   {
-   "id": 102,
+   "id": 103,
    "name": "pirate_floor_m_t",
    "kind": "floor"
   },
   {
-   "id": 103,
+   "id": 104,
    "name": "pirate_floor_r_t",
    "kind": "floor"
   },
   {
-   "id": 104,
+   "id": 105,
    "name": "pirate_floor_l_b",
    "kind": "floor"
   },
   {
-   "id": 105,
+   "id": 106,
    "name": "pirate_floor_m_b",
    "kind": "floor"
   },
   {
-   "id": 106,
+   "id": 107,
    "name": "pirate_floor_r_b",
    "kind": "floor"
   },
   {
-   "id": 107,
+   "id": 108,
    "name": "pirate_floor_n",
    "kind": "floor"
   },
   {
-   "id": 108,
+   "id": 109,
    "name": "pirate_door_half",
    "kind": "door"
   },
   {
-   "id": 109,
+   "id": 110,
    "name": "pirate_airlock_closed",
    "kind": "door"
   },
   {
-   "id": 110,
+   "id": 111,
    "name": "pirate_airlock_half",
    "kind": "door"
   },
   {
-   "id": 111,
+   "id": 112,
    "name": "pirate_glass_l_t",
    "kind": "glass"
   },
   {
-   "id": 112,
+   "id": 113,
    "name": "pirate_glass_m_t",
    "kind": "glass"
   },
   {
-   "id": 113,
+   "id": 114,
    "name": "pirate_glass_r_t",
    "kind": "glass"
   },
   {
-   "id": 114,
+   "id": 115,
    "name": "pirate_glass_l_b",
    "kind": "glass"
   },
   {
-   "id": 115,
+   "id": 116,
    "name": "pirate_glass_m_b",
    "kind": "glass"
   },
   {
-   "id": 116,
+   "id": 117,
    "name": "pirate_glass_r_b",
    "kind": "glass"
   },
   {
-   "id": 117,
+   "id": 118,
    "name": "pirate_glass_n",
    "kind": "glass"
   },
   {
-   "id": 118,
+   "id": 119,
    "name": "pirate_grate_l_t",
    "kind": "grate"
   },
   {
-   "id": 119,
+   "id": 120,
    "name": "pirate_grate_m_t",
    "kind": "grate"
   },
   {
-   "id": 120,
+   "id": 121,
    "name": "pirate_grate_r_t",
    "kind": "grate"
   },
   {
-   "id": 121,
+   "id": 122,
    "name": "pirate_grate_l_b",
    "kind": "grate"
   },
   {
-   "id": 122,
+   "id": 123,
    "name": "pirate_grate_m_b",
    "kind": "grate"
   },
   {
-   "id": 123,
+   "id": 124,
    "name": "pirate_grate_r_b",
    "kind": "grate"
   },
   {
-   "id": 124,
+   "id": 125,
    "name": "pirate_grate_n",
    "kind": "grate"
   },
   {
-   "id": 125,
+   "id": 126,
    "name": "pirate_hatch_l_t",
    "kind": "hatch"
   },
   {
-   "id": 126,
+   "id": 127,
    "name": "pirate_hatch_m_t",
    "kind": "hatch"
   },
   {
-   "id": 127,
+   "id": 128,
    "name": "pirate_hatch_r_t",
    "kind": "hatch"
   },
   {
-   "id": 128,
+   "id": 129,
    "name": "pirate_hatch_l_b",
    "kind": "hatch"
   },
   {
-   "id": 129,
+   "id": 130,
    "name": "pirate_hatch_m_b",
    "kind": "hatch"
   },
   {
-   "id": 130,
+   "id": 131,
    "name": "pirate_hatch_r_b",
    "kind": "hatch"
   },
   {
-   "id": 131,
+   "id": 132,
    "name": "pirate_hatch_n",
    "kind": "hatch"
   },
   {
-   "id": 132,
+   "id": 133,
    "name": "pirate_ladder_l_t",
    "kind": "ladder"
   },
   {
-   "id": 133,
+   "id": 134,
    "name": "pirate_ladder_m_t",
    "kind": "ladder"
   },
   {
-   "id": 134,
+   "id": 135,
    "name": "pirate_ladder_r_t",
    "kind": "ladder"
   },
   {
-   "id": 135,
+   "id": 136,
    "name": "pirate_ladder_l_b",
    "kind": "ladder"
   },
   {
-   "id": 136,
+   "id": 137,
    "name": "pirate_ladder_m_b",
    "kind": "ladder"
   },
   {
-   "id": 137,
+   "id": 138,
    "name": "pirate_ladder_r_b",
    "kind": "ladder"
   },
   {
-   "id": 138,
+   "id": 139,
    "name": "pirate_ladder_n",
    "kind": "ladder"
   },
   {
-   "id": 139,
+   "id": 140,
    "name": "pirate_engine",
    "kind": "wall"
   },
   {
-   "id": 140,
+   "id": 141,
    "name": "pirate_air_plant",
    "kind": "wall"
   },
   {
-   "id": 141,
+   "id": 142,
    "name": "pirate_locker",
    "kind": "wall"
   },
   {
-   "id": 142,
+   "id": 143,
    "name": "pirate_lock_pump",
    "kind": "wall"
   },
   {
-   "id": 143,
+   "id": 144,
    "name": "pirate_gun",
    "kind": "wall"
   },
   {
-   "id": 144,
+   "id": 145,
    "name": "pirate_intercom",
    "kind": "wall"
   },
   {
-   "id": 145,
+   "id": 146,
    "name": "pirate_holo",
    "kind": "wall"
   },
   {
-   "id": 146,
+   "id": 147,
    "name": "pirate_shield",
    "kind": "wall"
   },
   {
-   "id": 147,
+   "id": 148,
    "name": "pirate_bench",
    "kind": "wall"
   },
   {
-   "id": 148,
+   "id": 149,
    "name": "pirate_bay",
    "kind": "wall"
   },
   {
-   "id": 149,
+   "id": 150,
    "name": "pirate_autodoc",
    "kind": "wall"
   },
   {
-   "id": 150,
+   "id": 151,
    "name": "pirate_scanner",
    "kind": "wall"
   },
   {
-   "id": 151,
+   "id": 152,
    "name": "pirate_smes",
    "kind": "wall"
   },
   {
-   "id": 152,
+   "id": 153,
    "name": "pirate_smes_small",
    "kind": "wall"
   },
   {
-   "id": 153,
+   "id": 154,
    "name": "pirate_comms",
    "kind": "wall"
   },
   {
-   "id": 154,
+   "id": 155,
    "name": "pirate_tray",
    "kind": "wall"
   },
   {
-   "id": 155,
+   "id": 156,
    "name": "pirate_cryo",
+   "kind": "wall"
+  },
+  {
+   "id": 157,
+   "name": "pirate_stove",
    "kind": "wall"
   }
  ]

@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v70 (version 0.63, people over bots) is the latest. Plans one to four are done except the darkness front (the
+Build v71 (version 0.64, upkeep) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -53,7 +53,9 @@ Several reactors is a later question round (it breaks the one-engine rule).
 v69 was the author's notebook between plan builds: 11 bug fixes, wrecks kept on the chart, the one-press airlock, vents.
 v70 people over bots: bots at posts give half, no sailor, the autodoc needs a medic, injuries, the pilot steers round
 meteors and surges, prisoners, boarders with goals (wreck, rob, bomb, kidnap), the shotgun and the welder.
-Next in that plan: upkeep, fear (each its own build), then a fire question round.
+v71 upkeep: hunger that slows (10 min) and kills (25 min on), the galley's stove and three dishes, complex repairs
+(a toolbox and two part kinds) as a campaign option the hard mode turns on.
+Next in that plan: fear (its own build), then a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -84,7 +86,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 31 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 32 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -116,6 +118,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/crewfighttest.gd (since v68: power panel, overcharge, evade, loaded mounts, goals, alerts, knock-on)
     godot --headless --path . --script res://tools/fixtest.gd (since v69: self-healing, autodoc, buried finds, docking, wrecks on the chart, hunters, station, locked rooms, airlock cycle, vents, sight)
     godot --headless --path . --script res://tools/peopletest.gd (since v70: bots at half, jobs, autodoc, injuries, meteors, surges, prisoners, boarders' goals, bombs, kidnapping, shotgun, flashbang, welder)
+    godot --headless --path . --script res://tools/upkeeptest.gd (since v71: hunger slows and kills, the galley and its dishes, complex repairs, bots' parts)
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
     GODOT=... LAGPROXY=tools/lagproxy tools/nettest.sh 8 30 40 10 2
@@ -139,7 +142,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 31 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 32 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -170,7 +173,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   teleported boarders and assault drones, `robots`: our security robots; since v63 `story`: the comms console's
   calls (data in `tales.gd`), quests, missions, SOS, and `garden`: food, hunger and the hydroponic trays; since v64 `road`:
   the road of clusters, places inside a system and pirate hunters; since v67 `salvage`: cutting scrap off dark ships and
-  things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap).
+  things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap;
+  since v71 `galley`: the stove, its dishes and their effects).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -203,7 +207,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `src/shared/`: what both sides use. `net.gd` (protocol, ids, constants), `mover.gd` and `doors.gd`
   (predicted rules), `ship_map.gd` (the grid, decks, tiles), `sight.gd` (sight and light), `items.gd`,
   `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers), `gear.gd` (v59: crates of ship gear),
-  `plants.gd` (v63: what grows in the trays).
+  `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
@@ -213,7 +217,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
   draws the enemy ship's plan for the last two consoles' screens); `inventory_panel.gd`, `crew_panel.gd` (v55, key O),
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`, `bench_view.gd` (v58, the workbench), `power_view.gd` (v61),
-  `comms_view.gd` (v63, the comms console).
+  `comms_view.gd` (v63, the comms console), `galley_view.gd` (v71, the galley's stove).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
   under xvfb-run), `playthrough.gd` (2026-10-19: a script captain plays whole campaigns and records every number,
@@ -338,6 +342,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   post goes through `Stations.share(p)`. Pirates' bombs are floor things plus `Pirates.bombs`; boarders get goals only while
   `pirates.goals_on` (tests that count pirates' fighting may want it off). `Systems.at_console` refuses a concussed person.
   Pirates turn at `cd <= 1` (a walking character never shows cd 0 to a think).
+- (v71) Work by hand goes through `Repairs._work_done` (or takes `Player.pace(tick)` itself, as the workbench, the stove
+  and treatments do): coffee makes it 0.75. Mending a machine or door uses `Repairs.spare_for` (never `ITEM_PART` by
+  hand); `server.complex_repairs` (set before start, like `mode`) decides the part kinds (`Upkeep.part_for`). A slow
+  walk is `Player.slowed()` (a broken leg or hunger's `weak`), never `p.leg` alone. Hunger counts `Garden.starved`
+  seconds: a test that starves the crew calls `garden._feed_tick()` per second rather than running 25 min of ticks.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -381,5 +390,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
   New signs: `g` glass, `c` catwalks, `H` ladder (in one tile of two adjacent decks),
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
   `I` intercom, `M` holomap, `5` drone monitor (v54), `B` workbench (v58), `U` module bay (v59), `Y` autodoc, `X` body scanner (v60), `S` SMES, `Q` bridge backup SMES (v61),
-  `K` comms console, `P` hydroponic tray, `C` cryopod (v63). A line `% deck x y system` names the room of an enemy ship's system (used only by
+  `K` comms console, `P` hydroponic tray, `C` cryopod (v63), `G` the galley's stove (v71). A line `% deck x y system` names the room of an enemy ship's system (used only by
   the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked.

@@ -89,7 +89,7 @@ func act(p: Player) -> bool:
 	## puts on something to wear (what was worn there comes off into the hand).
 	## (v69) A first-aid kit or a patch treats oneself.
 	var item := p.in_hand()
-	if p.cond == Net.COND_OK and not p.corpse and (Items.uses(item) > 0 or item == Net.ITEM_SPLINT or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
+	if p.cond == Net.COND_OK and not p.corpse and (Items.uses(item) > 0 or item == Net.ITEM_SPLINT or Items.meal(item) or (Items.INFO.has(item) and Items.INFO[item].has("heal"))):
 		server.combat.treat_self(p)
 		return true
 	if p.cond == Net.COND_OK and not p.corpse and Items.worn_as(item) >= 0:

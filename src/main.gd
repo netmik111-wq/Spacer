@@ -13,7 +13,8 @@ extends Node
 ##   campaign=continue   a server goes on with the saved campaign, if there is one (the default);
 ##                       campaign=new starts a new one (the old save is overwritten at the first autosave),
 ##                       campaign=off neither reads nor writes a save
-##   mode=normal         (v63) a new campaign's mode: easy, normal or hard (a continued one keeps its own)
+##   mode=normal         (v63) a new campaign's mode: easy, normal or hard (a continued one keeps its own);
+##                       (v71) "+complex" or "+plain" after it turns complex repairs on or off (the hard mode has them on)
 ## Other keys: F11 toggles full screen.
 ## Used by the game itself when it starts a server for a hosted game:
 ##   --autoquit (stop once the server has stayed empty), token=TEXT (lets that game stop it).
@@ -173,7 +174,7 @@ func _ready() -> void:
 		_server.director.auto = not _flags.has("no-events")
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
 		_server.measure = _opt.has("bench")
-		_server.mode = maxi(Net.MODE_KEYS.find(str(_opt.get("mode", "normal"))), 0)
+		_set_mode(_server, str(_opt.get("mode", "normal")))
 		var problem := _server.start(port, "ship02", bots)
 		if problem == "":
 			problem = _open_campaign(_server, str(_opt.get("campaign", "continue")))
@@ -289,6 +290,18 @@ func _host_game(player: String, port: int, bots: int, campaign: String = "", mod
 	_host_inside(port)
 
 
+static func _set_mode(server: GameServer, text: String) -> void:
+	## (v63) The mode a new campaign is played in; (v71) and whether it has complex repairs:
+	## "hard", "normal+complex", "hard+plain" (a continued campaign keeps its own).
+	var parts := text.split("+")
+	server.mode = maxi(Net.MODE_KEYS.find(parts[0]), 0)
+	server.complex_repairs = server.mode == Net.MODE_HARD
+	if parts.has("complex"):
+		server.complex_repairs = true
+	elif parts.has("plain"):
+		server.complex_repairs = false
+
+
 func _host_inside(port: int) -> void:
 	## The server inside the game itself: the fallback when a separate process
 	## cannot be started. It also reports a busy port in plain words.
@@ -297,7 +310,7 @@ func _host_inside(port: int) -> void:
 	_server = GameServer.new()
 	add_child(_server)
 	_server.shutdown_token = _server_token
-	_server.mode = maxi(Net.MODE_KEYS.find(_host_mode), 0)
+	_set_mode(_server, _host_mode)
 	if _flags.has("log"):
 		_server.log_line.connect(func(text: String) -> void: print(text))
 	var problem := _server.start(port, "ship02", _host_bots)

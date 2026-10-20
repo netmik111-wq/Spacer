@@ -108,6 +108,10 @@ var way_in := -1                     # the cell it came aboard at: where it goes
 var goal_work := 0                   # ticks of work done at it
 var angry_until := 0                 # it was hurt: it fights back until this tick, goal or not
 var taken := false                   # (v70) dragged off by pirates: gone, no body left (until it comes back from the reserve)
+# (v71, the author's L1 and L2) hunger and the galley's meals
+var weak := false                    # weak with long hunger: it walks slowly, like with a broken leg (see Garden)
+var meal := 0                        # the dish whose effect is at work (Net.ITEM_STEW.. , 0 = none; see Galley)
+var meal_until := 0                  # ... until this tick
 
 
 const HISTORY := 32
@@ -129,7 +133,20 @@ func heal_injuries() -> void:
 	leg = false
 	arm = false
 	concussed = 0
-	st.slow = dragging >= 0 or dragged_by >= 0
+	st.slow = dragging >= 0 or dragged_by >= 0 or weak
+
+
+func slowed() -> bool:
+	## (v71) Walks slowly by itself, hauling nobody: a broken leg, or weak with hunger.
+	return leg or weak
+
+
+func pace(tick: int) -> float:
+	## (v71) The share of its usual time work by hand takes now: strong coffee makes it quicker.
+	return COFFEE_PACE if meal == Net.ITEM_COFFEE and tick < meal_until else 1.0
+
+
+const COFFEE_PACE := 0.75
 
 
 func take_job(which: int) -> void:

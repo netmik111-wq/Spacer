@@ -104,6 +104,8 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 				server.chat.say("%s заклеивает раны: %s." % [p.name, who.name])
 		else:
 			_why_not_treated(p, who)
+	elif Items.meal(item):
+		server.galley.eat(p, _beside(p, at, true))   # (v71) a galley's dish, for oneself or a neighbour
 	elif item == Net.ITEM_ROBOT:
 		server.robots.deploy(p, Vector2i(roundi(at.x), roundi(at.y)))   # (v62) a security robot set down there
 	elif Items.uses(item) > 0 or item == Net.ITEM_SPLINT:
@@ -213,7 +215,7 @@ func set_bone(q: Player) -> void:
 	## (v70) A broken leg (else arm) set.
 	if q.leg:
 		q.leg = false
-		q.st.slow = q.dragging >= 0 or q.dragged_by >= 0
+		q.st.slow = q.dragging >= 0 or q.dragged_by >= 0 or q.weak
 		q.self_dirty = true
 	else:
 		q.arm = false
@@ -222,7 +224,7 @@ func set_bone(q: Player) -> void:
 func _treat_ticks(p: Player, kit: int = Net.ITEM_NONE) -> int:
 	## A treatment takes TREAT_TICKS for one with no skill, down to half that for the best.
 	## (v70) Setting a bone with a splint, SPLINT_TICKS.
-	return roundi((SPLINT_TICKS if kit == Net.ITEM_SPLINT else TREAT_TICKS) * (1.0 - 0.5 * p.skill(Net.SKILL_MEDICINE)))
+	return maxi(roundi((SPLINT_TICKS if kit == Net.ITEM_SPLINT else TREAT_TICKS) * (1.0 - 0.5 * p.skill(Net.SKILL_MEDICINE)) * p.pace(server.tick)), 1)
 
 
 func _stops_shot(x: int, y: int) -> bool:

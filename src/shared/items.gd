@@ -25,6 +25,8 @@ extends RefCounted
 ##   stun     (v70) a blow with it knocks the one hit down for this many seconds
 ##   throw    (v70) a click anywhere throws it there (a flashbang)
 ##   aim      (v70) a click on somebody next to us uses it on them (handcuffs, a splint)
+##   meal     (v71) a galley's dish: a click on oneself (or Z) or a neighbour eats it; its effect lasts this many
+##            seconds (0: at once) (see Galley)
 ## Later things will add their own properties here (damage, what it protects
 ## from, which layer of clothing it is), so a new kind of thing does not need
 ## new code where things are moved about.
@@ -120,6 +122,18 @@ const BASE := {
 	Net.ITEM_SPLINT: {"name": "Шина", "about": "Щёлкните по себе или по соседу: вправляет сломанную руку или ногу (4 секунды, не сходя с места).",
 		"price": 6, "stock": 2, "aim": true},
 	Net.ITEM_BOMB: {"name": "Бомба пиратов", "about": "Тикает. Держите E, стоя рядом, чтобы обезвредить (инженер быстрее)."},
+	# (v71, the author's H1) complex repairs' toolbox and second kind of spare part
+	Net.ITEM_TOOLBOX: {"name": "Ящик с инструментами", "about": "При сложном ремонте (выбирается при создании игры, в тяжёлом режиме включён) без него машины и двери чинятся втрое дольше. Не расходуется.",
+		"price": 20, "stock": 2},
+	Net.ITEM_BOARD: {"name": "Плата", "about": "Запчасть для пультов и экранов: карта, управление, пульты орудий и связи, монитор дрона, голокарта, интерком, автодок, сканер, модульная стойка, генератор щита. В обычной игре годится как любая запчасть.",
+		"price": 12, "stock": 2},
+	# (v71, the author's L2) the galley's dishes (see Galley): kept in the locker, eaten by hand
+	Net.ITEM_STEW: {"name": "Рагу", "about": "Горячее рагу с камбуза. Щёлкните по себе (или Z) или по соседу, чтобы съесть: 5 минут раны понемногу затягиваются (до 30 здоровья).",
+		"keep": true, "meal": 300},
+	Net.ITEM_COFFEE: {"name": "Кофе", "about": "Крепкий кофе с камбуза. Щёлкните по себе (или Z) или по соседу, чтобы выпить: 4 минуты любая работа руками (ремонт, лечение, гидропоника, верстак) идёт на четверть быстрее.",
+		"keep": true, "meal": 240},
+	Net.ITEM_BROTH: {"name": "Травяной отвар", "about": "Отвар целебной травы с камбуза. Щёлкните по себе (или Z) или по соседу, чтобы выпить: сразу останавливает кровотечение, снимает контузию и закрывает 15 ран.",
+		"keep": true, "meal": 0},
 	Net.ITEM_SHOTGUN + 0: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 0, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5, "price": 45, "stock": 1},
 	Net.ITEM_SHOTGUN + 1: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 1, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
 	Net.ITEM_SHOTGUN + 2: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 2, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
@@ -167,6 +181,13 @@ static func _made() -> Dictionary:
 			"about": "Детали орудий, %s. Получаются, когда инженер разбирает такое орудие на верстаке; ими же он улучшает орудия этого рода. Хранятся в трюме." % Weapons.KIND_NAMES[k]}
 	return out
 
+
+# (v71, the author's L2) the galley's dishes: the stove's action -> [the dish, what it is cooked from in the locker]
+const DISHES := {
+	Net.BENCH_STEW: [Net.ITEM_STEW, {Net.ITEM_FOOD: 2}],
+	Net.BENCH_COFFEE: [Net.ITEM_COFFEE, {Net.ITEM_FOOD: 1}],
+	Net.BENCH_BROTH: [Net.ITEM_BROTH, {Net.ITEM_FOOD: 1, Net.ITEM_MEDPATCH: 1}],
+}
 
 const PISTOL_DAMAGE := 30
 const PISTOL_RANGE := 14
@@ -217,7 +238,12 @@ static func loaded(item: int) -> int:
 static func aimed(item: int) -> bool:
 	## (v70) Is a click on somebody meant for the thing in hand: a weapon, something to heal
 	## with, handcuffs, a splint (GameScreen._fires_at asks).
-	return is_weapon(item) or uses(item) >= 0 or (INFO.has(item) and (INFO[item].has("heal") or INFO[item].has("aim")))
+	return is_weapon(item) or uses(item) >= 0 or (INFO.has(item) and (INFO[item].has("heal") or INFO[item].has("aim") or INFO[item].has("meal")))
+
+
+static func meal(item: int) -> bool:
+	## (v71) Is it a galley's dish?
+	return INFO.has(item) and INFO[item].has("meal")
 
 
 static func uses(item: int) -> int:
@@ -330,7 +356,7 @@ static func kept_in_locker() -> PackedInt32Array:
 
 # The kinds of thing, as the supply locker and the trader show them: caption, the things in it.
 static var CATEGORIES: Array = [
-	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FUEL]],
+	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_BOARD, Net.ITEM_TOOLBOX, Net.ITEM_FUEL]],
 	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
 	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES, Net.ITEM_SPLINT]],
 	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON, Net.ITEM_SHOTGUN, Net.ITEM_SHELLS, Net.ITEM_STUNNER,
@@ -341,7 +367,7 @@ static var CATEGORIES: Array = [
 	["Модули корабля", Gear.all().map(func(g: int) -> int: return Gear.item_of(g))],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
 	["Охрана", [Net.ITEM_ROBOT]],
-	["Провизия", [Net.ITEM_FOOD]],
+	["Провизия", [Net.ITEM_FOOD, Net.ITEM_STEW, Net.ITEM_COFFEE, Net.ITEM_BROTH]],
 	["Добыча", [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA]],
 	["Семена", range(Net.ITEM_SEED, Net.ITEM_SEED + Plants.COUNT * Plants.TRAITS)],
 	["Задания", [Net.ITEM_CARGO, Net.ITEM_BLACKBOX]],

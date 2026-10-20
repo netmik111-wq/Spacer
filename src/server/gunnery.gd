@@ -1855,6 +1855,7 @@ func _wrecked() -> void:
 		var paid := roundi(reward * CAPTURE_SHARE)
 		server.ship.credits += paid
 		server.ship.store[Net.ITEM_PART] = int(server.ship.store.get(Net.ITEM_PART, 0)) + CAPTURE_PARTS
+		server.ship.store[Net.ITEM_BOARD] = int(server.ship.store.get(Net.ITEM_BOARD, 0)) + 1     # (v71) and a circuit board
 		server.ship.store[Net.ITEM_FUEL] = int(server.ship.store.get(Net.ITEM_FUEL, 0)) + 1
 		var gun := _loot_gun(true) if boss == 0 else ""
 		if boss > 0:

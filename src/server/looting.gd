@@ -72,9 +72,9 @@ func let_go(p: Player) -> void:
 	var body: Player = server.players[p.dragging] if p.dragging < server.players.size() else null
 	if body != null and body.dragged_by == p.slot:
 		body.dragged_by = -1
-		body.st.slow = body.leg              # (v70) a broken leg still slows
+		body.st.slow = body.slowed()         # (v70) a broken leg still slows (v71: or hunger)
 	p.dragging = -1
-	p.st.slow = p.leg
+	p.st.slow = p.slowed()
 	p.self_dirty = true
 
 

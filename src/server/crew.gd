@@ -201,6 +201,9 @@ func _kit_out(p: Player) -> void:
 	match p.job:
 		Net.JOB_ENGINEER:
 			p.add(Net.ITEM_PART)
+			if server.complex_repairs:
+				p.add(Net.ITEM_TOOLBOX)      # (v71) complex repairs: the engineer's own tools and a board
+				p.add(Net.ITEM_BOARD)
 		Net.JOB_MEDIC:
 			p.add(Net.ITEM_MEDPATCH)
 		Net.JOB_GUARD:
@@ -693,7 +696,7 @@ static func voyage_text(ticks: int) -> String:
 
 func campaign_packet() -> PackedByteArray:
 	var out := PackedByteArray()
-	out.resize(17)
+	out.resize(18)
 	out.encode_u8(0, Net.S_CAMPAIGN)
 	out.encode_u8(1, server.ship.hull)
 	out.encode_u8(2, server.reserve)
@@ -705,6 +708,7 @@ func campaign_packet() -> PackedByteArray:
 	out.encode_u8(14, 1 if server.won else 0)
 	out.encode_u8(15, server.ship.hull_max)
 	out.encode_u8(16, server.mode)
+	out.encode_u8(17, Net.CAMPAIGN_COMPLEX if server.complex_repairs else 0)   # (v71)
 	return out
 
 

@@ -281,6 +281,45 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(5, 7) * u, Vector2(4, 2) * u), Color(0.1, 0.25, 0.1))
 			canvas.draw_circle(at + Vector2(11, 8) * u, 1.3 * u, Color(1.0, 0.2, 0.15))
 			canvas.draw_line(at + Vector2(6, 5) * u, at + Vector2(8, 2.5) * u, Color(0.85, 0.2, 0.15), 0.8 * u)
+		Net.ITEM_TOOLBOX:
+			# (v71) a toolbox: a red box with a handle and a latch
+			canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(13, 7) * u), Color(0.1, 0.08, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(3, 8) * u, Vector2(11, 5) * u), Color(0.78, 0.18, 0.14))
+			canvas.draw_rect(Rect2(at + Vector2(3, 9.6) * u, Vector2(11, 0.8) * u), Color(0.45, 0.1, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 1.2) * u), Color(0.1, 0.08, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(1.2, 3.5) * u), Color(0.1, 0.08, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(9.8, 4) * u, Vector2(1.2, 3.5) * u), Color(0.1, 0.08, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(7.8, 9.2) * u, Vector2(1.4, 1.6) * u), Color(0.85, 0.85, 0.8))
+		Net.ITEM_BOARD:
+			# (v71) a circuit board: green, with chips and gold contacts
+			canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 9) * u), Color(0.06, 0.12, 0.08))
+			canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 7) * u), Color(0.15, 0.5, 0.25))
+			canvas.draw_rect(Rect2(at + Vector2(4.5, 6) * u, Vector2(3, 3) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(9, 6.5) * u, Vector2(4, 2) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_line(at + Vector2(7.5, 7.5) * u, at + Vector2(9, 7.5) * u, Color(0.85, 0.75, 0.3), 0.5 * u)
+			for k in 5:
+				canvas.draw_rect(Rect2(at + Vector2(3.5 + k * 2.2, 13) * u, Vector2(1.2, 1.5) * u), Color(0.9, 0.75, 0.25))
+		Net.ITEM_STEW:
+			# (v71) a stew: a bowl with brown stew and steam
+			canvas.draw_rect(Rect2(at + Vector2(3, 8) * u, Vector2(11, 5) * u), Color(0.12, 0.12, 0.14))
+			canvas.draw_rect(Rect2(at + Vector2(4, 9) * u, Vector2(9, 3.5) * u), Color(0.82, 0.82, 0.8))
+			canvas.draw_rect(Rect2(at + Vector2(4.5, 8.5) * u, Vector2(8, 1.5) * u), Color(0.55, 0.32, 0.15))
+			canvas.draw_circle(at + Vector2(7, 8.8) * u, 0.7 * u, Color(0.85, 0.55, 0.2))
+			for x in [6.0, 9.0, 11.0]:
+				canvas.draw_line(at + Vector2(x, 7) * u, at + Vector2(x - 0.8, 3.5) * u, Color(0.8, 0.82, 0.85, 0.6), 0.6 * u)
+		Net.ITEM_COFFEE:
+			# (v71) coffee: a mug with a handle, dark and steaming
+			canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(7, 8) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(5, 7) * u, Vector2(5, 6) * u), Color(0.9, 0.88, 0.82))
+			canvas.draw_rect(Rect2(at + Vector2(5, 7) * u, Vector2(5, 1.2) * u), Color(0.3, 0.17, 0.08))
+			canvas.draw_arc(at + Vector2(11.5, 10) * u, 2.0 * u, -PI / 2, PI / 2, 8, Color(0.1, 0.1, 0.12), 1.2 * u)
+			canvas.draw_line(at + Vector2(7.5, 5.5) * u, at + Vector2(6.8, 2.5) * u, Color(0.8, 0.82, 0.85, 0.6), 0.6 * u)
+		Net.ITEM_BROTH:
+			# (v71) a herb broth: a flask of green broth with a leaf
+			canvas.draw_rect(Rect2(at + Vector2(5, 5) * u, Vector2(7, 9) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(6, 7) * u, Vector2(5, 6) * u), Color(0.35, 0.78, 0.6))
+			canvas.draw_rect(Rect2(at + Vector2(7, 3) * u, Vector2(3, 2.5) * u), Color(0.6, 0.45, 0.3))
+			canvas.draw_circle(at + Vector2(8.5, 10) * u, 1.3 * u, Color(0.6, 0.95, 0.75))
 		Net.ITEM_MAG:
 			# a magazine with a round showing at the top
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.12, 0.12, 0.15))

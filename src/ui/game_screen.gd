@@ -22,6 +22,8 @@ const TradeView := preload("res://src/ui/trade_view.gd")
 const HoloView := preload("res://src/ui/holo_view.gd")
 const DroneView := preload("res://src/ui/drone_view.gd")
 const BenchView := preload("res://src/ui/bench_view.gd")
+const GalleyView := preload("res://src/ui/galley_view.gd")
+const Upkeep := preload("res://src/shared/upkeep.gd")
 const PowerView := preload("res://src/ui/power_view.gd")
 const CommsView := preload("res://src/ui/comms_view.gd")
 const Plants := preload("res://src/shared/plants.gd")
@@ -94,6 +96,7 @@ var _trading := false                # the locker's frame shows the trader's scr
 var _holo_view: HoloView
 var _drone_view: DroneView           # (v54) the drone monitor's screen, set up when first shown
 var _bench_view: BenchView           # (v58) the workbench's screen, set up when first shown
+var _galley_view: GalleyView         # (v71) the galley stove's screen, the same way
 var _power_view: PowerView           # (v61) an SMES's terminal, set up when first shown
 var _comms_view: CommsView           # (v63) the comms console, set up when first shown
 var _slots_view: Control             # what our character carries, slot by slot
@@ -509,6 +512,9 @@ func _build_console(root: Control) -> void:
 	_bench_view = BenchView.new()
 	_bench_view.visible = false
 	box.add_child(_bench_view)
+	_galley_view = GalleyView.new()
+	_galley_view.visible = false
+	box.add_child(_galley_view)
 	_power_view = PowerView.new()
 	_power_view.visible = false
 	box.add_child(_power_view)
@@ -541,7 +547,7 @@ func _opens_panel(target: int) -> bool:
 	## The bridge consoles and the holomap need power (v61: the bridge's backup SMES keeps those in its
 	## room going); the supply locker and the workbench are worked by hand, an SMES's terminal is its own.
 	return target == 12 or target == 22 or target == 28 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
-		or target == 30) and client.power_at(client.use_cell()))
+		or target == 30 or target == 44) and client.power_at(client.use_cell()))
 
 
 func _open_console(kind: int) -> void:
@@ -554,13 +560,15 @@ func _open_console(kind: int) -> void:
 		_drone_view.closed()
 	if _console_kind == 22 and kind != 22:
 		_bench_view.closed()
+	if _console_kind == 44 and kind != 44:
+		_galley_view.closed()
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
 		return
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
@@ -568,6 +576,8 @@ func _open_console(kind: int) -> void:
 		_drone_view.setup(client)
 	if kind == 22 and _bench_view.client == null:
 		_bench_view.setup(client)
+	if kind == 44 and _galley_view.client == null:
+		_galley_view.setup(client)
 	if kind == 30 and _comms_view.client == null:
 		_comms_view.setup(client)
 	if kind == 28:
@@ -580,6 +590,7 @@ func _open_console(kind: int) -> void:
 	_holo_view.visible = kind == 20
 	_drone_view.visible = kind == 21
 	_bench_view.visible = kind == 22
+	_galley_view.visible = kind == 44
 	_power_view.visible = kind == 28
 	_comms_view.visible = kind == 30
 	_chart.visible = not own_view
@@ -587,16 +598,16 @@ func _open_console(kind: int) -> void:
 	_jump_box.visible = not own_view
 	_jump_box.columns = 2
 	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
-		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 else Color(0.3, 0.75, 0.45)))))))
+		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 or kind == 44 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 else Color(0.3, 0.75, 0.45)))))))
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
 		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения",
-		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи"}.get(kind, "")
+		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита"}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
 	if kind == 21:
 		_drone_view.opened()
-	_console_shut.text = Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)")))
+	_console_shut.text = Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))))
 
 
 func _show_trade(on: bool) -> void:
@@ -644,6 +655,9 @@ func _update_console() -> void:
 	if _console_kind == 22:
 		_bench_view.refresh()
 		return
+	if _console_kind == 44:
+		_galley_view.refresh()
+		return
 	if _console_kind == 28:
 		_power_view.refresh()
 		return
@@ -654,6 +668,14 @@ func _update_console() -> void:
 		_bridge.update_helm()
 		return
 	_bridge.update_chart()
+
+
+func _lacking(cell: int) -> String:
+	## (v71) What mending the thing in that cell lacks (a part, with complex repairs the right
+	## one and a toolbox), as Repairs.spare_for and Upkeep.slower count it.
+	var want := Upkeep.part_for(client.map, cell) if cell >= 0 else Net.ITEM_PART
+	var part := Upkeep.spare(client.complex_repairs, want, func(item: int) -> bool: return client.carried(item) > 0)
+	return Upkeep.lacking(client.complex_repairs, part, want, client.toolbox)
 
 
 func _tray_hint(cell: int, no_power: bool) -> String:
@@ -1232,7 +1254,7 @@ func _process(delta: float) -> void:
 		target = -1                          # (the hint is set; none of the cases below applies)
 	var no_power := not client.power_at(client.use_cell())
 	var why := "двигатель не работает, СМЭС пуст" if client.engine_down() else "двигатель заглох, СМЭС пуст"
-	var no_part := "" if client.parts > 0 else " (без запчасти втрое дольше)"
+	var no_part := _lacking(client.use_cell())
 	if client.concussed and CONSOLE_KINDS.has(target):
 		_hint.text = DAZED
 		target = -1
@@ -1335,6 +1357,8 @@ func _process(delta: float) -> void:
 			_hint.text = "Модульная стойка: %s. Держите E, чтобы вынуть последний модуль" % _bay_text()
 	elif target == 24:
 		_hint.text = "Модульная стойка: %s. Ящик с модулем в руке: держите E, чтобы поставить" % _bay_text()
+	elif target == 44:
+		_hint.text = "Плита камбуза обесточена: %s" % why if no_power else "E: камбуз (рагу, кофе, травяной отвар из пайков)"
 	elif target == 22:
 		_hint.text = "E: верстак (разобрать, починить, улучшить орудия)" if client.job == Net.JOB_ENGINEER \
 			else "Верстак: за ним работают только инженеры (E: посмотреть)"
@@ -1490,6 +1514,8 @@ func _process(delta: float) -> void:
 				extra = "    Щелчок по соседу или Z на себя: вправить перелом"
 			elif item == Net.ITEM_WELDER:
 				extra = "    Держите E у закрытой двери: заварить или срезать шов"
+			elif info.has("meal"):
+				extra = "    Щелчок по соседу или Z на себя: съесть"
 			elif info.has("heal"):
 				extra = "    Щелчок по соседу или Z на себя: заклеить раны"
 			elif Items.worn_as(item) >= 0:
@@ -1513,8 +1539,16 @@ func _process(delta: float) -> void:
 		hurt.append("перелом руки (руки медленнее, стрельба неточная)")
 	if client.concussed:
 		hurt.append("контузия (пульты не даются)")
-	_hurt_label.text = ("Травмы: " + ", ".join(hurt)) if not hurt.is_empty() else ""
-	_hurt_label.visible = alive and not hurt.is_empty()
+	var lines := PackedStringArray()
+	if not hurt.is_empty():
+		lines.append("Травмы: " + ", ".join(hurt))
+	if client.weak:
+		lines.append("Слабость от голода: идёте медленно")       # (v71)
+	if client.meal != 0 and client.meal_left > 0:
+		lines.append("%s: %s, ещё %d:%02d" % [Items.name_of(client.meal), {Net.ITEM_STEW: "раны затягиваются",
+			Net.ITEM_COFFEE: "работа быстрее"}.get(client.meal, ""), client.meal_left / 60, client.meal_left % 60])
+	_hurt_label.text = "\n".join(lines)
+	_hurt_label.visible = alive and not lines.is_empty()
 	var share := float(client.tank) / Net.TANK_FULL
 	_tank_fill.position = Vector2(2, 2 + 92.0 * (1.0 - share))
 	_tank_fill.size = Vector2(8, 92.0 * share)
