@@ -54,6 +54,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## (v78) lie_after=SECONDS (lie down, as the C key does).
 ## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
 ## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
 ## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
@@ -142,6 +143,7 @@ var _fainted := false
 var _handed := false
 var _taken := false
 var _acted := false
+var _lain := false                      # (v78) lie_after done
 var _droned := false
 var _probed := false
 var _steers: Array = []              # [direction, seconds] still to send to the drone
@@ -583,6 +585,9 @@ func _process(_delta: float) -> void:
 	if _opt.has("act_after") and not _acted and _screen != null and t >= float(_opt["act_after"]):
 		_acted = true
 		_client.send_act()
+	if _opt.has("lie_after") and not _lain and _screen != null and t >= float(_opt["lie_after"]):
+		_lain = true
+		_client.toggle_prone()
 	if _opt.has("drone_after") and not _droned and _screen != null and t >= float(_opt["drone_after"]):
 		_droned = true
 		_client.send_drone(Net.DRONE_LAUNCH)
@@ -708,7 +713,7 @@ func _process(_delta: float) -> void:
 					"entities": _client.ents.size(), "rtt_ms": _client.rtt_ms,
 					"mispredicts": _client.mispredicts, "checks_ok": _client.checks_ok,
 					"checks_bad": _client.checks_bad, "packets_in": _client.packets_in,
-					"bytes_in": _client.bytes_in, "pred_x": _client.pred.x, "pred_y": _client.pred.y,
+					"bytes_in": _client.bytes_in, "pred_x": _client.pred.x + _client.pred.ox * 0.25, "pred_y": _client.pred.y + _client.pred.oy * 0.25,
 					"steps_predicted": _client.steps_predicted,
 					"ship_checks_bad": _client.ship_checks_bad, "holes": _client.holes.size(),
 					"air_here": _client.air_at(_client.pred.x, _client.pred.y),
@@ -722,7 +727,7 @@ func _process(_delta: float) -> void:
 					"ship_x": _client.ship_pos().x, "ship_y": _client.ship_pos().y, "broken": _client.broken.size(),
 					"sector_kind": _client.sectors.kind[_client.sector] if _client.sectors.count > 0 else -1,
 					"bodies": _client.roster.size() - _client.crew_count(),
-					"auth_x": mine.x if mine != null else -1, "auth_y": mine.y if mine != null else -1,
+					"auth_x": mine.x + mine.ox * 0.25 if mine != null else -1, "auth_y": mine.y + mine.oy * 0.25 if mine != null else -1,
 					"login_ms": _client.login_ms, "in_world_ms": _client.in_world_ms,
 				}))
 		if _client != null:

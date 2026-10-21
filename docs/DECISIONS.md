@@ -1317,3 +1317,43 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
 - **Left for v78** (M1 "D", Z1 "A" with "not free walking, a quarter of a tile"; C1 "B"): quarter-tile player steps, lying
   down, swapping places; and his M2 and thread words on friendly fire: "when you're almost in one tile you can shoot from
   behind your ally and not hit them, like in RimWorld" (a friend right next to the shooter is never hit).
+
+## v78: quarter steps, lying down, friendly fire (2026-10-21)
+
+His message: "Need your opinion about the 1/4 movement system... now we need to make it so that we can visually stop at
+1/4 of a tile". Built on his v77 poll picks (M1 "D", C1 "B", his M2 words on friendly fire).
+- **Quarter steps for players only** (`Mover.State.fine`, set each tick from `Player.quarters`, which `Crew` sets for a
+  joining player). A step is a quarter of a tile (8 px) and takes a quarter of a whole step's ticks (`MOVE_TICKS / 4` = 1,
+  `DRAG_TICKS / 4` = 2), so the speed is unchanged; a slant quarter takes `slant_span(1)`, 1 or 2 ticks, 1.4 on average.
+  Bots, pirates and robots keep whole tiles: they plan by tiles (`Paths`), and quarters would only make them jitter. A bot
+  that takes a player's place snaps back to its tile's centre on its first step.
+- **The tile is the one under the centre** (`x, y`, with `ox, oy` in -2..1 quarters off it; -2 is on the border and
+  belongs to this tile). So everything that asks `st.x, st.y` (air, doors, sight, use, bots, saves) works unchanged: my
+  main reason for this shape over a free position. The tile changes half way between two centres, not at a step's start.
+- **The body is a tile wide**: off centre it lies over the next tile too (`Mover.body_tiles`, 1, 2 or 4 tiles). Every
+  tile it newly lies over must be passable to it, with a door pushed open first (the same checks as a whole step); lying
+  over four tiles needs all four open, no doorway, one deck (as a slant step's `slant_open`). A door does not shut on a
+  body half in its doorway (`Systems.update_doors`, `_door_free`).
+- **Sliding into line** (`Mover._line_up`): a straight quarter refused while off line across the way slides a quarter
+  towards the row (or column) the way ahead is open from, as old console games do at corners: without it a player a
+  quarter off a doorway would push on the wall beside it. On a slant: the slant, then across, then up or down, then the
+  two slides.
+- **Network**: `S_WORLD` character records gain a byte (`Net.pack_off`: offsets and lying down; `ENT_BYTES` 8), the self
+  packet gains one (`SELF_BYTES` 19; byte 18's bits: free look, fine, prone), `fx, fy` are in quarters. Protocol 54.
+  Others are drawn by their quarter steps (`GameClient._apply_record` keeps 24 recent steps). Walking players send a record
+  every tick instead of every 4: the benchmark's tick went from 9.9 to 12.0 ms at 32 players (of 50), nettest corrections
+  stayed under 0.25% even at 210 ms ping with 5% loss.
+- **A hauled body follows by whole tiles**, when the hauler's tile changes (`Movement.move`); the client's guess of it
+  follows our tile too. Step sounds count tiles, not quarters.
+- **Lying down** (C1 "B"): inputs `Mover.LIE`/`RISE` in the walking stream (predicted), key C (`Options` "lie"). Crawling
+  takes `DRAG_TICKS` per tile (half speed). A shot passes over one lying down unless aimed within `Combat.PRONE_AIMED`
+  (1 cell) of it. `place()` stands one up (ladders, respawn); being knocked out or a bot taking over too. Drawn on its side
+  in its own colours.
+- **Friendly fire as in RimWorld** (his M2: "shoot with friends in one place constantly, just to suppress"; thread: "a
+  friend right next to the shooter is never hit"): `Combat.spared` skips one on the shooter's side within
+  `FRIEND_CLOSE` (1.25 cells across and down: the next tile, a slant too, and quarters off it). Friends further on still
+  get hit. Sides are `pirate` or not (our robots and bots are ours). Shots now start where the shooter is drawn
+  (`place_at`), and pirates aim at where a player is drawn (`Pirates` uses `visual_pos`), or a player half a tile off its
+  tile would be missed by every pirate.
+- **Swapping places is left out** (my disagreement, told to him): characters already walk through one another, so there
+  is nothing to swap. If he wants bodies to block (then swapping matters), that is its own question.

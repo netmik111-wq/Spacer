@@ -53,7 +53,10 @@ class Ent:
 	var cond := 0                    # Net.COND_*
 	var look := 2                    # facing and condition as the server packs them (for the checksum)
 	var light := false               # shines a light (a lit flashlight in the hand)
-	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing, ticks it takes]
+	var steps: Array = []            # recent steps: [start tick, from x, from y, to x, to y, facing, ticks it takes] (x, y in tiles)
+	var ox := 0                      # (v78) quarters off the centre of tile x, y
+	var oy := 0
+	var prone := false               # (v78) lying down
 
 
 var phase := IDLE
@@ -298,7 +301,10 @@ var _repeat_msg := PackedByteArray() # the newest input change, repeated in case
 var _repeat_left := 0
 var _haul_from := Vector2.ZERO       # the one we haul is drawn sliding between these two cells, in step with
 var _haul_to := Vector2.ZERO         # our own predicted character rather than a moment behind it
-var _haul_seen := -1                 # our step (its start tick) that slide belongs to
+var _haul_seen := -1                 # the tick our step left that cell on
+var _prone_to := false               # (v78) lying down or getting up as last asked (see toggle_prone)
+var _prone_at := -1
+var _haul_cell := Vector2i.ZERO      # (v78) the tile we were last in
 var _haul_id := -1                   # who it was worked out for
 
 
@@ -472,6 +478,16 @@ func face(facing: int) -> void:
 	_send_input(Mover.TURN + facing)
 	_turn_to = facing
 	_turn_at = _last_apply
+
+
+func toggle_prone() -> void:
+	## (v78, the author's C1 "B") Lie down, or get up: predicted as walking is.
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK:
+		return
+	var lying := _prone_to if _prone_at > pred_tick else pred.prone
+	_send_input(Mover.RISE if lying else Mover.LIE)
+	_prone_to = not lying
+	_prone_at = _last_apply
 
 
 func facing_soon() -> int:
@@ -2093,7 +2109,7 @@ func _on_world(pkt: PackedByteArray) -> void:
 			var count := pkt.decode_u16(pos)
 			pos += 2
 			for i in count:
-				_apply_record(pkt.decode_u16(pos), pkt.decode_s16(pos + 2), pkt.decode_s16(pos + 4), pkt[pos + 6], s_tick)
+				_apply_record(pkt.decode_u16(pos), pkt.decode_s16(pos + 2), pkt.decode_s16(pos + 4), pkt[pos + 6], s_tick, pkt[pos + 7])
 				pos += Net.ENT_BYTES
 		elif sec == Net.SEC_SELF:
 			if in_world_ms < 0:
@@ -2243,7 +2259,7 @@ func _outside_view(x: int, y: int) -> bool:
 	return absi((x >> Net.CHUNK_SHIFT) - _view_cx) > 1 or absi((map.local_y(y) >> Net.CHUNK_SHIFT) - _view_cy) > 1
 
 
-func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
+func _apply_record(id: int, x: int, y: int, look: int, s_tick: int, off: int = 10) -> void:
 	if look == Net.FACING_HIDDEN:
 		# out of our sight now: the server tells us no more about it
 		var e_hidden: Ent = ents.get(id)
@@ -2256,12 +2272,17 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
 		ents.erase(id)
 		return
 	var facing := Net.look_facing(look)
+	var ox := Net.off_x(off)
+	var oy := Net.off_y(off)
 	var e: Ent = ents.get(id)
 	if e == null:
 		e = Ent.new()
 		e.id = id
 		e.x = x
 		e.y = y
+		e.ox = ox
+		e.oy = oy
+		e.prone = Net.off_prone(off)
 		e.facing = facing
 		e.look = look
 		e.cond = Net.look_cond(look)
@@ -2271,19 +2292,30 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int) -> void:
 	e.look = look
 	e.cond = Net.look_cond(look)
 	e.light = Net.look_light(look)
-	if e.x != x or e.y != y:
-		if maxi(absi(e.x - x), absi(e.y - y)) == 1:
-			# somebody hauling, or being hauled, takes longer over a step; (v74) a slant one too
-			var span := Net.DRAG_TICKS if Net.look_slow(look) else Net.MOVE_TICKS
-			if e.x != x and e.y != y:
+	e.prone = Net.off_prone(off)
+	var was_qx := e.x * 4 + e.ox
+	var was_qy := e.y * 4 + e.oy
+	var qx := x * 4 + ox
+	var qy := y * 4 + oy
+	if was_qx != qx or was_qy != qy:
+		var far := maxi(absi(qx - was_qx), absi(qy - was_qy))
+		if far == 4 or far == 1:
+			# somebody hauling, or being hauled, takes longer over a step; (v74) a slant one too;
+			# (v78) a player's step is a quarter of a tile, a quarter of the time (lying down: crawling)
+			var span := Net.DRAG_TICKS if Net.look_slow(look) or e.prone else Net.MOVE_TICKS
+			if far == 1:
+				span = maxi(span / 4, 1)
+			if qx != was_qx and qy != was_qy:
 				span = Mover.slant_span(span, s_tick)
-			e.steps.append([s_tick, e.x, e.y, x, y, facing, span])
-			if e.steps.size() > 8:
+			e.steps.append([s_tick, was_qx * 0.25, was_qy * 0.25, qx * 0.25, qy * 0.25, facing, span])
+			if e.steps.size() > 24:
 				e.steps.pop_front()
 		else:
 			e.steps.clear()          # moved further than one step: place it there
 		e.x = x
 		e.y = y
+		e.ox = ox
+		e.oy = oy
 	e.facing = facing
 
 
@@ -2360,7 +2392,11 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.move_tick = pkt.decode_s32(o + 9)
 	_auth.fx = pkt.decode_s16(o + 13)
 	_auth.fy = pkt.decode_s16(o + 15)
-	_auth.free_look = pkt[o + 17] != 0
+	_auth.free_look = (pkt[o + 17] & 1) != 0
+	_auth.fine = (pkt[o + 17] & 2) != 0      # (v78)
+	_auth.prone = (pkt[o + 17] & 4) != 0
+	_auth.ox = Net.off_x(pkt[o + 18])
+	_auth.oy = Net.off_y(pkt[o + 18])
 	_auth_tick = s_tick
 	for i in _inputs.size():
 		if (int(_inputs[i][0]) & 0xFFFF) == ack:
@@ -2415,6 +2451,14 @@ func _rebuild_prediction() -> void:
 
 # ---------------------------------------------------------------- drawing
 
+func prone_of(id: int) -> bool:
+	## (v78) Is this character lying low (by its own choice, not knocked down)?
+	if id == my_id and _have_self:
+		return pred.prone
+	var e: Ent = ents.get(id)
+	return e != null and e.prone
+
+
 func sample(id: int) -> Array:
 	## Where to draw a character right now:
 	## [position in tiles, facing, is moving, tick its current step started on, condition].
@@ -2430,17 +2474,20 @@ func sample(id: int) -> Array:
 		# Whoever we haul moves into the cell we have just left, as we leave it.
 		# The server's word on that arrives late; our own steps we know at once.
 		_simulate_to_now()
+		# (v78) by the tile we leave: our own steps are quarters
 		if _haul_id != id:
 			_haul_id = id
 			_haul_to = Vector2(e.x, e.y)
 			_haul_from = _haul_to
+			_haul_cell = Vector2i(pred.x, pred.y)
 			_haul_seen = pred.move_tick
-		elif _haul_seen != pred.move_tick:
-			_haul_seen = pred.move_tick
+		elif _haul_cell != Vector2i(pred.x, pred.y):
 			_haul_from = _haul_to
-			_haul_to = Vector2(pred.fx, pred.fy)
+			_haul_to = Vector2(_haul_cell)
+			_haul_cell = Vector2i(pred.x, pred.y)
+			_haul_seen = pred.move_tick
 		var t := pred_time()
-		var k := clampf((t - float(pred.move_tick)) / float(pred.span), 0.0, 1.0)
+		var k := clampf((t - float(_haul_seen)) / float(Net.DRAG_TICKS), 0.0, 1.0)
 		if _haul_from.distance_to(_haul_to) > 1.5:
 			k = 1.0                          # a ladder, or a correction: no slide across the ship
 		return [_haul_from.lerp(_haul_to, k), e.facing, false, pred.move_tick, e.cond]
@@ -2458,4 +2505,4 @@ func sample(id: int) -> Array:
 	if last >= 0:
 		var first: Array = e.steps[0]
 		return [Vector2(first[1], first[2]), first[5], false, first[0], e.cond]
-	return [Vector2(e.x, e.y), e.facing, false, 0, e.cond]
+	return [Vector2(e.x + e.ox * 0.25, e.y + e.oy * 0.25), e.facing, false, 0, e.cond]

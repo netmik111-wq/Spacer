@@ -1450,6 +1450,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_suit(not client.supply)
 	elif Options.pressed(event, "drop"):
 		client.send_drop()
+	elif Options.pressed(event, "lie"):
+		client.toggle_prone()                 # (v78)
 	elif Options.pressed(event, "act"):
 		client.send_act()
 	elif Options.pressed(event, "inventory"):

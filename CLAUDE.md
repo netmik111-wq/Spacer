@@ -34,8 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v77.1 (version 0.70.1: v77's evening bugs, the view following the mouse, bots on a slant, and the fix for mouse turns
-freezing a fast computer's character) is the latest. Plans one to four are done except the darkness front (the
+Build v78 (version 0.71: quarter-tile steps for players, lying down, friendly fire as in RimWorld) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -74,9 +73,9 @@ playtests, so no numbers change for now; nothing public (no GitHub Releases, the
 v77 (his answers, `https://claude.ai/artifact/JFTeczxumE8CGGGcZ58vaJ`): seven bugs from an evening with KaineQwQ (the
 trader's money loop, wreck spam on a jump, rejoining as «Name 2», the dead ship left behind, the chat too low, place
 hints, the SOS dead ship), the view following the mouse (a setting), bots and pirates walking on a slant.
-Next, v78 (his picks M1 D, C1 B): quarter-tile steps for players (not free movement), lying down, swapping places with a
-friend, and friendly fire as in RimWorld (a friend right by the shooter is never hit). Later: fear (its own build) and a
-fire question round.
+v78 (his picks M1 D, C1 B): players step a quarter of a tile and stop on any quarter, C lies down (crawl, shots fly over),
+a friend right by the shooter is never hit. Swapping places was left out (people already walk through each other).
+Later: fear (its own build) and a fire question round.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -107,7 +106,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 36 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 37 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -144,6 +143,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/walktest.gd (since v74: 8 ways, slant steps, corners, doorways, use and sight on a slant, the look byte)
     godot --headless --path . --script res://tools/polishtest.gd (since v75: gunner mends its mount, bots leave airless rooms, stuck shutters, busy doors, breaches aloud, quiet start, summary)
     godot --headless --path . --script res://tools/eveningtest.gd (since v77: trader's wants, wreck on a jump, saved in space, SOS ship, free look, slant ways, rejoin with real clients)
+    godot --headless --path . --script res://tools/quartertest.gd (since v78: quarter steps, bodies never in walls, sliding into doorways, held doors, hauling, lying down, friendly fire)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -168,7 +168,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 36 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 37 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -409,6 +409,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a test buying plain things picks ones it does not look for. Same name and same address in a hello takes the old
   character over (`Crew._same_person`). Protocol 53. (v77.1) The client sends one turn at a time (`facing_soon`): never
   send an input on every frame, as each is stamped a tick after the last and the queue runs away at high frame rates.
+- (v78) A player's tile `st.x, st.y` is the one under its centre; `st.ox, st.oy` (-2..1 quarters) say how far off it
+  it stands, only when `st.fine` (players: `Player.quarters`; tests set it). Where it is drawn is `Mover.visual_pos`
+  (quarters included); `st.fx, st.fy` are in quarters (`qx()`, `qy()`). Whatever asks "is somebody in this doorway" must
+  look at `Mover.body_tiles(st)` too. Shots start and land by drawn places (`Combat.place_at`); aim at a player with
+  `visual_pos`, not its tile. A friend within `Combat.FRIEND_CLOSE` of the shooter is never hit (`Combat.spared`): a test
+  that wants a friend hit puts it two tiles on. Character records are 8 bytes, the self section 19 (protocol 54).
+  `tools/nettest.sh` runs in parallel only without `unshare -n` here (no `ip` to raise the loopback).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

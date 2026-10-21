@@ -6,7 +6,7 @@
 #   does not exit by itself. Its output goes to $OUT/NAME.log.
 set -u
 GODOT=${GODOT:-godot}; OUT=${OUT:-/tmp/runtests}; LIMIT=${LIMIT:-600}
-TESTS="airtest directortest machinetest spacetest itemtest sighttest fighttest locktest derelicttest weartest guntest crewtest savetest admintest holotest shiptest dronetest stationtest flagshiptest tiertest geartest worktest powertest enemytest storytest roadtest airlocktest salvagetest crewfighttest fixtest peopletest upkeeptest bottest walktest polishtest eveningtest"
+TESTS="airtest directortest machinetest spacetest itemtest sighttest fighttest locktest derelicttest weartest guntest crewtest savetest admintest holotest shiptest dronetest stationtest flagshiptest tiertest geartest worktest powertest enemytest storytest roadtest airlocktest salvagetest crewfighttest fixtest peopletest upkeeptest bottest walktest polishtest eveningtest quartertest"
 cd "$(dirname "$0")/.."; rm -rf "$OUT"; mkdir -p "$OUT"
 bad=0
 for t in $TESTS; do

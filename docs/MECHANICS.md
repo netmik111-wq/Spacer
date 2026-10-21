@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v77 (version 0.70).
+Last updated: build v78 (version 0.71).
 
 Contents:
 
@@ -49,6 +49,15 @@ Contents:
 
 - The server decides everything. The game runs in ticks: **20 ticks per second**.
 - A character crosses a cell in **0.2 s** (5 cells per second). Someone dragging a body moves half as fast.
+- **Quarter steps** (v78, the author's M1 "D"): a player moves a **quarter of a cell** (8 px) each tick, so at
+  the same speed, and stops wherever the key is let go: on the centre of a cell, a quarter or half of one off.
+  Everyone sees them there. The cell under the character's **centre** counts for everything else: air, doors,
+  sight, using things. The body is a cell wide, so it may lie over the next cell only if that cell is open
+  floor; on a slant it never lies over a wall corner or a doorway. Walking into a doorway or a corridor a quarter
+  off, the character slides into line by itself. Bots, pirates and robots still step whole cells.
+- **Lying down** (v78, C1 "B"): **C** lies down or gets up. Lying, you crawl at **half speed**, and shots fly
+  over you unless they are aimed at you (meant for a point within **1 cell** of you). Climbing a ladder or
+  being knocked out stands you up.
 - Pressing a direction **turns** the character **immediately**, even mid-step or facing a wall.
 - **Wall objects** (consoles, racks, locker, engine, air plant, intercom, airlock
   pump) face one room (down if there is floor there, otherwise up or sideways). They can be used
@@ -522,6 +531,12 @@ Contents:
 - **Pistol**: a click fires where you clicked. Damage **30**, range **14** cells,
   no more than once every 0.3 s. The bullet is instant and hits the **first one in its path**, allies too.
   Walls, windows and closed doors stop it.
+- **Friendly fire as in RimWorld** (v78, the author's M2): a friend standing **right by the shooter** (within
+  1.25 cells across and down, so the next cell, also on a slant) is never hit; a friend further down the line
+  still can be. So two or three can fire from one spot. A foe right by the shooter is hit as before.
+- The shot starts where the shooter **is drawn** (quarter steps), and hits whoever it passes within the hit
+  zone of, where they are drawn: someone half a cell aside of the line is missed.
+- Someone **lying down** is passed over (see [Basics](#1-basics-server-ticks-network)) unless the shot is aimed at them.
 - A hit is counted where **the shooter saw the target** on their screen: with ping you don't need
   to lead your aim.
 - An empty pistol **reloads** on click with a magazine from your slots in 1.5 s.

@@ -58,6 +58,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			end_campaign(Net.OVER_CREW_LOST)    # nobody alive and nobody left to send
 	var p := new_player(_unique_name(wanted))
 	p.peer = peer
+	p.quarters = true                      # (v78) a player steps by quarters of a tile
 	server.admin.joined(p)
 	var demoted := false
 	if server.saved_crew.has(p.name):

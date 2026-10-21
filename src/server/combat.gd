@@ -14,6 +14,8 @@ const SHOT_TICKS := 6                # a pistol fires at most this often
 const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
 const BLOW_TICKS := 16               # a blow with a baton
 const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
+const FRIEND_CLOSE := 1.25          # (v78) a friend this close (in cells, across and down) to the shooter is never hit
+const PRONE_AIMED := 1.0             # (v78) one lying down is hit only by a shot aimed this close to it
 const SHOT_SEEN := 24                # a shot is drawn for everybody this close on its deck
 # (v70, the author's J2) injuries
 const BLEED_CHANCE := 0.25           # a bullet starts bleeding this often (a pellet: PELLET_BLEED)
@@ -236,7 +238,7 @@ func _stops_shot(x: int, y: int) -> bool:
 
 
 func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
-	var from := Vector2(p.st.x, p.st.y)
+	var from := place_at(p, seen_tick)      # (v78) from where the shooter stood, quarters and all
 	var way := at - from
 	if way.length() < 0.1:
 		return
@@ -258,7 +260,7 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 			continue
 		var pos := place_at(q, seen_tick)
 		var along := (pos - from).dot(way)
-		if along <= 0.2 or along >= best:
+		if along <= 0.2 or along >= best or spared(p, q, pos, from, at):
 			continue
 		if (pos - (from + way * along)).length() <= HIT_RADIUS + 0.1 * p.skill(Net.SKILL_GUNS):
 			best = along
@@ -272,9 +274,18 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 		hurt(hit, Items.PISTOL_DAMAGE, p, CAUSE_SHOT)
 
 
-func _ray(p: Player, way: Vector2, reach: float) -> float:
-	## (v70) How far a shot that way from `p` flies before a wall, a shut door or the deck's end stops it.
-	var from := Vector2(p.st.x, p.st.y)
+func spared(p: Player, q: Player, pos: Vector2, from: Vector2, at: Vector2) -> bool:
+	## (v78, the author's M2 and C1 "B") A shot flies past `q` (drawn at `pos`): a friend right by
+	## the shooter (within FRIEND_CLOSE across and down, as in RimWorld) is never hit, so two
+	## can fire from one spot; and one lying low is hit only when aimed at (the shot
+	## meant for somewhere within PRONE_AIMED of it).
+	if q.pirate == p.pirate and absf(pos.x - from.x) <= FRIEND_CLOSE and absf(pos.y - from.y) <= FRIEND_CLOSE:
+		return true
+	return q.st.prone and pos.distance_to(at) > PRONE_AIMED
+
+
+func _ray(p: Player, from: Vector2, way: Vector2, reach: float) -> float:
+	## (v70) How far a shot that way from `p` (standing at `from`) flies before a wall, a shut door or the deck's end stops it.
 	var start := Vector2i(p.st.x, p.st.y)
 	var t := 0.3
 	while t < reach:
@@ -288,7 +299,7 @@ func _ray(p: Player, way: Vector2, reach: float) -> float:
 
 func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 	## (v70, the author's B3) A spread of pellets: each flies and hits the first it meets.
-	var from := Vector2(p.st.x, p.st.y)
+	var from := place_at(p, seen_tick)
 	var aim := at - from
 	if aim.length() < 0.1:
 		return
@@ -296,14 +307,14 @@ func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 	var hits := {}
 	for k in pellets:
 		var way := aim.rotated(Items.SHOTGUN_SPREAD * (2.0 * k / maxf(pellets - 1, 1) - 1.0) + _rng.randf_range(-0.04, 0.04))
-		var best := _ray(p, way, float(Items.SHOTGUN_RANGE))
+		var best := _ray(p, from, way, float(Items.SHOTGUN_RANGE))
 		var hit: Player = null
 		for q: Player in server.players:
 			if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
 				continue
 			var pos := place_at(q, seen_tick)
 			var along := (pos - from).dot(way)
-			if along <= 0.2 or along >= best:
+			if along <= 0.2 or along >= best or spared(p, q, pos, from, at):
 				continue
 			if (pos - (from + way * along)).length() <= HIT_RADIUS:
 				best = along
@@ -328,7 +339,7 @@ func _throw(p: Player, at: Vector2) -> void:
 		way = Vector2(Net.DX[p.st.facing], Net.DY[p.st.facing])
 		reach = 1.0
 	way = way.normalized()
-	reach = minf(_ray(p, way, reach + 0.01), reach)
+	reach = minf(_ray(p, Vector2(p.st.x, p.st.y), way, reach + 0.01), reach)
 	var end := from + way * reach
 	var cell := Vector2i(roundi(end.x), roundi(end.y))
 	if not server.map.walkable(cell.x, cell.y):

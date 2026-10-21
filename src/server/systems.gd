@@ -6,6 +6,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const Doors := preload("res://src/shared/doors.gd")
+const Mover := preload("res://src/shared/mover.gd")
 const Player := preload("res://src/server/player.gd")
 const Air := preload("res://src/server/air.gd")
 
@@ -87,6 +88,10 @@ func _door_free(d: int) -> bool:
 	for p: Player in server.players:
 		if p != null and server.map.door_at(p.st.x, p.st.y) == d:
 			return false
+		if p != null and (p.st.ox != 0 or p.st.oy != 0):
+			for c: Vector2i in Mover.body_tiles(p.st):      # (v78) half in it counts too
+				if server.map.door_at(c.x, c.y) == d:
+					return false
 	return true
 
 
@@ -508,9 +513,10 @@ func update_doors() -> void:
 	# a door does not close on somebody standing in it
 	for p: Player in server.players:
 		if p != null:
-			var d := server.map.door_at(p.st.x, p.st.y)
-			if d >= 0 and server.door_hold[d] < server.tick + Net.MOVE_TICKS + 2:
-				server.door_hold[d] = server.tick + Net.MOVE_TICKS + 2
+			_hold_under(server.map.door_at(p.st.x, p.st.y))
+			if p.st.ox != 0 or p.st.oy != 0:
+				for c: Vector2i in Mover.body_tiles(p.st):    # (v78) nor on a body half in its doorway
+					_hold_under(server.map.door_at(c.x, c.y))
 	for d in server.doors.ready.size():
 		if server.doors.forced[d] == 1 and server.tick >= server.forced_until[d] and server.doors.ready[d] == Doors.CLOSED:
 			server.doors.forced[d] = 0              # the lock holds again once the door has shut
@@ -525,6 +531,11 @@ func update_doors() -> void:
 			server.door_sent[d] = server.doors.ready[d]
 			server.flags_sent[d] = server.doors.flags(d)
 			server.replication.door_record(d)
+
+
+func _hold_under(d: int) -> void:
+	if d >= 0 and server.door_hold[d] < server.tick + Net.MOVE_TICKS + 2:
+		server.door_hold[d] = server.tick + Net.MOVE_TICKS + 2
 
 
 # ------------------------------------------------- (v66) getting past an airlock
