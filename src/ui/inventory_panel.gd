@@ -138,7 +138,7 @@ func _draw_canvas() -> void:
 		_canvas.draw_rect(cell, Color(0.1, 0.09, 0.07, 0.95))
 		_canvas.draw_rect(cell, Color(0.7, 0.6, 0.4, 0.9), false, 1.0)
 		if thing != Net.ITEM_NONE:
-			ItemArt.draw(_canvas, cell, Net.ITEM_SUIT + Net.SUIT_TANK_STEPS if k == Net.WEAR_SUIT else thing)
+			ItemArt.draw(_canvas, cell, Items.suit_with(float(client.tank) / Net.TANK_FULL) if k == Net.WEAR_SUIT else thing)   # (v80) its real tank
 		var label := WORN_NAMES[k]
 		if k == Net.WEAR_SUIT and thing != Net.ITEM_NONE:
 			label += " %d%%" % (client.tank * 100 / Net.TANK_FULL)

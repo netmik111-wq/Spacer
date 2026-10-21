@@ -231,7 +231,8 @@ func _treat_ticks(p: Player, kit: int = Net.ITEM_NONE) -> int:
 
 func _stops_shot(x: int, y: int) -> bool:
 	## A bullet stops at anything that cannot be walked through: walls, windows, shut doors.
-	if not server.map.walkable(x, y):
+	## (v80, the author's note: "in space you cannot shoot enemies") open space lets it fly on.
+	if not server.map.passable(x, y):
 		return true
 	var d := server.map.door_at(x, y)
 	return d >= 0 and server.doors.is_shut(d)
@@ -281,7 +282,8 @@ func spared(p: Player, q: Player, pos: Vector2, from: Vector2, at: Vector2) -> b
 	## meant for somewhere within PRONE_AIMED of it).
 	if q.pirate == p.pirate and absf(pos.x - from.x) <= FRIEND_CLOSE and absf(pos.y - from.y) <= FRIEND_CLOSE:
 		return true
-	return q.st.prone and pos.distance_to(at) > PRONE_AIMED
+	# (v80, the author's question about several bodies on one tile) one out cold on the floor is as low
+	return (q.st.prone or q.cond == Net.COND_CRIT) and pos.distance_to(at) > PRONE_AIMED
 
 
 func _ray(p: Player, from: Vector2, way: Vector2, reach: float) -> float:
@@ -342,7 +344,7 @@ func _throw(p: Player, at: Vector2) -> void:
 	reach = minf(_ray(p, Vector2(p.st.x, p.st.y), way, reach + 0.01), reach)
 	var end := from + way * reach
 	var cell := Vector2i(roundi(end.x), roundi(end.y))
-	if not server.map.walkable(cell.x, cell.y):
+	if not server.map.passable(cell.x, cell.y):
 		cell = Vector2i(p.st.x, p.st.y)
 	p.slots[p.hand] = Net.ITEM_NONE
 	p.ready_tick = server.tick + BLOW_TICKS

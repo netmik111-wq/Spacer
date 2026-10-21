@@ -9,6 +9,7 @@ extends Node2D
 ## whoever stands on them.
 
 const RED_ALERT_DIM := 0.3           # (v68) how far a red alert dims the lights (0 lit .. 1 dark)
+const EMERGENCY_DIM := 0.5           # (v80, the author's note) the engine down and the SMES carrying the ship: emergency light
 const Net := preload("res://src/shared/net.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const Sight := preload("res://src/shared/sight.gd")
@@ -254,7 +255,8 @@ const PASS_REACH := 1.0              # (v79) how near, in tiles, two people step
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
-var _stains: Array = []              # (v75) blood on the floor: [deck, position on its deck (pixels), radius]
+var _prone_side := {}                # (v80) id -> 1.0 or -1.0: the side a body lying low has its head to
+var _stains: Array = []              # (v75) blood on the floor: [deck, position on its deck (pixels), radius, (v80) cell]
 var _sparks: Array = []              # (v75) sparks off a robot hit: [deck, position, seconds left]
 var _alert_tint: ColorRect           # (v75) red light over the world at red alert
 var _red := 0.0                      # how red it is now (eased)
@@ -637,7 +639,11 @@ func _update_ship(delta: float) -> void:
 	# light and dark change with every step anybody holding a flashlight takes
 	# (v61) the bridge backup lights its room; (v68) the lights' breaker off is dark, a red alert dims them
 	var lit_here := client.light_at(client.pred.y * map.width + client.pred.x)
-	_dark = move_toward(_dark, (RED_ALERT_DIM if client.alert == Net.ALERT_RED else 0.0) if lit_here else 1.0, delta * 2.5)
+	# (v80, the author's note: "the lights do not go out in a blackout") with the engine down the SMES keeps
+	# the ship going, but only on emergency light: half as bright (the backup-lit bridge stays as it was)
+	var emergency := int(client.power_mon.get("flags", 0)) & 4 != 0 and not map.on_backup(client.pred.y * map.width + client.pred.x)
+	var lit_dim := maxf(RED_ALERT_DIM if client.alert == Net.ALERT_RED else 0.0, EMERGENCY_DIM if emergency else 0.0)
+	_dark = move_toward(_dark, lit_dim if lit_here else 1.0, delta * 2.5)
 	# (v75, the author's F3) at red alert the ship's lights turn a dim, slowly pulsing red
 	var now_s := Time.get_ticks_msec() / 1000.0
 	var red_alert := client.alert == Net.ALERT_RED and lit_here and map.on_ship(client.pred.y * map.width + client.pred.x)
@@ -680,7 +686,7 @@ func _draw_things(d: int) -> void:
 	var pen := _decks[d].things
 	# (v75, the author's F1) blood where somebody was hurt, under everything
 	for st: Array in _stains:
-		if int(st[0]) == d:
+		if int(st[0]) == d and map.walk[int(st[3])] == 1:      # (v80) not where a ship alongside has gone from
 			pen.draw_circle(st[1], float(st[2]), Color(0.42, 0.02, 0.03, 0.85))
 	# (v69) each room's air vent: a grille in the floor, under whatever lies on it
 	for cell: int in map.vents:
@@ -1640,9 +1646,10 @@ func _on_hit(blood: int, id: int, x: int, y: int) -> void:
 	if deck < 0 or deck >= _decks.size():
 		return
 	var corner := Vector2(x, map.local_y(y)) * _tile
-	if blood == Net.BLOOD_FLESH:
+	if blood == Net.BLOOD_FLESH and map.walkable(x, y):
+		# (v80, the author's note: blood stayed in open space and flew along with the ship) only on a floor
 		for k in randi_range(2, 4):
-			_stains.append([deck, corner + Vector2(randf_range(5.0, 27.0), randf_range(15.0, 30.0)), randf_range(1.2, 3.4)])
+			_stains.append([deck, corner + Vector2(randf_range(5.0, 27.0), randf_range(15.0, 30.0)), randf_range(1.2, 3.4), y * map.width + x])
 		while _stains.size() > STAINS_KEPT:
 			_stains.pop_front()
 		_decks[deck].things.queue_redraw()
@@ -1988,11 +1995,14 @@ func _process(delta: float) -> void:
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 		_hold(sprite, Net.DIR_DOWN if cond == Net.COND_OK and client.prone_of(id) else s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		if cond == Net.COND_OK and client.prone_of(id):
-			# (v78) lying low, in its own colours. (v79, his note) Seen from above on its back, the head
-			# toward where it looks (8 ways) and the body over its own spot, not slid back like one knocked down.
-			var head := Net.way(s[1])
-			if head == Vector2.ZERO:
-				head = Vector2.RIGHT
+			# (v78) lying low, in its own colours. (v79, his note) Seen from above on its back, the body over
+			# its own spot, not slid back like one knocked down. (v80, his note: "this feels very strange": looking
+			# up it stood upright, looking down it stood on its head) Always lying across, as in SS13: the head
+			# to the side it looks to, kept while it looks straight up or down.
+			var look_x := Net.way(s[1]).x
+			if look_x != 0.0:
+				_prone_side[id] = 1.0 if look_x > 0.0 else -1.0
+			var head := Vector2(float(_prone_side.get(id, 1.0)), 0.0)
 			sprite.region_rect = _frame(Net.DIR_DOWN, false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 			sprite.rotation = head.angle() + PI / 2.0
 			sprite.position = (((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round()) / zoom
@@ -2020,6 +2030,7 @@ func _process(delta: float) -> void:
 			_views.erase(id)
 			_labels.erase(id)
 			_seen.erase(id)
+			_prone_side.erase(id)
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)

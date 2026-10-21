@@ -160,10 +160,18 @@ func can(p: Player, cell: int) -> String:
 			return "Орудие повреждено: сначала его чинят на верстаке."
 		if server.ship.broken.has(cell):
 			return NOT_HERE                  # (mended first: holding "use" on it mends it)
+		if p.bot and wanted[i] != item:
+			return NOT_HERE                  # (v80) a bot puts up only the gun the console ordered there
 		return ""
 	if item == Net.ITEM_NONE and on != Weapons.NONE:
 		if server.ship.broken.has(cell):
 			return NOT_HERE
+		if p.bot and wanted[i] != WANT_DOWN:
+			# (v80, the author's note: "bots take the ship's guns without an order") a bot holding
+			# "use" at a mount for anything else never takes its gun down
+			return NOT_HERE
+		if p.mended == cell:
+			return NOT_HERE                  # (v80) the same hold that mended it does not go on to take it down
 		return ""
 	return NOT_HERE
 

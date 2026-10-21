@@ -27,6 +27,7 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Player := preload("res://src/server/player.gd")
 
 const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const RAID_BOARD_TICKS := 30 * Net.TICK_HZ    # (v54) a raider that sees us helpless closes in and boards after this
@@ -208,19 +209,26 @@ func cast_off() -> bool:
 
 func someone_outside() -> bool:
 	## Is anybody alive outside our own ship (on the derelict, or out in space)?
+	return who_outside() != null
+
+
+func who_outside() -> Player:
+	## (v80) The first of ours alive outside our own ship, or null. The dead and bodies never hold it.
 	for p in server.players:
-		if p != null and not p.corpse and not p.pirate and not p.ally and p.cond != Net.COND_DEAD \
+		if p != null and not p.corpse and not p.pirate and not p.ally and not p.taken and p.cond != Net.COND_DEAD \
 				and not map.on_ship(p.st.y * map.width + p.st.x):
-			return true
-	return false
+			return p
+	return null
 
 
 func holds_ship() -> String:
 	## Why our ship may not move or jump right now ("" = it may).
 	if docked:
 		return "Корабль пристыкован: сначала расстыкуйтесь с пульта управления."
-	if someone_outside():
-		return "Не все на борту: кто-то снаружи корабля."
+	var out := who_outside()
+	if out != null:
+		# (v80, the author's note: the ship waited for somebody nobody could see) it says who and how
+		return "Не все на борту: %s снаружи корабля%s." % [out.name, " без сознания: заберите его на борт" if out.cond == Net.COND_CRIT else ""]
 	return ""
 
 
@@ -240,7 +248,8 @@ func update() -> void:
 			_watch_boarding()
 			# (v69, the author's note: a wreck could not be docked to) it drifts where it died:
 			# it is left behind only once we fly out of reach of that spot, or jump
-			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
+			# (v80, the author's note: the wreck flew along with us) or as soon as our ship gets under way
+			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.moving or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
 				_hulk_leaves()
 				_leave()
 			return
@@ -253,7 +262,7 @@ func update() -> void:
 		return
 	var hulk: Dictionary = server.road.at_hulk()
 	# (v77, the author's note: chat spam while the jump charged) a wreck sent away for the jump must not come straight back
-	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and server.tick >= held_off_until \
+	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and not server.ship.moving and server.tick >= held_off_until \
 			and not server.gunnery.fighting() and _spots.has(int(hulk["layout"])):
 		_hulk_arrives(hulk)                  # (v69) a pirate ship we wrecked here before
 		return
@@ -262,6 +271,7 @@ func update() -> void:
 	var want: bool = (server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach) or server.road.at_wreck()   # (v64) or an abandoned ship among the places
 	if sos and here:
 		want = server.ship.jump_to == Net.NO_SECTOR and server.ship.pos.distance_to(sos_at) <= Sectors.WRECK_REACH
+	want = want and not server.ship.moving    # (v80) a ship alongside never flies along with ours
 	if want and not here and server.tick >= held_off_until and not server.gunnery.fighting():
 		_arrive()
 	elif not want and here and holds_ship() == "":

@@ -110,7 +110,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 38 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 39 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -149,6 +149,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/eveningtest.gd (since v77: trader's wants, wreck on a jump, saved in space, SOS ship, free look, slant ways, rejoin with real clients)
     godot --headless --path . --script res://tools/quartertest.gd (since v78: quarter steps, bodies never in walls, sliding into doorways, held doors, hauling, lying down, friendly fire)
     godot --headless --path . --script res://tools/defencetest.gd (since v79: bots run from armed pirates and lie low, a guard bot fetches a gun and fights, the camera lean setting)
+    godot --headless --path . --script res://tools/fullruntest.gd (since v80: no holes on machines, shots through space, mounts left alone, wrecks stay behind, stopping for those outside, out cold spared)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -173,7 +174,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 38 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 39 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
