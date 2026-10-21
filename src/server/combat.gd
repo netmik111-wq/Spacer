@@ -497,6 +497,8 @@ func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 	injure(q, taken, cause)
 	if (q.pirate or q.ally) and by != null:
 		server.pirates.attacked(q, by)
+	elif q.bot and by != null:
+		server.defence.hurt_by(q, by)         # (v79) it knows where the pirate is now: it runs (or a guard fights)
 
 
 func tell_hit(q: Player) -> void:

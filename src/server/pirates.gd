@@ -180,10 +180,10 @@ func cut_in() -> Vector2i:
 
 func foe(p, q) -> bool:
 	## (v62) Is `q` one that `p` fights? Pirates (and their robots) fight our
-	## people and our security robots; our robots fight pirates.
+	## people and our security robots; our robots (and, v79, a guard bot) fight pirates.
 	if q == null or q == p or q.corpse or q.prisoner or q.taken:
 		return false                         # (v70) nobody fights a prisoner
-	return q.pirate if p.ally else not q.pirate
+	return q.pirate if p.ally or p.bot else not q.pirate
 
 
 func heard(p, x: int, y: int) -> void:
@@ -292,7 +292,7 @@ func think(p) -> void:
 		var there: Vector2 = Vector2(target.st.x, target.st.y)
 		var dist: float = here.distance_to(there)
 		var rounds: int = Items.rounds(item)
-		if rounds == 0 and p.slots.has(Net.ITEM_MAG):
+		if rounds == 0 and p.slots.has(Items.ammo_of(item)):           # (v79) a guard bot may carry a shotgun
 			_stop(p)
 			server.combat.use_at(p, now, there)                  # reload
 			return
@@ -425,7 +425,7 @@ func _first_step(p, goal: Vector2i) -> int:
 	if goal.x < 0 or start == end:
 		return 0
 	var suited: bool = p.has_suit()
-	var forces: bool = not p.ally
+	var forces: bool = not p.ally and not p.bot     # (v79) a guard bot is ours too: it forces no shutter
 	# (v77, the author's B1) in 8 ways, as players walk
 	return int(Paths.first_step(map, start, {end: 0}, func(nx: int, ny: int) -> bool: return _passable(nx, ny, suited, forces))[0])
 

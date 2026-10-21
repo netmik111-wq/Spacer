@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v78 (version 0.71).
+Last updated: build v79 (version 0.72).
 
 Contents:
 
@@ -57,7 +57,11 @@ Contents:
   off, the character slides into line by itself. Bots, pirates and robots still step whole cells.
 - **Lying down** (v78, C1 "B"): **C** lies down or gets up. Lying, you crawl at **half speed**, and shots fly
   over you unless they are aimed at you (meant for a point within **1 cell** of you). Climbing a ladder or
-  being knocked out stands you up.
+  being knocked out stands you up. (v79, the author's note and L1 "A") The body lies on the spot where you are,
+  seen from above, **head toward where you look** (8 ways), so it always matches your light and view.
+- (v79, the author's W1 note) People still walk through one another. Two close together (under **1 cell**
+  apart) while either walks are drawn **stepping aside**, each up to a **quarter of a cell** off its line, as if
+  sliding past; only the picture moves. Two standing still keep the spots they chose.
 - Pressing a direction **turns** the character **immediately**, even mid-step or facing a wall.
 - **Wall objects** (consoles, racks, locker, engine, air plant, intercom, airlock
   pump) face one room (down if there is floor there, otherwise up or sideways). They can be used
@@ -446,6 +450,10 @@ Contents:
   at full speed while looking ahead. The body turns with the eyes in 8 ways (others see where you look); E uses what you
   face. The setting «Взгляд за мышью» (Settings, Picture) turns it off: then you look where you walk, as before. While a
   console or a window is open the eyes stay still. Bots and pirates look where they walk.
+- (v79, the author's V1 "A") With the view following the mouse, **the camera leans toward the mouse**: by how far
+  the cursor is from the middle of the screen, up to **2 cells** at the screen's edge (setting «Камера смещается к
+  мыши»: none, 1, 2 or 3 cells), easing there in about a third of a second. It shows more of the side you look at;
+  sight itself is unchanged. No lean while a console or window is open.
 - A character sees **only forward**: two eyes of **85°** each, **160°** together, overlapping
   in the middle (later, losing an eye will remove its part of the cone).
 - The eyes reach **9 cells** (v46, the author: as in SS13; before it was 20). The screen is zoomed so
@@ -735,6 +743,18 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
   if it wears a suit; without a suit it does not follow into a vacuum. It stands beside the player, never in a doorway. A **repair** bot goes to the nearest broken machine, jammed or faulty door, or hole
   (if a patch is to be had), taking a **spare part** or **patch** from the hold; it mends like a player.
   A **gun** bot fires every ready gun where the guns aim, but holds fire while a ransom is offered.
+- (v79, the author's B1 "B") **Bots and armed boarders.** A bot that sees an armed pirate (any weapon, or a pirate
+  robot) by our rules of sight, or one within **4 cells** with nothing between, or is hurt by one, drops its work
+  (the repair it had is free for another bot) and **runs**: to open floor at least **10 cells** from every pirate it
+  knows of and out of their rooms, by one of our people if possible (one of ours at least 6 cells from the pirates,
+  within 2 cells of the spot). There, or with nowhere to go, it **lies down** (shots fly over). The crew window says
+  «прячется». It remembers a pirate while that pirate is still on our ship (unseen for **45 s** counts as gone);
+  **8 s** after the last one is gone (dead, captured, off the ship) it gets up and goes back to its order. Bots
+  following a player, out on the hull or lying in an autodoc take no notice.
+- A bot with the **guard's job** does not run while there is a gun for it: it goes to the supply locker, takes a
+  **pistol** (or a **shotgun** if there is no pistol) and **2** magazines (boxes of shells), then hunts the pirates
+  like our security robots do (crew window: «в бою»). It keeps the gun afterwards. With no gun in the locker it runs
+  like the others. Other bots never fight.
 
 ### Boarding a pirate ship (v55)
 
@@ -1508,7 +1528,11 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   in the top left corner (shown even while F1's status is hidden), the white flash after a jump,
   the screen shaking when the hull is hit (v56, 0–100%), (v73) the size of the interface and its text (75–150%),
   (v74) «Подсказки первой смены» (the first-shift checklist; turning it on starts it from the beginning),
-  (v77) «Взгляд за мышью» (the view follows the mouse; on at first; off: you look where you walk).
+  (v77) «Взгляд за мышью» (the view follows the mouse; on at first; off: you look where you walk),
+  (v79) «Камера смещается к мыши» (none, up to 1, 2 or 3 cells; 2 at first).
+- (v79, the author's Task Manager picture: the game's window was marked "not responding" while it played on) While
+  the game's window is in the background, vertical sync is off (the frame limit of 30 paces it), so a covered or
+  minimised window keeps answering Windows. The program shows as «Spacer» in Task Manager.
 - **Controls**: every action above can have two keys. A key may be combined with Ctrl, Shift or
   Alt. A key given to one action is taken from the one that had it (the window says so).
   Backspace clears a key, Esc cancels, one button restores every default. A bare key still works

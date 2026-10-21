@@ -31,8 +31,9 @@ func move(p: Player) -> void:
 		server.pirates.think(p)          # (v62) our security robots fight by the same mind
 	# (v78) players step a quarter of a tile at a time; bots, pirates and robots whole tiles
 	p.st.fine = p.quarters and not p.bot and not p.pirate and not p.ally
-	if p.st.prone and (p.bot or p.cond != Net.COND_OK):
+	if p.st.prone and (p.bot and not server.defence.busy(p) or p.cond != Net.COND_OK):
 		p.st.prone = false               # a bot that took over, or one knocked out, is not lying low any more
+		                                 # ((v79) a bot hiding from pirates lies low on purpose)
 	var was_x := p.st.x
 	var was_y := p.st.y
 	if Mover.step(p.st, server.map, server.doors, tick):
@@ -73,6 +74,8 @@ func climb(p: Player) -> bool:
 
 func bot_think(p: Player) -> void:
 	server.stations.bot_breathe(p)  # (v60) its suit's supply in thin air
+	if server.defence.think(p):
+		return                       # (v79) armed pirates about: it runs, hides or (a guard) fights
 	if server.stations.bot_think(p):
 		return                       # (v55) it has an order from the captain
 	var st := p.st

@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v78 (version 0.71: quarter-tile steps for players, lying down, friendly fire as in RimWorld) is the latest. Plans one to four are done except the darkness front (the
+Build v79 (version 0.72: polish after quarter steps; bots run from armed boarders, a guard bot fights) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -75,7 +75,11 @@ trader's money loop, wreck spam on a jump, rejoining as «Name 2», the dead shi
 hints, the SOS dead ship), the view following the mouse (a setting), bots and pirates walking on a slant.
 v78 (his picks M1 D, C1 B): players step a quarter of a tile and stop on any quarter, C lies down (crawl, shots fly over),
 a friend right by the shooter is never hit. Swapping places was left out (people already walk through each other).
-Later: fear (its own build) and a fire question round.
+v79 (his answers, `https://claude.ai/artifact/RMLhvSAPdwjWFUssNC8LDM`): the lying body on its spot, head where one looks;
+passing people drawn sliding a quarter aside; the camera leans toward the mouse; bots run from armed boarders and lie low,
+a guard bot fetches a gun and fights (`defence`); vsync off in the background (his "not responding" picture).
+Next: the fire round, his answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk` (v80). Fear: later,
+when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -106,7 +110,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 37 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 38 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -144,6 +148,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/polishtest.gd (since v75: gunner mends its mount, bots leave airless rooms, stuck shutters, busy doors, breaches aloud, quiet start, summary)
     godot --headless --path . --script res://tools/eveningtest.gd (since v77: trader's wants, wreck on a jump, saved in space, SOS ship, free look, slant ways, rejoin with real clients)
     godot --headless --path . --script res://tools/quartertest.gd (since v78: quarter steps, bodies never in walls, sliding into doorways, held doors, hauling, lying down, friendly fire)
+    godot --headless --path . --script res://tools/defencetest.gd (since v79: bots run from armed pirates and lie low, a guard bot fetches a gun and fights, the camera lean setting)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -168,7 +173,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 37 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 38 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -200,7 +205,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   calls (data in `tales.gd`), quests, missions, SOS, and `garden`: food, hunger and the hydroponic trays; since v64 `road`:
   the road of clusters, places inside a system and pirate hunters; since v67 `salvage`: cutting scrap off dark ships and
   things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap;
-  since v71 `galley`: the stove, its dishes and their effects).
+  since v71 `galley`: the stove, its dishes and their effects; since v79 `defence`: bots against armed boarders).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -416,6 +421,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `visual_pos`, not its tile. A friend within `Combat.FRIEND_CLOSE` of the shooter is never hit (`Combat.spared`): a test
   that wants a friend hit puts it two tiles on. Character records are 8 bytes, the self section 19 (protocol 54).
   `tools/nettest.sh` runs in parallel only without `unshare -n` here (no `ip` to raise the loopback).
+- (v79) A bot that `server.defence.busy(p)` runs, hides (lying low) or, with the guard's job, fights by `Pirates.think`:
+  its order waits. Tests that keep armed pirates near bots and count on the bots working set `server.defence.on = false`.
+  `Pirates.foe` treats a bot like our robots. `Net.DOING_HIDE`/`DOING_FIGHT` are new (protocol 55). The camera's lean is
+  `WorldView._lean` (with the mouse view only); the sliding-past push is drawing only (`WorldView._passing`).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

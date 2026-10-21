@@ -403,9 +403,15 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		if _client != null and (Options.max_fps == 0 or Options.max_fps > FPS_BACKGROUND):
 			Engine.max_fps = FPS_BACKGROUND
+		# (v79, his Task Manager picture: the game's window "not responding" while all worked) With
+		# vertical sync a covered or minimised OpenGL window can wait on the driver for seconds without
+		# reading its messages, and Windows marks it hung. In the background the frame limit paces it.
+		if _client != null and Options.vsync:
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
 		if _client != null:
 			Engine.max_fps = Options.max_fps
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if Options.vsync else DisplayServer.VSYNC_DISABLED)
 
 
 func _unhandled_input(event: InputEvent) -> void:

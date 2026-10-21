@@ -158,6 +158,20 @@ func _video_tab() -> Control:
 			Options.shift_done = 0)
 	# (v77, the author's V1) the view follows the mouse, or where one walks
 	_check(page, "Взгляд за мышью (выкл.: смотреть туда, куда идёте)", Options.mouse_look, func(on: bool) -> void: Options.mouse_look = on)
+	# (v79, the author's V1) with the view following the mouse, the camera leans toward it
+	var lean_row := HBoxContainer.new()
+	lean_row.add_theme_constant_override("separation", 12)
+	page.add_child(lean_row)
+	var lean_label := Label.new()
+	lean_label.text = "Камера смещается к мыши"
+	lean_label.custom_minimum_size = Vector2(220, 0)
+	lean_row.add_child(lean_label)
+	var lean := OptionButton.new()
+	for t in 4:
+		lean.add_item("нет" if t == 0 else ("до 1 клетки" if t == 1 else "до %d клеток" % t))
+	lean.select(Options.lean)
+	lean.item_selected.connect(func(i: int) -> void: Options.lean = i)
+	lean_row.add_child(lean)
 	_slider(page, "Тряска при попаданиях", Options.shake, func(v: float) -> void: Options.shake = v)
 	# (v73, the author's H5) the size of the interface and its text
 	var size_row := HBoxContainer.new()

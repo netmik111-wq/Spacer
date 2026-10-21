@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 54
+const PROTOCOL := 55
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -365,7 +365,9 @@ const DOING_DOWN := 4               # out cold or dead
 const DOING_NO_WAY := 5             # it cannot get there
 const DOING_CARRY := 6              # (v60) fetching from the supply locker or carrying a gun
 const DOING_HEAL := 7               # (v60) wounded: gone to lie in the autodoc
-const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "чинит", "без сознания", "не может пройти", "носит", "лечится"]
+const DOING_HIDE := 8               # (v79) running from armed pirates, or lying low from them
+const DOING_FIGHT := 9              # (v79) a guard bot fighting them
+const DOING_NAMES: Array[String] = ["ждёт", "идёт", "на посту", "чинит", "без сознания", "не может пройти", "носит", "лечится", "прячется", "в бою"]
 const POS_CLOSE := 0                # close in: both fire as before; boarding either way
 const POS_FAR := 1                  # at a distance: both hit less, their boarding comes slower
 const POS_FLANK := 2                # on its flank: we hit better, but dodge worse
