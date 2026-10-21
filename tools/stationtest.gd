@@ -98,7 +98,10 @@ func _initialize() -> void:
 	_expect(st.our_dodge() < full_dodge, "and dodge worse (%d%%)" % roundi(st.our_dodge() * 100))
 	st.order_asked(cap, bots[0].slot, Net.POST_FREE)
 	_stand(bots[0], -1)
+	bots[0].st.dir = Net.DIR_NONE
+	bots[0].bot_until = server.tick + 1000000   # (v79) a free bot wandering onto the controls kept them manned (1 run in 30)
 	_run(roundi(Stations.LAPSE_SECONDS * Net.TICK_HZ) + 10)
+	bots[0].bot_until = 0
 	_expect(st.position == Net.POS_CLOSE, "with nobody at the controls the position lapses to close in")
 
 	# all to posts: the bots take what nobody mans
