@@ -61,6 +61,7 @@ static var flash := true             # the white flash after a jump
 static var first_shift := true       # (v74, the author's L1) the «first shift» checklist in a game
 static var shift_done := 0           # (v74) its lines ticked off so far (bits, see FirstShift.STEPS), kept between games
 static var mouse_look := true        # (v77, the author's V1) the view follows the mouse (off: where one walks)
+static var lean := 2                 # (v79, the author's V1) with it, the camera leans this many tiles toward the mouse (0..3)
 static var ui_scale := 1.0           # (v73, the author's H5) the size of the interface (and its text): 0.75..1.5
 static var keys := {}                # action -> Array of {"key": physical keycode, "ctrl", "shift", "alt"}
 
@@ -100,6 +101,7 @@ static func load_all() -> void:
 		ui_scale = clampf(float(cfg.get_value("video", "ui_scale", ui_scale)), 0.75, 1.5)
 		first_shift = bool(cfg.get_value("game", "first_shift", first_shift))
 		mouse_look = bool(cfg.get_value("game", "mouse_look", mouse_look))
+		lean = clampi(int(cfg.get_value("game", "lean", lean)), 0, 3)
 		shift_done = int(cfg.get_value("game", "shift_done", shift_done))
 		for a: Array in ACTIONS:
 			if cfg.has_section_key("keys", a[0]):
@@ -131,6 +133,7 @@ static func save_all() -> void:
 	cfg.set_value("video", "ui_scale", ui_scale)
 	cfg.set_value("game", "first_shift", first_shift)
 	cfg.set_value("game", "mouse_look", mouse_look)
+	cfg.set_value("game", "lean", lean)
 	cfg.set_value("game", "shift_done", shift_done)
 	for action: String in keys:
 		cfg.set_value("keys", action, keys[action])

@@ -1794,6 +1794,7 @@ func _process(delta: float) -> void:
 	# which way to walk: the most recently pressed of the held direction keys
 	var busy := _chat_input.visible or _pause.visible or _console.visible or _open(_options)
 	_world.hover = not busy
+	_world.lean_on = not busy and not aim_cells.is_finite()   # (v79) no leaning with a window open or a scripted aim
 	_update_look(busy)
 	# (v77, the author's V1) the eyes follow the mouse (not while a console or a window has it)
 	client.want_free_look = Options.mouse_look and not scripted_look

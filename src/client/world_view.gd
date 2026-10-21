@@ -26,6 +26,7 @@ const CHAR_W := 32
 const CHAR_H := 48
 const CHAR_PAD := 1                  # transparent border around every frame in assets/chars.png
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
+const PRONE_CENTRE := Vector2(0, -8)  # (v79) the middle of a body lying low, from where its feet would stand
 # column of the first frame for each facing in assets/chars.png (down, up, left, right;
 # v74: then down-left, down-right, up-left, up-right)
 const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 18, 6: 21, 7: 12, 8: 15}
@@ -245,6 +246,11 @@ var _dark_sheet: ColorRect
 const AFTERIMAGE_SECONDS := 10.0                # how long the silhouette of somebody lost from sight stays
 var _afterimages := {}               # id -> [Sprite2D, seconds left, the cell it was last seen in]
 var _shown := {}                     # id -> was it shown last frame
+var _lean := Vector2.ZERO             # (v79) how far the camera leans toward the mouse now, in pixels
+var lean_on := true                  # (v79) GameScreen turns it off while a console or window is open
+const LEAN_EASE := 6.0
+var _pass_side := {}                 # (v79) Vector2i(id, id) -> the side two passing people step to
+const PASS_REACH := 1.0              # (v79) how near, in tiles, two people step aside for each other
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
@@ -503,6 +509,39 @@ func _on_deck(cell: int) -> Vector2:
 func _feet(pos_tiles: Vector2) -> Vector2:
 	## Where the feet of a character at this place of its deck are, in pixels.
 	return Vector2(pos_tiles.x * _tile + _tile * 0.5, pos_tiles.y * _tile + FEET_Y)
+
+
+func _passing(samples: Dictionary) -> Dictionary:
+	## (v79, his W1 note) People walk through one another; two standing close are drawn stepping
+	## aside, each up to a quarter of a tile off its line, as if sliding past. Only the picture moves.
+	var out := {}
+	var ids: Array = samples.keys()
+	ids.sort()
+	for i in ids.size():
+		var a: Array = samples[ids[i]]
+		if int(a[4]) != Net.COND_OK or client.prone_of(ids[i]):
+			continue
+		for j in range(i + 1, ids.size()):
+			var b: Array = samples[ids[j]]
+			if int(b[4]) != Net.COND_OK or client.prone_of(ids[j]):
+				continue
+			var apart: Vector2 = b[0] - a[0]
+			var d := apart.length()
+			# two standing still chose their spots: they stay as they are
+			if d >= PASS_REACH or not (bool(a[2]) or bool(b[2]) or _pass_side.has(Vector2i(ids[i], ids[j]))):
+				_pass_side.erase(Vector2i(ids[i], ids[j]))
+				continue
+			# sideways to the line between them; kept from the last frame once they stand on one spot
+			var side: Vector2 = _pass_side.get(Vector2i(ids[i], ids[j]), Vector2.ZERO)
+			if d > 0.05:
+				side = Vector2(-apart.y, apart.x) / d
+				_pass_side[Vector2i(ids[i], ids[j])] = side
+			elif side == Vector2.ZERO:
+				side = Vector2.RIGHT
+			var push := side * _tile * 0.25 * (1.0 - d / PASS_REACH)
+			out[ids[i]] = (out.get(ids[i], Vector2.ZERO) - push).limit_length(_tile * 0.25)
+			out[ids[j]] = (out.get(ids[j], Vector2.ZERO) + push).limit_length(_tile * 0.25)
+	return out
 
 
 func _frame(facing: int, moving: bool, pos_tiles: Vector2, colour: int) -> Rect2:
@@ -1898,10 +1937,14 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 	# characters
+	var samples := {}
 	for id: int in client.ents.keys():
-		var s := client.sample(id)
-		if s.is_empty():
-			continue
+		var got := client.sample(id)
+		if not got.is_empty():
+			samples[id] = got
+	var nudge := _passing(samples)
+	for id: int in samples.keys():
+		var s: Array = samples[id]
 		var sprite: Sprite2D = _views.get(id)
 		if sprite == null:
 			sprite = Sprite2D.new()
@@ -1941,13 +1984,18 @@ func _process(delta: float) -> void:
 		if bool(_shown.get(id, false)) and not sprite.visible and id != client.my_id:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible
-		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
+		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
-		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
+		_hold(sprite, Net.DIR_DOWN if cond == Net.COND_OK and client.prone_of(id) else s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		if cond == Net.COND_OK and client.prone_of(id):
-			# (v78) lying low: on its side as one knocked down, but in its own colours
-			sprite.rotation = PI / 2.0
-			sprite.position += Vector2(-22.0, -7.0)
+			# (v78) lying low, in its own colours. (v79, his note) Seen from above on its back, the head
+			# toward where it looks (8 ways) and the body over its own spot, not slid back like one knocked down.
+			var head := Net.way(s[1])
+			if head == Vector2.ZERO:
+				head = Vector2.RIGHT
+			sprite.region_rect = _frame(Net.DIR_DOWN, false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
+			sprite.rotation = head.angle() + PI / 2.0
+			sprite.position = (((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round()) / zoom
 			sprite.modulate = Color.WHITE
 		elif cond == Net.COND_OK:
 			sprite.rotation = 0.0
@@ -1989,6 +2037,15 @@ func _process(delta: float) -> void:
 		_me_over.region_rect = me.region_rect
 		_me_over.modulate = me.modulate * Color(0.8, 0.8, 0.85)
 	var focus := me.position - Vector2(0, 14) if me != null else Vector2.ZERO
+	# (v79, the author's V1) with the view following the mouse the camera leans toward it, by how far
+	# the mouse is from the middle of the screen, at most Options.lean tiles; it eases there and back
+	var lean_to := Vector2.ZERO
+	if client.free_looking() and client.my_cond == Net.COND_OK and Options.lean > 0 and lean_on:
+		var screen := get_viewport_rect().size
+		var off := (get_viewport().get_mouse_position() - screen * 0.5) / (screen * 0.5)
+		lean_to = off.limit_length(1.0) * Options.lean * _tile
+	_lean = _lean.lerp(lean_to, 1.0 - exp(-delta * LEAN_EASE))
+	focus += _lean
 	var half := get_viewport_rect().size / zoom * 0.5
 	var map_size := Vector2(map.width, map.deck_height) * _tile
 	var margin := 48.0
@@ -2045,7 +2102,8 @@ func _process(delta: float) -> void:
 				label.modulate = Color(1, 1, 1)
 			if sprite.get_parent() != _decks[my_deck].chars:
 				label.modulate.a = 0.55          # on another deck
-			var above := Vector2(22, 7 - 20) if lying else Vector2(0, 6 - CHAR_H)
+			# lying: over the middle of the body, whichever way it lies
+			var above := Vector2(0, -CHAR_H * 0.5).rotated(sprite.rotation) + Vector2(0, -13) if lying else Vector2(0, 6 - CHAR_H)
 			var top := (sprite.position + above - _camera.position) * zoom + screen_centre
 			label.position = (top - Vector2(label.size.x * 0.5, label.size.y)).round()
 

@@ -169,6 +169,20 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v79 (polish after quarter steps; his answers on "Spacer v79 Polish" and his notebook note)
+- The lying body (his note with a video) lies on the player's spot, head toward where they look (8 ways). People
+  passing through one another are drawn stepping a quarter of a tile aside (his W1 note). With the mouse view the camera
+  leans up to 2 tiles toward the cursor (a setting, 0–3).
+- Bots run from armed boarders to open floor far away (by our people if possible) and lie low there; 8 s after the
+  pirates are gone they go back to work. A guard bot takes a pistol (or shotgun) and two magazines from the supply locker
+  and fights them (his B1 "B"). New server part `defence`.
+- His Task Manager picture (the game's window "not responding" while it played on): vsync is off while the window is in
+  the background, and the exe is named "Spacer". His PC confirmed the three old unknowns (server as a second process,
+  no bar over heads, glass floors).
+- Fire and gases question page: https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk (the fire build after his answers).
+  Fear waits until he has the concept.
+- New test `tools/defencetest.gd` (38 scripts). Protocol 55. Version 0.72, build in `/mnt/project-files/builds/v79/`.
+
 ### v78 (quarter steps, lying down, friendly fire; his poll picks M1 "D", C1 "B" and his M2 words)
 - Players step a quarter of a tile (8 px) a tick, the same speed as before, and stop on any quarter; everyone sees them
   there. The tile under the centre still decides air, doors, sight and use; the body never lies over a wall, a slant

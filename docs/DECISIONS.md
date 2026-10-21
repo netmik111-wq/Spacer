@@ -1357,3 +1357,45 @@ His message: "Need your opinion about the 1/4 movement system... now we need to 
   tile would be missed by every pirate.
 - **Swapping places is left out** (my disagreement, told to him): characters already walk through one another, so there
   is nothing to swap. If he wants bodies to block (then swapping matters), that is its own question.
+
+## v79: polish after quarter steps (2026-10-21)
+
+His answers on the page "Spacer v79 Polish" (https://claude.ai/artifact/RMLhvSAPdwjWFUssNC8LDM): L1 "A", B1 "B", W1 "A"
+with his note, V1 "A", K1 (all three old unknowns fine on his PC), Z1 "A and C without fear".
+
+- **The lying body** (his notebook note with a video: "you look the other way for half a tile"; L1 "A"): v78 drew one
+  lying low like one knocked out, always head to the right and slid back about two thirds of a tile over its tile. Now it
+  is drawn from the front frame, turned so the head points along the facing (8 ways), its middle `PRONE_CENTRE` above
+  where its feet would stand, so it matches the light cone. The hand's picture goes with the front frame. Knocked-out
+  bodies are drawn as before.
+- **Sliding past** (W1 "A" with his note "it needs to look like you slide using 1/4 of a tile"): people keep walking
+  through one another (no blocking, no swapping). Only the drawing changes: two standing characters under
+  `WorldView.PASS_REACH` (1 cell) apart, while either walks, are pushed apart sideways to the line between them, each up
+  to a quarter of a tile, more the closer they are (`WorldView._passing`); the side is kept per pair while they overlap so
+  it does not flip. Two who stopped near each other keep the push they had (no pop). Nothing on the server or the network.
+- **Camera lean** (V1 "A"): with the mouse view only, `focus += _lean`, eased toward `(mouse - centre) / half screen`
+  (length at most 1) × `Options.lean` tiles (0..3, 2 at first, a setting). It is worked from screen coordinates, so it
+  does not feed back on itself as the camera moves. Off while a console or window is open or a scripted aim is set.
+- **Bots and armed boarders** (B1 "B", against my pick "A": he wants the guard bot to fight too): a new server part
+  `Defence` (`src/server/defence.gd`), asked first in `Movement.bot_think`. Noticing: `Pirates._sees` from the bot (its
+  cone), or within `NEAR` 4 cells with a clear line, or a wound from a pirate (`Combat.hurt` → `hurt_by`). "Armed" = a
+  pirate robot or any weapon in a pirate's slots: the unarmed are not worth running from. A known pirate is kept while it
+  stands on our ship and was seen in the last `LOST_SECONDS` (45 s); `CALM_SECONDS` (8 s) after the last is gone the bot
+  replans its order. Running goes to the nearest (by path) open floor ≥ `SAFE_FROM` (10) cells from every known pirate
+  and outside their rooms, preferring cells within 2 of one of our people who is ≥ 6 from them; there it lies down
+  (`st.prone`, which `Movement` no longer resets for a bot that `Defence.busy`). Its repair job is let go on noticing so
+  another bot may take it. Not for bots following a player (the player leads), out on the hull, or in an autodoc.
+- **The guard bot** fights by `Pirates.think`, as our security robots do: `Pirates.foe` treats a bot like our robots
+  (fights pirates only), `_first_step` does not force shutters for it, and reloading uses `Items.ammo_of` so a shotgun
+  works. Its gun comes from the supply locker (pistol first, then shotgun) with `AMMO_TAKEN` 2 magazines or boxes; it
+  keeps it after. With no gun in the locker, no free slot or no way to the locker it runs like the others. Other bots never
+  fight ("people over bots", v70). Crew window: two new `DOING_*` (hides, fights). Protocol 55 for those values.
+- **"Not responding"** (his Task Manager picture: the game's process marked «Не отвечает», 13% GPU, the server process
+  fine, all playing normally): the server is not it (a headless process has no window to hang). Most likely the OpenGL
+  window waiting on vertical sync while covered or minimised, which some drivers block on for seconds; Windows then marks
+  it hung. Not seen on Linux; the fix is a guess, said so to him: on focus out vsync is turned off (the 30 fps background
+  limit already paces it), on focus in the setting is applied again. The export now sets the exe's product name and
+  description to "Spacer" (`application/modify_resources`), so Task Manager names it.
+- **Fire questions** (Z1 "C"): page "Spacer Fire Questions" (https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk), my
+  picks: FTL-like tile fire that needs air, smoke, no heat, fire from causes, extinguishers, venting and a trader's module.
+  Nothing built until he answers. Fear waits for his concept ("I don't have the full concept").
