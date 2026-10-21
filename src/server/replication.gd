@@ -361,7 +361,7 @@ func _prepare() -> void:
 			continue
 		var lit := not Items.light(q.in_hand()).is_empty()
 		_shines[q.slot] = 1 if lit else 0
-		_now[q.slot] = _pack(q.st.x, q.st.y, Net.pack_look(q.st.facing, q.cond, q.st.slow, lit))
+		_now[q.slot] = _pack(q.st.x, q.st.y, Net.pack_look(q.st.facing, q.cond, q.st.slow, lit)) | (Net.pack_off(q.st.ox, q.st.oy, q.st.prone) << 40)
 		_chunk[q.slot] = (q.st.x >> Net.CHUNK_SHIFT) | ((server.map.local_y(q.st.y) >> Net.CHUNK_SHIFT) << 16)
 
 
@@ -426,16 +426,16 @@ func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 		if absi((ch & 0xFFFF) - p.view_cx) > 1 or absi((ch >> 16) - p.view_cy) > 1:
 			if had >= 0:
 				# it has gone out of the chunks shown: where it went (the client lets it go)
-				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
+				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF, now >> 40)
 				known.erase(slot)
 			continue
 		if (not q.taken or q == p) and _seen_now(p, q, a_mine):   # (v70) one dragged off is gone
 			if now != had:
-				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF)
+				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF, now >> 40)
 				known[slot] = now
 		elif had >= 0:
 			# out of sight: the client is told where it last saw it, no more
-			_put_record(recs, slot, had & 0xFFFF, (had >> 16) & 0xFFFF, Net.FACING_HIDDEN)
+			_put_record(recs, slot, had & 0xFFFF, (had >> 16) & 0xFFFF, Net.FACING_HIDDEN, had >> 40)
 			known.erase(slot)
 	return recs
 
@@ -448,13 +448,14 @@ func _known_sum(p: Player) -> int:
 	return sum
 
 
-func _put_record(buf: PackedByteArray, slot: int, x: int, y: int, facing: int) -> void:
+func _put_record(buf: PackedByteArray, slot: int, x: int, y: int, facing: int, off: int) -> void:
 	var o := buf.size()
 	buf.resize(o + Net.ENT_BYTES)
 	buf.encode_u16(o, slot)
 	buf.encode_s16(o + 2, x)
 	buf.encode_s16(o + 4, y)
 	buf.encode_u8(o + 6, facing)
+	buf.encode_u8(o + 7, off & 0xFF)     # (v78) quarters off the tile's centre, lying down (Net.pack_off)
 
 
 func _append_ents(out: PackedByteArray, records: PackedByteArray) -> void:
@@ -568,7 +569,9 @@ func send() -> void:
 			out.encode_s32(o + 10, st.move_tick)
 			out.encode_s16(o + 14, st.fx)
 			out.encode_s16(o + 16, st.fy)
-			out.encode_u8(o + 18, 1 if st.free_look else 0)   # (v77) it looks where its mouse is
+			# (v77) it looks where its mouse is; (v78) quarter steps, lying down
+			out.encode_u8(o + 18, (1 if st.free_look else 0) | (2 if st.fine else 0) | (4 if st.prone else 0))
+			out.encode_u8(o + 19, Net.pack_off(st.ox, st.oy, st.prone))   # (v78) quarters off the tile's centre
 			p.self_dirty = false
 			p.last_self_tick = server.tick
 		if check:

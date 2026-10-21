@@ -61,3 +61,17 @@ to check far-away pairs less often. The rare ticks over budget in both runs come
 starving this 4-CPU machine (the maximum moves a lot between runs); the server's own work is the mean.
 `tools/sightbench.gd` (32 bots, no network) shows the same: 7.4 ms of sight per tick before, about
 3.5 ms after.
+
+### v78, 32 clients (same machine, 2026-10-21)
+
+| | v77.1, 32 | v78, 32 |
+|---|---|---|
+| tick mean, all aboard | 9.89 ms | 11.95 ms |
+| tick median, all aboard | 9.29 ms | 10.55 ms |
+| tick p99, all aboard | 20.5 ms | 26.0 ms |
+| tick max | 32.8 ms | 47.0 ms |
+| ticks over 50 ms, all aboard | 0 of 565 | 0 of 633 |
+| send (of which sight) | 5.17 (4.40) ms | 7.13 (6.18) ms |
+
+Players now step a quarter of a tile each tick, so a walking player's place changes every tick instead of every
+fourth: more character records to send and more pairs to look at again. Still a quarter of the budget.

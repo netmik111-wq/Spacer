@@ -169,7 +169,15 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
-- Next (v78, his picks): quarter-tile steps for players, lying down, swapping places, and RimWorld-like friendly fire.
+### v78 (quarter steps, lying down, friendly fire; his poll picks M1 "D", C1 "B" and his M2 words)
+- Players step a quarter of a tile (8 px) a tick, the same speed as before, and stop on any quarter; everyone sees them
+  there. The tile under the centre still decides air, doors, sight and use; the body never lies over a wall, a slant
+  never over a doorway, and a player a quarter off a doorway slides into line. Bots, pirates and robots keep whole tiles.
+- C lies down or gets up: crawling at half speed, shots fly over unless aimed at you. A friend right by the shooter
+  (the next tile, slants too) is never hit; further on, still. Swapping places left out: people already walk through
+  each other (said so in the thread).
+- New test `tools/quartertest.gd` (37 scripts). Protocol 54. Benchmark at 32 players: tick 9.9 -> 12.0 ms (of 50).
+  Version 0.71, build in `/mnt/project-files/builds/v78/`.
 
 ### v76 (his answers after v75)
 - Out cold, a player may hold R for 2 s to give up: the character dies at once and R brings a new one from the reserve.

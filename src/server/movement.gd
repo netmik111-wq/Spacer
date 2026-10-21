@@ -29,15 +29,20 @@ func move(p: Player) -> void:
 		bot_think(p)
 	elif p.pirate or p.ally:
 		server.pirates.think(p)          # (v62) our security robots fight by the same mind
+	# (v78) players step a quarter of a tile at a time; bots, pirates and robots whole tiles
+	p.st.fine = p.quarters and not p.bot and not p.pirate and not p.ally
+	if p.st.prone and (p.bot or p.cond != Net.COND_OK):
+		p.st.prone = false               # a bot that took over, or one knocked out, is not lying low any more
 	var was_x := p.st.x
 	var was_y := p.st.y
 	if Mover.step(p.st, server.map, server.doors, tick):
 		p.self_dirty = true
-		p.steps += 1
-		if p.steps % 2 == 0:
-			server.chat.sound(Net.SOUND_STEP, p.st.x, p.st.y, p.slot)
-		if p.dragging >= 0:
-			server.looting.haul(p, was_x, was_y)
+		if p.st.x != was_x or p.st.y != was_y:
+			p.steps += 1
+			if p.steps % 2 == 0:
+				server.chat.sound(Net.SOUND_STEP, p.st.x, p.st.y, p.slot)
+			if p.dragging >= 0:
+				server.looting.haul(p, was_x, was_y)
 	if p.climb_tick >= 0 and tick >= p.climb_tick:
 		p.climb_tick = -1
 		server.repairs.press(p)

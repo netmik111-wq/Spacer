@@ -23,6 +23,7 @@ const ACTIONS: Array = [
 	["drag", "Тащить лежащего", [KEY_F]],
 	["act", "Применить вещь в руке (фонарик, надеть, лечить себя)", [KEY_Z]],
 	["drop", "Положить вещь на пол", [KEY_G]],
+	["lie", "Лечь / встать (пули летят над лежащим)", [KEY_C]],
 	["suit", "Подача кислорода", [KEY_Q]],
 	["inventory", "Инвентарь", [KEY_I, KEY_TAB]],
 	["crew", "Экипаж: посты и приказы ботам", [KEY_O]],
@@ -202,7 +203,7 @@ static func key_text(action: String) -> String:
 	return binding_text(list[0]) if not list.is_empty() else "—"
 
 
-const LETTERS := {"E": "use", "F": "drag", "Z": "act", "G": "drop", "Q": "suit", "R": "respawn"}
+const LETTERS := {"E": "use", "F": "drag", "Z": "act", "G": "drop", "C": "lie", "Q": "suit", "R": "respawn"}
 static var _letter: RegEx
 
 

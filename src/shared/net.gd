@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 53
+const PROTOCOL := 54
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -193,8 +193,8 @@ const NOBODY := 65535               # "no character" where an id is expected
 
 const FACING_GONE := 255
 const FACING_HIDDEN := 254
-const ENT_BYTES := 7
-const SELF_BYTES := 18
+const ENT_BYTES := 8                # (v78) + quarters off the centre and lying down
+const SELF_BYTES := 19
 const DOOR_BYTES := 7
 const HULL_BYTES := 5
 const FLOOR_STACK := 4              # how many things can lie in one cell
@@ -805,6 +805,23 @@ const LOOK_SLOW := 64
 
 static func pack_look(facing: int, cond: int, slow: bool = false, light: bool = false) -> int:
 	return facing | (cond << 4) | (LOOK_SLOW if slow else 0) | (LOOK_LIGHT if light else 0)
+
+
+static func pack_off(ox: int, oy: int, prone: bool) -> int:
+	## (v78) The byte after the look: quarters off the tile's centre (-2..1 each) and lying down.
+	return (ox + 2) | ((oy + 2) << 2) | (16 if prone else 0)
+
+
+static func off_x(off: int) -> int:
+	return (off & 3) - 2
+
+
+static func off_y(off: int) -> int:
+	return ((off >> 2) & 3) - 2
+
+
+static func off_prone(off: int) -> bool:
+	return (off & 16) != 0
 
 
 static func look_light(look: int) -> bool:

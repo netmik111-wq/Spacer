@@ -94,12 +94,14 @@ func haul(p: Player, to_x: int, to_y: int) -> void:
 	var body: Player = server.players[p.dragging]
 	if body == null:
 		return
-	body.st.fx = body.st.x
-	body.st.fy = body.st.y
+	body.st.fx = body.st.qx()
+	body.st.fy = body.st.qy()
 	body.st.x = to_x
 	body.st.y = to_y
+	body.st.ox = 0
+	body.st.oy = 0
 	body.st.move_tick = server.tick
-	body.st.span = p.st.span
+	body.st.span = Net.DRAG_TICKS if p.st.fine else p.st.span   # (v78) a quarter-stepper crosses a tile in DRAG_TICKS
 	body.self_dirty = true
 
 

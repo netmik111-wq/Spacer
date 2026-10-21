@@ -12,6 +12,7 @@ extends RefCounted
 
 const Net := preload("res://src/shared/net.gd")
 const Paths := preload("res://src/server/paths.gd")
+const Mover := preload("res://src/shared/mover.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
 
@@ -300,7 +301,8 @@ func think(p) -> void:
 			_face(p, there)
 			if now >= p.ai_fire_tick and now >= p.ready_tick:
 				p.ai_fire_tick = now + _rng.randi_range(FIRE_GAP[0], FIRE_GAP[1])
-				var aim: Vector2 = there + Vector2(_rng.randf_range(-AIM_SPREAD, AIM_SPREAD), _rng.randf_range(-AIM_SPREAD, AIM_SPREAD))
+				# (v78) at where the target is drawn: a player may stand a quarter or half a tile off its tile
+				var aim: Vector2 = Mover.visual_pos(target.st, now) + Vector2(_rng.randf_range(-AIM_SPREAD, AIM_SPREAD), _rng.randf_range(-AIM_SPREAD, AIM_SPREAD))
 				server.combat.use_at(p, now, aim)
 			return
 		if rounds <= 0 and absi(target.st.x - p.st.x) + absi(target.st.y - p.st.y) == 1:

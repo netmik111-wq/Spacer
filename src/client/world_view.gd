@@ -1944,7 +1944,12 @@ func _process(delta: float) -> void:
 		sprite.position = (_feet(pos) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
-		if cond == Net.COND_OK:
+		if cond == Net.COND_OK and client.prone_of(id):
+			# (v78) lying low: on its side as one knocked down, but in its own colours
+			sprite.rotation = PI / 2.0
+			sprite.position += Vector2(-22.0, -7.0)
+			sprite.modulate = Color.WHITE
+		elif cond == Net.COND_OK:
 			sprite.rotation = 0.0
 			sprite.modulate = Color.WHITE
 		else:
