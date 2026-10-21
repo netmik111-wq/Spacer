@@ -53,6 +53,7 @@ func _go() -> void:
 	_pirates_slant()
 	_bot_walks_slant()
 	await _rejoin()
+	await _mouse_spin()
 	server.stop()
 	server.free()
 	print("eveningtest: %d failed" % failed)
@@ -379,6 +380,43 @@ func _rejoin() -> void:
 	b.close()
 	get_root().remove_child(b)
 	b.free()
+	await _frames(5)
+
+
+func _mouse_spin() -> void:
+	print("  -- the mouse swept round many times a tick: one still walks and turns (v77.1, the author's bug)")
+	_calm()
+	var c := GameClient.new()
+	get_root().add_child(c)
+	c.connect_to("127.0.0.1", PORT, "Мышь")
+	await _until_playing(c)
+	_expect(c.phase == GameClient.PLAYING, "the link joins")
+	if c.phase != GameClient.PLAYING:
+		return
+	c.want_free_look = true
+	var p = server.players[c.my_id]
+	var ways := {}
+	var cells := {}
+	var worst := 0
+	var until := Time.get_ticks_msec() + 4000
+	var k := 0                    # frames
+	while Time.get_ticks_msec() < until:
+		# a fast game draws many frames a tick, the mouse spinning round twice a second
+		k += 1
+		var me := Vector2(c.pred.x, c.pred.y)
+		c.aim_at(me + Vector2.from_angle(Time.get_ticks_msec() * 0.012) * 4.0, 1.0 / 144.0)
+		c.want_dir = Net.DIR_LEFT if (Time.get_ticks_msec() / 700) % 2 == 0 else Net.DIR_RIGHT
+		ways[p.st.facing] = true
+		cells[Vector2i(p.st.x, p.st.y)] = true
+		worst = maxi(worst, c._last_apply - c.pred_tick)
+		await process_frame
+	c.want_dir = 0
+	_expect(worst < 6, "the queued inputs stay close to now (at most %d ticks ahead, %d frames)" % [worst, k])
+	_expect(ways.size() >= 4, "the server turned it many ways (%d)" % ways.size())
+	_expect(cells.size() >= 3, "and it walked (%d cells)" % cells.size())
+	c.close()
+	get_root().remove_child(c)
+	c.free()
 	await _frames(5)
 
 
