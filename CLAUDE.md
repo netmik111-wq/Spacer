@@ -34,7 +34,8 @@ needs:
 
 ## Where things stand
 
-Build v77 (version 0.70, the evening's bugs, the view following the mouse, bots on a slant) is the latest. Plans one to four are done except the darkness front (the
+Build v77.1 (version 0.70.1: v77's evening bugs, the view following the mouse, bots on a slant, and the fix for mouse turns
+freezing a fast computer's character) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -406,7 +407,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `Net.way(pred.facing)`. Scripted walks in `main.gd` turn it off (`GameScreen.scripted_look`). Bots, pirates and robots find
   ways with `Paths.first_step` (directions 1..8): never write a 4-way search again. A trader never offers what it `wanted()`:
   a test buying plain things picks ones it does not look for. Same name and same address in a hello takes the old
-  character over (`Crew._same_person`). Protocol 53.
+  character over (`Crew._same_person`). Protocol 53. (v77.1) The client sends one turn at a time (`facing_soon`): never
+  send an input on every frame, as each is stamped a tick after the last and the queue runs away at high frame rates.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

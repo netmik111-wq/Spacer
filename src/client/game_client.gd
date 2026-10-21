@@ -290,6 +290,8 @@ var _ship_cell := Vector2i.ZERO      # where in space the ship was when we last 
 var _inputs: Array = []              # input changes not yet confirmed: [seq, apply tick, dir, applied]
 var _seq := 0
 var _sent_dir := 0
+var _turn_to := 0                     # (v77.1) the last turn sent, and the tick it takes effect on
+var _turn_at := -1
 var _last_apply := 0
 var _corr := Vector2.ZERO            # leftover of a correction, eased out so the sprite does not jump
 var _repeat_msg := PackedByteArray() # the newest input change, repeated in case the first copy is lost
@@ -347,6 +349,7 @@ func close() -> void:
 	_view_cx = -100
 	_view_cy = -100
 	_sent_dir = 0
+	_turn_at = -1
 	_last_apply = 0
 	_repeat_left = 0
 	_corr = Vector2.ZERO
@@ -464,9 +467,18 @@ func turn_to(at: Vector2) -> void:
 
 func face(facing: int) -> void:
 	## Turns our character to face that way (Net.DIR_*), predicted at once.
-	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == pred.facing:
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == facing_soon():
 		return
 	_send_input(Mover.TURN + facing)
+	_turn_to = facing
+	_turn_at = _last_apply
+
+
+func facing_soon() -> int:
+	## (v77.1) The way we face once the turn already sent is applied. A turn takes effect on a
+	## later tick; asking again on every frame until then queued turn after turn, each a tick
+	## further on, until the turns (and the walking queued behind them) never came.
+	return _turn_to if _turn_at > pred_tick else pred.facing
 
 
 func _send_input(value: int) -> void:
@@ -523,6 +535,8 @@ func aim_at(at: Vector2, delta: float) -> void:
 	var turn := angle_difference(look_angle, d.angle())
 	var most := PI / LOOK_TURN_SEC * delta
 	look_angle = wrapf(look_angle + clampf(turn, -most, most), -PI, PI)
+	if _turn_at > pred_tick:
+		return                       # (v77.1) one turn at a time: the next once this one is applied
 	var now := Net.way(pred.facing)
 	if absf(rad_to_deg(angle_difference(now.angle(), look_angle))) > 22.5 + LOOK_STICK_DEG:
 		var way := Vector2.from_angle(look_angle)

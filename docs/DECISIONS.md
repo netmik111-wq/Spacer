@@ -1310,6 +1310,10 @@ Plan: `/mnt/project-files/plans/every-part-plan.md`, answers at https://claude.a
   5 for a straight step, 7 for a slant: 1.4, as a slant takes 1.4 times as long, so no zigzags). A slant needs both cells
   beside it to be cells the walker may step into and no doorway on any of the three or underfoot, as for players
   (`Mover.slant_open`). Wandering bots may pick a slant too (Mover slides along a wall if it is shut).
+- **(v77.1) One turn at a time.** The mouse view sends a turn only when none is waiting to be applied
+  (`GameClient.aim_at` returns while `_turn_at > pred_tick`): asking on every frame queued each turn a tick later than the
+  last, and on his fast computer the queue ran away (game-breaking: no walking, no turning). The headless tests ran too few
+  frames a tick to show it; eveningtest's `_mouse_spin` now drives a real client at full frame rate.
 - **Left for v78** (M1 "D", Z1 "A" with "not free walking, a quarter of a tile"; C1 "B"): quarter-tile player steps, lying
   down, swapping places; and his M2 and thread words on friendly fire: "when you're almost in one tile you can shoot from
   behind your ally and not hit them, like in RimWorld" (a friend right next to the shooter is never hit).

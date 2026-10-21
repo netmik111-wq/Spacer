@@ -161,6 +161,14 @@ Open problems:
 - The view follows the mouse (a setting, on at first; half a turn in 1/3 s; the body turns in 8 ways for others to see).
 - Bots, pirates and our robots walk on a slant (one 8-way search, `src/server/paths.gd`).
 - New test `tools/eveningtest.gd` (36 scripts now); protocol 53. Version 0.70, build in `/mnt/project-files/builds/v77/`.
+
+### v77.1 (his urgent note: a game-breaking bug, a video the same night)
+- With the view following the mouse, a fast computer (many frames a tick) asked for the same turn on every frame until the
+  first one took effect a tick later; each ask was queued a tick further on, so turns and the walking behind them ran
+  seconds, then minutes, into the future: the character froze and never turned. Now one turn waits for the last to land
+  (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
+  Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
+
 - Next (v78, his picks): quarter-tile steps for players, lying down, swapping places, and RimWorld-like friendly fire.
 
 ### v76 (his answers after v75)
