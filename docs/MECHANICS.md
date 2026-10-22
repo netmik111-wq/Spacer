@@ -2070,7 +2070,8 @@ note, and the questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp
 - **The name stays its colour while lying low** (his bug note): only somebody out cold or dead has the red name.
 - **The autodoc alone heals fully**: up to **50** health at its full pace (3 a second), then on at **half** that pace.
   Somebody holding E by it still makes it **2×** quicker (more with medicine skill) and mends injuries after 3 s. A bot in
-  an autodoc gets up at 90 either way. (v70 to v81: alone it stopped at 50.)
+  an autodoc gets up at 90 either way. (v70 to v81: alone it stopped at 50.) A **green cross** pulses over anyone lying
+  in a working autodoc; over yourself a small bar of your health fills beside it.
 - **What the crew used**: every run counts how often people (not bots) used 18 systems: the pilot's evade, the power
   panel, the overcharge, loading rounds by hand, alert levels, the galley, tending an autodoc, the body scanner, kits and
   splints, handcuffs, selling prisoners, welding doors, holding position, lying down, the drone, the workbench, answering
@@ -2086,4 +2087,11 @@ note, and the questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp
 - **Small sounds**: picking a thing up (range 4), a console's screen opening and closing, and a low buzz when a console
   will not open for lack of power. All can be replaced from the «sounds» folder (`click`, `reload`, `pickup`, `ui_open`,
   `ui_close`, `ui_deny`).
+- **Work you hear**: while a job under your hands goes on (repairs, welding, the workbench, anything held with E) a soft
+  tool tick sounds about **3 times a second**; a small knock when it is done; a flick when another thing comes into your
+  hand (`ui_work`, `ui_done`, `ui_slot`). Only you hear these, and only in air.
+- **A welded door shows its seam**: a row of weld beads where the leaves meet.
+- **Getting hurt is felt**: a small camera shake when you are wounded (times the screen-shake setting), a short cry
+  (`cry`, heard by those near), and red at the screen's edges once your health is below **75**, deeper and darker down to
+  **15**, with a brighter flash at each blow.
 

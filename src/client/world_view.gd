@@ -131,6 +131,7 @@ const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt fig
 const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the floor
 const CASING_FADE := 3.0             # and the last seconds of it, fading
 const CASINGS_KEPT := 120
+const HURT_SHAKE := 3.0              # (v82) screen pixels the picture shakes when we are hurt
 const KICK_PX := 2.5                 # (v82) how far our own shot throws the camera back (a shotgun twice that)
 const STAINS_KEPT := 400             # (v75) drops of blood kept on the floors (the oldest go first)
 const RED_ALERT_TINT := 0.1          # (v75, the author's F3) how red the light is at red alert (it pulses round this)
@@ -176,6 +177,10 @@ var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
 var _rise_shown := false             # (v82) the getting-up bar is on
 var _ring_pen: Node2D                # (v73) the ring that fills over the thing we work on
 var _ring_shown := false
+var _work_was := 0                   # (v82, his F1 note) the job's share last frame, for its ticks and its "done"
+var _work_tick_at := 0.0             # and when the next tick sounds
+var _hand_was := -1                  # (v82) the hand's slot last frame: a flick when it changes
+var _healing: Array[int] = []        # (v82, his D2 note) ids lying in a working autodoc: a green cross pulses over them
 var zoom_step := 0                   # (v73, the author's H6) Ctrl+wheel: one whole zoom step closer or farther
 var _hover_ink: Node2D               # under _hover_pen: the silhouettes of things on the floor, drawn round them
 var _body_ink: Sprite2D              # on a body under the mouse: its outline (OUTLINE_SHADER)
@@ -1015,10 +1020,47 @@ func alarm_sound() -> void:
 func _update_ring() -> void:
 	var working := client.work > 0 and client.target_cell() >= 0   # (v74) held or going on by itself (the bench, a kit)
 	var rising := client.pred.rise > 0
-	if working or _ring_shown or rising or _rise_shown:
+	_work_sounds(working)
+	var healing := _in_autodocs()
+	if working or _ring_shown or rising or _rise_shown or not healing.is_empty() or not _healing.is_empty():
 		_ring_shown = working
 		_rise_shown = rising
+		_healing = healing
 		_ring_pen.queue_redraw()
+
+
+func _work_sounds(working: bool) -> void:
+	## (v82, his F1 note "a little sound for everything we do") a soft tick while a job goes on under
+	## our hands, a knock when it is done, a flick when another thing comes into the hand.
+	var now := Time.get_ticks_msec() / 1000.0
+	if working and client.work > _work_was and now >= _work_tick_at:
+		_work_tick_at = now + 0.32
+		ui_sound(Sounds.UI_WORK)
+	if not working and _work_was >= 95:
+		ui_sound(Sounds.UI_DONE)
+	_work_was = client.work if working else 0
+	if _hand_was >= 0 and client.hand != _hand_was:
+		ui_sound(Sounds.UI_SLOT)
+	_hand_was = client.hand
+
+
+func _in_autodocs() -> Array[int]:
+	## (v82, his D2 note "it needs a bar so one sees one is being healed") Who lies on the bed of a
+	## working autodoc. We know our own health; of others only that the machine is at them.
+	var found: Array[int] = []
+	if client.map.autodoc.is_empty() or not client.powered():
+		return found
+	var beds := {}
+	for doc: int in client.map.autodoc.keys():
+		if not client.broken.has(doc):
+			beds[int(client.map.autodoc[doc])] = true
+	var w := client.map.width
+	if beds.has(client.pred.y * w + client.pred.x) and client.my_cond != Net.COND_DEAD and client.health < 100:
+		found.append(client.my_id)
+	for e: GameClient.Ent in client.ents.values():
+		if e.id != client.my_id and e.cond != Net.COND_DEAD and beds.has(e.y * w + e.x) and _views.has(e.id) and _views[e.id].visible:
+			found.append(e.id)
+	return found
 
 
 func _draw_ring() -> void:
@@ -1031,6 +1073,21 @@ func _draw_ring() -> void:
 		var share := 1.0 - float(client.pred.rise) / float(Mover.RISE_TICKS)
 		_ring_pen.draw_rect(Rect2(at - Vector2(13, 3), Vector2(26, 6)), Color(0.05, 0.07, 0.1, 0.8))
 		_ring_pen.draw_rect(Rect2(at - Vector2(12, 2), Vector2(24 * share, 4)), Color(0.9, 0.2, 0.15).lerp(Color(0.3, 0.9, 0.35), share))
+	for id in _healing:
+		var body: Sprite2D = _views.get(id)
+		if body == null or not body.visible:
+			continue
+		var top := _ring_pen.to_local(body.get_parent().to_global(body.position + Vector2(0, -CHAR_H * 0.5) + Vector2(0, -44)))
+		var beat := 0.55 + 0.45 * sin(Time.get_ticks_msec() / 1000.0 * TAU * 0.8)
+		var green := Color(0.35, 1.0, 0.45, 0.5 + 0.5 * beat)
+		var cross := top + Vector2(-17 if id == client.my_id else 0, 0)
+		_ring_pen.draw_rect(Rect2(cross - Vector2(4, 1.5), Vector2(8, 3)), green)
+		_ring_pen.draw_rect(Rect2(cross - Vector2(1.5, 4), Vector2(3, 8)), green)
+		if id == client.my_id:
+			# our own health filling up, beside the cross
+			var share := clampf(client.health / 100.0, 0.0, 1.0)
+			_ring_pen.draw_rect(Rect2(top - Vector2(11, 3), Vector2(28, 6)), Color(0.05, 0.07, 0.1, 0.8))
+			_ring_pen.draw_rect(Rect2(top - Vector2(10, 2), Vector2(26 * share, 4)), Color(0.9, 0.2, 0.15).lerp(Color(0.3, 0.9, 0.35), share))
 	if not _ring_shown:
 		return
 	var cell := client.target_cell()
@@ -1710,6 +1767,8 @@ func _on_hit(blood: int, id: int, x: int, y: int) -> void:
 	## of blood stay on the floor (sparks fly off a robot), the blow is heard where there is air.
 	var map := client.map
 	_flash[id] = HIT_FLASH
+	if id == client.my_id:
+		_shake = maxf(_shake, HURT_SHAKE * Options.shake)   # (v82, his O1 note) we feel our own hurt
 	var deck := map.deck_of(y)
 	if deck < 0 or deck >= _decks.size():
 		return
@@ -1911,6 +1970,13 @@ func _draw_fx(d: int) -> void:
 				var to := from + Vector2(((beat * 13) % 7) - 3, ((beat * 11) % 7) - 3)
 				pen.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
 				pen.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
+		if client.doors.welded[door] == 1:
+			# (v82, his note: a welded door looked like any other) a bead of weld where the leaves meet
+			for k in 7:
+				var bead := corner + (Vector2(18.0 + (1.5 if k % 2 == 0 else -1.5), 9.5 + k * 2.2) if band
+					else Vector2(12.0 + k * 1.4, 13.5 + (1.5 if k % 2 == 0 else -1.5)))
+				pen.draw_circle(bead, 2.0, Color(0.2, 0.17, 0.15))
+				pen.draw_circle(bead, 1.3, Color(0.78, 0.55, 0.3))
 		if faulty and not sealed and lit and fposmod(now + door * 0.37, 1.0) < 0.5:
 			# a shutter that will not drop: a warning lamp blinks on the door frame
 			var lamp_at := corner + (Vector2(15, 4) if band else Vector2(8, 26))

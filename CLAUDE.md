@@ -84,9 +84,10 @@ light, lying across, a stronger shotgun, picking what to take in the right-click
 v81 (his answers, `https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww`, all "A"): the ship editor in the main menu (game look,
 tools, mirrors, select/copy/paste, undo, palette, decks, room marks, problems, `ships/` folder, «Попробовать»), the map builder
 in the game, rooms taller than 2 tiles, asteroids as maps with ore veins, hold position (X, the human wall).
-v82 (his worry "mechanics too deep", `https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi`): the depth rule (a mechanic works
-untouched, touching it gives a bonus), getting up takes 1 s as in SS13, the autodoc alone heals on at half pace, per-run
-counts of what people used (`usage.txt`), one's own sounds heard, empty click, casings, a camera kick, console sounds.
+v82 (his worry "mechanics too deep", `https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi`): no general depth rule (his D1: case by
+case), getting up takes 1 s as in SS13, the autodoc alone heals on at half pace, per-run
+counts of what people used (`usage.txt`), one's own sounds heard, empty click, casings, a camera kick, console sounds; (his answers) a healing
+cross and bar at the autodoc, work ticks, a welded door's seam, being hit shakes, cries and reddens the screen's edges.
 Next: v83 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
 when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -454,7 +455,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - (v82) Getting up is `Mover.State.rise` (ticks left, `Mover.RISE_TICKS`), predicted like a step and sent in the self
   section (20 bytes, protocol 58); a test that sends RISE must step the state RISE_TICKS times. Whatever people choose to
   use goes through `server.usage.note(p, key)` (bots skipped); a new key goes into `Usage.NAMES`. `Chat.sound` now sends a
-  sound back to the one who made it, except footsteps. New mechanics follow the depth rule in `docs/DECISIONS.md` (v82).
+  sound back to the one who made it, except footsteps. He chose no general depth rule: judge each mechanic on its own.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

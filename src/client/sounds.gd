@@ -25,7 +25,7 @@ const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: 
 	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow",
 	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load", Net.SOUND_BANG: "bang", Net.SOUND_BEEP: "beep",
 	Net.SOUND_SHOTGUN: "shotgun", Net.SOUND_ZAP: "zap",
-	Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup"}   # (v82)
+	Net.SOUND_CRY: "cry", Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup"}   # (v82)
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -61,7 +61,11 @@ const MUSIC_FIGHT := "music_fight"         # (v75) a low dark drone while there 
 const UI_OPEN := "ui_open"                   # (v82) a console's screen coming up
 const UI_CLOSE := "ui_close"                 # (v82) and going off
 const UI_DENY := "ui_deny"                   # (v82) a console that will not open (no power)
-const MORE_NAMES := [HIT, HIT_METAL, AMB_VENT, AMB_PIPE, AMB_CREAK, MUSIC_MENU, MUSIC_FIGHT, UI_OPEN, UI_CLOSE, UI_DENY]
+const UI_WORK := "ui_work"                   # (v82, his F1 note "a little sound for everything we do") a job held with E ticking on
+const UI_DONE := "ui_done"                   # (v82) and finished
+const UI_SLOT := "ui_slot"                   # (v82) another thing taken into the hand
+const MORE_NAMES := [HIT, HIT_METAL, AMB_VENT, AMB_PIPE, AMB_CREAK, MUSIC_MENU, MUSIC_FIGHT, UI_OPEN, UI_CLOSE, UI_DENY,
+	UI_WORK, UI_DONE, UI_SLOT]
 const FIGHT_NAMES := [ALERT_YELLOW, ALERT_RED, GUN_LASER, GUN_HEAVY, GUN_ROCKET, GUN_ION, GUN_BEAM, HULL_HIT, HULL_HEAVY, SHIELD_HIT, THEIR_HIT, THEIR_SHIELD,
 	GUN_AUTOCANNON, GUN_RAIL, GUN_HAMMER, GUN_PHOENIX, GUN_STORM, GUN_DEVASTATOR, GUN_REAPER, GUN_FLAK, GUN_NOVA,
 	GUN_BOMB, GUN_SHRAPNEL]
@@ -96,12 +100,16 @@ static func prepare() -> void:
 	_streams[Net.SOUND_BEEP] = [_beep()]
 	_streams[Net.SOUND_SHOTGUN] = [_shotgun()]
 	_streams[Net.SOUND_ZAP] = [_zap()]
+	_streams[Net.SOUND_CRY] = [_cry(1.0), _cry(0.86), _cry(1.15)]   # (v82: a cry was only ever a mark)
 	_streams[Net.SOUND_CLICK] = [_click()]           # (v82)
 	_streams[Net.SOUND_RELOAD] = [_reload()]
 	_streams[Net.SOUND_PICKUP] = [_pickup()]
 	_streams[UI_OPEN] = [_ui_blip(1.0)]
 	_streams[UI_CLOSE] = [_ui_blip(0.75)]
 	_streams[UI_DENY] = [_ui_deny()]
+	_streams[UI_WORK] = [_ui_work(1.0), _ui_work(0.9), _ui_work(1.12)]
+	_streams[UI_DONE] = [_ui_done()]
+	_streams[UI_SLOT] = [_ui_slot()]
 	_streams[ALERT_YELLOW] = [_alert_yellow()]
 	_streams[ALERT_RED] = [_alert_red()]
 	_streams[GUN_LASER] = [_gun_laser(1.0), _gun_laser(1.07)]
@@ -424,6 +432,18 @@ static func _alert_red() -> AudioStreamWAV:
 	return _wav(out)
 
 
+static func _cry(pitch: float) -> AudioStreamWAV:
+	# (v82, his O1 note "a little ugh") a short grunt: a low voice falling, breath round it
+	var out := _buffer(0.32)
+	_tone(out, 0.0, 150.0 * pitch, 0.3, 7.0, -150.0 * pitch)
+	_tone(out, 0.0, 300.0 * pitch, 0.16, 9.0, -300.0 * pitch)
+	_tone(out, 0.0, 450.0 * pitch, 0.08, 12.0, -450.0 * pitch)
+	_tone(out, 0.0, 720.0 * pitch, 0.05, 16.0, -720.0 * pitch)
+	_noise(out, 0.0, 0.3, 0.07, 10.0, 0.85)
+	_fade(out, 0.012)
+	return _wav(out)
+
+
 static func _click() -> AudioStreamWAV:
 	# (v82) a hammer falling on nothing: one dry tick
 	var out := _buffer(0.08)
@@ -468,6 +488,31 @@ static func _ui_deny() -> AudioStreamWAV:
 	_tone(out, 0.0, 233.0, 0.12, 14.0)
 	_tone(out, 0.14, 196.0, 0.14, 14.0)
 	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _ui_work(pitch: float) -> AudioStreamWAV:
+	# (v82) hands at work: a soft tool tick, a little different each time
+	var out := _buffer(0.09)
+	_noise(out, 0.0, 0.035, 0.16, 120.0, 0.45)
+	_tone(out, 0.0, 1650.0 * pitch, 0.07, 90.0)
+	return _wav(out)
+
+
+static func _ui_done() -> AudioStreamWAV:
+	# (v82) a job done: a small bright knock and a rising note
+	var out := _buffer(0.28)
+	_tone(out, 0.0, 1400.0, 0.12, 60.0)
+	_tone(out, 0.06, 1980.0, 0.09, 18.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _ui_slot() -> AudioStreamWAV:
+	# (v82) a thing taken in hand: a short cloth-and-metal flick
+	var out := _buffer(0.07)
+	_noise(out, 0.0, 0.04, 0.1, 110.0, 0.6)
+	_tone(out, 0.0, 2600.0, 0.05, 140.0)
 	return _wav(out)
 
 

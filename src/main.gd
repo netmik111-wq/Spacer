@@ -71,7 +71,8 @@ extends Node
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
 ## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside),
-## restock_after=SECONDS (v65: the admin's «refill the supply locker»).
+## restock_after=SECONDS (v65: the admin's «refill the supply locker»),
+## (v82) hurt=N with hurt_after=SECONDS (our character takes a wound of N; with --in_doc it is put on an autodoc's bed), weld_after=SECONDS (every door welded).
 ## (v62, --inproc only) enemy_after=SECONDS with enemy_class=K (a pirate ship of that class, Net.ECLASS_*,
 ## comes to fight at a distance), assault_after=SECONDS (an assault drone lands aboard at once),
 ## robot_after=SECONDS (one of our security robots is set down beside the character).
@@ -86,6 +87,7 @@ const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
 const Music := preload("res://src/client/music.gd")
 const Options := preload("res://src/client/options.gd")
+const Player := preload("res://src/server/player.gd")
 const ShipEditor := preload("res://src/ui/ship_editor.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 
@@ -161,6 +163,8 @@ var _dropped := false
 var _picked := false
 var _given := false
 var _restocked := false
+var _hurt := false                      # (v82) hurt_after done
+var _welded := false                    # (v82) weld_after done
 var _boarded := false
 var _goto_at := 0
 var _next_volley := 0.0
@@ -695,6 +699,21 @@ func _process(_delta: float) -> void:
 		_restocked = true
 		var pkt := PackedByteArray([Net.C_ADMIN, Net.ADMIN_RESTOCK, 0, 0, 0])
 		_server.admin.asked(_server.players[_client.my_id], pkt)
+	if _opt.has("hurt_after") and not _hurt and _server != null and _screen != null and t >= float(_opt["hurt_after"]):
+		_hurt = true
+		var hurt_one: Player = _server.players[_client.my_id]
+		_server.combat.hurt(hurt_one, int(_opt.get("hurt", 50)), null)
+		if _flags.has("in_doc") and not _server.map.autodoc.is_empty():
+			# and is put on the first autodoc's bed (to see its healing drawn)
+			var bed := int(_server.map.autodoc.values()[0])
+			hurt_one.st.x = bed % _server.map.width
+			hurt_one.st.y = bed / _server.map.width
+			hurt_one.self_dirty = true
+	if _opt.has("weld_after") and not _welded and _server != null and _screen != null and t >= float(_opt["weld_after"]):
+		_welded = true
+		for d in _server.doors.welded.size():
+			_server.doors.welded[d] = 1
+			_server.replication.door_record(d)
 	if _opt.has("click_after") and not _clicked and _screen != null and t >= float(_opt["click_after"]):
 		_clicked = true
 		var at := str(_opt.get("click", "0,0")).split(",")

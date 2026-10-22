@@ -171,15 +171,18 @@ Open problems:
 
 ### v82 (polish without extra depth; his worry that mechanics get too deep, his crawl video and a bug note)
 - My second opinion on the page "Spacer v82 Polish" (https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi): most deep systems
-  already work if nobody touches them; the rule from now on is "the ship runs fine untouched, touching gives a bonus"; count
-  what people really use; a pause on new systems until a few evenings of play. Built on my picks while he answers.
+  already work if nobody touches them; a rule "the ship runs fine untouched, touching gives a bonus" (he chose B: case by
+  case, no rule); count what people really use; a pause on new systems until a few evenings of play.
 - Lying down and getting up as in SS13: the body turns over in 0.2 s, getting up takes 1 s with a bar (C again stays down);
   the name no longer turns red for one lying low by choice (his note).
 - The autodoc alone heals past 50 at half pace (no one has to stand holding E). Per-run counts of 18 systems people used,
   on the end screen, in the save and in `usage.txt` (new part `src/server/usage.gd`).
 - Found while adding the empty click: one never heard one's own shots, blows or doors. Now one does (only footsteps are
   played locally). A dry click, a reload sound, casings on the floor, a small camera kick, pickup and console sounds.
-- Own-ship hosting moves to v83 (his O1 to confirm). Protocol 58. Version 0.75, build in `/mnt/project-files/builds/v82/`.
+- From his answers: a green cross over anyone healing in an autodoc (and a bar of one's own health), soft work ticks and
+  a "done" knock, a flick when a thing comes into the hand, a welded door's seam, and being hit: a small shake, a cry,
+  red screen edges that deepen and darken with lower health.
+- Own-ship hosting moves to v83 (his O1: yes). Protocol 58. Version 0.75, build in `/mnt/project-files/builds/v82/`.
 
 ### v81 (the ship editor; his answers on "Spacer v81 Ship editor", all "A")
 - «Редактор кораблей» in the main menu: the game's own look, brush, line, rectangle, room, fill, eraser, picker,

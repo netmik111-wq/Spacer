@@ -1487,11 +1487,14 @@ The author: "We need to polish the game further ... I'm afraid of making the mec
 of fun." Questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi); built on my picks while
 he answers.
 
-- **The rule for depth** (my D1 pick): the ship runs fine if nobody touches a mechanic; touching it gives a bonus. Only
-  hard mode may punish ignoring something. Most systems already pass (guns start armed, rounds come from the locker too,
-  complex repairs are hard mode only, the galley's dishes are extras). The autodoc did not: alone it stopped at 50, so
-  one player had to stand holding E. Now alone it goes on at half pace past 50 (`Medbay.UNTENDED_SLOW`); tending keeps its
-  2× and the injuries. Check every new idea against this rule.
+- **No general rule for depth** (his D1 answer B, against my pick of a rule "the ship runs fine untouched, touching
+  gives a bonus"): each mechanic is judged on its own, case by case. Most systems already work untouched anyway (guns
+  start armed, rounds come from the locker too, complex repairs are hard mode only, the galley's dishes are extras).
+- **The autodoc alone heals fully** (his D2 answer A): alone it stopped at 50, so one player had to stand holding E. Now
+  alone it goes on at half pace past 50 (`Medbay.UNTENDED_SLOW`); tending keeps its 2× and the injuries. He added "it needs
+  a bar or something to see that you are being healed": a green cross pulses over anyone on a working autodoc's bed, and
+  over oneself a bar of one's own health (`WorldView._in_autodocs`). Others' health is not sent to clients, so their
+  cross only says the machine is at them.
 - **Count what people use, not what bots do** (D3): `src/server/usage.gd` counts people's uses of 18 systems, kept in the
   save and written to `usage.txt` next to the game (the host's), shown on the end screen with what nobody touched. The
   simulator cannot say what is fun; his evenings with friends can. Then we cut or simplify by real play. Nothing is sent
@@ -1510,4 +1513,11 @@ he answers.
 - **Feel without rules** (F1, F2): an empty click and a reload sound (new `Net.SOUND_*` 16 to 18), casings that are only
   drawn, a camera kick for one's own shot only (scaled by the shake setting, so it can be turned off), console sounds kept
   quiet (−10 dB) and only in air (vacuum stays silent).
+- **His F1 note: "a little sound for everything we do"**: a soft tool tick every 0.32 s while a job under our hands goes
+  on, a knock when it is done (the share was 95+ when it stopped; a release that late also knocks, which is fine), a flick
+  when another thing comes into the hand. All client only (`WorldView._work_sounds`), quiet and only in air.
+- **A welded door shows its seam** (his F1 note): beads of weld drawn where the leaves meet (`WorldView._draw_fx`).
+- **Being hit is felt** (his O1 note): a small shake for one's own wound (`HURT_SHAKE`, times the shake setting), the
+  cry (`SOUND_CRY` had no sound of its own, only a mark), and red at the screen's edges below 75 health, deeper and darker
+  down to 15, with a brighter moment at each blow (`GameScreen._update_hurt_edge`). The older darkening below 40 stays.
 
