@@ -791,6 +791,181 @@
    "id": 157,
    "name": "pirate_stove",
    "kind": "wall"
+  },
+  {
+   "id": 158,
+   "name": "rock_1",
+   "kind": "wall"
+  },
+  {
+   "id": 159,
+   "name": "rock_2",
+   "kind": "wall"
+  },
+  {
+   "id": 160,
+   "name": "rock_3",
+   "kind": "wall"
+  },
+  {
+   "id": 161,
+   "name": "rock_ore",
+   "kind": "wall"
+  },
+  {
+   "id": 162,
+   "name": "rock_ground",
+   "kind": "floor"
+  },
+  {
+   "id": 163,
+   "name": "floor_l_m",
+   "kind": "floor"
+  },
+  {
+   "id": 164,
+   "name": "floor_m_m",
+   "kind": "floor"
+  },
+  {
+   "id": 165,
+   "name": "floor_r_m",
+   "kind": "floor"
+  },
+  {
+   "id": 166,
+   "name": "glass_l_m",
+   "kind": "glass"
+  },
+  {
+   "id": 167,
+   "name": "glass_m_m",
+   "kind": "glass"
+  },
+  {
+   "id": 168,
+   "name": "glass_r_m",
+   "kind": "glass"
+  },
+  {
+   "id": 169,
+   "name": "grate_l_m",
+   "kind": "grate"
+  },
+  {
+   "id": 170,
+   "name": "grate_m_m",
+   "kind": "grate"
+  },
+  {
+   "id": 171,
+   "name": "grate_r_m",
+   "kind": "grate"
+  },
+  {
+   "id": 172,
+   "name": "hatch_l_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 173,
+   "name": "hatch_m_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 174,
+   "name": "hatch_r_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 175,
+   "name": "ladder_l_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 176,
+   "name": "ladder_m_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 177,
+   "name": "ladder_r_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 178,
+   "name": "pirate_floor_l_m",
+   "kind": "floor"
+  },
+  {
+   "id": 179,
+   "name": "pirate_floor_m_m",
+   "kind": "floor"
+  },
+  {
+   "id": 180,
+   "name": "pirate_floor_r_m",
+   "kind": "floor"
+  },
+  {
+   "id": 181,
+   "name": "pirate_glass_l_m",
+   "kind": "glass"
+  },
+  {
+   "id": 182,
+   "name": "pirate_glass_m_m",
+   "kind": "glass"
+  },
+  {
+   "id": 183,
+   "name": "pirate_glass_r_m",
+   "kind": "glass"
+  },
+  {
+   "id": 184,
+   "name": "pirate_grate_l_m",
+   "kind": "grate"
+  },
+  {
+   "id": 185,
+   "name": "pirate_grate_m_m",
+   "kind": "grate"
+  },
+  {
+   "id": 186,
+   "name": "pirate_grate_r_m",
+   "kind": "grate"
+  },
+  {
+   "id": 187,
+   "name": "pirate_hatch_l_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 188,
+   "name": "pirate_hatch_m_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 189,
+   "name": "pirate_hatch_r_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 190,
+   "name": "pirate_ladder_l_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 191,
+   "name": "pirate_ladder_m_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 192,
+   "name": "pirate_ladder_r_m",
+   "kind": "ladder"
   }
  ]
 }

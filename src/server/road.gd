@@ -68,7 +68,7 @@ const GAS_MAX := 120 * Net.TICK_HZ
 const GAS_PER_TICK := 2.5 / Net.TICK_HZ   # ... this much a tick (150..300 units in all)
 const WORK_START: Array[String] = [
 	"Корабль у аномалии. Пока он стоит, её можно изучить с голокарты (около 30 с).",
-	"Корабль у астероида. Пока он стоит, выйдите в скафандре: от него будут откалываться куски руды.",
+	"Корабль у астероида. Пока он стоит, из его рудных жил можно добывать руду: выйдите в скафандре.",
 	"Корабль в газовом облаке. Пока он стоит и кто-то у двигателя, топливозаборник наполняет бак.",
 ]
 const NOTES: Array[String] = [
@@ -394,6 +394,8 @@ func _work_tick(i: int, kind: int, d: float) -> void:
 				server.supplies.tell_store()
 				server.chat.say("Аномалия изучена: данные сканирования ×%d в шкафу снабжения. Торговцы их покупают." % n)
 		Sectors.P_ASTEROID:
+			if server.derelict.here and server.derelict.kind == Net.OTHER_ROCK:
+				return                       # (v81) the rock is alongside: ore is dug out of its veins (Salvage.mine)
 			if server.tick % roundi(ORE_SECONDS * Net.TICK_HZ) != 0:
 				return
 			var miner := _outside_one()
@@ -420,6 +422,54 @@ func _work_tick(i: int, kind: int, d: float) -> void:
 	if left <= 0:
 		taken[k] = true
 		_dirty = true
+
+
+func _asteroid_here() -> int:
+	## (v81) The asteroid place (its number among this system's places) the ship holds still by, with
+	## ore left, or -1.
+	if server.ship.moving or server.ship.jump_to != Net.NO_SECTOR:
+		return -1
+	for i in _here_places.size():
+		var pl: Array = _here_places[i]
+		if int(pl[0]) == Sectors.P_ASTEROID and not taken.has(_key(i)) and server.ship.pos.distance_to(pl[1]) <= Sectors.WORK_REACH:
+			return i
+	return -1
+
+
+func at_asteroid() -> bool:
+	## (v81, Derelict) Should the asteroid lie alongside now?
+	return _asteroid_here() >= 0
+
+
+func asteroid_key() -> int:
+	## Which asteroid it is (picks its drawing), the same every time.
+	var i := _asteroid_here()
+	return absi(_key(i)) if i >= 0 else 0
+
+
+func ore_left() -> int:
+	var i := _asteroid_here()
+	if i < 0:
+		return 0
+	var k := _key(i)
+	if not work.has(k):
+		work[k] = _rng.randi_range(ORE_MIN, ORE_MAX)
+	return int(work[k])
+
+
+func mined() -> int:
+	## (v81, Salvage.mine) A piece of ore was dug out of the asteroid alongside: how much is left.
+	var i := _asteroid_here()
+	if i < 0:
+		return 0
+	var left := ore_left() - 1
+	var k := _key(i)
+	work[k] = left
+	if left <= 0:
+		taken[k] = true
+		_dirty = true
+		server.chat.say("Астероид выработан.")
+	return left
 
 
 func _someone_at(cells: Dictionary) -> Player:

@@ -40,11 +40,30 @@ static func sheet(name: String) -> Texture2D:
 		if Vector2(file.get_size()) == own.get_size():
 			tex = ImageTexture.create_from_image(file)
 			own_files.append(name + ".png")
+		elif file.get_width() == int(own.get_width()) and file.get_height() < int(own.get_height()):
+			# (v81) a sheet drawn for an older build, before new pictures were added at its bottom:
+			# laid over the game's own, so the new pictures still show
+			var whole := own.get_image()
+			if whole.is_compressed():
+				whole.decompress()
+			whole.convert(Image.FORMAT_RGBA8)
+			file.convert(Image.FORMAT_RGBA8)
+			whole.blit_rect(file, Rect2i(Vector2i.ZERO, file.get_size()), Vector2i.ZERO)
+			tex = ImageTexture.create_from_image(whole)
+			own_files.append(name + ".png")
 		else:
 			print("sprites/%s.png is %dx%d, the game's is %dx%d: not used" % [name, file.get_width(), file.get_height(),
 				own.get_width(), own.get_height()])
 	_sheets[name] = tex
 	return tex
+
+
+static func reload() -> void:
+	## (v81, the author's E11) Forget what was read, so the next ask reads the folder again (the
+	## ship editor's «Обновить картинки»).
+	_sheets.clear()
+	_items.clear()
+	own_files.clear()
 
 
 static func item_key(item: int) -> String:

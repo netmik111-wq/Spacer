@@ -66,7 +66,8 @@ func can_cut(p: Player, cell: int) -> String:
 	## "" = it can cut scrap off this cell now; NOT_HERE = this is no wall of a
 	## dark ship alongside; anything else is why not.
 	var map = server.map
-	if cell < 0 or not map.is_other(cell) or map.walk[cell] == 1 or map.door_of[cell] >= 0 or not server.derelict.dark():
+	if cell < 0 or not map.is_other(cell) or map.walk[cell] == 1 or map.door_of[cell] >= 0 or not server.derelict.dark() \
+			or server.derelict.kind == Net.OTHER_ROCK:
 		return NOT_HERE
 	if p.cond != Net.COND_OK or p.corpse:
 		return NOT_HERE
@@ -86,6 +87,38 @@ func cut(p: Player, _cell: int) -> void:
 	if not p.add(Net.ITEM_SCRAP, true):
 		server.put_on_floor(p.st.y * server.map.width + p.st.x, Net.ITEM_SCRAP)
 	server.chat.tell(p, "Срезан кусок лома. Осталось на этом корабле: %d." % int(left[k]))
+
+
+# ------------------------------------------------------------- (v81) ore out of an asteroid
+
+const MINE_SECONDS := 10.0           # to dig a piece of ore out of a vein by hand (quicker with the repair skill)
+
+
+func can_mine(p: Player, cell: int) -> String:
+	## "" = it can dig ore out of this cell now; NOT_HERE = no ore vein of the asteroid alongside.
+	var map = server.map
+	if cell < 0 or not map.is_other(cell) or not server.derelict.here or server.derelict.kind != Net.OTHER_ROCK \
+			or map.cells[cell] != int(map.tile_ids.get("rock_ore", -2)):
+		return NOT_HERE
+	if p.cond != Net.COND_OK or p.corpse:
+		return NOT_HERE
+	if server.derelict.trial:
+		return ""
+	if server.road.ore_left() <= 0:
+		return "Астероид выработан: руды не осталось."
+	return ""
+
+
+func mine_ticks(p: Player) -> int:
+	return roundi(MINE_SECONDS * Net.TICK_HZ * (1.0 - 0.3 * p.skill(Net.SKILL_REPAIR)))
+
+
+func mine(p: Player, _cell: int) -> void:
+	var left := 99 if server.derelict.trial else server.road.mined()
+	p.train(Net.SKILL_REPAIR)
+	if not p.add(Net.ITEM_ORE, true):
+		server.put_on_floor(p.st.y * server.map.width + p.st.x, Net.ITEM_ORE)
+	server.chat.tell(p, "Добыт кусок руды. В астероиде осталось примерно %d." % maxi(left, 0))
 
 
 # ------------------------------------------------------------- things floating outside

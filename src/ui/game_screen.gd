@@ -1453,6 +1453,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_drop()
 	elif Options.pressed(event, "lie"):
 		client.toggle_prone()                 # (v78)
+	elif Options.pressed(event, "hold"):
+		var was := client.holds_position()
+		client.toggle_hold()                  # (v81, the author's human wall)
+		_say("[color=#9fc3ff]%s[/color]" % ("Позиция отпущена." if was else
+			"Держите позицию: сквозь вас не пройти, свои стреляют мимо. Любой шаг отпускает."), TAB_SHIP, "hold")
 	elif Options.pressed(event, "act"):
 		client.send_act()
 	elif Options.pressed(event, "inventory"):
@@ -1738,7 +1743,7 @@ func _holds(c: Vector2i) -> bool:
 		return false
 	var t := client.use_target(f)
 	return t == 1 or t == 2 or t == 5 or t == 9 or t == 10 or t == 11 or t == 16 or t == 18 or t == 23 or t == 25 \
-		or t == 29 or t == 33 or t == 34 or t == 40 or t == 41 or t == 42
+		or t == 29 or t == 33 or t == 34 or t == 40 or t == 41 or t == 42 or t == 45
 
 
 func _fires_at(c: Vector2i) -> bool:
@@ -1967,6 +1972,8 @@ func _process(delta: float) -> void:
 			_hint.text = "Бак полон (%d из %d): канистра не войдёт" % [client.fuel, client.fuel_max]
 		else:
 			_hint.text = "Заливаю топливо…" if (_use_held and client.work > 0) else "Бак: %d из %d. Держите E, чтобы залить канистру (+%d)" % [client.fuel, client.fuel_max, Net.CAN_FUEL]
+	elif target == 45:
+		_hint.text = "Добываю руду…" if (_use_held and client.work > 0) else "Рудная жила. Держите E, чтобы добыть кусок руды"
 	elif target == 34:
 		_hint.text = "Срезаю лом…" if (_use_held and client.work > 0) else "Обшивка мёртвого корабля. Держите E, чтобы срезать кусок лома"
 	elif target == 29:

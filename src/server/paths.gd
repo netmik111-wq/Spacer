@@ -42,7 +42,8 @@ static func first_step(map: ShipMap, start: int, goals: Dictionary, ok: Callable
 					continue
 				var j := ny * w + nx
 				if not memo.has(j):
-					memo[j] = ok.call(nx, ny)
+					# (v81, the author's human wall) a tile somebody holds is passed round
+					memo[j] = ok.call(nx, ny) and not (map.held.has(j) and not goals.has(j))
 				if memo[j]:
 					open[d] = true
 					_reach(buckets, cost, first, j, b + STRAIGHT, d if cell == start else int(first[cell]))
@@ -58,7 +59,7 @@ static func first_step(map: ShipMap, start: int, goals: Dictionary, ok: Callable
 						continue
 					var j := ny * w + nx
 					if not memo.has(j):
-						memo[j] = ok.call(nx, ny)
+						memo[j] = ok.call(nx, ny) and not (map.held.has(j) and not goals.has(j))
 					if memo[j] and map.door_of[j] < 0 and map.door_of[y * w + nx] < 0 and map.door_of[ny * w + x] < 0 \
 							and map.deck_of(y) == map.deck_of(ny):
 						_reach(buckets, cost, first, j, b + SLANT, d if cell == start else int(first[cell]))

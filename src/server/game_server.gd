@@ -212,7 +212,7 @@ var lap_at := -1
 func start(p_port: int, map_name: String, bots: int) -> String:
 	## Opens the port and starts ticking. Returns "" or what went wrong.
 	var problem := map.load_from(map_name)
-	for other_map in Net.OTHER_MAPS:
+	for other_map in map.other_maps():
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
 	if problem != "":
@@ -664,6 +664,7 @@ func _tick() -> void:
 	if measure and not slot_of.is_empty():
 		lap_at = Time.get_ticks_usec()
 		part_ticks += 1
+	movement.mark_held()
 	for p: Player in players:
 		if p == null or p.corpse:
 			continue

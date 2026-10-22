@@ -57,6 +57,7 @@ class Ent:
 	var ox := 0                      # (v78) quarters off the centre of tile x, y
 	var oy := 0
 	var prone := false               # (v78) lying down
+	var hold := false                # (v81) holding its position (the human wall): nobody walks through it
 
 
 var phase := IDLE
@@ -108,6 +109,7 @@ var drag_id := -1                    # the lying character we last took hold of 
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
 var other_wreck := false            # the ship alongside is a pirate ship our guns wrecked: dark and dead
+var other_rock := false             # (v81) what lies alongside is an asteroid (Net.SHIP_ROCK)
 var _glows := {}                     # pools of light worked out lately (see glow)
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
 var gun_weapon := PackedByteArray()  # per gun mount: the weapon on it (Weapons.*; see Net.S_GUNS)
@@ -304,6 +306,8 @@ var _haul_to := Vector2.ZERO         # our own predicted character rather than a
 var _haul_seen := -1                 # the tick our step left that cell on
 var _prone_to := false               # (v78) lying down or getting up as last asked (see toggle_prone)
 var _prone_at := -1
+var _hold_to := false                # (v81) holding the position or letting go, as last asked (see toggle_hold)
+var _hold_at := -1
 var _haul_cell := Vector2i.ZERO      # (v78) the tile we were last in
 var _haul_id := -1                   # who it was worked out for
 
@@ -812,12 +816,12 @@ func other_here() -> bool:
 
 func pirates_alongside() -> bool:
 	## Is a pirate ship (still able to fight) alongside?
-	return other_here() and map.other_kind >= Net.OTHER_PIRATE and not other_wreck
+	return other_here() and map.other_kind >= Net.OTHER_PIRATE and not other_wreck and not other_rock
 
 
 func other_dark() -> bool:
 	## Is the ship alongside one without light of its own (a derelict, or a wreck)?
-	return other_here() and (map.other_kind == Net.OTHER_DERELICT or other_wreck)
+	return other_here() and (map.other_kind == Net.OTHER_DERELICT or other_wreck or other_rock)
 
 
 func dark_cell(cell: int) -> bool:
@@ -998,7 +1002,8 @@ func use_target(facing: int = -1) -> int:
 	## 33 = (v67) the engine with a can of fuel in hand, 34 = a wall of a dark ship alongside (scrap to cut),
 	## 40 = (v69) a door whose broken lock can be mended,
 	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
-	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove.
+	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove,
+	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1030,7 +1035,9 @@ func use_target(facing: int = -1) -> int:
 			return 33
 		if map.engine.has(cell) or map.air_plant.has(cell):
 			return 8
-		if map.is_other(cell) and other_dark() and map.walk[cell] == 0 and map.door_of[cell] < 0:
+		if map.is_other(cell) and other_rock and map.cells[cell] == int(map.tile_ids.get("rock_ore", -2)):
+			return 45                        # (v81) an ore vein of the asteroid alongside
+		if map.is_other(cell) and other_dark() and not other_rock and map.walk[cell] == 0 and map.door_of[cell] < 0:
 			return 34
 		if map.locker.has(cell):
 			return 12
@@ -2034,22 +2041,25 @@ func _on_ships(pkt: PackedByteArray) -> void:
 	var at := ShipMap.NO_OTHER
 	var kind := Net.OTHER_DERELICT
 	var wreck := false
+	var rock := false
 	other_docked = false
 	for id: int in ships.keys():
 		if id != my_ship:
 			at = ships[id]["at"]
 			wreck = int(ships[id]["kind"]) == Net.SHIP_WRECK
+			rock = int(ships[id]["kind"]) == Net.SHIP_ROCK
 			kind = int(ships[id]["layout"]) if int(ships[id]["layout"]) < map.others.size() else Net.OTHER_DERELICT
 			other_docked = ships[id]["docked"]
-	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck:
+	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck or rock != other_rock:
 		if at != map.other_at or kind != map.other_kind:
 			map.place_other(at, kind)
 			for d in range(map.other_first_door, map.doors.size()):
 				doors.ready[d] = Doors.CLOSED
 				doors.set_flags(d, 0)
 		other_wreck = wreck
+		other_rock = rock
 		for d in range(map.other_first_door, map.doors.size()):
-			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck else 0
+			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck or rock else 0
 		other_changes += 1
 		ship_changes += 1
 		_rebuild_prediction()
@@ -2074,7 +2084,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	var n := pkt[13]
 	var map_name := pkt.slice(14, 14 + n).get_string_from_utf8()
 	var problem := map.load_from(map_name)
-	for other_map in Net.OTHER_MAPS:
+	for other_map in map.other_maps():
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
 	holo_cells = PackedInt32Array()
@@ -2094,6 +2104,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	pred_doors.dead = doors.dead
 	other_docked = false
 	other_wreck = false
+	other_rock = false
 	pumps.clear()
 	air.resize(map.width * map.height)
 	air.fill(0)
@@ -2292,6 +2303,7 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int, off: int = 1
 		e.ox = ox
 		e.oy = oy
 		e.prone = Net.off_prone(off)
+		e.hold = Net.off_hold(off)
 		e.facing = facing
 		e.look = look
 		e.cond = Net.look_cond(look)
@@ -2302,6 +2314,7 @@ func _apply_record(id: int, x: int, y: int, look: int, s_tick: int, off: int = 1
 	e.cond = Net.look_cond(look)
 	e.light = Net.look_light(look)
 	e.prone = Net.off_prone(off)
+	e.hold = Net.off_hold(off)
 	var was_qx := e.x * 4 + e.ox
 	var was_qy := e.y * 4 + e.oy
 	var qx := x * 4 + ox
@@ -2372,6 +2385,7 @@ func _simulate_to_now() -> void:
 	## behind the clock, whatever order the nodes are processed in.
 	if not _have_self:
 		return
+	_mark_held()
 	var target := int(floor(now_ticks() + _pred_offset))
 	if target - pred_tick > 40:
 		pred_tick = target - 40      # after a long freeze, do not replay everything
@@ -2404,6 +2418,7 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.free_look = (pkt[o + 17] & 1) != 0
 	_auth.fine = (pkt[o + 17] & 2) != 0      # (v78)
 	_auth.prone = (pkt[o + 17] & 4) != 0
+	_auth.hold = (pkt[o + 17] & 8) != 0      # (v81)
 	_auth.ox = Net.off_x(pkt[o + 18])
 	_auth.oy = Net.off_y(pkt[o + 18])
 	_auth_tick = s_tick
@@ -2415,6 +2430,34 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_rebuild_prediction()
 
 
+func _mark_held() -> void:
+	## (v81) The tiles others hold (the human wall), as the server marks them (Movement.mark_held).
+	map.held.clear()
+	for id: int in ents.keys():
+		var e: Ent = ents[id]
+		if id == my_id or not e.hold:
+			continue
+		var bx := e.x + signi(e.ox)
+		var by := e.y + signi(e.oy)
+		for t: Vector2i in [Vector2i(e.x, e.y), Vector2i(bx, e.y), Vector2i(e.x, by), Vector2i(bx, by)]:
+			map.held[t.y * map.width + t.x] = id
+
+
+func holds_position() -> bool:
+	## (v81) Does our character hold its position (as predicted)?
+	return _have_self and pred.hold
+
+
+func toggle_hold() -> void:
+	## (v81, the author's human wall) Hold the position, or let go: predicted as lying down is.
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK:
+		return
+	var on := _hold_to if _hold_at > pred_tick else pred.hold
+	_send_input(Mover.LET_GO if on else Mover.HOLD)
+	_hold_to = not on
+	_hold_at = _last_apply
+
+
 func _rebuild_prediction() -> void:
 	## Rebuilds the prediction from the server's last word: start from that
 	## state and the doors as the server describes them, and replay the input
@@ -2424,6 +2467,7 @@ func _rebuild_prediction() -> void:
 	## stretch: see Doors.HOLD_TICKS.)
 	if not _have_auth:
 		return
+	_mark_held()
 	var st := Mover.State.new()
 	st.copy_from(_auth)
 	var table := Doors.new()
@@ -2459,6 +2503,14 @@ func _rebuild_prediction() -> void:
 
 
 # ---------------------------------------------------------------- drawing
+
+func hold_of(id: int) -> bool:
+	## (v81) Does that character hold its position (the human wall)?
+	if id == my_id:
+		return holds_position()
+	var e: Ent = ents.get(id)
+	return e != null and e.hold
+
 
 func prone_of(id: int) -> bool:
 	## (v78) Is this character lying low (by its own choice, not knocked down)?

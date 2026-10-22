@@ -283,6 +283,8 @@ func spared(p: Player, q: Player, pos: Vector2, from: Vector2, at: Vector2) -> b
 	## meant for somewhere within PRONE_AIMED of it).
 	if q.pirate == p.pirate and absf(pos.x - from.x) <= FRIEND_CLOSE and absf(pos.y - from.y) <= FRIEND_CLOSE:
 		return true
+	if q.pirate == p.pirate and q.st.hold and q != p:
+		return true                      # (v81, the author's human wall) friends fire past one holding the line
 	# (v80, the author's question about several bodies on one tile) one out cold on the floor is as low
 	return (q.st.prone or q.cond == Net.COND_CRIT) and pos.distance_to(at) > PRONE_AIMED
 

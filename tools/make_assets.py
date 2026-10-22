@@ -104,6 +104,23 @@ TILES.append(("stove", None, "wall"))
 PIRATE = "pirate_"
 for _name, _src, _kind in list(TILES):
     TILES.append((PIRATE + _name, None, _kind))
+# (v81, the author's "And asteroids!") An asteroid's pieces, put last so every older tile keeps its
+# place in the sheet (a «sprites/tiles.png» drawn for an older build still fits over the top).
+ROCKS = ["rock_1", "rock_2", "rock_3"]
+for _rock in ROCKS:
+    TILES.append((_rock, None, "wall"))
+TILES.append(("rock_ore", None, "wall"))
+TILES.append(("rock_ground", None, "floor"))
+# (v81, the author: "more than 2 tiles") the floor of a room's middle rows, for rooms taller than two,
+# with its see-through kinds and the pirates' colours, all after the rest for the same reason
+MIDDLES = ["floor_l_m", "floor_m_m", "floor_r_m"]
+for _piece in MIDDLES:
+    TILES.append((_piece, None, "floor"))
+for _cover in COVERS:
+    for _piece in MIDDLES:
+        TILES.append((_cover + _piece[5:], None, _cover))
+for _name, _src, _kind in list(TILES[-len(MIDDLES) * (len(COVERS) + 1):]):
+    TILES.append((PIRATE + _name, None, _kind))
 ATLAS_COLS = 8
 
 
@@ -485,6 +502,51 @@ def make_machine(wall, what):
     return out
 
 
+def make_middle(bottom):
+    """(v81) A floor piece of a middle row: the bottom row's piece without its lower edge
+    (the rows above the edge carried down)."""
+    out = bottom.copy()
+    for y in range(24, T):
+        for x in range(T):
+            out.putpixel((x, y), bottom.getpixel((x, y - 8)))
+    return out
+
+
+def make_rock(seed, ore=False, ground=False):
+    """(v81) A block of an asteroid's rock (three of them, told apart by their cracks), a vein of
+    ore in it, or the bare rock ground one can walk on. Simple base pictures for the artist."""
+    import random
+    rnd = random.Random(seed * 7919)
+    out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    o = out.load()
+    base = (58, 54, 52) if ground else (92, 86, 80)
+    for y in range(T):
+        for x in range(T):
+            n = rnd.randint(-9, 9)
+            o[x, y] = (base[0] + n, base[1] + n, base[2] + n, 255)
+    for _ in range(3 if not ground else 5):        # pits and cracks
+        cx, cy, r = rnd.randint(4, 27), rnd.randint(4, 27), rnd.randint(2, 4)
+        for y in range(max(0, cy - r), min(T, cy + r + 1)):
+            for x in range(max(0, cx - r), min(T, cx + r + 1)):
+                d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                if d <= r:
+                    k = 0.65 if d < r - 1 else 1.15
+                    c = o[x, y]
+                    o[x, y] = (min(255, int(c[0] * k)), min(255, int(c[1] * k)), min(255, int(c[2] * k)), 255)
+    if ore:
+        for _ in range(5):                         # lumps of ore with a glint
+            cx, cy = rnd.randint(7, 24), rnd.randint(7, 24)
+            for y in range(cy - 3, cy + 4):
+                for x in range(cx - 3, cx + 4):
+                    d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5
+                    if d < 2.2:
+                        o[x, y] = (232, 178, 80, 255)
+                    elif d < 3.2:
+                        o[x, y] = (150, 104, 44, 255)
+            o[cx - 1, cy - 1] = (255, 236, 170, 255)
+    return out
+
+
 def build_tiles():
     mock = load_mockup()
     rows = (len(TILES) + ATLAS_COLS - 1) // ATLAS_COLS
@@ -514,6 +576,14 @@ def build_tiles():
         "tray": lambda: make_machine(images["wall_h"], "tray"),
         "cryo": lambda: make_machine(images["wall_h"], "cryo"),
         "stove": lambda: make_machine(images["wall_h"], "stove"),
+        "floor_l_m": lambda: make_middle(images["floor_l_b"]),
+        "floor_m_m": lambda: make_middle(images["floor_m_b"]),
+        "floor_r_m": lambda: make_middle(images["floor_r_b"]),
+        "rock_1": lambda: make_rock(1),
+        "rock_2": lambda: make_rock(2),
+        "rock_3": lambda: make_rock(3),
+        "rock_ore": lambda: make_rock(4, ore=True),
+        "rock_ground": lambda: make_rock(5, ground=True),
     }
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
@@ -559,6 +629,11 @@ def build_tiles():
 #   'P'  (v63) wall with a hydroponic tray: plants grow in it (two side by side may cross)
 #   'C'  (v63) wall with a cryosleep pod: the crew reserve sleeps in them and wakes from them
 #   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
+#   'R'  (v81) an asteroid's rock      'O'  (v81) a vein of ore in the rock      ','  (v81) bare rock ground
+#        (rock and ground follow no room rule: draw them any shape)
+#
+# (v81) A line "; kind = ship|pirate|derelict|asteroid" says what the drawing is (the ship editor writes
+# it); without one the file's name says (pirate*, derelict*, asteroid*, else our own ship).
 #
 # Rooms with restricted access are named by a line of their own anywhere in the file:
 #   @ <deck number, from 1> <x> <y> <access>
@@ -585,6 +660,7 @@ ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}  
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
 COVER_OF = {"g": "glass", "c": "grate"}
+ROCK_CHARS = set("RO,")
 
 
 class MapError(Exception):
@@ -623,9 +699,9 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 right = at(x + 1, y) in FLOOR_CHARS
                 top = at(x, y - 1) not in FLOOR_CHARS
                 bottom = at(x, y + 1) not in FLOOR_CHARS
-                if top == bottom:
-                    raise MapError(f"{name}: floor at {x},{y} is not in a deck exactly two tiles tall")
-                row = "t" if top else "b"
+                if top and bottom:
+                    raise MapError(f"{name}: floor at {x},{y} is in a room one tile tall (rooms are two or more)")
+                row = "t" if top else ("b" if bottom else "m")   # (v81) rooms may be taller than two
                 if not left and not right:
                     piece = "floor_n"
                 else:
@@ -640,6 +716,8 @@ def resolve_map(name, lines, ids, w, h, above, below):
                     cover = "hatch" if down else "ladder"
                 if cover:
                     piece = cover + piece[5:]
+            elif c in ROCK_CHARS:
+                piece = {"R": "rock_%d" % ((x * 7 + y * 13) % 3 + 1), "O": "rock_ore", ",": "rock_ground"}[c]
             elif c == "A":
                 if not (n and s) or e or wst:
                     raise MapError(f"{name}: airlock at {x},{y} must sit inside a vertical wall")
@@ -737,7 +815,7 @@ def resolve_ship(name, lines, ids):
         cells[d * stride * w:d * stride * w + w * h] = deck_cells
         spawns += [[x, y + d * stride] for x, y in deck_spawns]
         doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
-    if not spawns and not name.startswith("derelict") and not name.startswith("pirate"):
+    if not spawns and not name.startswith("derelict") and not name.startswith("pirate") and not name.startswith("asteroid"):
         raise MapError(f"{name}: no spawn points ('s')")
     door_access = [0] * len(doors)
     access_rooms = []                    # (v69) a floor cell of each restricted room and its access: leaving it is free

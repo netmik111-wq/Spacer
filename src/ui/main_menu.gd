@@ -4,6 +4,7 @@ extends Control
 signal host_requested(player_name: String, port: int, bots: int, campaign: String, mode: String)
 signal join_requested(player_name: String, address: String, port: int)
 signal quit_requested
+signal editor_requested               # (v81) the ship editor
 
 const Net := preload("res://src/shared/net.gd")
 const SETTINGS := "user://settings.cfg"
@@ -149,6 +150,13 @@ func _ready() -> void:
 	_status.add_theme_font_size_override("font_size", 14)
 	box.add_child(_status)
 
+	var editor := Button.new()
+	editor.text = "Редактор кораблей"
+	editor.tooltip_text = "Рисовать свои корабли и астероиды и сразу пробовать их в игре"
+	editor.custom_minimum_size = Vector2(0, 36)
+	editor.pressed.connect(func() -> void: editor_requested.emit())
+	box.add_child(editor)
+	_buttons.append(editor)
 	var settings := Button.new()
 	settings.text = "Настройки: звук, изображение, клавиши"
 	settings.custom_minimum_size = Vector2(0, 36)

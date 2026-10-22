@@ -361,7 +361,7 @@ func _prepare() -> void:
 			continue
 		var lit := not Items.light(q.in_hand()).is_empty()
 		_shines[q.slot] = 1 if lit else 0
-		_now[q.slot] = _pack(q.st.x, q.st.y, Net.pack_look(q.st.facing, q.cond, q.st.slow, lit)) | (Net.pack_off(q.st.ox, q.st.oy, q.st.prone) << 40)
+		_now[q.slot] = _pack(q.st.x, q.st.y, Net.pack_look(q.st.facing, q.cond, q.st.slow, lit)) | (Net.pack_off(q.st.ox, q.st.oy, q.st.prone, q.st.hold) << 40)
 		_chunk[q.slot] = (q.st.x >> Net.CHUNK_SHIFT) | ((server.map.local_y(q.st.y) >> Net.CHUNK_SHIFT) << 16)
 
 
@@ -570,7 +570,7 @@ func send() -> void:
 			out.encode_s16(o + 14, st.fx)
 			out.encode_s16(o + 16, st.fy)
 			# (v77) it looks where its mouse is; (v78) quarter steps, lying down
-			out.encode_u8(o + 18, (1 if st.free_look else 0) | (2 if st.fine else 0) | (4 if st.prone else 0))
+			out.encode_u8(o + 18, (1 if st.free_look else 0) | (2 if st.fine else 0) | (4 if st.prone else 0) | (8 if st.hold else 0))
 			out.encode_u8(o + 19, Net.pack_off(st.ox, st.oy, st.prone))   # (v78) quarters off the tile's centre
 			p.self_dirty = false
 			p.last_self_tick = server.tick
