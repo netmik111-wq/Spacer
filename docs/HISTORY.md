@@ -169,6 +169,18 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v80 (the full run: his eleven bug notes, four suggestions and his answers on "Spacer v80 Playthrough")
+- Bugs: no hole on a machine in the wall; bullets fly through open space; bots touch mounted guns only on the console's
+  order (and a mend's hold no longer unmounts); a ship alongside stays at its mark once ours gets under way; a flying
+  ship stops when one of ours goes out and the helm names who is outside; the worn suit shows its real air; blood only
+  on floors; the flagship's chart mark above its system; bodies on a wreck or derelict kept when it leaves.
+- His picks: emergency light at a third while the SMES carries the ship (P2 "1/3?"); a body lying low always lies across
+  (L1); shots pass over people out cold (S1). His suggestions: a stronger shotgun up close (6 pellets of 15, knocks down);
+  the right-click menu picks which body to drag or search and which thing to take from a pile (new `C_TAKE`).
+- His top priority, a ship editor for his artist, and the human wall: question page
+  https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww; my pick is the editor as v81. Several friendly ships: in the vision.
+- New test `tools/fullruntest.gd` (39 scripts). Protocol 56. Version 0.73, build in `/mnt/project-files/builds/v80/`.
+
 ### v79 (polish after quarter steps; his answers on "Spacer v79 Polish" and his notebook note)
 - The lying body (his note with a video) lies on the player's spot, head toward where they look (8 ways). People
   passing through one another are drawn stepping a quarter of a tile aside (his W1 note). With the mouse view the camera

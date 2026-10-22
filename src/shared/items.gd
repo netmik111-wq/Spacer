@@ -40,7 +40,7 @@ const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. П�
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
 const MEDKIT_HEAL := 30
 
-const SHOTGUN_ABOUT := "Бьёт дробью веером: пять дробин по 10, до 7 клеток. Перезаряжается коробкой патронов."
+const SHOTGUN_ABOUT := "Бьёт дробью веером: шесть дробин по 15, до 6 клеток. В упор валит с ног. Перезаряжается коробкой патронов."
 
 const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Z: надеть."
 
@@ -134,11 +134,11 @@ const BASE := {
 		"keep": true, "meal": 240},
 	Net.ITEM_BROTH: {"name": "Травяной отвар", "about": "Отвар целебной травы с камбуза. Щёлкните по себе (или Z) или по соседу, чтобы выпить: сразу останавливает кровотечение, снимает контузию и закрывает 15 ран.",
 		"keep": true, "meal": 0},
-	Net.ITEM_SHOTGUN + 0: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 0, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5, "price": 45, "stock": 1},
-	Net.ITEM_SHOTGUN + 1: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 1, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
-	Net.ITEM_SHOTGUN + 2: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 2, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
-	Net.ITEM_SHOTGUN + 3: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 3, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
-	Net.ITEM_SHOTGUN + 4: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 4, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 5},
+	Net.ITEM_SHOTGUN + 0: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 0, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 6, "price": 45, "stock": 1},
+	Net.ITEM_SHOTGUN + 1: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 1, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 6},
+	Net.ITEM_SHOTGUN + 2: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 2, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 6},
+	Net.ITEM_SHOTGUN + 3: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 3, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 6},
+	Net.ITEM_SHOTGUN + 4: {"name": "Дробовик", "about": SHOTGUN_ABOUT, "kind": Net.ITEM_SHOTGUN, "rounds": 4, "ammo": Net.ITEM_SHELLS, "full": Net.SHOTGUN_ROUNDS, "pellets": 6},
 	Net.ITEM_PISTOL + 0: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 0, "price": 25, "stock": 1},
 	Net.ITEM_PISTOL + 1: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 1},
 	Net.ITEM_PISTOL + 2: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 2},
@@ -191,9 +191,11 @@ const DISHES := {
 
 const PISTOL_DAMAGE := 30
 const PISTOL_RANGE := 14
-const PELLET_DAMAGE := 10            # (v70) a shotgun's pellet
-const SHOTGUN_RANGE := 7
-const SHOTGUN_SPREAD := 0.28         # radians between the outermost pellets and the middle one
+const PELLET_DAMAGE := 15            # (v70) a shotgun's pellet; (v80, the author: "the pistol is MUCH better") 10 -> 15
+const SHOTGUN_RANGE := 6             # (v80) 7 -> 6: it is the close-quarters gun
+const SHOTGUN_SPREAD := 0.2          # radians between the outermost pellets and the middle one ((v80) 0.28 -> 0.2)
+const SHOTGUN_KNOCK := 4             # (v80) pellets of one shot that knock the one they hit off their feet
+const SHOTGUN_KNOCK_SECONDS := 1.5
 const THROW_RANGE := 6               # (v70) how far a flashbang is thrown
 
 

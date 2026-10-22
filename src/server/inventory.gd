@@ -48,6 +48,31 @@ func pick_up(p: Player) -> bool:
 	return false
 
 
+func take_from(p: Player, cell: int, at: int) -> bool:
+	## (v80, the author's note: "choose what items to take from the floor") One chosen thing from
+	## a pile in our own cell or one next to us (not through a wall), into the hand if it is free.
+	var map := server.map
+	if p.cond != Net.COND_OK or p.corpse or at < 0 or at >= Net.FLOOR_STACK or not server.floor_things.has(cell) \
+			or server.pirates.bombs.has(cell):
+		return false
+	var x := cell % map.width
+	var y := cell / map.width
+	if maxi(absi(x - p.st.x), absi(y - p.st.y)) > 1 or not map.passable(x, y):
+		return false
+	if x != p.st.x and y != p.st.y and not (map.passable(x, p.st.y) and map.passable(p.st.x, y)):
+		return false                         # (round a corner on a slant: no)
+	var things: PackedByteArray = server.floor_things[cell]
+	if things[at] == Net.ITEM_NONE or not p.add(things[at], true):
+		return false
+	things[at] = Net.ITEM_NONE
+	if things.count(Net.ITEM_NONE) == Net.FLOOR_STACK:
+		server.floor_things.erase(cell)
+	else:
+		server.floor_things[cell] = things
+	server.replication.floor_record(cell)
+	return true
+
+
 func put_down(p: Player) -> bool:
 	## Puts the thing in the hand down in its own cell, if there is room there.
 	var item := p.in_hand()

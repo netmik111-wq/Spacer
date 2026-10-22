@@ -4,7 +4,7 @@ This is how the author sees the game in the future. It is not a work plan and no
 in his words, "for now it's all dreams and daydreams", but today's decisions should start
 from it. The document grows as the author adds to the vision.
 
-Written down from the author's words, in his wording where possible. Last addition: 12 October 2026.
+Written down from the author's words, in his wording where possible. Last addition: 22 October 2026.
 
 ## Foundation
 
@@ -14,6 +14,10 @@ Written down from the author's words, in his wording where possible. Last additi
   are invented along the way.
 - The game's skeleton is built around space and its cruelty.
 - The scale grows with the number of players.
+- (22 October 2026, his note) "For the future: several friendly ships can move around": more than one crewed ship
+  of ours in the world, each with its own crew. (The server's ships have had their own ids since v39 as groundwork.)
+- (22 October 2026, his note, "top priority for my spriter guy") A ship editor that comes with the game: comfortable for
+  people (mirroring, holding the mouse to paint a lot, many helping tools), with saving.
 - A story and a campaign are needed.
 - Built in small steps: first the skeleton, then it grows flesh.
 

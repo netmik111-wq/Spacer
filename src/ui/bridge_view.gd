@@ -171,8 +171,9 @@ func _draw_story(place: Callable) -> void:
 					at + Vector2(-d, -6), at + Vector2(0, -d - 6)]), QUEST, 2.0)
 				chart.draw_string(font, at + Vector2(10, -10), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, QUEST)
 		if awake and st["flagship"] == c:
-			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -16), at + Vector2(9, -2), at + Vector2(-9, -2)]), GOAL)
-			chart.draw_string(font, at + Vector2(-40, -20), "ФЛАГМАН", HORIZONTAL_ALIGNMENT_CENTER, 80, 11, GOAL)
+			# (v80, the author's note: the mark hid the system under it) a pointer above the system, not on it
+			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -17), at + Vector2(7, -29), at + Vector2(-7, -29)]), GOAL)
+			chart.draw_string(font, at + Vector2(-40, -33), "ФЛАГМАН", HORIZONTAL_ALIGNMENT_CENTER, 80, 11, GOAL)
 
 
 static func _jumps_word(n: int) -> String:

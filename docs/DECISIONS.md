@@ -1399,3 +1399,46 @@ with his note, V1 "A", K1 (all three old unknowns fine on his PC), Z1 "A and C w
 - **Fire questions** (Z1 "C"): page "Spacer Fire Questions" (https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk), my
   picks: FTL-like tile fire that needs air, smoke, no heat, fire from causes, extinguishers, venting and a trader's module.
   Nothing built until he answers. Fear waits for his concept ("I don't have the full concept").
+
+## v80: the full run's bugs (2026-10-21)
+
+He and friends played a whole campaign on v79 and left eleven bug notes in the Notebook. The question page "Spacer v80
+Playthrough" (https://claude.ai/artifact/3A2HTzKTNpPbgQTuyAFFvc) asks about the fixes that change play; each is built as
+my pick until he answers otherwise. Checked by `tools/fullruntest.gd`.
+
+- **No hole on a machine** (his picture: a hole over the supply locker, E opened the locker and nobody could patch it):
+  `ShipMap.hull` leaves out every wall cell with a fitting (`fitting_front`) or a gun mount. Simpler than teaching every
+  "use" path to prefer the hole, and a hole on a console never made sense.
+- **Bullets through space** ("in space you cannot shoot enemies"): `Combat._stops_shot` asked `walkable`, and open space
+  is not walkable, so every shot stopped at the first space cell. It asks `passable` now (floor, doorway or open space);
+  the flashbang's landing cell too.
+- **Mounted guns left alone** ("bots take the ship's guns without an order", G1 "A"): with empty hands at a mounted gun a
+  held "use" takes it down. A bot holding "use" there for something else (a repair finished, a round loaded, a hold left
+  set while it ran from boarders) could do that. `Mounts.can` now refuses a bot unless the console's order for that mount
+  is `WANT_DOWN`, and a bot may put up only the gun ordered there. For everybody, `Player.mended` keeps the hold that
+  mended a mount from rolling on into taking its gun down: a fresh press is needed.
+- **A ship alongside never flies along** (his video: a wreck stayed over the airlock while we flew, until out of reach,
+  W1 "A"): a wreck leaves as soon as `ship.moving`, a derelict or SOS ship too (`want` is false while moving), and a hulk
+  comes back only to a stopped ship in reach. The ship cannot move while anybody is on it or docked, so nobody is lost.
+- **Somebody outside** (P1 "A"; "if a person dies in space you cannot move", "people outside are left behind and die"):
+  the dead and bodies never held the ship; somebody out cold in a suit (breathing from the tank) does, and that is kept,
+  but `Derelict.holds_ship` now names who and says "без сознания" (`who_outside`). The ship checked only when a course was
+  set, so somebody stepping out while it flew was left behind: `Navigation.update` stops the ship (every 10 ticks) when
+  anybody is outside. I could not repeat "a dead body holds the ship"; asked him to describe it if it was that.
+- **Emergency light** ("the lights don't go out in a blackout", P2 "A"): his pictures were the engine failing and the SMES
+  carrying the ship, which by the v61 rule keeps everything going. The client now dims the lights to `EMERGENCY_DIM`
+  (0.67, a third of the light, his comment "1/3?" on P2; the red alert's is 0.3) while the power monitor's flags say the SMES carries the ship (bit 4), outside the
+  backup-lit bridge. Drawing only: sight and the server's light are unchanged.
+- **The worn suit's gauge** ("putting on an empty suit fills its air", O1 "A"): the server kept the air; the hotbar and the
+  inventory always drew the worn suit as `ITEM_SUIT + 10` (full). Both now draw `Items.suit_with(client.tank)`; the
+  search window draws the other's suit as sent.
+- **Blood only on floors**: a stain is kept with its cell and drawn only while that cell is floor, so blood in open space is
+  never made and blood on a ship alongside goes with it.
+- **Lying down across** ("this feels very strange and odd", L1 "A"): v79 turned a body lying low toward its look in 8
+  ways, so looking up it stood upright and looking down it stood on its head. It now always lies across, head to the
+  side it looks to (`WorldView._prone_side`), kept while it looks straight up or down.
+- **Shots over the fallen** (his question: which of many bodies on a tile is shot; S1 "A"): the first living one along
+  the line; bodies never stop a bullet. Somebody out cold (`COND_CRIT`) is now spared like one lying low: hit only when
+  aimed within `PRONE_AIMED`.
+- **The flagship mark** on the cluster chart (his picture): drawn above the system, pointing down, so the system's dot
+  and "?" stay visible.

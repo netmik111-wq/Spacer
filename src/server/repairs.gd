@@ -28,6 +28,7 @@ func update(p: Player) -> void:
 		return                               # (v58) at work at the workbench (see Workshop.update)
 	if not p.using or p.cond != Net.COND_OK or p.st.cd > 0 or p.st.dir != Net.DIR_NONE:
 		p.work = 0
+		p.mended = -1
 		return
 	var bomb := server.pirates.bomb_by(p)
 	if bomb >= 0:
@@ -61,6 +62,7 @@ func update(p: Player) -> void:
 			p.train(Net.SKILL_REPAIR)
 			_use_spare(p, spare)
 			server.ship.broken.erase(cell)
+			p.mended = cell
 			server.to_all(server.ship.devices_packet())
 			server.chat.say("%s заканчивает ремонт: %s снова работает." % [p.name, server.map.device_name(cell)])
 			server.systems.power_changed()

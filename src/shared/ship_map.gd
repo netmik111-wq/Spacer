@@ -333,6 +333,10 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		for x in width:
 			if cells[y * width + x] < 0 or walk[y * width + x] == 1:
 				continue
+			# (v80, the author's note) never a hole on a machine set into the wall: its "use"
+			# would win over the patch and the hole could not be mended
+			if fitting_front(y * width + x) >= 0 or guns.has(y * width + x):
+				continue
 			var inside := walkable(x - 1, y) or walkable(x + 1, y) or walkable(x, y - 1) or walkable(x, y + 1)
 			var outside := is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 			if inside and outside:

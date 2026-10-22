@@ -27,6 +27,7 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Player := preload("res://src/server/player.gd")
 
 const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const RAID_BOARD_TICKS := 30 * Net.TICK_HZ    # (v54) a raider that sees us helpless closes in and boards after this
@@ -70,6 +71,7 @@ var _came_in := 0                    # the sector it came in (Sectors.key): it d
 var wreck_at := Vector2.ZERO         # (v69) where in the system a raider was wrecked: it stays alongside while we are near
 var held_off_until := -1             # (v69) a derelict pushed away by a hunter does not come back alongside before this tick
 var _left := {}                      # sector key -> [[cell inside it, things], ...]: what was left on it
+var _left_bodies := {}               # (v80) sector key -> the bodies left on it (see _bodies_aboard)
 var sos := false                     # (v77, the author's S1) the derelict alongside is the ship that called SOS: its crew is dead
 var sos_at := Vector2.ZERO           # where it lies: it stays alongside while our ship stays near
 const SOS_BODIES := 3                # its dead crew, with what they carried
@@ -84,6 +86,7 @@ func setup(p_server: Node) -> void:
 	docked = false
 	ship = null
 	_left.clear()
+	_left_bodies.clear()
 	_rng.randomize()
 	_spots = {}
 	_pirates_dock_at = -1
@@ -208,19 +211,26 @@ func cast_off() -> bool:
 
 func someone_outside() -> bool:
 	## Is anybody alive outside our own ship (on the derelict, or out in space)?
+	return who_outside() != null
+
+
+func who_outside() -> Player:
+	## (v80) The first of ours alive outside our own ship, or null. The dead and bodies never hold it.
 	for p in server.players:
-		if p != null and not p.corpse and not p.pirate and not p.ally and p.cond != Net.COND_DEAD \
+		if p != null and not p.corpse and not p.pirate and not p.ally and not p.taken and p.cond != Net.COND_DEAD \
 				and not map.on_ship(p.st.y * map.width + p.st.x):
-			return true
-	return false
+			return p
+	return null
 
 
 func holds_ship() -> String:
 	## Why our ship may not move or jump right now ("" = it may).
 	if docked:
 		return "Корабль пристыкован: сначала расстыкуйтесь с пульта управления."
-	if someone_outside():
-		return "Не все на борту: кто-то снаружи корабля."
+	var out := who_outside()
+	if out != null:
+		# (v80, the author's note: the ship waited for somebody nobody could see) it says who and how
+		return "Не все на борту: %s снаружи корабля%s." % [out.name, " без сознания: заберите его на борт" if out.cond == Net.COND_CRIT else ""]
 	return ""
 
 
@@ -240,7 +250,8 @@ func update() -> void:
 			_watch_boarding()
 			# (v69, the author's note: a wreck could not be docked to) it drifts where it died:
 			# it is left behind only once we fly out of reach of that spot, or jump
-			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
+			# (v80, the author's note: the wreck flew along with us) or as soon as our ship gets under way
+			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.moving or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
 				_hulk_leaves()
 				_leave()
 			return
@@ -253,7 +264,7 @@ func update() -> void:
 		return
 	var hulk: Dictionary = server.road.at_hulk()
 	# (v77, the author's note: chat spam while the jump charged) a wreck sent away for the jump must not come straight back
-	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and server.tick >= held_off_until \
+	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and not server.ship.moving and server.tick >= held_off_until \
 			and not server.gunnery.fighting() and _spots.has(int(hulk["layout"])):
 		_hulk_arrives(hulk)                  # (v69) a pirate ship we wrecked here before
 		return
@@ -262,6 +273,7 @@ func update() -> void:
 	var want: bool = (server.navigation.sector_kind() == Sectors.DERELICT and server.ship.in_reach) or server.road.at_wreck()   # (v64) or an abandoned ship among the places
 	if sos and here:
 		want = server.ship.jump_to == Net.NO_SECTOR and server.ship.pos.distance_to(sos_at) <= Sectors.WRECK_REACH
+	want = want and not server.ship.moving    # (v80) a ship alongside never flies along with ours
 	if want and not here and server.tick >= held_off_until and not server.gunnery.fighting():
 		_arrive()
 	elif not want and here and holds_ship() == "":
@@ -503,6 +515,7 @@ func _arrive(called := "Брошенный корабль") -> void:
 	if _left.has(key) and not sos:
 		for e: Array in _left[key]:
 			_put(map.other_at, int(e[0]), e[1])
+		_bodies_back(_left_bodies.get(key, []))
 	else:
 		for i in _rng.randi_range(5, 8):
 			_drop(cells, LOOT)
@@ -541,6 +554,7 @@ func _hulk_arrives(h: Dictionary) -> void:
 			server.air.air[c] = float(air_of.get(_local(c, map.other_at), 0.0))
 	for e: Array in h["things"]:
 		_put(map.other_at, int(e[0]), e[1])
+	_bodies_back(h.get("bodies", []))
 	server.air.wake()
 	server.chat.say("Рядом %s: его можно обыскать и резать на лом. Пристыковаться можно с пульта управления." % (ship.name.substr(0, 1).to_lower() + ship.name.substr(1)))
 
@@ -562,7 +576,7 @@ func _hulk_leaves() -> void:
 			hiding += 1                      # living pirates still aboard: they will be there again
 	server.road.add_hulk(_came_in, {"pos": wreck_at, "layout": layout, "name": ship.name, "id": ship.id, "things": things,
 		"air": air_of, "outcome": "fight" if hiding > 0 else _outcome, "party": hiding if hiding > 0 else _pirates_party,
-		"boarded": _boarded and hiding == 0, "design": design})
+		"boarded": _boarded and hiding == 0, "design": design, "bodies": _bodies_aboard()})
 
 
 func _leave(quiet: bool = false) -> void:
@@ -575,6 +589,7 @@ func _leave(quiet: bool = false) -> void:
 			if server.floor_things.has(c):
 				kept.append([_local(c, map.other_at), (server.floor_things[c] as PackedByteArray).duplicate()])
 		_left[key] = kept
+		_left_bodies[key] = _bodies_aboard()
 	# whoever lies on it (pirates struck down on their own ship) goes with it
 	for p in server.players:
 		if p != null and map.is_other(p.st.y * map.width + p.st.x) and (p.corpse or p.pirate):
@@ -591,6 +606,41 @@ func _leave(quiet: bool = false) -> void:
 	if not quiet:
 		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else
 			("Разбитый пиратский корабль остался позади: он отмечен на карте сектора." if was_wreck else "Пиратский корабль отошёл от шлюза и ушёл."))
+
+
+func _bodies_aboard() -> Array:
+	## (v80, the author's note: "corpses disappear after you leave the ship") The bodies lying on the
+	## ship alongside, ours and theirs, as plain data: they are there again when it comes back.
+	var out: Array = []
+	for p in server.players:
+		if p != null and p.corpse and not p.taken and map.is_other(p.st.y * map.width + p.st.x):
+			out.append({"at": _local(p.st.y * map.width + p.st.x, map.other_at), "name": p.name, "colour": p.colour, "job": p.job,
+				"slots": Array(p.slots), "worn": Array(p.worn), "tank": p.tank, "facing": p.st.facing, "wounds": p.wounds,
+				"pirate": p.pirate, "robot": p.robot})
+	return out
+
+
+func _bodies_back(bodies: Array) -> void:
+	## (v80) The bodies _bodies_aboard remembered, laid where they were.
+	for b: Dictionary in bodies:
+		var c := _cell(map.other_at, int(b["at"]))
+		if c < 0 or map.walk[c] != 1:
+			continue
+		var q: Player = server.crew.alloc(str(b["name"]))
+		q.colour = int(b["colour"])
+		q.job = int(b["job"])
+		q.pirate = bool(b["pirate"])
+		q.robot = bool(b["robot"])
+		q.st.place(c % map.width, c / map.width)
+		q.st.facing = int(b["facing"])
+		q.st.down = true
+		q.cond = Net.COND_DEAD
+		q.health = Net.HEALTH_DEAD
+		q.wounds = float(b["wounds"])
+		q.slots = PackedByteArray(b["slots"])
+		q.worn = PackedByteArray(b["worn"])
+		q.tank = float(b["tank"])
+		server.crew.becomes_corpse(q)
 
 
 func _move(from: Vector2i, to: Vector2i) -> void:

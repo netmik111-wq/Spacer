@@ -47,6 +47,13 @@ func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 
 
 func update() -> void:
+	if server.ship.moving and server.ship.jump_to == Net.NO_SECTOR and server.tick % 10 == 0 and server.derelict.someone_outside():
+		# (v80, the author's note: "if people are outside they are left behind and die") somebody went out
+		# while the ship was flying in the system: it stops for them
+		server.ship.moving = false
+		server.ship.dest = server.ship.pos
+		server.to_all(server.ship.helm_packet(server.tick))
+		server.chat.say("Корабль остановлен. " + server.derelict.holds_ship())
 	if server.ship.moving:
 		var was := server.ship.pos
 		server.ship.pos = server.ship.pos.move_toward(server.ship.dest, Sectors.SHIP_SPEED * Net.TICK_SEC)

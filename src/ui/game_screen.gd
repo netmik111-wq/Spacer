@@ -306,7 +306,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_slots_view.offset_left = _slots_view.offset_right - slots_wide
 	_slots_view.offset_bottom = -14
 	_slots_view.offset_top = -14 - SLOT_PX
-	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, client.worn, SLOT_PX, SLOT_GAP, client.hand))
+	_slots_view.draw.connect(func() -> void: _draw_slots(_slots_view, Vector2.ZERO, client.slots, client.worn, SLOT_PX, SLOT_GAP, client.hand, true))
 	_slots_view.gui_input.connect(_on_slots_input)
 	root.add_child(_slots_view)
 	_hand_label = _text(root, 14)
@@ -950,7 +950,7 @@ static func _slot_open(worn: PackedByteArray, at: int) -> bool:
 	return worn[Net.WEAR_PACK] != Net.ITEM_NONE
 
 
-func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, worn: PackedByteArray, px: float, gap: float, hand: int = -1) -> void:
+func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, worn: PackedByteArray, px: float, gap: float, hand: int = -1, own: bool = false) -> void:
 	## A row: what is worn, then the slots with what is in them; the one in the hand is lit up.
 	## Pockets and backpack slots show only faintly while there is no jumpsuit or backpack.
 	var font := ThemeDB.fallback_font
@@ -963,7 +963,8 @@ func _draw_slots(canvas: Control, origin: Vector2, slots: PackedByteArray, worn:
 			if thing == Net.ITEM_NONE:
 				canvas.draw_string(font, cell.position + Vector2(0, px * 0.62), WORN_MARKS[k], HORIZONTAL_ALIGNMENT_CENTER, px, int(px * 0.4), Color(0.7, 0.6, 0.4, 0.5))
 			else:
-				ItemArt.draw(canvas, cell, Net.ITEM_SUIT + Net.SUIT_TANK_STEPS if k == Net.WEAR_SUIT else thing)
+				# (v80, the author's note: an empty suit looked full once put on) our own suit shows our tank
+				ItemArt.draw(canvas, cell, Items.suit_with(float(client.tank) / Net.TANK_FULL) if k == Net.WEAR_SUIT and own else thing)
 			continue
 		var i := k - Net.WORN
 		if not _slot_open(worn, i):
@@ -1005,7 +1006,7 @@ func _draw_search() -> void:
 	var px := _search_px()
 	_draw_slots(_chart, theirs, client.search_slots, client.search_worn, px, BIG_SLOT_GAP)
 	_chart.draw_string(font, ours + Vector2(0, -12), "У вас:", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.85, 0.95, 0.88))
-	_draw_slots(_chart, ours, client.slots, client.worn, px, BIG_SLOT_GAP)
+	_draw_slots(_chart, ours, client.slots, client.worn, px, BIG_SLOT_GAP, -1, true)
 	for row: Array in [[theirs, client.search_slots, client.search_worn], [ours, client.slots, client.worn]]:
 		var things: PackedByteArray = row[2] + row[1]
 		for k in things.size():
@@ -1692,12 +1693,18 @@ func _open_menu(at: Vector2) -> void:
 		if e.x != c.x or e.y != c.y or e.id == client.my_id:
 			continue
 		if e.cond != Net.COND_OK and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
+			# (v80, the author's note: "if a lot of bodies lie there, choose which to pull") one line each
 			var id := e.id
 			add.call("Тащить: %s  [%s]" % [client.player_name(id), Options.key_text("drag")], func() -> void:
 				var f := client.click_facing(c)
 				if f > 0:
 					client.face(f)
 				client.send_drag(id))
+			add.call("Обыскать: %s" % client.player_name(id), func() -> void:
+				var f := client.click_facing(c)
+				if f > 0:
+					client.face(f)
+				client.send_search(id))
 		if client.is_bot(e.id) and e.cond == Net.COND_OK:
 			var id := e.id
 			var now := -1
@@ -1707,6 +1714,13 @@ func _open_menu(at: Vector2) -> void:
 			for post in Net.POST_NAMES.size():
 				var p := post
 				add.call("Приказ: %s%s" % [Net.POST_NAMES[post], "  ✓" if post == now else ""], func() -> void: client.send_order(id, p))
+	if client.floor_things.has(cell) and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
+		# (v80, the author's note: "and what items to take from the floor") each thing in the pile
+		var pile: PackedByteArray = client.floor_things[cell]
+		for k in range(pile.size() - 1, -1, -1):
+			if pile[k] != Net.ITEM_NONE:
+				var at_k := k
+				add.call("Взять: %s" % Items.name_of(pile[k]), func() -> void: client.send_take(cell, at_k))
 	if client.dragging():
 		add.call("Отпустить  [%s]" % Options.key_text("drag"), func() -> void: client.send_drag(Net.NOBODY))
 	if title != "":
