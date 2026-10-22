@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v81 (version 0.74).
+Last updated: build v82 (version 0.75).
 
 Contents:
 
@@ -44,6 +44,7 @@ Contents:
 34. [The evening's bugs, the view and bots on a slant (v77)](#34-the-evenings-bugs-the-view-and-bots-on-a-slant-v77)
 35. [The full run's fixes (v80)](#35-the-full-runs-fixes-v80)
 36. [The ship editor, asteroids, holding position (v81)](#36-the-ship-editor-asteroids-holding-position-v81)
+37. [Polish without extra depth (v82)](#37-polish-without-extra-depth-v82)
 
 ---
 
@@ -2056,4 +2057,41 @@ The author's answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68o
   your tiles; bots and pirates find their way round. Your friends' shots fly past you, so a line can hold a door while
   others shoot through it. A light blue tint shows who holds.
 - A step, lying down (C) or falling lets go; X again lets go too.
+
+## 37. Polish without extra depth (v82)
+
+The author's worry ("I'm afraid of making mechanics too deep, so the game loses a bit of fun"), his crawl video and bug
+note, and the questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi). No new systems.
+
+- **Lying down and getting up, as in SS13** (his video): the body turns over in **0.2 s** (going down, getting up, and
+  falling out cold too) instead of flipping. Getting up takes **1 s**: a small bar over the body fills from red to green,
+  you can turn but not walk, and **C** again stays down. Lying down is at once. Bots hiding from pirates still get up at
+  once.
+- **The name stays its colour while lying low** (his bug note): only somebody out cold or dead has the red name.
+- **The autodoc alone heals fully**: up to **50** health at its full pace (3 a second), then on at **half** that pace.
+  Somebody holding E by it still makes it **2×** quicker (more with medicine skill) and mends injuries after 3 s. A bot in
+  an autodoc gets up at 90 either way. (v70 to v81: alone it stopped at 50.) A **green cross** pulses over anyone lying
+  in a working autodoc; over yourself a small bar of your health fills beside it.
+- **What the crew used**: every run counts how often people (not bots) used 18 systems: the pilot's evade, the power
+  panel, the overcharge, loading rounds by hand, alert levels, the galley, tending an autodoc, the body scanner, kits and
+  splints, handcuffs, selling prisoners, welding doors, holding position, lying down, the drone, the workbench, answering
+  calls, trading. The end screen lists what was used and what nobody touched; the campaign save keeps the counts over the
+  evenings, and **usage.txt** next to the game (on the host's computer) is written at every save. The bug-report zip
+  takes it too.
+- **You hear your own actions**: your own shots, blows, the doors you open, things you put down and ladders used to be
+  silent to you (only others heard them). Now they play for you too; your own footsteps are played by your game as before.
+- **Hand guns**: an empty gun with no magazine **clicks** (range 4); putting in a new magazine is heard (**reload**, range 5);
+  every shot drops a **spent casing** by the shooter (one for a shotgun's spread) that lies **30 s** and fades in its last 3;
+  your own shot **kicks the camera back** 2.5 screen pixels (a shotgun 5), eased back at once, times the screen-shake
+  setting.
+- **Small sounds**: picking a thing up (range 4), a console's screen opening and closing, and a low buzz when a console
+  will not open for lack of power. All can be replaced from the «sounds» folder (`click`, `reload`, `pickup`, `ui_open`,
+  `ui_close`, `ui_deny`).
+- **Work you hear**: while a job under your hands goes on (repairs, welding, the workbench, anything held with E) a soft
+  tool tick sounds about **3 times a second**; a small knock when it is done; a flick when another thing comes into your
+  hand (`ui_work`, `ui_done`, `ui_slot`). Only you hear these, and only in air.
+- **A welded door shows its seam**: a row of weld beads where the leaves meet.
+- **Getting hurt is felt**: a small camera shake when you are wounded (times the screen-shake setting), a short cry
+  (`cry`, heard by those near), and red at the screen's edges once your health is below **75**, deeper and darker down to
+  **15**, with a brighter flash at each blow.
 

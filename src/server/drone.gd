@@ -60,6 +60,7 @@ func asked(p: Player, action: int, a: int) -> void:
 
 func _launch(p: Player) -> void:
 	var store: Dictionary = server.ship.store
+	server.usage.note(p, "drone")          # (v82)
 	if state != Net.DRONE_NONE:
 		server.chat.tell(p, "Дрон уже в деле.")
 		return

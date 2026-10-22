@@ -151,6 +151,7 @@ const WELD_TICKS := 80               # (v70) 4 s to weld a door shut, or to cut 
 func weld(p: Player, door: int) -> void:
 	var doors := server.doors
 	doors.welded[door] = 1 - doors.welded[door]
+	server.usage.note(p, "weld")           # (v82)
 	server.chat.sound(Net.SOUND_ZAP, p.st.x, p.st.y, p.slot)
 	server.replication.sight_changed()
 	server.chat.say("%s %s." % [p.name, "заваривает дверь: теперь её не откроет никто, пока не срежут шов" if doors.welded[door] == 1

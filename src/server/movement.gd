@@ -23,6 +23,8 @@ func move(p: Player) -> void:
 	while not p.inputs.is_empty() and int(p.inputs[0][0]) <= tick:
 		var inp: Array = p.inputs.pop_front()
 		Mover.apply_input(p.st, inp[1])
+		if int(inp[1]) == Mover.LIE or int(inp[1]) == Mover.HOLD:
+			server.usage.note(p, "crawl" if int(inp[1]) == Mover.LIE else "hold")   # (v82)
 		p.last_seq = inp[2]
 		p.self_dirty = true
 	if p.bot:
@@ -34,6 +36,7 @@ func move(p: Player) -> void:
 	if p.st.prone and (p.bot and not server.defence.busy(p) or p.cond != Net.COND_OK):
 		p.st.prone = false               # a bot that took over, or one knocked out, is not lying low any more
 		                                 # ((v79) a bot hiding from pirates lies low on purpose)
+		p.st.rise = 0
 	var was_x := p.st.x
 	var was_y := p.st.y
 	if Mover.step(p.st, server.map, server.doors, tick):

@@ -159,7 +159,9 @@ func sound(kind: int, x: int, y: int, made_by: int = -1) -> void:
 	msg.encode_s16(2, x)
 	msg.encode_s16(4, y)
 	for q: Player in server.players:
-		if q == null or q.slot == made_by or not hears(q, kind, x, y):
+		# (v82) one hears one's own shots, blows, doors and things put down; only one's own footsteps
+		# are played by the client itself (until v82 the shooter's own gun was silent)
+		if q == null or q.slot == made_by and kind == Net.SOUND_STEP or not hears(q, kind, x, y):
 			continue
 		if server.keep_heard:
 			q.heard.append([kind, x, y])

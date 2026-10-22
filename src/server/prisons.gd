@@ -138,6 +138,7 @@ func give_back(ransom: int) -> String:
 func sell(p: Player) -> void:
 	## At a station or a trader: every prisoner aboard is handed over.
 	var list := all()
+	server.usage.note(p, "sell_prisoners") # (v82)
 	if list.is_empty():
 		server.chat.tell(p, "На борту нет пленных.")
 		return

@@ -136,6 +136,7 @@ func update(p: Player) -> void:
 
 func _finish(p: Player, action: int, item: int) -> void:
 	var store := server.ship.store
+	server.usage.note(p, "bench")          # (v82)
 	if AMMO_MADE.has(action):
 		var made: Array = AMMO_MADE[action]
 		store[Net.ITEM_PART] = int(store[Net.ITEM_PART]) - 1

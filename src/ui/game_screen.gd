@@ -165,6 +165,8 @@ var _fps_smooth := 60.0
 var _demo_until := 0.0
 var _demo_dir := 0
 var _rng := RandomNumberGenerator.new()
+var _hurt_edge: TextureRect          # (v82, his O1 note) red at the screen's edges, deeper the more we are hurt
+var _hurt_flash := 0.0               # (v82) and a moment brighter when a blow lands
 var _banner: PanelContainer          # (v73, the author's H4) a danger, big at the top of the screen
 var _banner_text: Label
 var _banner_left := 0.0
@@ -190,6 +192,9 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	host_port = p_port
 	client.chat.connect(_on_chat)
 	client.notice.connect(_on_notice)
+	client.hit.connect(func(_blood: int, id: int, _x: int, _y: int) -> void:
+		if id == client.my_id:
+			_hurt_flash = 1.0)
 
 	_world = WorldView.new()
 	add_child(_world)
@@ -198,6 +203,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	_ui = CanvasLayer.new()
 	_ui.layer = 5
 	add_child(_ui)
+	_build_hurt_edge()
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -615,6 +621,18 @@ func _story() -> String:
 		for d: Array in deaths.slice(maxi(deaths.size() - 6, 0)):
 			lines.append("%s: %s" % [d[0], d[1]])
 		out += "\nПогибли (%d): %s" % [deaths.size(), ", ".join(lines)]
+	# (v82) what the crew used and what nobody touched (also in usage.txt next to the game)
+	var used := PackedStringArray()
+	var never := PackedStringArray()
+	for line: Array in sm.get("used", []):
+		if int(line[1]) > 0:
+			used.append("%s %d" % [line[0], int(line[1])])
+		else:
+			never.append(str(line[0]))
+	if not used.is_empty():
+		out += "\nПользовались: %s" % ", ".join(used)
+	if not never.is_empty():
+		out += "\nНе трогали: %s" % ", ".join(never)
 	return out
 
 
@@ -747,6 +765,8 @@ func _open_console(kind: int) -> void:
 		_bench_view.closed()
 	if _console_kind == 44 and kind != 44:
 		_galley_view.closed()
+	if kind != _console_kind and kind != 13 and _console_kind != 13:
+		_world.ui_sound("ui_open" if kind != 0 else "ui_close")   # (v82)
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
@@ -1530,6 +1550,8 @@ func _use_screen(target: int) -> bool:
 	elif _opens_panel(target):
 		_open_console(target)
 	else:
+		if [3, 4, 17, 20, 21, 30, 44].has(target):
+			_world.ui_sound("ui_deny")       # (v82) a console that needs power, with none there
 		return false
 	return true
 
@@ -1581,6 +1603,46 @@ func _fit_root() -> void:
 		_root.position = Vector2.ZERO
 		_root.scale = Vector2(s, s)
 		_root.size = view / s
+
+
+const HURT_FROM := 75.0              # (v82) health below which the edges start to redden
+const HURT_FULL := 15.0              # and where they are at their deepest
+
+
+func _build_hurt_edge() -> void:
+	## (v82, his O1 note: "change of screen a little bit red that you have less health, and it
+	## becomes more and more dark red with less hp") A soft ring, clear in the middle.
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 1))
+	fade.add_point(0.55, Color(1, 1, 1, 0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = fade
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(0.5, -0.2)
+	tex.width = 256
+	tex.height = 256
+	_hurt_edge = TextureRect.new()
+	_hurt_edge.texture = tex
+	_hurt_edge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_hurt_edge.stretch_mode = TextureRect.STRETCH_SCALE
+	_hurt_edge.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_hurt_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hurt_edge.visible = false
+	_ui.add_child(_hurt_edge)
+
+
+func _update_hurt_edge(delta: float) -> void:
+	_hurt_flash = move_toward(_hurt_flash, 0.0, delta * 2.5)
+	var alive := client.my_cond != Net.COND_DEAD
+	var hurt := clampf((HURT_FROM - float(client.health)) / (HURT_FROM - HURT_FULL), 0.0, 1.0) if alive else 0.0
+	var strength := (0.25 + 0.6 * hurt if hurt > 0.0 else 0.0) + 0.35 * _hurt_flash if alive else 0.0
+	_hurt_edge.visible = strength > 0.01
+	if _hurt_edge.visible:
+		var tint := Color(0.85, 0.08, 0.05).lerp(Color(0.32, 0.0, 0.0), hurt)
+		tint.a = clampf(strength, 0.0, 0.9)
+		_hurt_edge.modulate = tint
 
 
 func show_banner(text: String) -> void:
@@ -1823,6 +1885,7 @@ func _process(delta: float) -> void:
 		client.aim_at(Vector2.INF if busy else _world.cell_under_mouse(), delta)
 	_fit_root()
 	_update_banner(delta)
+	_update_hurt_edge(delta)
 	_update_console()
 	for m: Array in MOVES:
 		var dir: int = m[1]

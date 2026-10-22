@@ -117,7 +117,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
-		"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(),
+		"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(), "usage": server.usage.used,
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
 		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
 		"smes": server.power.save(),
@@ -194,6 +194,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))
 	server.ship.hull = int(data["hull"])
 	server.power.load_panel(data.get("panel", {}))          # (v68) the power panel's breakers and engines
+	server.usage.load_from(data.get("usage", {}))            # (v82) what people used, over the evenings
 	if data.has("mounts"):
 		var mounts := PackedByteArray(data["mounts"])
 		var armed := PackedByteArray(data.get("armed", []))

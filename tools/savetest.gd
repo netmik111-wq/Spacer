@@ -76,6 +76,14 @@ func _initialize() -> void:
 	a.voyage_ticks = 123456
 	var health_was := p.health
 	var wounds_was := p.wounds
+	# (v82) what people used: bots never count
+	a.usage.note(p, "evade")
+	a.usage.note(p, "evade")
+	var bot := a.crew.new_player("Бот")
+	bot.bot = true
+	a.usage.note(bot, "galley")
+	_expect(int(a.usage.used.get("evade", 0)) == 2 and not a.usage.used.has("galley"), "people's use is counted, bots' is not")
+	_expect(a.usage.lines()[0] == ["уклонение пилота", 2] and a.usage.lines().size() == a.usage.NAMES.size(), "most used first, the unused listed too")
 	_expect(a.save_campaign() and Campaign.exists(PATH), "the campaign is saved")
 	var hull_was: int = a.ship.hull                   # (the hole took its share)
 	a.stop()
@@ -90,6 +98,7 @@ func _initialize() -> void:
 	_expect(b.resume_campaign(PATH) == "", "a new server goes on with it")
 	_expect(b.space_seed == 12345 and b.sectors.cell[b.ship.sector] == arrived and b.been.size() == 2, "in the same place in the same space")
 	_expect(b.ship.pos == Vector2(33.0, 21.5), "at the same spot in its sector")
+	_expect(int(b.usage.used.get("evade", 0)) == 2 and FileAccess.file_exists(b.usage.path()), "what people used is kept, and usage.txt written")
 	_expect(b.ship.store[Net.ITEM_PATCH] == 2 and b.ship.credits == 77, "with the same supplies and money")
 	_expect(b.reserve == 1 and b.ship.hull == hull_was and b.voyage_ticks == 123456 and b.jumps == 9 and b.farthest == 4,
 		"the same reserve, hull and record of the voyage")
@@ -114,6 +123,8 @@ func _initialize() -> void:
 		"with what it carried and its wounds")
 
 	print("the end")
+	var sm := b.crew.summary_packet()
+	_expect(sm.size() > 10 + 1 + 4 * b.usage.NAMES.size(), "the end screen gets what people used")
 	b.ship.hull = 1
 	b.crew.hull_hit(5)
 	_expect(b.over == Net.OVER_WRECKED and not Campaign.exists(PATH), "a lost campaign leaves no save behind")

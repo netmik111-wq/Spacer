@@ -252,6 +252,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 			if item < Net.SLOTS:
 				_put_back(p, item)
 		Net.STORE_BUY:
+			server.usage.note(p, "trade")      # (v82)
 			var price: int = offers().get(item, 0)
 			if (server.ship.store.has(item) or Items.cargo(item)) and price > 0 and server.ship.credits >= price:
 				server.ship.credits -= price
@@ -261,6 +262,7 @@ func store_asked(p: Player, action: int, item: int) -> void:
 					_gone(item)
 					server.chat.say("%s покупает у торговца: %s." % [p.name, Items.name_of(item).to_lower()])
 		Net.STORE_SELL:
+			server.usage.note(p, "trade")      # (v82)
 			var price := sell_price(item)
 			if trader_here() and int(server.ship.store.get(item, 0)) > 0 and price > 0:
 				server.ship.store[item] -= 1

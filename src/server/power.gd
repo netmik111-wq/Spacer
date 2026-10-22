@@ -460,6 +460,7 @@ func asked(p: Player, which: int, action: int, value: int) -> void:
 
 func _panel(p: Player, action: int, value: int) -> void:
 	var g = server.gunnery
+	server.usage.note(p, "overcharge" if action == ACT_OVERCHARGE and value != 0 else "panel")   # (v82)
 	if action >= ACT_GUN:
 		g.arm(p, action - ACT_GUN, value != 0)
 		return

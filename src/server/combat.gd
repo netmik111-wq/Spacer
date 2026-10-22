@@ -90,6 +90,11 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.slots[mag] = Net.ITEM_NONE
 			p.slots[p.hand] = Items.loaded(item)
 			p.ready_tick = server.tick + roundi(RELOAD_TICKS * slow)
+			server.chat.sound(Net.SOUND_RELOAD, p.st.x, p.st.y, p.slot)   # (v82)
+		else:
+			# (v82) empty, nothing to load: the gun only clicks
+			p.ready_tick = server.tick + SHOT_TICKS
+			server.chat.sound(Net.SOUND_CLICK, p.st.x, p.st.y, p.slot)
 	elif Items.INFO.has(item) and Items.INFO[item].has("blow"):
 		p.ready_tick = server.tick + roundi(BLOW_TICKS * slow * (1.5 if Items.INFO[item].has("stun") else 1.0))
 		_strike(p, at, int(Items.INFO[item]["blow"]), float(Items.INFO[item].get("stun", 0.0)))
@@ -116,6 +121,7 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 		var who := _beside(p, at, true)
 		var needs := who != null and (who.leg or who.arm) if item == Net.ITEM_SPLINT else who != null and (who.wounds > 0.0 or who.injured())
 		if needs:
+			server.usage.note(p, "treat")      # (v82)
 			p.treating = who.slot
 			p.work = 0
 			p.work_cell = -2
@@ -448,6 +454,7 @@ func cuff(p: Player, q: Player) -> void:
 		server.chat.tell(p, "Заковать можно только пирата, который лежит рядом (без сознания или оглушён)." if q == null or not q.pirate or q.prisoner
 			else ("Робота не заковать." if q.robot else "Он ещё держится на ногах: сначала собейте его (электрошокер, граната, или пусть потеряет сознание)."))
 		return
+	server.usage.note(p, "cuffs")          # (v82)
 	p.slots[p.hand] = Net.ITEM_NONE
 	server.prisons.take(q, p)
 

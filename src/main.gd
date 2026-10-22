@@ -56,7 +56,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
-## (v78) lie_after=SECONDS (lie down, as the C key does).
+## (v78) lie_after=SECONDS (lie down, as the C key does). (v82) rise_after=SECONDS (get up again).
 ## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
 ## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
 ## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
@@ -71,7 +71,8 @@ extends Node
 ## With --inproc only: give=ITEM with give_after=SECONDS (the thing appears in
 ## the character's hand, or its first free slot), place=X,Y with place_after=SECONDS
 ## (the character is put in that cell), dockship_after=SECONDS (dock with the derelict alongside),
-## restock_after=SECONDS (v65: the admin's «refill the supply locker»).
+## restock_after=SECONDS (v65: the admin's «refill the supply locker»),
+## (v82) hurt=N with hurt_after=SECONDS (our character takes a wound of N; with --in_doc it is put on an autodoc's bed), weld_after=SECONDS (every door welded).
 ## (v62, --inproc only) enemy_after=SECONDS with enemy_class=K (a pirate ship of that class, Net.ECLASS_*,
 ## comes to fight at a distance), assault_after=SECONDS (an assault drone lands aboard at once),
 ## robot_after=SECONDS (one of our security robots is set down beside the character).
@@ -86,6 +87,7 @@ const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
 const Music := preload("res://src/client/music.gd")
 const Options := preload("res://src/client/options.gd")
+const Player := preload("res://src/server/player.gd")
 const ShipEditor := preload("res://src/ui/ship_editor.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 
@@ -152,6 +154,7 @@ var _handed := false
 var _taken := false
 var _acted := false
 var _lain := false                      # (v78) lie_after done
+var _risen := false                     # (v82) rise_after done
 var _droned := false
 var _probed := false
 var _steers: Array = []              # [direction, seconds] still to send to the drone
@@ -160,6 +163,8 @@ var _dropped := false
 var _picked := false
 var _given := false
 var _restocked := false
+var _hurt := false                      # (v82) hurt_after done
+var _welded := false                    # (v82) weld_after done
 var _boarded := false
 var _goto_at := 0
 var _next_volley := 0.0
@@ -667,6 +672,9 @@ func _process(_delta: float) -> void:
 	if _opt.has("lie_after") and not _lain and _screen != null and t >= float(_opt["lie_after"]):
 		_lain = true
 		_client.toggle_prone()
+	if _opt.has("rise_after") and not _risen and _screen != null and t >= float(_opt["rise_after"]):
+		_risen = true
+		_client.toggle_prone()
 	if _opt.has("drone_after") and not _droned and _screen != null and t >= float(_opt["drone_after"]):
 		_droned = true
 		_client.send_drone(Net.DRONE_LAUNCH)
@@ -691,6 +699,21 @@ func _process(_delta: float) -> void:
 		_restocked = true
 		var pkt := PackedByteArray([Net.C_ADMIN, Net.ADMIN_RESTOCK, 0, 0, 0])
 		_server.admin.asked(_server.players[_client.my_id], pkt)
+	if _opt.has("hurt_after") and not _hurt and _server != null and _screen != null and t >= float(_opt["hurt_after"]):
+		_hurt = true
+		var hurt_one: Player = _server.players[_client.my_id]
+		_server.combat.hurt(hurt_one, int(_opt.get("hurt", 50)), null)
+		if _flags.has("in_doc") and not _server.map.autodoc.is_empty():
+			# and is put on the first autodoc's bed (to see its healing drawn)
+			var bed := int(_server.map.autodoc.values()[0])
+			hurt_one.st.x = bed % _server.map.width
+			hurt_one.st.y = bed / _server.map.width
+			hurt_one.self_dirty = true
+	if _opt.has("weld_after") and not _welded and _server != null and _screen != null and t >= float(_opt["weld_after"]):
+		_welded = true
+		for d in _server.doors.welded.size():
+			_server.doors.welded[d] = 1
+			_server.replication.door_record(d)
 	if _opt.has("click_after") and not _clicked and _screen != null and t >= float(_opt["click_after"]):
 		_clicked = true
 		var at := str(_opt.get("click", "0,0")).split(",")

@@ -106,6 +106,7 @@ func cook(p: Player, action: int) -> void:
 		store[item] = int(store.get(item, 0)) - int(need[item])
 	store[dish] = int(store.get(dish, 0)) + 1
 	server.supplies.tell_store()
+	server.usage.note(p, "galley")         # (v82)
 	server.chat.say("%s готовит на камбузе: %s. Блюдо в шкафу снабжения." % [p.name, Items.name_of(dish).to_lower()])
 
 

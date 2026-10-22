@@ -11,7 +11,9 @@ extends RefCounted
 ## holding "use" at the autodoc tends the one in it: twice as quick, and a lesson
 ## in medicine every TEND_LESSON_SECONDS.
 ## (v70, the author's M1: "a medic should matter") Alone an autodoc only gets its
-## patient out of danger: it heals up to UNTENDED_CAP health and no further. Tended,
+## patient out of danger: it heals up to UNTENDED_CAP health and no further. (v82, the
+## rule "the ship runs fine if nobody touches it, touching gives a bonus") Alone it now
+## goes on past UNTENDED_CAP at UNTENDED_SLOW of its pace, so nobody has to stand there. Tended,
 ## it heals fully, quicker with the tender's medicine skill (a bot tends at half),
 ## and after FIX_SECONDS of tending it also mends injuries: bleeding, broken bones,
 ## a concussion.
@@ -31,7 +33,8 @@ const TENDED := 2.0                  # this many times quicker with somebody ten
 const TEND_LESSON_SECONDS := 5.0
 const BOT_GOES_AT := 40.0            # a bot this badly hurt walks to an autodoc by itself (see Stations)
 const BOT_LEAVES_AT := 90.0          # and gets up again at this much health (tended; untended at UNTENDED_CAP)
-const UNTENDED_CAP := 50.0           # (v70) health an autodoc heals to with nobody tending it
+const UNTENDED_CAP := 50.0           # (v70) health an autodoc heals to with nobody tending it at its full pace
+const UNTENDED_SLOW := 0.5           # (v82) and past it, alone, this share of that pace
 const SKILL_TEND := 1.0              # (v70) a tender with the best medicine skill makes it this much quicker again
 const FIX_SECONDS := 3.0             # (v70) of tending, to mend the patient's injuries
 
@@ -93,7 +96,7 @@ func tended(doc: int) -> bool:
 
 func leave_at(doc: int) -> float:
 	## (v70) The health a bot lying in that autodoc gets up at.
-	return BOT_LEAVES_AT if tended(doc) else UNTENDED_CAP
+	return BOT_LEAVES_AT
 
 
 func bed_of(q: Player) -> int:
@@ -111,6 +114,8 @@ func tending(p: Player, doc: int) -> bool:
 	var q := in_bed(doc, p)
 	if q == null or not works(doc) or not needs_doc(q):
 		return false
+	if not tended(doc):
+		server.usage.note(p, "tend")       # (v82) once each time somebody starts tending
 	_tended[doc] = server.tick
 	_pace[doc] = 1.0 + ((TENDED - 1.0) + SKILL_TEND * p.skill(Net.SKILL_MEDICINE)) * server.stations.share(p)
 	var n: int = _lesson.get(p.slot, 0) + 1
@@ -129,14 +134,15 @@ func tick() -> void:
 		if q == null or not needs_doc(q):
 			continue
 		var by_hand := tended(doc)
-		if not by_hand and q.health >= UNTENDED_CAP:
-			# (v70) out of danger: further healing needs somebody tending
+		var slow := not by_hand and q.health >= UNTENDED_CAP
+		if slow:
+			# (v70) out of danger: (v82) it goes on slowly alone, quicker with somebody tending
 			if q.peer != null and not _capped.has(q.slot):
 				_capped[q.slot] = true
-				server.chat.tell(q, "Автодок вывел вас из опасности. Долечить может только он под присмотром: пусть кто-то держит E у автодока.")
-			continue
-		_capped.erase(q.slot)
-		var rate := AUTODOC_HEAL * (float(_pace.get(doc, TENDED)) if by_hand else 1.0) / Net.TICK_HZ
+				server.chat.tell(q, "Автодок вывел вас из опасности и долечивает медленно. Если кто-то держит E у автодока, он лечит быстрее и вылечит травмы.")
+		else:
+			_capped.erase(q.slot)
+		var rate := AUTODOC_HEAL * (float(_pace.get(doc, TENDED)) if by_hand else (UNTENDED_SLOW if slow else 1.0)) / Net.TICK_HZ
 		if by_hand and q.injured():
 			var n: int = _fixing.get(q.slot, 0) + 1
 			_fixing[q.slot] = n
@@ -155,6 +161,7 @@ func tick() -> void:
 
 func scan(p: Player, scanner: int) -> void:
 	## The body scanner's report (see above), to the one who pressed "use" at it.
+	server.usage.note(p, "scan")           # (v82)
 	if not server.powered() or server.ship.broken.has(scanner):
 		server.chat.tell(p, "Сканер не работает: нет питания." if not server.powered() else "Сканер сломан.")
 		return

@@ -5,6 +5,7 @@ extends RefCounted
 ## a video cannot. Client only.
 
 const GameClient := preload("res://src/client/game_client.gd")
+const Usage := preload("res://src/server/usage.gd")
 
 const LOGS_KEPT := 6                 # the newest log files taken (the game and its server each write one per run)
 
@@ -29,7 +30,7 @@ static func make(shot: Image = null) -> String:
 		Time.get_datetime_string_from_system(), RenderingServer.get_video_adapter_name()])
 	for f: String in _newest_logs():
 		_add_file(zip, "logs/" + f.get_file(), f)
-	for f: String in ["user://campaign.json", "user://options.cfg", "user://settings.cfg", GameClient.log_path()]:
+	for f: String in ["user://campaign.json", "user://options.cfg", "user://settings.cfg", GameClient.log_path(), Usage.path()]:
 		_add_file(zip, f.get_file(), f)
 	if shot != null and not shot.is_empty():
 		_add_bytes(zip, "screen.png", shot.save_png_to_buffer())

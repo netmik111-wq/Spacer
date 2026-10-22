@@ -335,6 +335,7 @@ func evade_asked(p: Player) -> void:
 	## the next moment (longer with piloting skill) hit far less often. It costs the SMES.
 	if not server.systems.at_console(p, server.map.helm):
 		return
+	server.usage.note(p, "evade")          # (v82)
 	if meteor_at > 0 and not server.gunnery.fighting():
 		_steer(p)
 		return
@@ -418,6 +419,7 @@ func alert_asked(p: Player, level: int) -> void:
 	if not may_order(p):
 		server.chat.tell(p, "Тревогу объявляет капитан.")
 		return
+	server.usage.note(p, "alert")          # (v82)
 	set_alert(level, p)
 
 

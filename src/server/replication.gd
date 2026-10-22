@@ -572,6 +572,7 @@ func send() -> void:
 			# (v77) it looks where its mouse is; (v78) quarter steps, lying down
 			out.encode_u8(o + 18, (1 if st.free_look else 0) | (2 if st.fine else 0) | (4 if st.prone else 0) | (8 if st.hold else 0))
 			out.encode_u8(o + 19, Net.pack_off(st.ox, st.oy, st.prone))   # (v78) quarters off the tile's centre
+			out.encode_u8(o + 20, st.rise)   # (v82) ticks left getting up
 			p.self_dirty = false
 			p.last_self_tick = server.tick
 		if check:
