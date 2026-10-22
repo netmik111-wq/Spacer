@@ -488,7 +488,8 @@ func toggle_prone() -> void:
 	## (v78, the author's C1 "B") Lie down, or get up: predicted as walking is.
 	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK:
 		return
-	var lying := _prone_to if _prone_at > pred_tick else pred.prone
+	# (v82) C while getting up stays down
+	var lying := _prone_to if _prone_at > pred_tick else pred.prone and pred.rise == 0
 	_send_input(Mover.RISE if lying else Mover.LIE)
 	_prone_to = not lying
 	_prone_at = _last_apply
@@ -1972,7 +1973,19 @@ func _on_packet(pkt: PackedByteArray) -> void:
 						at += 1 + n
 					if pair.size() == 2:
 						deaths.append(pair)
-				summary = {"ships": pkt.decode_u16(1), "boarders": pkt.decode_u16(3), "earned": pkt.decode_u32(5), "deaths": deaths}
+				var used: Array = []         # (v82) [name, times] people used each system
+				if at < pkt.size():
+					var things: int = pkt[at]
+					at += 1
+					for i in things:
+						if at >= pkt.size():
+							break
+						var n: int = pkt[at]
+						if at + 3 + n > pkt.size():
+							break
+						used.append([pkt.slice(at + 1, at + 1 + n).get_string_from_utf8(), pkt.decode_u16(at + 1 + n)])
+						at += 3 + n
+				summary = {"ships": pkt.decode_u16(1), "boarders": pkt.decode_u16(3), "earned": pkt.decode_u32(5), "deaths": deaths, "used": used}
 		Net.S_HIT:
 			if pkt.size() >= 8:
 				hit.emit(pkt[1], pkt.decode_u16(2), pkt.decode_s16(4), pkt.decode_s16(6))
@@ -2421,6 +2434,7 @@ func _reconcile(s_tick: int, pkt: PackedByteArray, o: int) -> void:
 	_auth.hold = (pkt[o + 17] & 8) != 0      # (v81)
 	_auth.ox = Net.off_x(pkt[o + 18])
 	_auth.oy = Net.off_y(pkt[o + 18])
+	_auth.rise = pkt[o + 19]                 # (v82)
 	_auth_tick = s_tick
 	for i in _inputs.size():
 		if (int(_inputs[i][0]) & 0xFFFF) == ack:

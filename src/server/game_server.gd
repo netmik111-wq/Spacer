@@ -40,6 +40,7 @@ extends Node
 ##   road         (v64) the road of clusters, the places inside a system, the pirate hunters
 ##   galley       (v71) the galley's stove, its dishes and what they do
 ##   defence      (v79) bots running from armed boarders, and a guard bot fetching a gun to fight them
+##   usage        (v82) how often people used each system this run
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -97,6 +98,7 @@ const Salvage := preload("res://src/server/salvage.gd")
 const Prisons := preload("res://src/server/prisons.gd")
 const Galley := preload("res://src/server/galley.gd")
 const Defence := preload("res://src/server/defence.gd")
+const Usage := preload("res://src/server/usage.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -191,6 +193,7 @@ var salvage := Salvage.new()           # (v67) cutting scrap off wrecks, things 
 var prisons := Prisons.new()           # (v70) pirates in our handcuffs
 var galley := Galley.new()             # (v71) the galley's stove and its dishes
 var defence := Defence.new()           # (v79) bots against armed boarders
+var usage := Usage.new()               # (v82) what people used this run
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
                                        # (the hard mode sets it, the menu may too), kept in the campaign
@@ -298,6 +301,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	garden.setup(self)
 	galley.setup(self)
 	defence.setup(self)
+	usage.setup(self)
 	hazards.setup(self)
 	power.setup(self)
 	outside.setup(self)
@@ -593,6 +597,7 @@ func save_campaign() -> bool:
 	if not Campaign.write(self, save_path):
 		log_line.emit("Не удалось сохранить кампанию в %s." % save_path)
 		return false
+	usage.write()                        # (v82) usage.txt next to the game
 	return true
 
 

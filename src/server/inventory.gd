@@ -44,6 +44,7 @@ func pick_up(p: Player) -> bool:
 		else:
 			server.floor_things[cell] = things
 		server.replication.floor_record(cell)
+		server.chat.sound(Net.SOUND_PICKUP, cell % server.map.width, cell / server.map.width, p.slot)   # (v82)
 		return true
 	return false
 
@@ -70,6 +71,7 @@ func take_from(p: Player, cell: int, at: int) -> bool:
 	else:
 		server.floor_things[cell] = things
 	server.replication.floor_record(cell)
+	server.chat.sound(Net.SOUND_PICKUP, x, y, p.slot)   # (v82)
 	return true
 
 

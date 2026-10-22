@@ -245,6 +245,7 @@ func answer_asked(p: Player, choice: int) -> void:
 	## Somebody at the comms console answers the call.
 	if call.is_empty() or not server.systems.at_console(p, server.map.comms):
 		return
+	server.usage.note(p, "comms")          # (v82)
 	_refresh_flags()
 	var flags: PackedByteArray = call["flags"]
 	if choice >= flags.size() or flags[choice] & Net.CHOICE_SHUT:

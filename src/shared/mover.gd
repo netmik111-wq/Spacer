@@ -29,20 +29,21 @@ class State:
 	var free_look := false     # (v77, the author's V1) it looks where the mouse is: walking does not turn it
 	var hold := false          # (v81, the author's human wall) holds its position: nobody walks through its tile;
 	                           # any step lets go
+	var rise := 0              # (v82, his crawl video) ticks left getting up: still lying, cannot walk
 
 	func copy_from(o: State) -> void:
 		x = o.x; y = o.y; cd = o.cd; facing = o.facing; dir = o.dir
 		move_tick = o.move_tick; fx = o.fx; fy = o.fy; down = o.down
 		slow = o.slow; span = o.span; access = o.access; free_look = o.free_look
-		ox = o.ox; oy = o.oy; fine = o.fine; prone = o.prone; hold = o.hold
+		ox = o.ox; oy = o.oy; fine = o.fine; prone = o.prone; hold = o.hold; rise = o.rise
 
 	func same_as(o: State) -> bool:
 		return x == o.x and y == o.y and cd == o.cd and facing == o.facing \
 			and dir == o.dir and move_tick == o.move_tick and down == o.down and slow == o.slow and free_look == o.free_look \
-			and ox == o.ox and oy == o.oy and fine == o.fine and prone == o.prone and hold == o.hold
+			and ox == o.ox and oy == o.oy and fine == o.fine and prone == o.prone and hold == o.hold and rise == o.rise
 
 	func place(px: int, py: int) -> void:
-		x = px; y = py; ox = 0; oy = 0; fx = px * 4; fy = py * 4; cd = 0; move_tick = -1000; prone = false; hold = false
+		x = px; y = py; ox = 0; oy = 0; fx = px * 4; fy = py * 4; cd = 0; move_tick = -1000; prone = false; hold = false; rise = 0
 
 	func qx() -> int:
 		## (v78) Where it stands across, in quarters of a tile (x * 4 is the centre of tile x).
@@ -57,6 +58,7 @@ const LOOK_FREE := 32                # (v77) an input of LOOK_FREE: from now on 
 const LOOK_WALK := 33                # and LOOK_WALK: it looks where it walks again
 const LIE := 34                      # (v78) an input of LIE: it lies down
 const RISE := 35                     # and RISE: it gets up
+const RISE_TICKS := 20               # (v82) getting up takes a second, as in SS13 (lying down is at once)
 const HOLD := 36                     # (v81) an input of HOLD: it holds its position (the human wall)
 const LET_GO := 37                   # and LET_GO: it stops holding
 
@@ -66,8 +68,12 @@ static func apply_input(st: State, value: int) -> void:
 	## or (v77) look with the mouse or where one walks.
 	if value == LOOK_FREE or value == LOOK_WALK:
 		st.free_look = value == LOOK_FREE
-	elif value == LIE or value == RISE:
-		st.prone = value == LIE
+	elif value == LIE:
+		st.prone = true
+		st.rise = 0                      # (v82) lying down again while getting up stays down
+	elif value == RISE:
+		if st.prone and st.rise == 0:
+			st.rise = RISE_TICKS
 	elif value == HOLD or value == LET_GO:
 		st.hold = value == HOLD and not st.down
 	elif value > TURN:
@@ -85,6 +91,14 @@ static func apply_input(st: State, value: int) -> void:
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
+	if st.rise > 0:
+		# (v82) getting up: it may turn, not walk, and stands once the second is over
+		st.rise = 0 if st.down else st.rise - 1
+		if st.rise == 0:
+			st.prone = false
+		if not st.down and st.dir != 0 and not st.free_look:
+			st.facing = st.dir
+		return false
 	# the character turns the way it is told at once, even in mid-step or against a wall
 	if not st.down and st.dir != 0 and not st.free_look:
 		st.facing = st.dir

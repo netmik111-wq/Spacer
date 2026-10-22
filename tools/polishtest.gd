@@ -225,6 +225,14 @@ func _summary() -> void:
 	var pk: PackedByteArray = server.crew.summary_packet()
 	_expect(pk[0] == Net.S_SUMMARY and pk.decode_u16(1) == 3 and pk.decode_u32(5) == server.ship.earned and pk[9] == server.deaths.size(),
 		"the summary packet carries ships beaten, credits earned and the dead")
+	# (v82) and what people used, read back by a client
+	server.usage.note(server.crew.new_player("Счётчик"), "crawl")
+	var reader = load("res://src/client/game_client.gd").new()
+	reader._on_packet(server.crew.summary_packet())
+	var used: Array = reader.summary.get("used", [])
+	_expect(used.size() == server.usage.NAMES.size() and used[0] == ["лечь (C)", 1] and (reader.summary["deaths"] as Array).size() == server.deaths.size(),
+		"the client reads what people used after the dead (%s)" % str(used.slice(0, 2)))
+	reader.free()
 
 
 func _give_up() -> void:

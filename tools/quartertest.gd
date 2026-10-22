@@ -80,7 +80,7 @@ func _bytes() -> void:
 				var b := Net.pack_off(ox, oy, prone)
 				all = all and b < 256 and Net.off_x(b) == ox and Net.off_y(b) == oy and Net.off_prone(b) == prone
 	_expect(all, "every offset and lying down come back as packed")
-	_expect(Net.ENT_BYTES == 8 and Net.SELF_BYTES == 19, "records carry it")
+	_expect(Net.ENT_BYTES == 8 and Net.SELF_BYTES == 20, "records carry it")
 	var a := Mover.State.new()
 	a.place(10, 10)
 	a.ox = 1
@@ -330,8 +330,20 @@ func _lying() -> void:
 		Mover.step(st, server.map, table, 100 + ticks)
 		ticks += 1
 	_expect(ticks >= 2 * 2 * Net.MOVE_TICKS - 1 and ticks <= 2 * 2 * Net.MOVE_TICKS, "two tiles take twice as long (%d ticks)" % ticks)
+	# (v82, his crawl video) getting up takes a second: still lying, no step, C again stays down
 	Mover.apply_input(st, Mover.RISE)
-	_expect(not st.prone, "RISE gets it up")
+	_expect(st.prone and st.rise == Mover.RISE_TICKS, "RISE starts getting up")
+	var stood_at := st.qx()
+	for k in 5:
+		Mover.step(st, server.map, table, 200 + k)
+	_expect(st.prone and st.qx() == stood_at, "getting up it does not walk")
+	Mover.apply_input(st, Mover.LIE)
+	_expect(st.prone and st.rise == 0, "LIE while getting up stays down")
+	Mover.apply_input(st, Mover.RISE)
+	st.dir = 0
+	for k in Mover.RISE_TICKS:
+		Mover.step(st, server.map, table, 300 + k)
+	_expect(not st.prone and st.rise == 0, "RISE gets it up after a second")
 	st.place(at.x, at.y)
 	st.prone = true
 	st.place(at.x, at.y)

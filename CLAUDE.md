@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v81 (version 0.74: the ship editor) is the latest. Plans one to four are done except the darkness front (the
+Build v82 (version 0.75: polish without extra depth) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -84,7 +84,10 @@ light, lying across, a stronger shotgun, picking what to take in the right-click
 v81 (his answers, `https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww`, all "A"): the ship editor in the main menu (game look,
 tools, mirrors, select/copy/paste, undo, palette, decks, room marks, problems, `ships/` folder, «Попробовать»), the map builder
 in the game, rooms taller than 2 tiles, asteroids as maps with ore veins, hold position (X, the human wall).
-Next: v82 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
+v82 (his worry "mechanics too deep", `https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi`): the depth rule (a mechanic works
+untouched, touching it gives a bonus), getting up takes 1 s as in SS13, the autodoc alone heals on at half pace, per-run
+counts of what people used (`usage.txt`), one's own sounds heard, empty click, casings, a camera kick, console sounds.
+Next: v83 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
 when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -250,7 +253,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `map_builder.gd` (v81: a text drawing to the layout, as `tools/make_assets.py` does).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
-  pirate and robot uses.
+  pirate and robot uses. (v82) `usage.gd`, what people used this run.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
   sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `sprites.gd` (v74: pictures
@@ -448,6 +451,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   editor's trial, `ShipMap.try_other`), never `Net.OTHER_MAPS` alone. An asteroid alongside is `Net.OTHER_ROCK` (ship kind
   `SHIP_ROCK`): no doors, no dock, no scrap. Held cells are `ShipMap.held` (filled by `Movement.mark_held` each tick, by the
   client in `_mark_held`): whatever moves a character other than through `Mover.step` should respect them. Protocol 57.
+- (v82) Getting up is `Mover.State.rise` (ticks left, `Mover.RISE_TICKS`), predicted like a step and sent in the self
+  section (20 bytes, protocol 58); a test that sends RISE must step the state RISE_TICKS times. Whatever people choose to
+  use goes through `server.usage.note(p, key)` (bots skipped); a new key goes into `Usage.NAMES`. `Chat.sound` now sends a
+  sound back to the one who made it, except footsteps. New mechanics follow the depth rule in `docs/DECISIONS.md` (v82).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

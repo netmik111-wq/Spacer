@@ -56,7 +56,7 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
-## (v78) lie_after=SECONDS (lie down, as the C key does).
+## (v78) lie_after=SECONDS (lie down, as the C key does). (v82) rise_after=SECONDS (get up again).
 ## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
 ## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
 ## hover=DX,DY (the mouse is taken to be that many cells from our character: the outline of anything usable there).
@@ -152,6 +152,7 @@ var _handed := false
 var _taken := false
 var _acted := false
 var _lain := false                      # (v78) lie_after done
+var _risen := false                     # (v82) rise_after done
 var _droned := false
 var _probed := false
 var _steers: Array = []              # [direction, seconds] still to send to the drone
@@ -666,6 +667,9 @@ func _process(_delta: float) -> void:
 		_client.send_act()
 	if _opt.has("lie_after") and not _lain and _screen != null and t >= float(_opt["lie_after"]):
 		_lain = true
+		_client.toggle_prone()
+	if _opt.has("rise_after") and not _risen and _screen != null and t >= float(_opt["rise_after"]):
+		_risen = true
 		_client.toggle_prone()
 	if _opt.has("drone_after") and not _droned and _screen != null and t >= float(_opt["drone_after"]):
 		_droned = true

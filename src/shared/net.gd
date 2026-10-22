@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 57
+const PROTOCOL := 58
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -194,7 +194,7 @@ const NOBODY := 65535               # "no character" where an id is expected
 const FACING_GONE := 255
 const FACING_HIDDEN := 254
 const ENT_BYTES := 8                # (v78) + quarters off the centre and lying down
-const SELF_BYTES := 19
+const SELF_BYTES := 20
 const DOOR_BYTES := 7
 const HULL_BYTES := 5
 const FLOOR_STACK := 4              # how many things can lie in one cell
@@ -519,7 +519,8 @@ const S_BOTLOG := 45                # (v72) to all: u16 the bot's id, u32 second
 const S_HIT := 46                   # (v75, the author's F1) somebody hurt, to those near on that deck: u8 BLOOD_*, u16 their id,
                                     # s16 x, s16 y: the figure flashes red, blood drips (sparks off a robot), a hit is heard
 const S_SUMMARY := 47               # (v75, the author's E1) the run's story at its end: u16 pirate ships beaten, u16 boarders
-                                    # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8)
+                                    # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8);
+                                    # (v82) then u8 things, per thing u8 length + name (UTF-8), u16 times people used it
 const BLOOD_FLESH := 0
 const BLOOD_METAL := 1
 const GROW_EMPTY := 0
@@ -630,7 +631,10 @@ const SOUND_BANG := 12              # (v70) a flashbang or a boarder's bomb burs
 const SOUND_BEEP := 13              # (v70) a bomb ticking; the meteor warning on the bridge
 const SOUND_SHOTGUN := 14           # (v70) a shotgun
 const SOUND_ZAP := 15               # (v70) a stun baton
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7]
+const SOUND_CLICK := 16              # (v82) a gun clicking empty
+const SOUND_RELOAD := 17             # (v82) a magazine pushed home
+const SOUND_PICKUP := 18             # (v82) a thing picked up
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 

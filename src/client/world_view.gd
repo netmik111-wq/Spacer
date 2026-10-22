@@ -13,6 +13,7 @@ const EMERGENCY_DIM := 0.67          # (v80, the author's note and his P2 "1/3?"
 const Net := preload("res://src/shared/net.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const Sight := preload("res://src/shared/sight.gd")
+const Mover := preload("res://src/shared/mover.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
 const ItemArt := preload("res://src/client/item_art.gd")
@@ -27,6 +28,7 @@ const CHAR_W := 32
 const CHAR_H := 48
 const CHAR_PAD := 1                  # transparent border around every frame in assets/chars.png
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
+const LIE_TURN := 0.2                # (v82) seconds to turn over lying down or getting up
 const PRONE_CENTRE := Vector2(0, -8)  # (v79) the middle of a body lying low, from where its feet would stand
 # column of the first frame for each facing in assets/chars.png (down, up, left, right;
 # v74: then down-left, down-right, up-left, up-right)
@@ -123,8 +125,13 @@ void fragment() {
 """
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
 const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
-	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд"]   # (v75: the kinds from 10 on were never played)
+	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд",   # (v75: the kinds from 10 on were never played)
+	"щелчок", "перезарядка", "взял"]   # (v82)
 const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt figure shows red
+const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the floor
+const CASING_FADE := 3.0             # and the last seconds of it, fading
+const CASINGS_KEPT := 120
+const KICK_PX := 2.5                 # (v82) how far our own shot throws the camera back (a shotgun twice that)
 const STAINS_KEPT := 400             # (v75) drops of blood kept on the floors (the oldest go first)
 const RED_ALERT_TINT := 0.1          # (v75, the author's F3) how red the light is at red alert (it pulses round this)
 const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0.4, 0.9, 0.85), Color(0.6, 0.85, 1.0),
@@ -166,6 +173,7 @@ var hover := true                    # outline what the mouse is over (off while
 var hover_test := Vector2.INF       # (test helper) the mouse is taken to be this far from our character, in cells
 var _hover_pen: Node2D               # above the dark too: the outline of the thing under the mouse
 var _hover_on := Vector2i(-1, 0)     # [its cell, 1 = within reach] as drawn
+var _rise_shown := false             # (v82) the getting-up bar is on
 var _ring_pen: Node2D                # (v73) the ring that fills over the thing we work on
 var _ring_shown := false
 var zoom_step := 0                   # (v73, the author's H6) Ctrl+wheel: one whole zoom step closer or farther
@@ -255,7 +263,12 @@ const PASS_REACH := 1.0              # (v79) how near, in tiles, two people step
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
+var _lie := {}                       # (v82) id -> 0 standing .. 1 lying: how far over the body is turned
 var _prone_side := {}                # (v80) id -> 1.0 or -1.0: the side a body lying low has its head to
+var _casings: Array = []             # (v82) spent casings: [deck, position on its deck, angle, cell, seconds left]
+var _kick := Vector2.ZERO            # (v82) the camera thrown back by our own shot (pixels), easing home
+var _last_spent := -1000             # (v82) when the last bullet was seen fired (msec), and from where:
+var _spent_from := Vector2.INF       # a shotgun's pellets come together and leave one casing
 var _stains: Array = []              # (v75) blood on the floor: [deck, position on its deck (pixels), radius, (v80) cell]
 var _sparks: Array = []              # (v75) sparks off a robot hit: [deck, position, seconds left]
 var _alert_tint: ColorRect           # (v75) red light over the world at red alert
@@ -673,6 +686,12 @@ func _update_ship(delta: float) -> void:
 		_shots[i][5] -= delta
 		if float(_shots[i][5]) <= 0.0:
 			_shots.remove_at(i)
+	for i in range(_casings.size() - 1, -1, -1):
+		_casings[i][4] -= delta
+		if float(_casings[i][4]) < CASING_FADE:
+			_decks[int(_casings[i][0])].things.queue_redraw()
+		if float(_casings[i][4]) <= 0.0:
+			_casings.remove_at(i)
 	for i in range(_sounds.size() - 1, -1, -1):
 		_sounds[i][3] -= delta
 		if float(_sounds[i][3]) <= 0.0:
@@ -688,6 +707,11 @@ func _draw_things(d: int) -> void:
 	for st: Array in _stains:
 		if int(st[0]) == d and map.walk[int(st[3])] == 1:      # (v80) not where a ship alongside has gone from
 			pen.draw_circle(st[1], float(st[2]), Color(0.42, 0.02, 0.03, 0.85))
+	# (v82) spent casings, fading out at the end
+	for c: Array in _casings:
+		if int(c[0]) == d and map.walk[int(c[3])] == 1:
+			var lie := Vector2.from_angle(float(c[2])) * 2.0
+			pen.draw_line(c[1] - lie, c[1] + lie, Color(0.86, 0.66, 0.26, clampf(float(c[4]) / CASING_FADE, 0.0, 1.0)), 1.5)
 	# (v69) each room's air vent: a grille in the floor, under whatever lies on it
 	for cell: int in map.vents:
 		if map.deck_of_cell(cell) != d:
@@ -850,7 +874,33 @@ func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, fli
 		return
 	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
 	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
+	if kind == Net.SHOT_BULLET:
+		_spent(from, to, deck)
 	_shots.append([kind, hit != 0, a, b, deck, SHOT_SECONDS * (3.0 if kind == Net.SHOT_FLASH else 1.0)])
+
+
+func _spent(from: Vector2, to: Vector2, deck: int) -> void:
+	## (v82, the author's F1) A gun fired: a casing falls by the shooter (one for a shotgun's
+	## whole spread), and our own shot kicks the camera back a little.
+	var now := Time.get_ticks_msec()
+	var again := now - _last_spent < 60 and from.distance_to(_spent_from) < 0.1
+	_last_spent = now
+	_spent_from = from
+	var way := (to - from).normalized()
+	var mine := from.distance_to(Vector2(client.pred.qx(), client.pred.qy()) / 4.0) < 0.8
+	if mine and Options.shake > 0.0:
+		_kick = -way * KICK_PX * (2.0 if again else 1.0) * Options.shake
+	if again:
+		return
+	var cell := Vector2i(roundi(from.x), roundi(from.y))
+	if not client.map.walkable(cell.x, cell.y):
+		return
+	var side := Vector2(-way.y, way.x) * (1.0 if randf() < 0.5 else -1.0)
+	var at := _feet(Vector2(from.x, from.y - deck * _stride)) + side * randf_range(7.0, 13.0) + Vector2(randf_range(-3, 3), randf_range(-2, 2))
+	_casings.append([deck, at, randf_range(0.0, PI), cell.y * client.map.width + cell.x, CASING_SECONDS])
+	while _casings.size() > CASINGS_KEPT:
+		_casings.pop_front()
+	_decks[deck].things.queue_redraw()
 
 
 func cell_under_mouse() -> Vector2:
@@ -946,6 +996,14 @@ func _update_hover() -> void:
 	_hover_body()
 
 
+func ui_sound(name: String) -> void:
+	## (v82) A console's own little sound (opening, closing, refusing), where we stand: only in air.
+	var here := Vector2i(client.pred.x, client.pred.y)
+	var cell := here.y * client.map.width + here.x
+	if cell >= 0 and cell < client.air.size() and client.air[cell] >= Net.AIR_FULL * Net.SOUND_AIR:
+		_audio.play(name, _feet(Vector2(here.x, client.map.local_y(here.y))), 6.0, false, -10.0)
+
+
 func alarm_sound() -> void:
 	## (v73) The chime of a danger banner, from the ship's speakers: only where there is air.
 	var here := Vector2i(client.pred.x, client.pred.y)
@@ -956,13 +1014,23 @@ func alarm_sound() -> void:
 
 func _update_ring() -> void:
 	var working := client.work > 0 and client.target_cell() >= 0   # (v74) held or going on by itself (the bench, a kit)
-	if working or _ring_shown:
+	var rising := client.pred.rise > 0
+	if working or _ring_shown or rising or _rise_shown:
 		_ring_shown = working
+		_rise_shown = rising
 		_ring_pen.queue_redraw()
 
 
 func _draw_ring() -> void:
 	## (v73, the author's I3) The progress of a job held with "use", over the thing itself.
+	var me: Sprite2D = _views.get(client.my_id)
+	if _rise_shown and me != null and me.visible:
+		# (v82, his crawl video) getting up: a small bar over the body, red filling to green, as in SS13
+		var spot := me.position + Vector2(0, -CHAR_H * 0.5).rotated(me.rotation) + Vector2(0, -34)
+		var at := _ring_pen.to_local(me.get_parent().to_global(spot))
+		var share := 1.0 - float(client.pred.rise) / float(Mover.RISE_TICKS)
+		_ring_pen.draw_rect(Rect2(at - Vector2(13, 3), Vector2(26, 6)), Color(0.05, 0.07, 0.1, 0.8))
+		_ring_pen.draw_rect(Rect2(at - Vector2(12, 2), Vector2(24 * share, 4)), Color(0.9, 0.2, 0.15).lerp(Color(0.3, 0.9, 0.35), share))
 	if not _ring_shown:
 		return
 	var cell := client.target_cell()
@@ -1994,18 +2062,26 @@ func _process(delta: float) -> void:
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 		_hold(sprite, Net.DIR_DOWN if cond == Net.COND_OK and client.prone_of(id) else s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
-		if cond == Net.COND_OK and client.prone_of(id):
+		# (v82, his crawl video) lying down, getting up and falling turn the body over in LIE_TURN
+		# seconds rather than flipping it; a body first seen already lies
+		var lies := cond != Net.COND_OK or client.prone_of(id)
+		var was_t: float = _lie.get(id, 1.0 if lies else 0.0)
+		var t := move_toward(was_t, 1.0 if lies else 0.0, delta / LIE_TURN)
+		_lie[id] = t
+		var stand_at := sprite.position
+		if cond == Net.COND_OK and (client.prone_of(id) or t > 0.0):
 			# (v78) lying low, in its own colours. (v79, his note) Seen from above on its back, the body over
 			# its own spot, not slid back like one knocked down. (v80, his note: "this feels very strange": looking
 			# up it stood upright, looking down it stood on its head) Always lying across, as in SS13: the head
 			# to the side it looks to, kept while it looks straight up or down.
 			var look_x := Net.way(s[1]).x
-			if look_x != 0.0:
+			if look_x != 0.0 and (client.prone_of(id) and t >= 1.0 or not _prone_side.has(id)):
 				_prone_side[id] = 1.0 if look_x > 0.0 else -1.0
 			var head := Vector2(float(_prone_side.get(id, 1.0)), 0.0)
 			sprite.region_rect = _frame(Net.DIR_DOWN, false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
-			sprite.rotation = head.angle() + PI / 2.0
-			sprite.position = (((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round()) / zoom
+			sprite.rotation = wrapf(head.angle() + PI / 2.0, -PI, PI) * t
+			var lying_at := ((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round() / zoom
+			sprite.position = (stand_at.lerp(lying_at, t) * zoom).round() / zoom
 			sprite.modulate = Color.WHITE
 		elif cond == Net.COND_OK:
 			sprite.rotation = 0.0
@@ -2013,8 +2089,8 @@ func _process(delta: float) -> void:
 			sprite.modulate = Color(0.72, 0.85, 1.0) if client.hold_of(id) else Color.WHITE
 		else:
 			# on the floor: the figure is turned on its side and slid back over its tile
-			sprite.rotation = PI / 2.0
-			sprite.position += Vector2(-22.0, -7.0)
+			sprite.rotation = PI / 2.0 * t
+			sprite.position += (Vector2(-22.0, -7.0) * t * zoom).round() / zoom
 			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
 		if _flash.has(id):
 			sprite.modulate = sprite.modulate.lerp(Color(1.0, 0.2, 0.2), clampf(float(_flash[id]) / HIT_FLASH, 0.0, 1.0))
@@ -2032,6 +2108,7 @@ func _process(delta: float) -> void:
 			_labels.erase(id)
 			_seen.erase(id)
 			_prone_side.erase(id)
+			_lie.erase(id)
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
@@ -2076,6 +2153,9 @@ func _process(delta: float) -> void:
 	_camera.position = ((focus * zoom - screen_half).round() + screen_half) / zoom
 	# (v56) a blow to the hull throws the picture about, by whole screen pixels
 	_shake = move_toward(_shake * exp(-6.0 * delta), 0.0, delta)
+	# (v82) our own shot's kick, eased back in a tenth of a second or so
+	_kick = _kick.move_toward(Vector2.ZERO, delta * 40.0)
+	_camera.position += (_kick * zoom).round() / zoom
 	if _shake >= 1.0:
 		_camera.position += Vector2(randf_range(-_shake, _shake), randf_range(-_shake, _shake)).round() / zoom
 	# the picture of where light falls follows the camera exactly
@@ -2102,7 +2182,8 @@ func _process(delta: float) -> void:
 			var sprite: Sprite2D = _views[id]
 			label.text = client.player_name(id)
 			var lying: bool = sprite.rotation != 0.0
-			if lying:
+			# (v82, his note) only one really down gets the red name, not one lying low by choice
+			if (int((samples[id] as Array)[4]) != Net.COND_OK) if samples.has(id) else lying:
 				label.modulate = Color(0.75, 0.5, 0.5)
 			elif id == client.my_id:
 				label.modulate = Color(0.6, 1.0, 0.7)

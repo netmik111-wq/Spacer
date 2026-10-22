@@ -1480,3 +1480,34 @@ notes: the editor (top priority, for his artist) and the human wall. In the thre
   standing, not a stance to walk in. I chose a key over a right-click item: it is a fighting move and must be quick.
 - **My second opinion** (posted before building): hosting a game on one's own ship waits for v82, since a drawn ship
   must be tested by the server's rules (spawns, pumps, other ships' spots) and the editor's checks are the first half of that.
+
+## v82: polish without extra depth (2026-10-22)
+
+The author: "We need to polish the game further ... I'm afraid of making the mechanics too deep, so the game loses a bit
+of fun." Questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi); built on my picks while
+he answers.
+
+- **The rule for depth** (my D1 pick): the ship runs fine if nobody touches a mechanic; touching it gives a bonus. Only
+  hard mode may punish ignoring something. Most systems already pass (guns start armed, rounds come from the locker too,
+  complex repairs are hard mode only, the galley's dishes are extras). The autodoc did not: alone it stopped at 50, so
+  one player had to stand holding E. Now alone it goes on at half pace past 50 (`Medbay.UNTENDED_SLOW`); tending keeps its
+  2× and the injuries. Check every new idea against this rule.
+- **Count what people use, not what bots do** (D3): `src/server/usage.gd` counts people's uses of 18 systems, kept in the
+  save and written to `usage.txt` next to the game (the host's), shown on the end screen with what nobody touched. The
+  simulator cannot say what is fun; his evenings with friends can. Then we cut or simplify by real play. Nothing is sent
+  anywhere by itself (the game stays private).
+- **A pause on new systems** (D5, my pick): fixes, feel, art, the editor and own ships until he has played a few evenings.
+- **Getting up takes a second** (his crawl video, SS13): `Mover.State.rise` counts the ticks in the shared walking rule, so
+  the client predicts it like a step (`Mover.RISE_TICKS` = 20; the self section grew a byte, protocol 58). It makes lying
+  down a choice in a gunfight rather than a free dodge. Lying down stays instant. Bots hiding from pirates still get up at
+  once: their mind (`Defence`) would otherwise stand in place for a second at every alarm.
+- **The turn over is drawn only** (`WorldView._lie`, 0.2 s), for everyone and for falling out cold too.
+- **The red name meant "down"**: it was keyed on the sprite being turned, so lying low turned it red. Now it is keyed on the
+  condition.
+- **One's own sounds**: `Chat.sound` skipped the one who made a sound, so a shooter never heard their own gun, nor the door
+  they opened. Only footsteps are played by the client itself (they come every step and are predicted); every other sound
+  of one's own is now sent back. Found while adding the empty click.
+- **Feel without rules** (F1, F2): an empty click and a reload sound (new `Net.SOUND_*` 16 to 18), casings that are only
+  drawn, a camera kick for one's own shot only (scaled by the shake setting, so it can be turned off), console sounds kept
+  quiet (−10 dB) and only in air (vacuum stays silent).
+

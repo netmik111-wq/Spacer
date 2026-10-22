@@ -735,6 +735,8 @@ func end_campaign(how: int) -> void:
 		why, server.been.size(), server.farthest, voyage_text(server.voyage_ticks)])
 	tell_campaign()
 	server.to_all(summary_packet())
+	if server.save_path != "":
+		server.usage.write()             # (v82) the save is let go, usage.txt stays
 	campaign_ended()
 
 
@@ -762,6 +764,16 @@ func summary_packet() -> PackedByteArray:
 			var b := text.to_utf8_buffer().slice(0, 120)
 			out.append(b.size())
 			out.append_array(b)
+	# (v82) what people used: u8 count, per thing u8 length + name (UTF-8), u16 times
+	var used := server.usage.lines()
+	out.append(used.size())
+	for line: Array in used:
+		var b := str(line[0]).to_utf8_buffer().slice(0, 60)
+		out.append(b.size())
+		out.append_array(b)
+		var n := out.size()
+		out.resize(n + 2)
+		out.encode_u16(n, mini(int(line[1]), 65535))
 	return out
 
 

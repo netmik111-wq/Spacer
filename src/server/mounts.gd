@@ -197,6 +197,7 @@ func finish(p: Player, cell: int) -> void:
 		p.slots[p.hand] = Net.ITEM_NONE
 		p.train(Net.SKILL_GUNS)
 		server.chat.sound(Net.SOUND_LOAD, cell % server.map.width, cell / server.map.width, p.slot)
+		server.usage.note(p, "load")       # (v82)
 		server.chat.tell(p, "Орудие %d заряжено вручную: %d из %d. Оно заряжается быстрее." % [i + 1, loaded[i], LOAD_MAX])
 		return
 	unload(i)

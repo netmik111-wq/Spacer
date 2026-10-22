@@ -146,7 +146,7 @@ func _jobs() -> void:
 # --------------------------------------------------------------- the autodoc
 
 func _autodoc() -> void:
-	print("  -- the autodoc alone heals out of danger only")
+	print("  -- the autodoc alone heals slowly past danger")
 	_clear()
 	var map := server.map
 	var doc: int = map.autodoc.keys()[0]
@@ -158,7 +158,8 @@ func _autodoc() -> void:
 	hurt.leg = true
 	hurt.st.slow = true
 	_run(30 * Net.TICK_HZ)
-	_expect(hurt.health >= Medbay.UNTENDED_CAP - 1.0 and hurt.health < Medbay.UNTENDED_CAP + 1.0, "untended it stops at %d health (%.1f)" % [int(Medbay.UNTENDED_CAP), hurt.health])
+	# (v82) past the cap it goes on alone at half its pace: 10 -> 50 in ~13 s, then ~1.5 a second
+	_expect(hurt.health > Medbay.UNTENDED_CAP + 10.0 and hurt.health < Medbay.UNTENDED_CAP + 35.0, "untended it slows past %d health (%.1f)" % [int(Medbay.UNTENDED_CAP), hurt.health])
 	_expect(hurt.leg, "and leaves the broken leg alone")
 	var medic := server.crew.new_player("Медик")
 	medic.take_job(Net.JOB_MEDIC)

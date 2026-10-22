@@ -615,6 +615,18 @@ func _story() -> String:
 		for d: Array in deaths.slice(maxi(deaths.size() - 6, 0)):
 			lines.append("%s: %s" % [d[0], d[1]])
 		out += "\nПогибли (%d): %s" % [deaths.size(), ", ".join(lines)]
+	# (v82) what the crew used and what nobody touched (also in usage.txt next to the game)
+	var used := PackedStringArray()
+	var never := PackedStringArray()
+	for line: Array in sm.get("used", []):
+		if int(line[1]) > 0:
+			used.append("%s %d" % [line[0], int(line[1])])
+		else:
+			never.append(str(line[0]))
+	if not used.is_empty():
+		out += "\nПользовались: %s" % ", ".join(used)
+	if not never.is_empty():
+		out += "\nНе трогали: %s" % ", ".join(never)
 	return out
 
 
@@ -747,6 +759,8 @@ func _open_console(kind: int) -> void:
 		_bench_view.closed()
 	if _console_kind == 44 and kind != 44:
 		_galley_view.closed()
+	if kind != _console_kind and kind != 13 and _console_kind != 13:
+		_world.ui_sound("ui_open" if kind != 0 else "ui_close")   # (v82)
 	_console_kind = kind
 	_console.visible = kind != 0
 	if kind == 0:
@@ -1530,6 +1544,8 @@ func _use_screen(target: int) -> bool:
 	elif _opens_panel(target):
 		_open_console(target)
 	else:
+		if [3, 4, 17, 20, 21, 30, 44].has(target):
+			_world.ui_sound("ui_deny")       # (v82) a console that needs power, with none there
 		return false
 	return true
 
