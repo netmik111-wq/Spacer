@@ -31,6 +31,7 @@ var tool := Tool.BRUSH
 var sign := "#"                      # what the tools draw with
 var filled := false                  # the rectangle tool fills (else only its edge)
 var grid := true
+var show_objects := true             # (v82.1) false: only the floor layer is drawn (objects hidden)
 var problems: Array = []             # from Checks: cells to frame in red
 var zoom := 1.0
 var view := Vector2(40, 40)          # where the canvas's corner is on the screen
@@ -92,9 +93,10 @@ func fit() -> void:
 
 
 func _process(_delta: float) -> void:
-	if drawing != null and drawing.changes != _built_at:
-		_built_at = drawing.changes
-		_built = MapBuilder.build("ships:edit", drawing.to_text())["data"]
+	var key := drawing.changes * 2 + (1 if show_objects else 0) if drawing != null else -1
+	if drawing != null and key != _built_at:
+		_built_at = key
+		_built = MapBuilder.build("ships:edit", drawing.to_text() if show_objects else drawing.base_text())["data"]
 		queue_redraw()
 
 
@@ -118,7 +120,7 @@ func _cell_tile(d: int, x: int, y: int) -> int:
 	if x >= w or y >= int(_built["deck_height"]):
 		return -1
 	var id := int((_built["cells"] as Array)[(d * int(_built["deck_stride"]) + y) * w + x])
-	var s := drawing.at(d, Vector2i(x, y))
+	var s := drawing.at(d, Vector2i(x, y)) if show_objects else drawing.base_at(d, Vector2i(x, y))
 	if s == "D":
 		return _tile_id("door")
 	if s == "A":
@@ -155,7 +157,7 @@ func _draw() -> void:
 				if under >= 0:
 					draw_texture_rect_region(_tex, r, tile_region(under), Color(0.55, 0.55, 0.6))
 			draw_texture_rect_region(_tex, r, tile_region(id))
-			if drawing.at(deck, Vector2i(x, y)) == "s":
+			if show_objects and drawing.at(deck, Vector2i(x, y)) == "s":
 				draw_circle(r.get_center(), cs * 0.16, Color(0.4, 1.0, 0.5, 0.75))
 	_draw_marks(cs)
 	if grid and cs >= 12:
@@ -325,7 +327,7 @@ func _press(button: int, c: Vector2i, alt: bool) -> void:
 		return
 	if alt or tool == Tool.PICK:
 		if drawing.inside(c):
-			picked.emit(drawing.at(deck, c))
+			picked.emit(drawing.base_at(deck, c) if drawing.layer == Drawing.LAYER_FLOOR or not show_objects else drawing.at(deck, c))
 		return
 	if tool == Tool.MARK:
 		if drawing.inside(c) and button == MOUSE_BUTTON_LEFT:

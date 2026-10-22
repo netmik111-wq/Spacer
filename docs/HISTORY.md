@@ -169,6 +169,11 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v82.1 (his note: layers in the ship editor)
+- Each cell has a floor layer and an object layer; objects keep their floor, the eraser takes the object first, a
+  floor fill runs round objects; Q picks the layer the tools change, O hides objects. Editor only: no game rule or
+  protocol change. Version 0.75.1, build in `/mnt/project-files/builds/v82.1/`.
+
 ### v82 (polish without extra depth; his worry that mechanics get too deep, his crawl video and a bug note)
 - My second opinion on the page "Spacer v82 Polish" (https://claude.ai/artifact/NTp7NAbinskUYCEhKwCZVi): most deep systems
   already work if nobody touches them; a rule "the ship runs fine untouched, touching gives a bonus" (he chose B: case by
