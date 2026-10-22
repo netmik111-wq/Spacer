@@ -90,7 +90,7 @@ var _category: OptionButton
 var _search: LineEdit
 var _favs: HBoxContainer
 var _favourites: Array[String] = ["#", ".", "D", "s"]
-var _problems: ItemList
+var _problems: VBoxContainer
 var _problem_rows: Array = []
 var _status: Label
 var _info: Label
@@ -320,15 +320,18 @@ func _deck_bar() -> Control:
 
 func _right_panel() -> Control:
 	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(300, 0)
+	panel.custom_minimum_size = Vector2(320, 0)
 	var caption := Label.new()
 	caption.text = "Проблемы (щёлкните, чтобы найти)"
 	panel.add_child(caption)
-	_problems = ItemList.new()
-	_problems.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_problems.focus_mode = Control.FOCUS_NONE
-	_problems.item_selected.connect(_on_problem)
-	panel.add_child(_problems)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	_problems = VBoxContainer.new()
+	_problems.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_problems.add_theme_constant_override("separation", 6)
+	scroll.add_child(_problems)
 	var about := Label.new()
 	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	about.custom_minimum_size = Vector2(290, 0)
@@ -471,7 +474,8 @@ func _choose(s: String) -> void:
 	_favourites.push_front(s)
 	if _favourites.size() > 9:
 		_favourites.resize(9)
-	if _canvas.tool == Canvas.Tool.PICK or _canvas.tool == Canvas.Tool.ERASE or _canvas.tool == Canvas.Tool.SELECT or _canvas.tool == Canvas.Tool.MARK:
+	if _canvas.tool == Canvas.Tool.PICK or _canvas.tool == Canvas.Tool.ERASE or _canvas.tool == Canvas.Tool.SELECT \
+			or _canvas.tool == Canvas.Tool.MARK or _canvas.tool == Canvas.Tool.ROOM:
 		_set_tool(Canvas.Tool.BRUSH)
 	_fill_palette()
 	_note("Рисую: %s. %s" % [sign_name(s), _hint_of(s)])
@@ -587,26 +591,40 @@ func _run_checks() -> void:
 	var found := Checks.run(drawing)
 	_canvas.problems = found
 	_canvas.queue_redraw()
-	_problems.clear()
+	for c in _problems.get_children():
+		c.queue_free()
 	_problem_rows = found
 	var errors := 0
-	for p: Dictionary in found:
+	for i in found.size():
+		var p: Dictionary = found[i]
 		var where := ""
 		if int(p["deck"]) >= 0:
 			where = " (%s, %d:%d)" % [drawing.decks[int(p["deck"])]["name"] if int(p["deck"]) < drawing.decks.size() else "?", int(p["x"]), int(p["y"])]
-		var i := _problems.add_item(("✖ " if p["error"] else "⚠ ") + str(p["text"]) + where)
-		_problems.set_item_custom_fg_color(i, Color(1.0, 0.5, 0.45) if p["error"] else Color(1.0, 0.85, 0.45))
+		var row := Label.new()
+		row.text = ("✖ " if p["error"] else "⚠ ") + str(p["text"]) + where
+		row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.custom_minimum_size = Vector2(300, 0)
+		row.add_theme_font_size_override("font_size", 13)
+		row.add_theme_color_override("font_color", Color(1.0, 0.5, 0.45) if p["error"] else Color(1.0, 0.85, 0.45))
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		row.gui_input.connect(func(e: InputEvent) -> void:
+			if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+				_on_problem(i))
+		_problems.add_child(row)
 		if p["error"]:
 			errors += 1
 	if found.is_empty():
-		_problems.add_item("Всё в порядке.")
-		_problem_rows = [{}]
+		var ok := Label.new()
+		ok.text = "Всё в порядке."
+		ok.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
+		_problems.add_child(ok)
 	_try.disabled = errors > 0
 	_try.tooltip_text = "Сначала исправьте ошибки (красное справа)." if errors > 0 else "Сохранить и сразу сыграть одному на этом корабле (F5)"
 
 
 func _on_problem(i: int) -> void:
-	if i >= _problem_rows.size() or (_problem_rows[i] as Dictionary).is_empty():
+	if i >= _problem_rows.size():
 		return
 	var p: Dictionary = _problem_rows[i]
 	if int(p["deck"]) >= 0:

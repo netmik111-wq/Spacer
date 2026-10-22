@@ -399,7 +399,8 @@ func _parting() -> void:
 	server.ship.shield = shield
 	d._leave(true)
 	server.ship.hull = maxi(hull, server.ship.hull)
-	server.air.holes.clear()
+	for c: int in server.air.holes.keys():      # (set_hole, not holes.clear(): the leak beside a hole goes too)
+		server.air.set_hole(c, false)
 	_run(2)
 
 

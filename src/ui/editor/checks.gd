@@ -33,6 +33,14 @@ static func run(d: Drawing) -> Array:
 	var built := MapBuilder.build("ships:check", text_of(d))
 	for p: Dictionary in built["problems"]:
 		out.append(_p(int(p["deck"]), int(p["x"]), int(p["y"]), p["text"], true))
+	for i in d.decks.size():
+		var empty := true
+		for s: String in d.decks[i]["cells"]:
+			if s != " ":
+				empty = false
+				break
+		if empty:
+			out.append(_p(i, 0, 0, "Палуба «%s» пустая: в игре её не будет." % d.decks[i]["name"], false))
 	var signs := {}
 	for deck: Dictionary in d.decks:
 		for s: String in deck["cells"]:

@@ -1442,3 +1442,41 @@ my pick until he answers otherwise. Checked by `tools/fullruntest.gd`.
   aimed within `PRONE_AIMED`.
 - **The flagship mark** on the cluster chart (his picture): drawn above the system, pointing down, so the system's dot
   and "?" stay visible.
+
+## v81: the ship editor, asteroids, holding position (2026-10-22)
+
+His answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww) were all "A", with comments:
+E1 "And asteroids!", E4 "Dont forget ctrl+z/c/v", E5 categories in the palette, H1 "need to test in game". His notebook
+notes: the editor (top priority, for his artist) and the human wall. In the thread he asked for rooms taller than 2 tiles.
+
+- **The editor is inside the game** (`src/ui/ship_editor.gd`, `src/ui/editor/`), not a separate tool: his artist has only
+  the game, and drawing with the game's own tiles shows exactly what will be played. It writes the same text maps as
+  `maps/*.txt`, so a ship drawn there can become one of the game's by copying the file into `maps/` and running
+  `tools/make_assets.py`.
+- **One builder, two languages**: `src/shared/map_builder.gd` turns a drawing into the layout the game loads, the same as
+  `tools/make_assets.py` does for `maps/`. `edittest` checks they agree on every map in `maps/`; change both together.
+  The Python script stays because it also draws the tile sheets.
+- **Lenient building**: the builder picks tiles even where a drawing is wrong and lists problems with their cells, so the
+  editor can show a half-done ship. The game (`ShipMap.load_from`) refuses a drawing with a problem and says the first one.
+- **Problems in two colours**: red only for what the game cannot load; yellow for what loads but plays badly (no helm,
+  no pump, other ships cannot come alongside). Saving is always allowed (an artist works over days); «Попробовать» waits
+  for the red ones only.
+- **«ships:NAME»** is the map name of a ship of one's own (`ShipMap.USER_PREFIX`); the folder is next to the exe (the
+  project folder when run from the editor). `ShipMap.ships_override` points tests elsewhere.
+- **Trying a pirate, derelict or asteroid** lays it alongside ship02 through the derelict's machinery
+  (`Derelict.try_alongside`), with `ShipMap.try_other` adding the drawing to the other maps for that game only. The trial
+  never leaves on its own and the game's events are off (`director/road/story.auto = false`), so it can be looked at.
+- **Taller rooms**: the tile sheet gained floor pieces for a room's middle rows (the wall's shade only on the top and bottom
+  rows). New tiles are added at the end of the sheet so an artist's older sheet still lines up; a shorter `tiles.png` in
+  `sprites/` is laid over the game's (`Sprites.sheet`). A one-tile-tall room stays an error: a floor needs a top and a
+  bottom piece.
+- **Asteroids as maps** (his E1): an asteroid place now brings a drawn rock alongside (`Net.OTHER_ROCK`, maps of kind
+  `asteroid`), with no doors, air or loot; ore is dug from veins by hand (`Salvage.mine`, 10 s), the place's old count
+  of 4–8 pieces kept. The old "ore breaks off at your feet every 12 s" stays only for a ship that somehow has no rock.
+  This makes the place work instead of waiting, and lets the artist draw asteroids too. Not docked: no door to dock to.
+- **Hold position** (the human wall): one key (X), a flag in the walking state (`Mover.State.hold`) so the client predicts
+  it, and the cells held in `ShipMap.held`, which `Mover.step` refuses for others. Shots of the same side pass a holder
+  (`Combat.spared`), so a line can hold a door while the rest shoot. Any step, lying down or falling lets go: holding is
+  standing, not a stance to walk in. I chose a key over a right-click item: it is a fighting move and must be quick.
+- **My second opinion** (posted before building): hosting a game on one's own ship waits for v82, since a drawn ship
+  must be tested by the server's rules (spawns, pumps, other ships' spots) and the editor's checks are the first half of that.

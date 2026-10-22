@@ -103,6 +103,9 @@ static func build(name: String, text: String) -> Dictionary:
 	if decks.is_empty():
 		problems.append(_problem(-1, 0, 0, "Нет ни одной палубы."))
 		decks = [["Палуба", PackedStringArray([" "])]]
+	# (v81) a deck not drawn yet at the bottom (the editor's new ship) is simply left out
+	while decks.size() > 1 and (decks[-1][1] as PackedStringArray).is_empty():
+		decks.pop_back()
 	var w := 1
 	var h := 1
 	for d: Array in decks:

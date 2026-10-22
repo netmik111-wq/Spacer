@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v80 (version 0.73: the full run's fixes) is the latest. Plans one to four are done except the darkness front (the
+Build v81 (version 0.74: the ship editor) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -81,8 +81,10 @@ a guard bot fetches a gun and fights (`defence`); vsync off in the background (h
 v80 (his full run's notes, `https://claude.ai/artifact/3A2HTzKTNpPbgQTuyAFFvc`): eleven bug fixes (holes never on machines,
 shots through space, mounts left alone, ships alongside stay behind, stopping for those outside, bodies kept), emergency
 light, lying across, a stronger shotgun, picking what to take in the right-click menu.
-Next: the ship editor for his artist (his top priority), questions on `https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww`
-(v81), with the human wall. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
+v81 (his answers, `https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww`, all "A"): the ship editor in the main menu (game look,
+tools, mirrors, select/copy/paste, undo, palette, decks, room marks, problems, `ships/` folder, «Попробовать»), the map builder
+in the game, rooms taller than 2 tiles, asteroids as maps with ore veins, hold position (X, the human wall).
+Next: v82 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
 when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -114,7 +116,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 39 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 40 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -154,6 +156,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/quartertest.gd (since v78: quarter steps, bodies never in walls, sliding into doorways, held doors, hauling, lying down, friendly fire)
     godot --headless --path . --script res://tools/defencetest.gd (since v79: bots run from armed pirates and lie low, a guard bot fetches a gun and fights, the camera lean setting)
     godot --headless --path . --script res://tools/fullruntest.gd (since v80: no holes on machines, shots through space, mounts left alone, wrecks stay behind, stopping for those outside, out cold spared)
+    godot --headless --path . --script res://tools/edittest.gd (since v81: builder = script, drawing tools, own ships, checks, trials, asteroids, hold position)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -178,7 +181,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 39 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 40 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -243,7 +246,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - `src/shared/`: what both sides use. `net.gd` (protocol, ids, constants), `mover.gd` and `doors.gd`
   (predicted rules), `ship_map.gd` (the grid, decks, tiles), `sight.gd` (sight and light), `items.gd`,
   `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers), `gear.gd` (v59: crates of ship gear),
-  `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints).
+  `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints),
+  `map_builder.gd` (v81: a text drawing to the layout, as `tools/make_assets.py` does).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
   pirate and robot uses.
@@ -257,6 +261,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `admin_panel.gd`, `options_panel.gd`, `main_menu.gd`, `bench_view.gd` (v58, the workbench), `power_view.gd` (v61),
   `comms_view.gd` (v63, the comms console), `galley_view.gd` (v71, the galley's stove), `help_book.gd` and
   `first_shift.gd` (v74, H and the first-shift checklist).
+  (v81) `ship_editor.gd` (the ship editor) with `src/ui/editor/`: `drawing.gd` (the model, tools, undo, text), `canvas.gd`
+  (drawing and the mouse), `checks.gd` (the problems panel).
   (v75) `src/client/music.gd` (one music player with a crossfade, menu and fight), `src/client/bug_report.gd` (the zip).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
@@ -436,6 +442,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   hulk comes back only to a stopped ship: a test that moves the ship on purpose by setting `pos` (not `moving`) keeps it.
   `Navigation.update` stops a flying ship while `derelict.someone_outside()`. Bodies on the ship alongside go into the
   hulk (`"bodies"`) or `_left_bodies` and come back with it. `C_TAKE` takes one chosen floor thing (protocol 56).
+- (v81) `MapBuilder` and `tools/make_assets.py` must build the same layout (`edittest` compares every map): change both.
+  New tiles go at the END of the sheet (an artist's older sheet still lines up). A map's kind is `ShipMap.kind` (from
+  `; kind =` or its name); pick other maps with `map.others_of(kind)` and the list with `map.other_maps()` (it adds the
+  editor's trial, `ShipMap.try_other`), never `Net.OTHER_MAPS` alone. An asteroid alongside is `Net.OTHER_ROCK` (ship kind
+  `SHIP_ROCK`): no doors, no dock, no scrap. Held cells are `ShipMap.held` (filled by `Movement.mark_held` each tick, by the
+  client in `_mark_held`): whatever moves a character other than through `Mover.step` should respect them. Protocol 57.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
