@@ -10,11 +10,18 @@ extends RefCounted
 ## at least one empty row, so nothing on one deck touches another in the grid.
 
 const Net := preload("res://src/shared/net.gd")
+const MapBuilder := preload("res://src/shared/map_builder.gd")
+
+const USER_PREFIX := "ships:"        # (v81) a map named "ships:NAME" is ships/NAME.txt of one's own (see ships_dir)
+static var ships_override := ""      # (tests) another «ships» folder
+static var try_other := ""           # (v81) the ship editor's «Попробовать»: a drawing of one's own that comes alongside
+                                     # (the game's server runs inside the game then, so both sides read this)
 
 const DOOR_BAND := 0                 # a door in a horizontal wall ('D' in the drawing)
 const DOOR_AIRLOCK := 1              # an airlock in a vertical wall ('A')
 
 var map_name := ""
+var kind := "ship"                   # (v81) what the drawing is: ship (ours), pirate, derelict or asteroid (MapBuilder.KINDS)
 var width := 0
 var height := 0                      # rows of the whole grid, all decks together
 var deck_height := 0                 # rows of one deck
@@ -94,6 +101,9 @@ var base_cells := PackedInt32Array()
 var base_walk := PackedByteArray()
 var base_opaque := PackedByteArray()
 
+var held := {}                       # (v81, the author's human wall) cells somebody holds (Mover.State.hold): nobody
+                                     # else walks into them. The server marks them every tick; a client marks those
+                                     # of the others it sees, so its own walking is predicted alike
 var tile_size := 32
 var atlas_columns := 8
 var tile_kinds := PackedStringArray()
@@ -110,11 +120,43 @@ const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_
 func load_from(name: String, needs_spawns: bool = true) -> String:
 	## Returns "" on success or a description of what went wrong.
 	var tiles_text := FileAccess.get_file_as_string("res://assets/tiles.json")
-	var map_text := FileAccess.get_file_as_string("res://maps/%s.json" % name)
-	if tiles_text.is_empty() or map_text.is_empty():
+	var data: Variant = null
+	if name.begins_with(USER_PREFIX):
+		# (v81) a ship of one's own, drawn in the ship editor: built here from its drawing
+		var text := FileAccess.get_file_as_string(ships_dir().path_join(name.substr(USER_PREFIX.length()) + ".txt"))
+		if text.is_empty():
+			return "Не найден корабль «%s» в папке ships." % name.substr(USER_PREFIX.length())
+		var built := MapBuilder.build(name, text)
+		var problems: Array = built["problems"]
+		if not problems.is_empty():
+			var p: Dictionary = problems[0]
+			return "Корабль «%s»: %s" % [name.substr(USER_PREFIX.length()), p["text"]]
+		data = built["data"]
+		kind = built["kind"]
+	else:
+		var map_text := FileAccess.get_file_as_string("res://maps/%s.json" % name)
+		if map_text.is_empty():
+			return "Не найдены файлы карты «%s»." % name
+		data = JSON.parse_string(map_text)
+		kind = MapBuilder.kind_of(name, "")
+	return load_data(name, tiles_text, data, needs_spawns)
+
+
+static func ships_dir() -> String:
+	## (v81) The «ships» folder next to the game (run from the project: the project's own), where the
+	## ship editor keeps its drawings.
+	if ships_override != "":
+		return ships_override
+	if OS.has_feature("template"):
+		return OS.get_executable_path().get_base_dir().path_join("ships")
+	return ProjectSettings.globalize_path("res://").path_join("ships")
+
+
+func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bool = true) -> String:
+	## Sets the layout up from a map's data (as maps/*.json holds it). "" or what went wrong.
+	if tiles_text.is_empty():
 		return "Не найдены файлы карты «%s»." % name
 	var tiles: Variant = JSON.parse_string(tiles_text)
-	var data: Variant = JSON.parse_string(map_text)
 	if typeof(tiles) != TYPE_DICTIONARY or typeof(data) != TYPE_DICTIONARY:
 		return "Файлы карты «%s» повреждены." % name
 	tile_size = int(tiles["tile_size"])
@@ -462,6 +504,23 @@ func _find_rooms() -> void:
 		rooms.append(room)
 
 
+static func other_maps() -> Array[String]:
+	## The drawings of other ships that may come alongside, in the order `others` numbers them.
+	var out: Array[String] = Net.OTHER_MAPS.duplicate()
+	if try_other != "":
+		out.append(try_other)
+	return out
+
+
+func others_of(of_kind: String) -> Array[int]:
+	## (v81) The numbers in `others` of the drawings of that kind (pirate, derelict, asteroid).
+	var out: Array[int] = []
+	for k in others.size():
+		if str(others[k].kind) == of_kind and others[k].map_name != try_other:
+			out.append(k)
+	return out
+
+
 func add_other(name: String) -> int:
 	## Makes room for another kind of ship that may come alongside: its layout,
 	## and numbers for its doors. Returns its number in `others`, or -1 if its
@@ -543,7 +602,7 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 
 func door_tint(d: int) -> String:
 	## The prefix of the tiles this door is drawn in ("pirate_" on a pirate ship).
-	if d >= other_first_door and other_kind >= 0 and str(other.map_name).begins_with("pirate"):
+	if d >= other_first_door and other_kind >= 0 and str(other.kind) == "pirate":
 		return "pirate_"
 	return ""
 

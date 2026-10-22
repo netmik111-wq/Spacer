@@ -50,6 +50,19 @@ func move(p: Player) -> void:
 	p.history[tick % Player.HISTORY] = Mover.visual_pos(p.st, tick)
 
 
+func mark_held() -> void:
+	## (v81, the author's human wall) The tiles held this tick: nobody else walks into them.
+	server.map.held.clear()
+	for p: Player in server.players:
+		if p != null and p.st.hold and not p.corpse:
+			if p.cond != Net.COND_OK:
+				p.st.hold = false
+				p.self_dirty = true
+				continue
+			for t in Mover.body_tiles(p.st):
+				server.map.held[t.y * server.map.width + t.x] = p.slot
+
+
 func climb(p: Player) -> bool:
 	## The "use" key was pressed. On a ladder, with nothing else to use in front,
 	## the character goes to the other deck, and takes along whoever it hauls.

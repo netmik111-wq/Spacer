@@ -1,0 +1,8 @@
+; A small asteroid of solid rock, its ore veins on the outside.
+; kind = asteroid
+= Астероид
+   RRRR
+ RRRRORR
+ORRRRRRRR
+ RRRRRRO
+   RRR

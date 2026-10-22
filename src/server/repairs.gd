@@ -70,6 +70,10 @@ func update(p: Player) -> void:
 		# (v67) a can of fuel poured into the tank at the engine
 		if _work_done(p, cell, Net.POUR_TICKS):
 			pour(p)
+	elif cell >= 0 and server.salvage.can_mine(p, cell) == "":
+		# (v81) ore dug out of a vein of the asteroid alongside
+		if _work_done(p, cell, server.salvage.mine_ticks(p)):
+			server.salvage.mine(p, cell)
 	elif cell >= 0 and server.salvage.can_cut(p, cell) == "":
 		# (v67, the author's B2) scrap cut off a wreck or a derelict alongside (see Salvage)
 		if _work_done(p, cell, server.salvage.cut_ticks(p)):
@@ -207,8 +211,8 @@ func usable_ahead(p: Player) -> bool:
 		return true                          # (v59) a crate of gear where it goes, or the module bay
 	if server.outside.can_mend(p, cell) or map.smes.has(cell) or map.smes_small.has(cell):
 		return true                          # (v61) the hull from outside; an SMES's terminal
-	if server.salvage.can_cut(p, cell) != server.salvage.NOT_HERE:
-		return true                          # (v67) a wreck's wall to cut scrap off (or why not)
+	if server.salvage.can_cut(p, cell) != server.salvage.NOT_HERE or server.salvage.can_mine(p, cell) != server.salvage.NOT_HERE:
+		return true                          # (v67) a wreck's wall to cut scrap off (or why not); (v81) an ore vein
 	if server.air.holes.has(cell) or server.ship.broken.has(cell) or map.oxygen.has(cell) or map.chart.has(cell) \
 			or map.helm.has(cell) or map.engine.has(cell) or map.air_plant.has(cell) or map.locker.has(cell) \
 			or map.lock_pump.has(cell) or map.gun_console.has(cell) or map.guns.has(cell) or map.intercom.has(cell) or map.holo.has(cell) \
@@ -252,6 +256,8 @@ func press(p: Player) -> void:
 		pass                                 # (v66) the airlock door's button: the pump is at work
 	elif gear_why != "" and gear_why != server.outfit.NOT_HERE and not server.ship.broken.has(ahead):
 		server.chat.tell(p, gear_why)        # (v59) why that crate cannot go in here
+	elif ahead >= 0 and server.salvage.can_mine(p, ahead) != "" and server.salvage.can_mine(p, ahead) != server.salvage.NOT_HERE:
+		server.chat.tell(p, server.salvage.can_mine(p, ahead))    # (v81) why no ore comes out of it
 	elif ahead >= 0 and server.salvage.can_cut(p, ahead) != "" and server.salvage.can_cut(p, ahead) != server.salvage.NOT_HERE:
 		server.chat.tell(p, server.salvage.can_cut(p, ahead))     # (v67) why nothing can be cut off here
 	elif ahead >= 0 and server.map.engine.has(ahead) and p.in_hand() == Net.ITEM_FUEL and not can_pour(p, ahead):

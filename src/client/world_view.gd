@@ -2009,7 +2009,8 @@ func _process(delta: float) -> void:
 			sprite.modulate = Color.WHITE
 		elif cond == Net.COND_OK:
 			sprite.rotation = 0.0
-			sprite.modulate = Color.WHITE
+			# (v81) one holding its position (the human wall) stands out in a steel blue
+			sprite.modulate = Color(0.72, 0.85, 1.0) if client.hold_of(id) else Color.WHITE
 		else:
 			# on the floor: the figure is turned on its side and slid back over its tile
 			sprite.rotation = PI / 2.0

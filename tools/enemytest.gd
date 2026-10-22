@@ -271,7 +271,8 @@ func _bombs() -> void:
 	g.enemy_gone()
 	d.pirates_wrecked()
 	_run(2)
-	server.air.holes.clear()
+	for c: int in server.air.holes.keys():
+		server.air.set_hole(c, false)
 	_run(2)
 
 

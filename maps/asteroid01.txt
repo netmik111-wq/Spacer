@@ -1,0 +1,9 @@
+; An asteroid with a hollow: rock ('R'), ore veins ('O'), bare ground (','). Legend in tools/make_assets.py.
+; kind = asteroid
+= Астероид
+      RRRRR
+   RRRRRORRRR
+  RRO,,,,,RRRRR
+ RRR,,,,,,,,ORRR
+  RRRR,,,,RRRRR
+    RRR,,RRRR

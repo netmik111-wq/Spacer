@@ -41,7 +41,7 @@ func _initialize() -> void:
 
 	# the hulls
 	_expect(map.others.size() == Net.OTHER_MAPS.size(), "every other ship's drawing loads (%d)" % map.others.size())
-	for k in range(Net.OTHER_PIRATE, map.others.size()):
+	for k in map.others_of("pirate"):
 		var o = map.others[k]
 		# (v57: only the carrier is sure to have a teleporter; v62: only a drone ship has a control core,
 		# and an ordinary pirate carries a teleporter only when its hull has a room to spare for it)

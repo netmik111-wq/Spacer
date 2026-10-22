@@ -169,6 +169,18 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v81 (the ship editor; his answers on "Spacer v81 Ship editor", all "A")
+- «Редактор кораблей» in the main menu: the game's own look, brush, line, rectangle, room, fill, eraser, picker,
+  selection with Ctrl+C/X/V and moving, mirrors, undo/redo, a categorised palette with search and the last 9 signs on
+  1–9, deck tabs, size, room marks (locks, brig, pirate systems), a live problems panel, saving to `ships/` next to the
+  game with autosave each minute, «Попробовать» to play the drawing alone at once, «Обновить картинки» for the artist.
+- The map builder now lives in the game too (`src/shared/map_builder.gd`, same result as `tools/make_assets.py`).
+- His "can you make rooms more than 2 tiles": rooms any height from 2 (middle floor tiles in the sheet).
+- His E1 "And asteroids!": asteroids are drawn maps that come alongside at an asteroid place; ore is dug from veins.
+- The human wall (his note): X holds position; nobody passes, friends' shots fly past.
+- Hosting a game on one's own ship: v82. New test `tools/edittest.gd` (40 scripts). Protocol 57. Version 0.74, build in
+  `/mnt/project-files/builds/v81/`.
+
 ### v80 (the full run: his eleven bug notes, four suggestions and his answers on "Spacer v80 Playthrough")
 - Bugs: no hole on a machine in the wall; bullets fly through open space; bots touch mounted guns only on the console's
   order (and a mend's hold no longer unmounts); a ship alongside stays at its mark once ours gets under way; a flying

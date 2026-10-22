@@ -203,6 +203,8 @@ func update_helm() -> void:
 	elif client.pirates_alongside():
 		lines.append("У шлюза пиратский корабль%s. Расстыковавшись, он уйдёт, но заклинившие двери шлюза выпустят воздух." %
 			(", пристыкован силой" if client.other_docked else ", сейчас пристыкуется"))
+	elif client.other_here() and client.other_rock:
+		lines.append("Над шлюзом астероид. Руду добывают из его жил в скафандре: держите E у жилы. Тронемся, и он останется позади.")
 	elif client.other_here() and client.other_wreck:
 		lines.append("Разбитый пиратский корабль пристыкован к шлюзу." if client.other_docked else
 			"Над шлюзом разбитый пиратский корабль. До него можно добраться через открытый космос или пристыковаться.")
@@ -279,7 +281,7 @@ func update_helm() -> void:
 	lines.append("%s: %s" % [Net.ALERT_NAMES[client.alert], ALERT_ABOUT[client.alert]])
 	text.text = "\n".join(lines)
 	var buttons_key := Sectors.key(sectors.cell[here]) * 128 + 1 + (2 if client.other_here() else 0) + (4 if client.other_docked else 0) \
-		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck else 0) + (16 if client.fighting() else 0) \
+		+ (8 if client.pirates_alongside() else 0) + (32 if client.other_wreck or client.other_rock else 0) + (16 if client.fighting() else 0) \
 		+ (64 if _has_phase() else 0)
 	buttons_key = buttons_key * 2 + (1 if client.meteor_left > 0.0 and not client.fighting() else 0)   # (v70) the meteor button
 	if buttons_for != buttons_key:
@@ -291,7 +293,7 @@ func update_helm() -> void:
 		halt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		halt.pressed.connect(func() -> void: client.send_helm(false))
 		buttons.add_child(halt)
-		if client.other_here() and (client.other_docked or not client.pirates_alongside()):
+		if client.other_here() and not client.other_rock and (client.other_docked or not client.pirates_alongside()):
 			var dock := Button.new()
 			dock.text = ("Расстыковаться с пиратским кораблём" if client.pirates_alongside() else "Расстыковаться") \
 				if client.other_docked else ("Пристыковаться к разбитому кораблю" if client.other_wreck else "Пристыковаться к брошенному кораблю")
@@ -611,5 +613,5 @@ func _draw_helm() -> void:
 		var colour := PLACE_COLOURS[Sectors.P_HULK] if client.other_dark() else HUNTER
 		var by := ship + Vector2(16, -10)
 		chart.draw_rect(Rect2(by - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
-		chart.draw_string(font, by + Vector2(-60, -8), "обломки пиратов" if client.other_wreck else
+		chart.draw_string(font, by + Vector2(-60, -8), "астероид" if client.other_rock else "обломки пиратов" if client.other_wreck else
 			("пираты" if client.pirates_alongside() else "корабль рядом"), HORIZONTAL_ALIGNMENT_CENTER, 120, 11, colour)

@@ -76,6 +76,7 @@ var sos := false                     # (v77, the author's S1) the derelict along
 var sos_at := Vector2.ZERO           # where it lies: it stays alongside while our ship stays near
 const SOS_BODIES := 3                # its dead crew, with what they carried
 const SOS_POCKETS: Array[int] = [Net.ITEM_MEDPATCH, Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_FOOD, Net.ITEM_MAG]
+var trial := false                   # (v81) laid by the ship editor's «Попробовать»: it never leaves by itself
 var _rng := RandomNumberGenerator.new()
 
 
@@ -100,12 +101,14 @@ func setup(p_server: Node) -> void:
 		for d in o.doors.size():
 			if o.door_vent[d] == 1:
 				theirs = o.doors[d]
-		if theirs.x < 0:
+		if theirs.x < 0 and o.kind != "asteroid":
 			continue
+		if theirs.x < 0:
+			theirs = Vector2i(o.width / 2, o.height - 1)   # (v81) an asteroid lies over the airlock, never docked
 		var docked_at := ours - theirs - Vector2i(0, 1)
 		var alongside := docked_at - Vector2i(0, GAP)
 		if map.other_fits_kind(k, docked_at) and map.other_fits_kind(k, alongside):
-			_spots[k] = [alongside, docked_at]
+			_spots[k] = [alongside, alongside if o.kind == "asteroid" else docked_at]
 
 
 func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
@@ -118,7 +121,16 @@ func _pirate_spots() -> Array:
 	## The pirate ships' drawings that can lie off our airlock.
 	var out := []
 	for k: int in _spots.keys():
-		if k >= Net.OTHER_PIRATE:
+		if map.others_of("pirate").has(k):
+			out.append(k)
+	return out
+
+
+func _rock_spots() -> Array:
+	## (v81) The asteroids' drawings that can lie off our airlock.
+	var out := []
+	for k: int in _spots.keys():
+		if map.others_of("asteroid").has(k):
 			out.append(k)
 	return out
 
@@ -136,7 +148,7 @@ func _comes(of_kind: int, of_layout: int, of_name: String) -> void:
 	_came_in = Sectors.key(server.sectors.cell[server.ship.sector])
 	ship = Ship.new()
 	ship.id = server.new_ship_id()
-	ship.kind = Net.SHIP_PIRATE if of_kind == Net.OTHER_PIRATE else Net.SHIP_DERELICT
+	ship.kind = Net.SHIP_PIRATE if of_kind == Net.OTHER_PIRATE else (Net.SHIP_ROCK if of_kind == Net.OTHER_ROCK else Net.SHIP_DERELICT)
 	ship.name = of_name
 	ship.layout = of_layout
 	ship.map = map
@@ -195,7 +207,7 @@ func cast_off() -> bool:
 	## out at us: a derelict alongside is let go (undocked first) and drifts off, to come
 	## back once the fight is over and the ship is still near it. False while anybody of
 	## ours is outside (on it or in space): they are not left behind.
-	if not here or (kind != Net.OTHER_DERELICT and not wreck) or someone_outside():
+	if not here or (kind == Net.OTHER_PIRATE and not wreck) or someone_outside() or trial:
 		return false
 	if docked:
 		_move(map.other_at, _spots[layout][0])
@@ -205,7 +217,7 @@ func cast_off() -> bool:
 	_leave(true)
 	held_off_until = server.tick + 5 * Net.TICK_HZ
 	server.chat.say("Охотник выходит на нас! Пришлось отдать швартовы: %s отнесло в сторону. После боя к нему можно вернуться." % (
-		"брошенный корабль" if kind == Net.OTHER_DERELICT else "разбитый корабль"))
+		"брошенный корабль" if kind == Net.OTHER_DERELICT else ("астероид" if kind == Net.OTHER_ROCK else "разбитый корабль")))
 	return true
 
 
@@ -262,6 +274,17 @@ func update() -> void:
 		elif _pirates_dock_at < 0 and not raid and not docked and free:
 			_leave()
 		return
+	if trial:
+		return                               # (v81) the ship editor's «Попробовать»: it stays as it was laid
+	if here and kind == Net.OTHER_ROCK:
+		# (v81) an asteroid stays while the ship holds still by it
+		if (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR or not server.road.at_asteroid()) and holds_ship() == "":
+			_leave()
+		return
+	if not here and server.road.at_asteroid() and not server.ship.moving and server.ship.jump_to == Net.NO_SECTOR \
+			and server.tick >= held_off_until and not server.gunnery.fighting() and not _rock_spots().is_empty():
+		_rock_arrives()
+		return
 	var hulk: Dictionary = server.road.at_hulk()
 	# (v77, the author's note: chat spam while the jump charged) a wreck sent away for the jump must not come straight back
 	if not here and not hulk.is_empty() and server.ship.jump_to == Net.NO_SECTOR and not server.ship.moving and server.tick >= held_off_until \
@@ -286,6 +309,8 @@ func dock(on: bool) -> String:
 		return ""
 	if kind == Net.OTHER_PIRATE and on and not wreck:
 		return "Стыковаться с пиратами по своей воле никто не станет."
+	if kind == Net.OTHER_ROCK:
+		return "К астероиду не пристыковаться: до него добираются в скафандре через шлюз и открытый космос."
 	if on and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
 		return "Стыковка на ходу невозможна: сначала остановите корабль."   # (v69, the author's note)
 	var from: Vector2i = map.other_at
@@ -313,7 +338,7 @@ func pirates_escaped() -> void:
 
 func dark() -> bool:
 	## Is the ship alongside without light of its own (a derelict, or a wreck)?
-	return here and (kind == Net.OTHER_DERELICT or wreck)
+	return here and (kind == Net.OTHER_DERELICT or kind == Net.OTHER_ROCK or wreck)
 
 
 func becomes_wreck() -> void:
@@ -534,6 +559,40 @@ func _arrive(called := "Брошенный корабль") -> void:
 	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
 
 
+func _rock_arrives() -> void:
+	## (v81, the author's "And asteroids!") An asteroid place in reach and the ship holding still:
+	## the rock lies over our airlock, a few cells of open space away. Ore is dug out of its veins
+	## by hand (Salvage.mine), in a suit; how much it holds is the place's own (Road.work).
+	var rocks := _rock_spots()
+	var k: int = rocks[server.road.asteroid_key() % rocks.size()]
+	_comes(Net.OTHER_ROCK, k, "Астероид")
+	_place(_spots[k][0])
+	for c in map.other_cells:
+		if map.walk[c] == 1:
+			server.air.air[c] = 0.0          # bare rock in space: no air on its ground
+	server.air.wake()
+	server.chat.say("Рядом астероид. Руду добывают из жил: выйдите в скафандре через шлюз и держите E у жилы.")
+
+
+func try_alongside(k: int) -> bool:
+	## (v81) The ship editor's «Попробовать» on a drawing that is not our own ship: it lies at our
+	## airlock at once (docked, if it has an outer door), with air, and stays. False if it does not fit.
+	if not _spots.has(k) or here:
+		return false
+	var rock: bool = map.others[k].kind == "asteroid"
+	_comes(Net.OTHER_ROCK if rock else Net.OTHER_DERELICT, k, "Пробный: " + str(map.others[k].map_name).trim_prefix(ShipMap.USER_PREFIX))
+	trial = true
+	if not rock:
+		ship.kind = Net.SHIP_WRECK           # (clients: no pirates' fight, no derelict's sector)
+	_place(_spots[k][1])
+	_set_docked(not rock)
+	for c in map.other_cells:
+		if map.walk[c] == 1:
+			server.air.air[c] = 0.0 if rock else 1.0
+	server.air.wake()
+	return true
+
+
 func _hulk_arrives(h: Dictionary) -> void:
 	## (v69, the author: wrecks "appear on the map like an event, so they don't disappear")
 	## A raider we wrecked in this system comes alongside again, as it was left.
@@ -582,7 +641,7 @@ func _hulk_leaves() -> void:
 func _leave(quiet: bool = false) -> void:
 	var was_wreck := wreck
 	# what is left on a derelict is remembered for this sector
-	if kind == Net.OTHER_DERELICT and not sos:
+	if kind == Net.OTHER_DERELICT and not sos and not trial:
 		var key := Sectors.key(server.sectors.cell[server.ship.sector])
 		var kept := []
 		for c in map.other_cells:
@@ -602,8 +661,11 @@ func _leave(quiet: bool = false) -> void:
 	_set_docked(false)
 	_place(ShipMap.NO_OTHER)
 	ship = null
+	trial = false
 	server.gunnery.enemy_gone()
-	if not quiet:
+	if not quiet and kind == Net.OTHER_ROCK:
+		server.chat.say("Астероид остался позади.")
+	elif not quiet:
 		server.chat.say("Брошенный корабль остался позади." if kind == Net.OTHER_DERELICT else
 			("Разбитый пиратский корабль остался позади: он отмечен на карте сектора." if was_wreck else "Пиратский корабль отошёл от шлюза и ушёл."))
 
@@ -685,7 +747,7 @@ func _place(at: Vector2i) -> void:
 	for d in range(map.other_first_door, map.doors.size()):
 		server.doors.ready[d] = Doors.CLOSED
 		server.doors.set_flags(d, 0)
-		server.doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck else 0     # a pirate ship has power, a wreck not
+		server.doors.dead[d] = 1 if kind != Net.OTHER_PIRATE or wreck else 0     # a pirate ship has power, a wreck not
 	server.replication.index_doors()
 	server.air.reshape()
 	_unbury()

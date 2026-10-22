@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v80 (version 0.73).
+Last updated: build v81 (version 0.74).
 
 Contents:
 
@@ -43,6 +43,7 @@ Contents:
 33. [Polish (v75)](#33-polish-v75)
 34. [The evening's bugs, the view and bots on a slant (v77)](#34-the-evenings-bugs-the-view-and-bots-on-a-slant-v77)
 35. [The full run's fixes (v80)](#35-the-full-runs-fixes-v80)
+36. [The ship editor, asteroids, holding position (v81)](#36-the-ship-editor-asteroids-holding-position-v81)
 
 ---
 
@@ -105,6 +106,8 @@ Contents:
   - New people appear in the upper-deck cabins and in corridors, not in restricted compartments.
   - **Intercoms** — four panels on walls: cabins and corridor upstairs, bridge, store and
     corridor below, corridor and hold below (see section 22).
+- (v81) Rooms may be any height from **2 tiles** up (before: exactly 2); a room's middle rows get floor without the
+  wall's shade. A room one tile tall is still impossible (the editor says so).
 - **Glass** (transparent floor): you can see the lower deck through it; air does not pass.
 - **Catwalks** (grating): you can see down, air passes between decks.
 - **Hatch with ladder**: you can see down, air passes, you can climb down.
@@ -1305,8 +1308,11 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   stop inside it, and somebody must work.
   - **Аномалия** (anomaly, 10%; twice as often in a storm belt): somebody at a holomap for **30 s** scans it: **1–2 scan
     data** into the locker.
-  - **Астероид** (asteroid, 12%): every **12 s** a piece of **ore** breaks off at the feet of one of ours out in space,
-    **4–8** in all.
+  - **Астероид** (asteroid, 12%): (v81) once the ship stops at it, **the asteroid itself comes alongside** (a rock drawn
+    like a ship, with no doors and no air). Its **ore veins** (darker rock with shiny bits) are dug in a suit: hold **E**
+    at a vein for **10 s** (up to 30% quicker with the repair skill), a piece of **ore** goes into the hands (or on the
+    floor). **4–8** pieces in all, then «Астероид выработан» and the rock drifts off. It cannot be docked, scrapped or
+    looted. (Before v81: every 12 s a piece broke off at the feet of one of ours out in space.)
   - **Газовое облако** (gas cloud, 10%; never in a dead zone): while somebody stands at the engine the fuel scoop adds
     **2.5 units a second** to the tank, **150–300** in all.
   - (v77, the author's note) The bridge says for each kind found what it takes («подлетите к метке и остановитесь, потом
@@ -1509,6 +1515,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 | WASD, arrows | walk; (v74) two keys at once (up or down with left or right) walk on a slant |
 | E | action: console, locker, holomap, drone monitor, ladder, repair, search, pick up item, hack lock, intercom |
 | F | drag a person lying down / let go |
+| X | (v81) hold position: a living wall nobody passes, see section 36 |
 | Q | oxygen supply |
 | 1–6, mouse wheel | what's in hand |
 | Z | use the item in hand (flashlight) |
@@ -2010,3 +2017,43 @@ the page "Spacer v80 Playthrough" (https://claude.ai/artifact/3A2HTzKTNpPbgQTuyA
 - **Blood** stays only on floors (never in open space), and blood on a ship alongside goes with it.
 - **The flagship's mark** on the cluster chart sits above its system, so the system stays visible.
 - Emergency light, lying across, the shotgun, choosing what to take and bodies kept: sections 7, 1, 28 and 16.
+
+## 36. The ship editor, asteroids, holding position (v81)
+
+The author's answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww), all "A".
+
+### The ship editor
+
+- **«Редактор кораблей»** in the main menu. The ship is drawn in the game's own look (the same tiles; doors drawn
+  shut, the deck above faint, the deck below seen through glass and catwalks).
+- **Tools**: brush (B), line (L), rectangle (R, filled or as walls), **room** (M: walls round a floor in one drag), fill
+  (F), eraser (E; the right mouse button erases with any tool), picker (I, or Alt+click), **selection** (S: drag it to
+  move, Ctrl+C / Ctrl+X / Ctrl+V, Delete, Ctrl+A; a pasted copy follows the mouse, a click lays it, Esc cancels, spaces in
+  it do not erase), **room marks** (K: lock a room by access, a brig cell, a pirate ship's system).
+- **Mirror** left-right (X) and up-down (Y) around the ship's middle: one stroke draws both halves; wide windows flip.
+- **Undo / redo**: Ctrl+Z, Ctrl+Y (or Ctrl+Shift+Z), 200 steps.
+- **Palette**: every sign with its picture and Russian name, in **7 categories** (walls and floor, doors and windows,
+  consoles, machines, guns and defence, medicine and living, asteroid) with a **search** box; the last 9 signs used are on keys **1–9**.
+- **Decks**: tabs, add, remove (pressed twice), move, rename; Page Up / Page Down.
+- **Kind**: our ship, pirate, derelict or **asteroid** (rock «R», ore vein «O», ground «,»).
+- **Size**: up to 96×96 per deck, grown or cut from any side.
+- **Problems panel**, checked live: red = the game cannot load it (a door in a wrong wall, a wall end without a corner,
+  a machine not in a wall, a room one tile tall, no spawn place...); yellow = it loads but misses something (no
+  helm, no airlock pump, no SMES, no supply locker, other ships could not come alongside...). A click on a problem
+  shows its place.
+- **Saving**: Ctrl+S, into the **«ships»** folder next to the game (`ships/NAME.txt`, the same text format the game's own
+  ships use); the editor also saves itself every **60 s**. «Открыть…» opens your ships and copies of the game's.
+- **«▶ Попробовать»** (F5, only without red problems): plays the drawing at once, alone, with no events. Our ship: you
+  stand in it. Pirate, derelict or asteroid: it comes alongside ship02 (docked if it has a door). Esc → «Выйти» brings
+  you back to the editor.
+- **«Обновить картинки»** rereads the «sprites» folder, so an artist sees new tiles without restarting. A tiles sheet
+  from an older build (shorter) is laid over the game's, so the new v81 tiles still show.
+- Hosting a game on your own ship comes in v82.
+
+### Holding position
+
+- **X** (changeable in the settings): you **hold your position**, a living wall. Nobody, ours or pirates, can step into
+  your tiles; bots and pirates find their way round. Your friends' shots fly past you, so a line can hold a door while
+  others shoot through it. A light blue tint shows who holds.
+- A step, lying down (C) or falling lets go; X again lets go too.
+

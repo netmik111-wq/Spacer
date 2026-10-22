@@ -15,6 +15,8 @@ extends Node
 ##                       campaign=off neither reads nor writes a save
 ##   mode=normal         (v63) a new campaign's mode: easy, normal or hard (a continued one keeps its own);
 ##                       (v71) "+complex" or "+plain" after it turns complex repairs on or off (the hard mode has them on)
+##   --editor           (v81) open the ship editor straight away; editor_open=PATH opens that drawing in it
+##                       (res://maps/ship02.txt, or a file of one's own); with try_after=SECONDS its «Попробовать»
 ## Other keys: F11 toggles full screen.
 ## Used by the game itself when it starts a server for a hosted game:
 ##   --autoquit (stop once the server has stayed empty), token=TEXT (lets that game stop it).
@@ -84,6 +86,8 @@ const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
 const Music := preload("res://src/client/music.gd")
 const Options := preload("res://src/client/options.gd")
+const ShipEditor := preload("res://src/ui/ship_editor.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 
 var _placed := false
 var _derelicted := false
@@ -106,6 +110,10 @@ var _host_tries := 0
 var _host_bots := 0
 var _host_campaign := "continue"    # a hosted game goes on with the saved campaign, or starts a new one
 var _host_mode := "normal"           # (v63) and the mode a new one is played in (Net.MODE_KEYS)
+var _host_map := "ship02"            # (v81) the ship a hosted game is played on
+var _editor: ShipEditor = null       # (v81) the ship editor, kept while the game runs so its undo survives a try
+var _trial := ""                     # (v81) the kind of drawing «Попробовать» is playing ("" = a real game)
+var _tried := false
 var _empty_since := 0.0              # dedicated server with --autoquit: when it last had a player
 var _had_players := false
 
@@ -203,6 +211,10 @@ func _ready() -> void:
 	_client.failed.connect(_on_failed)
 	_client.lost.connect(_on_lost)
 	_show_menu("")
+	if _flags.has("editor"):
+		_open_editor()
+		if _opt.has("editor_open"):
+			_editor.open_path(str(_opt["editor_open"]))
 	var player := str(_opt.get("name", ""))
 	if _flags.has("host"):
 		_host_game(player if player != "" else "Игрок", port, bots)
@@ -220,17 +232,65 @@ func _show_menu(message: String, is_error: bool = false) -> void:
 	if _screen != null:
 		_screen.queue_free()
 		_screen = null
+	if _trial != "":
+		# (v81) back from «Попробовать» to the editor, as it was
+		_trial = ""
+		ShipMap.try_other = ""
+		_host_map = "ship02"
+		if _menu != null:
+			_menu.visible = false
+			_menu.set_busy(false)
+		_editor.back_from_try()
+		if message != "":
+			_editor._note(message)
+		if Music.current != null:
+			Music.current.play(Sounds.MUSIC_MENU)
+		return
 	if _menu == null:
 		_menu = MainMenu.new()
 		add_child(_menu)
 		_menu.host_requested.connect(_host_game)
 		_menu.join_requested.connect(_join_game)
 		_menu.quit_requested.connect(func() -> void: get_tree().quit())
+		_menu.editor_requested.connect(_open_editor)
 	_menu.visible = true
 	_menu.set_busy(false)
 	if Music.current != null:
 		Music.current.play(Sounds.MUSIC_MENU)
 	_menu.show_status(message, is_error)
+
+
+func _open_editor() -> void:
+	## (v81) The ship editor, from the main menu.
+	if _editor == null:
+		_editor = ShipEditor.new()
+		add_child(_editor)
+		_editor.closed.connect(func() -> void:
+			_editor.visible = false
+			_show_menu(""))
+		_editor.try_requested.connect(_try_ship)
+	_menu.visible = false
+	_editor.visible = true
+
+
+func _try_ship(ship: String, kind: String) -> void:
+	## (v81, the author's E10) «Попробовать»: a game alone, at once, on the drawing: our own ship is
+	## played on; any other kind lies at the airlock of the game's ship. The server runs inside the game
+	## (ShipMap.try_other is read by both sides), with no save and no events.
+	_trial = kind
+	ShipMap.try_other = "" if kind == "ship" else ShipMap.USER_PREFIX + ship
+	_host_map = ShipMap.USER_PREFIX + ship if kind == "ship" else "ship02"
+	_editor.visible = false
+	_stop_server()
+	_hosting = true
+	_host_name = _menu.player_name()
+	_host_bots = 0
+	_host_campaign = "off"
+	_host_mode = "normal"
+	_server_token = "%08x%08x" % [randi(), randi()]
+	_tried = false
+	_menu.visible = true
+	_host_inside(_pending_port if _pending_port > 0 else Net.DEFAULT_PORT)
 
 
 func _quit_server() -> void:
@@ -314,14 +374,19 @@ func _host_inside(port: int) -> void:
 	## The server inside the game itself: the fallback when a separate process
 	## cannot be started. It also reports a busy port in plain words.
 	_stop_server(0)
-	_show_menu("")
+	if _trial == "":
+		_show_menu("")
 	_server = GameServer.new()
 	add_child(_server)
 	_server.shutdown_token = _server_token
 	_set_mode(_server, _host_mode)
 	if _flags.has("log"):
 		_server.log_line.connect(func(text: String) -> void: print(text))
-	var problem := _server.start(port, "ship02", _host_bots)
+	var problem := _server.start(port, _host_map, _host_bots)
+	if problem == "" and _trial != "":
+		_server.director.auto = false    # (v81) a try is a calm walk round: no events, hunters or calls
+		_server.road.auto = false
+		_server.story.auto = false
 	if problem == "":
 		problem = _open_campaign(_server, _host_campaign)
 	if problem != "":
@@ -365,6 +430,12 @@ func _on_joined() -> void:
 		_client.predict = str(_opt["predict"]) != "0"
 	if _hosting:
 		_client.admin_token = _server_token
+	if _trial != "" and _trial != "ship" and _server != null and not _tried:
+		_tried = true
+		if not _server.derelict.try_alongside(_server.map.others.size() - 1):
+			_server.chat.say("Нарисованное не помещается у шлюза корабля игры: сделайте его меньше (не выше 9 рядов).")
+		else:
+			_server.chat.say("Пробный %s у шлюза. Выход в меню вернёт в редактор." % ("астероид" if _trial == "asteroid" else "корабль"))
 	_screen.setup(_client, _hosting, _pending_port)
 	_screen.exit_requested.connect(_leave)
 	if _opt.has("hover"):
@@ -443,6 +514,8 @@ func _process(_delta: float) -> void:
 		else:
 			_show_menu("Сервер остановился.", true)
 	# test helpers; unused in normal play
+	if _opt.has("try_after") and _editor != null and _editor.visible and not _tried and _trial == "" and t >= float(_opt["try_after"]):
+		_editor._on_try()
 	if _opt.has("derelict_after") and not _derelicted and _server != null and t >= float(_opt["derelict_after"]):
 		_derelicted = true
 		_server.sectors.kind[_server.ship.sector] = Sectors.DERELICT

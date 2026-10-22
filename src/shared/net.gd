@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 56
+const PROTOCOL := 57
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -474,12 +474,15 @@ const SHIP_CREW := 0                # kinds of ship
 const SHIP_DERELICT := 1
 const SHIP_PIRATE := 2
 const SHIP_WRECK := 3               # a pirate ship our guns have wrecked: dark and dead, but it can be boarded
+const SHIP_ROCK := 4                # (v81) an asteroid alongside: ore is dug out of its veins, in a suit
 # the kinds of other ship that may come alongside, and their maps (in this order: ShipMap.others)
 const OTHER_DERELICT := 0
 const OTHER_PIRATE := 1
-# (v53) every drawing from OTHER_PIRATE on is a pirate ship's: see Hulls for which class each is
+const OTHER_ROCK := 2               # (v81) an asteroid (Derelict.kind only: its drawings are the asteroid* in OTHER_MAPS)
+# (v53) the drawings from OTHER_PIRATE on are pirate ships' (v81: those whose ShipMap.kind is "pirate"):
+# see Hulls for which class each is
 const OTHER_MAPS: Array[String] = ["derelict01", "pirate01", "pirate02", "pirate03", "pirate04", "pirate05", "pirate06", "pirate07",
-	"pirate08", "pirate09"]
+	"pirate08", "pirate09", "asteroid01", "asteroid02"]   # (v81) asteroids last: see ShipMap.kind for what each is
 # (v63) the road and its story (see Story, Garden)
 const C_COMMS := 31                 # u8 choice (its number on the screen): answer the call on the comms console
 const S_COMMS := 41                 # to all: the comms console's screen. u8 state (COMMS_*), u16 seconds left to answer,
@@ -810,9 +813,14 @@ static func pack_look(facing: int, cond: int, slow: bool = false, light: bool = 
 	return facing | (cond << 4) | (LOOK_SLOW if slow else 0) | (LOOK_LIGHT if light else 0)
 
 
-static func pack_off(ox: int, oy: int, prone: bool) -> int:
-	## (v78) The byte after the look: quarters off the tile's centre (-2..1 each) and lying down.
-	return (ox + 2) | ((oy + 2) << 2) | (16 if prone else 0)
+static func pack_off(ox: int, oy: int, prone: bool, hold: bool = false) -> int:
+	## (v78) The byte after the look: quarters off the tile's centre (-2..1 each) and lying down;
+	## (v81) and holding its position (the human wall).
+	return (ox + 2) | ((oy + 2) << 2) | (16 if prone else 0) | (32 if hold else 0)
+
+
+static func off_hold(off: int) -> bool:
+	return (off & 32) != 0
 
 
 static func off_x(off: int) -> int:

@@ -283,21 +283,42 @@ func _work_places() -> void:
 	_expect(_face(p, map.holo.keys()[0]), "one stands at a holomap by an anomaly")
 	_run(server.road.ANOMALY_SECONDS * Net.TICK_HZ + 4)
 	_expect(int(server.ship.store.get(Net.ITEM_DATA, 0)) > data, "it is scanned: scan data in the locker")
-	# an asteroid: ore breaks off for somebody outside
+	# an asteroid: (v81) the rock comes alongside and ore is dug out of its veins
 	_place(Sectors.P_ASTEROID)
-	var spot: int = -1
-	for c: int in server.salvage._spots_near(server.salvage._vents()[0][1]):
-		spot = c
-		break
-	p.st.place(spot % map.width, spot / map.width)
+	_run(2)
+	_expect(server.derelict.here and server.derelict.kind == Net.OTHER_ROCK, "an asteroid lies alongside")
+	var vein := -1
+	var stand := -1
+	for c: int in map.other_cells:
+		if map.cells[c] != int(map.tile_ids["rock_ore"]):
+			continue
+		for d in range(1, 5):
+			var n: int = c - Net.DX[d] - Net.DY[d] * map.width
+			if map.floats(n % map.width, n / map.width) or (map.walkable(n % map.width, n / map.width) and map.is_other(n)):
+				vein = c
+				stand = n
+				p.st.place(n % map.width, n / map.width)
+				p.st.facing = d
+				break
+		if vein >= 0:
+			break
 	p.worn[Net.WEAR_SUIT] = Net.ITEM_SUIT + Net.SUIT_TANK_STEPS
 	p.supply = true
 	p.tank = 1.0
-	_run(roundi(server.road.ORE_SECONDS * Net.TICK_HZ) + 2)
-	var ore := 0
+	p.slots.fill(Net.ITEM_NONE)
+	_expect(vein >= 0 and server.salvage.can_mine(p, vein) == "", "one of ours outside faces an ore vein")
+	p.using = true
+	_run(server.salvage.mine_ticks(p) + 2)
+	p.using = false
+	_run(1)
+	var ore: int = p.count(Net.ITEM_ORE)
 	for things: PackedByteArray in server.floor_things.values():
 		ore += things.count(Net.ITEM_ORE)
-	_expect(ore >= 1, "one of ours outside by an asteroid gets ore (%d)" % ore)
+	_expect(ore >= 1, "holding E at the vein digs ore out (%d)" % ore)
+	p.st.place(map.spawns[0].x, map.spawns[0].y)
+	server.road._here_places = []
+	_run(2)
+	_expect(not server.derelict.here, "the asteroid stays behind once the place is gone")
 	server.salvage.jumped()
 	server.road._here_places = []
 	p.supply = false
@@ -378,7 +399,8 @@ func _parting() -> void:
 	server.ship.shield = shield
 	d._leave(true)
 	server.ship.hull = maxi(hull, server.ship.hull)
-	server.air.holes.clear()
+	for c: int in server.air.holes.keys():      # (set_hole, not holes.clear(): the leak beside a hole goes too)
+		server.air.set_hole(c, false)
 	_run(2)
 
 
