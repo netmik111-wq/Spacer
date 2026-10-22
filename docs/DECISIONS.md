@@ -1521,3 +1521,16 @@ he answers.
   cry (`SOUND_CRY` had no sound of its own, only a mark), and red at the screen's edges below 75 health, deeper and darker
   down to 15, with a brighter moment at each blow (`GameScreen._update_hurt_edge`). The older darkening below 40 stays.
 
+
+## v82.1: layers in the ship editor (2026-10-22)
+
+His note: "Need add layers for floors so object have priority on layers. Like floors 1 layers. doors 2 and stuff like that."
+
+- **Two layers, not more**: floor (the signs the builder treats as ground: space, wall, floor, glass, catwalk, rock) and
+  objects (every other sign). The game has one sign per cell, so more layers would have nothing to stand for.
+- **Editor only**: the file keeps one sign per cell, so the game, `MapBuilder` and old ships are unchanged. The floor
+  under an object is not saved; on opening it is worked out (`Drawing.base_for`: a wall under wall objects, floor under
+  a spawn place or a ladder), which is always what the game needs there.
+- **Objects win**: a floor stroke never removes an object (his "priority"); the eraser in "both" takes the object
+  first. Delete on a selection in "both" wipes both layers, as before, since that is what a box delete is for.
+- Keys Q (cycle the layer) and O (show objects) were free.

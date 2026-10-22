@@ -99,6 +99,8 @@ var _mirror_x: CheckBox
 var _mirror_y: CheckBox
 var _filled: CheckBox
 var _grid: CheckBox
+var _layer: OptionButton             # (v82.1) which layer the tools change
+var _objects_shown: CheckBox
 var _open_popup: PopupPanel
 var _open_list: ItemList
 var _size_popup: PopupPanel
@@ -246,6 +248,31 @@ func _left_panel() -> Control:
 	for c in [_mirror_x, _mirror_y, _filled, _grid]:
 		opts.add_child(c)
 	panel.add_child(opts)
+	# (v82.1, the author's note) layers: floor under, objects on top
+	var layer_row := HBoxContainer.new()
+	var layer_caption := Label.new()
+	layer_caption.text = "Слой (Q):"
+	layer_caption.add_theme_font_size_override("font_size", 12)
+	layer_row.add_child(layer_caption)
+	_layer = OptionButton.new()
+	_layer.focus_mode = Control.FOCUS_NONE
+	_layer.add_theme_font_size_override("font_size", 12)
+	_layer.tooltip_text = "Пол (стены, пол, стекло, мостки, скала) лежит снизу, объекты (двери, окна, пульты, машины,\n" \
+		+ "орудия, места появления, лестницы) — сверху. Пол под объектом остаётся, ластик сначала убирает объект.\n" \
+		+ "«Только пол» и «Только объекты»: инструменты, ластик, выделение и заливка трогают один слой."
+	for t in ["Пол и объекты", "Только пол", "Только объекты"]:
+		_layer.add_item(t)
+	_layer.item_selected.connect(func(i: int) -> void:
+		drawing.layer = i
+		_note("Слой: %s." % _layer.get_item_text(i)))
+	layer_row.add_child(_layer)
+	panel.add_child(layer_row)
+	_objects_shown = _check("Объекты видны (O)", "Снимите, чтобы видеть один пол: что лежит под дверями, пультами и машинами",
+		func(on: bool) -> void:
+			_canvas.show_objects = on
+			_canvas.queue_redraw())
+	_objects_shown.set_pressed_no_signal(true)
+	panel.add_child(_objects_shown)
 	var undo_row := HBoxContainer.new()
 	undo_row.add_child(_button("↶ Отменить", "Ctrl+Z", _undo))
 	undo_row.add_child(_button("↷ Вернуть", "Ctrl+Y", _redo))
@@ -389,6 +416,8 @@ func _make_popups() -> void:
 		"Колесо — приблизить, средняя кнопка или пробел + мышь — двигать вид, Home — весь корабль.",
 		"B кисть, L линия, R прямоугольник (Shift — сплошной), M комната, F заливка, E ластик, I пипетка,",
 		"S выделение, K метки комнат. G — сетка. X / Y — зеркало (при вставке: перевернуть копию).",
+		"Слои: пол снизу, объекты (двери, окна, пульты, машины, места появления, лестницы) сверху. Q — какой",
+		"слой меняют инструменты (оба, только пол, только объекты), O — показать или спрятать объекты.",
 		"Ctrl+Z отменить, Ctrl+Y (или Ctrl+Shift+Z) вернуть, Ctrl+C копировать, Ctrl+X вырезать,",
 		"Ctrl+V вставить (копия следует за мышью, щелчок кладёт, Esc отменяет), Delete — стереть выделенное,",
 		"Ctrl+A — выделить всё. 1–9 — последние знаки. Page Up / Page Down — палуба выше / ниже.",
@@ -831,6 +860,10 @@ func _input(event: InputEvent) -> void:
 		KEY_X: _mirror_x.button_pressed = not _mirror_x.button_pressed
 		KEY_Y: _mirror_y.button_pressed = not _mirror_y.button_pressed
 		KEY_G: _grid.button_pressed = not _grid.button_pressed
+		KEY_O: _objects_shown.button_pressed = not _objects_shown.button_pressed
+		KEY_Q:
+			_layer.select((_layer.selected + 1) % _layer.item_count)
+			_layer.item_selected.emit(_layer.selected)
 		KEY_HOME: _canvas.fit()
 		KEY_PAGEUP: _refresh_tabs(_canvas.deck - 1)
 		KEY_PAGEDOWN: _refresh_tabs(_canvas.deck + 1)

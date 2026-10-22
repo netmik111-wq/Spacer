@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v82 (version 0.75).
+Last updated: build v82.1 (version 0.75.1).
 
 Contents:
 
@@ -2050,6 +2050,14 @@ The author's answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68o
 - **«Обновить картинки»** rereads the «sprites» folder, so an artist sees new tiles without restarting. A tiles sheet
   from an older build (shorter) is laid over the game's, so the new v81 tiles still show.
 - Hosting a game on your own ship comes in v82.
+
+- (v82.1, the author's note) **Layers**: every cell has a **floor layer** (space, wall, floor, glass, catwalk, rock)
+  and an **object layer** on top (doors, windows, consoles, machines, guns, spawn places, ladders). An object keeps its
+  floor: painting a floor under it keeps the object, the eraser takes the object first and shows the floor again, and
+  a floor fill runs round objects. «Слой» (Q) picks what the tools change: both, only the floor or only objects (the
+  eraser, fill, selection and Delete too). «Объекты видны» (O) hides the objects to show the floor alone. The saved
+  file is unchanged (one sign per cell); on opening, the floor under an object is a wall, under a spawn place or a
+  ladder floor.
 
 ### Holding position
 

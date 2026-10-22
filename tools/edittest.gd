@@ -29,6 +29,7 @@ func _initialize() -> void:
 	_same_as_script()
 	_mistakes_listed()
 	_drawing_tools()
+	_layers()
 	_own_ship_runs()
 	_checks()
 	_in_game()
@@ -118,6 +119,46 @@ func _drawing_tools() -> void:
 		"saved and opened again it is the same")
 	d.resize(20, 10)
 	_expect(d.width == 20 and d.at(0, Vector2i(4, 4)) == "s", "growing the canvas keeps the drawing")
+
+
+func _layers() -> void:
+	## (v82.1, the author's note) floor under, objects on top
+	var d := Drawing.new()
+	d.reset(10, 6, 1)
+	d.room(0, Rect2i(1, 1, 8, 4))
+	d.paint(0, Vector2i(3, 1), "3")
+	d.paint(0, Vector2i(4, 2), "s")
+	d.commit()
+	_expect(d.at(0, Vector2i(3, 1)) == "3" and d.base_at(0, Vector2i(3, 1)) == "#", "a console lies on the wall under it")
+	d.paint(0, Vector2i(4, 2), "g")
+	d.commit()
+	_expect(d.at(0, Vector2i(4, 2)) == "s" and d.base_at(0, Vector2i(4, 2)) == "g", "painting floor under a spawn place keeps it")
+	d.paint(0, Vector2i(3, 1), " ")
+	d.commit()
+	_expect(d.at(0, Vector2i(3, 1)) == "#", "erasing an object shows the wall under it")
+	d.fill(0, Vector2i(2, 2), "c")
+	d.commit()
+	_expect(d.at(0, Vector2i(4, 2)) == "s" and d.base_at(0, Vector2i(4, 2)) == "g" and d.at(0, Vector2i(5, 2)) == "c",
+		"a floor fill runs round objects and keeps them")
+	d.layer = Drawing.LAYER_FLOOR
+	d.paint(0, Vector2i(6, 3), "D")
+	d.paint(0, Vector2i(4, 2), " ")
+	d.commit()
+	_expect(d.at(0, Vector2i(6, 3)) == "c" and d.at(0, Vector2i(4, 2)) == "s" and d.base_at(0, Vector2i(4, 2)) == " ",
+		"on the floor layer objects are neither drawn nor erased")
+	d.layer = Drawing.LAYER_OBJECTS
+	d.paint(0, Vector2i(5, 2), "#")
+	d.clear(0, Rect2i(0, 0, 10, 6))
+	d.commit()
+	_expect(d.at(0, Vector2i(5, 2)) == "c" and d.at(0, Vector2i(4, 2)) == " " and d.at(0, Vector2i(1, 1)) == "#",
+		"on the object layer floors stay and only objects are cleared")
+	d.layer = Drawing.LAYER_BOTH
+	var e := Drawing.new()
+	e.from_text("= Палуба\n#####\n#.D.#\n#s..#\n#####\n")
+	_expect(e.base_at(0, Vector2i(2, 1)) == "#" and e.base_at(0, Vector2i(1, 2)) == "." and e.at(0, Vector2i(1, 2)) == "s",
+		"opening a ship finds the floor under its objects")
+	e.from_text(d.base_text())
+	_expect(e.at(0, Vector2i(4, 2)) == " " and e.at(0, Vector2i(5, 2)) == "c", "hiding objects draws the floor alone")
 
 
 func _own_ship_runs() -> void:

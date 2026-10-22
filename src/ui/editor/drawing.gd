@@ -3,20 +3,32 @@ extends RefCounted
 ## tools/make_assets.py), the marks on rooms (locks, brig cells, a pirate ship's systems) and what
 ## kind of drawing it is. Every tool's change goes through here, so undo and redo see all of it:
 ## a stroke (everything between two `commit`s) is one step back.
+##
+## (v82.1, the author's note) Two layers per cell: the floor layer ("base": space, wall, floor, glass,
+## catwalk, rock) and the object layer on top of it (doors, windows, consoles, machines, guns, spawn
+## places, ladders). "cells" holds what the game sees, the object if there is one, else the floor;
+## "base" holds the floor under it. Taking an object away shows its floor again, and painting a floor
+## under an object keeps the object. The saved text has one sign per cell, as the game reads it; the
+## floor under an object is worked out again on opening (a wall under a wall object, floor under the rest).
 
 const MapBuilder := preload("res://src/shared/map_builder.gd")
 
 const MAX_SIZE := 96                 # the largest canvas, either way
 const UNDO_STEPS := 200
+const BASE_SIGNS := " #.gcRO,"       # the floor layer's signs; every other sign is an object
+const LAYER_BOTH := 0                # tools act on the object first, then the floor (as before)
+const LAYER_FLOOR := 1               # tools touch only the floor layer
+const LAYER_OBJECTS := 2             # tools touch only objects
 
 var width := 40
 var height := 12
 var kind := "ship"                   # MapBuilder.KINDS
-var decks: Array = []                # per deck {"name": String, "cells": PackedStringArray (width * height signs)}
+var decks: Array = []                # per deck {"name", "cells": what the game sees, "base": the floor layer (width * height signs each)}
 var marks: Array = []                # {"type": "@" (a lock or a brig cell) or "%" (a system), "deck", "x", "y", "what"}
 var mirror_x := false                # every stroke is drawn again mirrored left-right...
 var mirror_y := false                # ... and up-down
 var changes := 0                     # counts every change (the editor redraws and checks when it moves)
+var layer := LAYER_BOTH              # which layer the tools change
 
 var _undo: Array = []
 var _redo: Array = []
@@ -28,7 +40,7 @@ func reset(w: int, h: int, n_decks: int) -> void:
 	height = clampi(h, 3, MAX_SIZE)
 	decks = []
 	for i in n_decks:
-		decks.append({"name": _deck_name(i), "cells": _blank()})
+		decks.append({"name": _deck_name(i), "cells": _blank(), "base": _blank()})
 	marks = []
 	_undo.clear()
 	_redo.clear()
@@ -57,6 +69,33 @@ func at(deck: int, c: Vector2i) -> String:
 	return (decks[deck]["cells"] as PackedStringArray)[c.y * width + c.x]
 
 
+func base_at(deck: int, c: Vector2i) -> String:
+	## The floor layer there (under any object).
+	if deck < 0 or deck >= decks.size() or not inside(c):
+		return " "
+	return (decks[deck]["base"] as PackedStringArray)[c.y * width + c.x]
+
+
+static func is_object(sign: String) -> bool:
+	return BASE_SIGNS.find(sign) < 0
+
+
+static func base_for(sign: String) -> String:
+	## The floor an object stands on when none was drawn: a spawn place or a ladder on floor, the rest in a wall.
+	return "." if sign == "s" or sign == "H" else "#"
+
+
+func base_text() -> String:
+	## The drawing with its objects taken away (the editor's "hide objects").
+	var keep := decks
+	decks = []
+	for deck: Dictionary in keep:
+		decks.append({"name": deck["name"], "cells": deck["base"], "base": deck["base"]})
+	var text := to_text()
+	decks = keep
+	return text
+
+
 # ---------------------------------------------------------------- changes
 
 func _touch() -> void:
@@ -69,7 +108,8 @@ func _touch() -> void:
 func _snapshot() -> Dictionary:
 	var d := []
 	for deck: Dictionary in decks:
-		d.append({"name": deck["name"], "cells": (deck["cells"] as PackedStringArray).duplicate()})
+		d.append({"name": deck["name"], "cells": (deck["cells"] as PackedStringArray).duplicate(),
+			"base": (deck["base"] as PackedStringArray).duplicate()})
 	return {"w": width, "h": height, "kind": kind, "decks": d, "marks": marks.duplicate(true)}
 
 
@@ -79,7 +119,8 @@ func _restore(s: Dictionary) -> void:
 	kind = s["kind"]
 	decks = []
 	for deck: Dictionary in s["decks"]:
-		decks.append({"name": deck["name"], "cells": (deck["cells"] as PackedStringArray).duplicate()})
+		decks.append({"name": deck["name"], "cells": (deck["cells"] as PackedStringArray).duplicate(),
+			"base": (deck["base"] as PackedStringArray).duplicate()})
 	marks = (s["marks"] as Array).duplicate(true)
 	changes += 1
 
@@ -122,13 +163,33 @@ func can_redo() -> bool:
 
 
 func _put_sign(deck: int, c: Vector2i, sign: String) -> void:
+	## One sign into its layer (a space erases: the object first, unless the layer says otherwise).
 	if not inside(c) or deck < 0 or deck >= decks.size():
 		return
+	var i := c.y * width + c.x
+	var top: String = (decks[deck]["cells"] as PackedStringArray)[i]
+	var under: String = (decks[deck]["base"] as PackedStringArray)[i]
+	var has_object := is_object(top)
+	if sign == " ":
+		if has_object and layer != LAYER_FLOOR:
+			_layers(deck, i, under, under)
+		elif layer != LAYER_OBJECTS:
+			_layers(deck, i, top if has_object else " ", " ")
+	elif is_object(sign):
+		if layer != LAYER_FLOOR:
+			_layers(deck, i, sign, under if under != " " else base_for(sign))
+	elif layer != LAYER_OBJECTS:
+		_layers(deck, i, top if has_object else sign, sign)
+
+
+func _layers(deck: int, i: int, top: String, under: String) -> void:
 	var cells: PackedStringArray = decks[deck]["cells"]
-	if cells[c.y * width + c.x] == sign:
+	var base: PackedStringArray = decks[deck]["base"]
+	if cells[i] == top and base[i] == under:
 		return
 	_touch()
-	cells[c.y * width + c.x] = sign
+	cells[i] = top
+	base[i] = under
 
 
 static func _flip_x(sign: String) -> String:
@@ -197,8 +258,11 @@ func room(deck: int, r: Rect2i) -> void:
 
 
 func fill(deck: int, start: Vector2i, sign: String) -> void:
-	## Every cell joined to that one (sideways or up and down) holding the same sign.
-	var was := at(deck, start)
+	## Every cell joined to that one (sideways or up and down) holding the same sign. A floor sign
+	## fills by the floor layer, so the objects standing on it stay and do not stop it.
+	var by_base := not is_object(sign) and layer != LAYER_OBJECTS
+	var look := base_at if by_base else at
+	var was: String = look.call(deck, start)
 	if not inside(start) or was == sign:
 		return
 	var seen := {start: true}
@@ -208,7 +272,7 @@ func fill(deck: int, start: Vector2i, sign: String) -> void:
 		paint(deck, c, sign)
 		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			var n := c + d
-			if inside(n) and not seen.has(n) and at(deck, n) == was:
+			if inside(n) and not seen.has(n) and look.call(deck, n) == was:
 				seen[n] = true
 				todo.append(n)
 
@@ -216,40 +280,60 @@ func fill(deck: int, start: Vector2i, sign: String) -> void:
 func copy(deck: int, r: Rect2i) -> Dictionary:
 	r = r.abs().intersection(Rect2i(0, 0, width, height))
 	var cells := PackedStringArray()
+	var base := PackedStringArray()
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
-			cells.append(at(deck, Vector2i(x, y)))
-	return {"w": r.size.x, "h": r.size.y, "cells": cells}
+			var top := at(deck, Vector2i(x, y))
+			var under := base_at(deck, Vector2i(x, y))
+			# what the layer choice leaves out is not copied
+			cells.append(under if layer == LAYER_FLOOR else (top if is_object(top) or layer != LAYER_OBJECTS else " "))
+			base.append(" " if layer == LAYER_OBJECTS else under)
+	return {"w": r.size.x, "h": r.size.y, "cells": cells, "base": base}
 
 
 func clear(deck: int, r: Rect2i) -> void:
+	## Wipes a box: both layers, or only the one chosen.
 	r = r.abs()
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
-			_put_sign(deck, Vector2i(x, y), " ")
+			var c := Vector2i(x, y)
+			if inside(c):
+				var i := c.y * width + c.x
+				var top := at(deck, c)
+				var under := base_at(deck, c)
+				match layer:
+					LAYER_FLOOR: _layers(deck, i, top if is_object(top) else " ", " ")
+					LAYER_OBJECTS: _layers(deck, i, under, under)
+					_: _layers(deck, i, " ", " ")
 
 
 func paste(deck: int, corner: Vector2i, clip: Dictionary) -> void:
 	## Lays a copy down with its top-left corner there. Its empty cells leave what is under them.
 	var cells: PackedStringArray = clip.get("cells", PackedStringArray())
+	var base: PackedStringArray = clip.get("base", cells)
 	for y in int(clip.get("h", 0)):
 		for x in int(clip.get("w", 0)):
-			var s := cells[y * int(clip["w"]) + x]
-			if s != " ":
-				_put_sign(deck, corner + Vector2i(x, y), s)
+			var k := y * int(clip["w"]) + x
+			if base[k] != " ":
+				_put_sign(deck, corner + Vector2i(x, y), base[k])
+			if is_object(cells[k]):
+				_put_sign(deck, corner + Vector2i(x, y), cells[k])
 
 
 static func flip_clip(clip: Dictionary, across: bool) -> Dictionary:
 	## A copy turned over left-right (across) or up-down.
 	var w := int(clip["w"])
 	var h := int(clip["h"])
-	var src: PackedStringArray = clip["cells"]
-	var out := PackedStringArray()
-	for y in h:
-		for x in w:
-			var s := src[y * w + (w - 1 - x)] if across else src[(h - 1 - y) * w + x]
-			out.append(_flip_x(s) if across else s)
-	return {"w": w, "h": h, "cells": out}
+	var out := {"w": w, "h": h}
+	for key in ["cells", "base"]:
+		var src: PackedStringArray = clip.get(key, clip["cells"])
+		var turned := PackedStringArray()
+		for y in h:
+			for x in w:
+				var s := src[y * w + (w - 1 - x)] if across else src[(h - 1 - y) * w + x]
+				turned.append(_flip_x(s) if across else s)
+		out[key] = turned
+	return out
 
 
 # ---------------------------------------------------------------- size and decks
@@ -262,16 +346,17 @@ func resize(w: int, h: int, shift := Vector2i.ZERO) -> void:
 		return
 	_touch()
 	for deck: Dictionary in decks:
-		var old: PackedStringArray = deck["cells"]
-		var cells := PackedStringArray()
-		cells.resize(w * h)
-		cells.fill(" ")
-		for y in height:
-			for x in width:
-				var n := Vector2i(x, y) + shift
-				if n.x >= 0 and n.y >= 0 and n.x < w and n.y < h:
-					cells[n.y * w + n.x] = old[y * width + x]
-		deck["cells"] = cells
+		for key in ["cells", "base"]:
+			var old: PackedStringArray = deck[key]
+			var cells := PackedStringArray()
+			cells.resize(w * h)
+			cells.fill(" ")
+			for y in height:
+				for x in width:
+					var n := Vector2i(x, y) + shift
+					if n.x >= 0 and n.y >= 0 and n.x < w and n.y < h:
+						cells[n.y * w + n.x] = old[y * width + x]
+			deck[key] = cells
 	width = w
 	height = h
 	var kept := []
@@ -286,7 +371,7 @@ func resize(w: int, h: int, shift := Vector2i.ZERO) -> void:
 
 func add_deck() -> void:
 	_touch()
-	decks.append({"name": _deck_name(decks.size()), "cells": _blank()})
+	decks.append({"name": _deck_name(decks.size()), "cells": _blank(), "base": _blank()})
 
 
 func remove_deck(i: int) -> void:
@@ -423,13 +508,15 @@ func from_text(text: String, name: String = "") -> void:
 	decks = []
 	for deck: Array in parts["decks"]:
 		var cells := _blank()
+		var base := _blank()
 		var rows: PackedStringArray = deck[1]
 		for y in mini(rows.size(), height):
 			for x in mini(rows[y].length(), width):
 				cells[y * width + x] = rows[y][x]
-		decks.append({"name": deck[0], "cells": cells})
+				base[y * width + x] = base_for(rows[y][x]) if is_object(rows[y][x]) else rows[y][x]
+		decks.append({"name": deck[0], "cells": cells, "base": base})
 	if decks.is_empty():
-		decks.append({"name": _deck_name(0), "cells": _blank()})
+		decks.append({"name": _deck_name(0), "cells": _blank(), "base": _blank()})
 	marks = []
 	for l: String in parts["marks"]:
 		var bits := l.substr(1).split(" ", false)
