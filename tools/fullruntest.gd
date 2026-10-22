@@ -4,7 +4,9 @@ extends SceneTree
 ## without taking its gun down unless the console ordered it, and the hold that mended a mount
 ## does not go on to take its gun down; a wreck alongside stays behind once our ship gets under
 ## way and comes back when it stops by its mark; a ship flying in the system stops when one of
-## ours goes outside, and says who; a shot flies over somebody out cold unless aimed at them.
+## ours goes outside, and says who; a shot flies over somebody out cold unless aimed at them;
+## bodies on a wreck are there again when it comes back; one chosen thing is taken off a pile;
+## the shotgun hits hard up close and knocks down.
 ## On a real server stepped by hand:
 ##   godot --headless --path . --script res://tools/fullruntest.gd
 ## Fails with exit code 1.
@@ -13,6 +15,7 @@ const GameServer := preload("res://src/server/game_server.gd")
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
+const Items := preload("res://src/shared/items.gd")
 
 var failed := 0
 var server: GameServer
@@ -39,6 +42,8 @@ func _initialize() -> void:
 	_wreck_stays()
 	_stops_for_outside()
 	_out_cold_spared()
+	_take_chosen()
+	_shotgun_close()
 	server.stop()
 	server.free()
 	print("fullruntest: %d failed" % failed)
@@ -192,6 +197,18 @@ func _wreck_stays() -> void:
 	server.gunnery._wrecked()
 	_run(2)
 	_expect(der.here and der.wreck, "a raider wrecked stays alongside")
+	# (his note: bodies vanished once the ship was left) one of ours dies on it
+	var on_it := -1
+	for c in server.map.other_cells:
+		if server.map.walk[c] == 1 and server.map.door_of[c] < 0:
+			on_it = c
+			break
+	var fallen = _player("Павший", Vector2i(on_it % server.map.width, on_it / server.map.width))
+	fallen.slots[0] = Net.ITEM_MEDKIT + Net.MEDKIT_USES
+	fallen.cond = Net.COND_DEAD
+	fallen.health = Net.HEALTH_DEAD
+	server.crew.becomes_corpse(fallen)
+	var bodies_before := _bodies_on_other()
 	server.ship.moving = true
 	server.ship.dest = server.ship.pos + Vector2(4, 0)
 	_run(2)
@@ -202,6 +219,13 @@ func _wreck_stays() -> void:
 		ticks += 1
 	_run(2)
 	_expect(der.here and der.wreck, "stopped near its mark, it comes alongside again")
+	var back := _bodies_on_other()
+	_expect(back.size() == bodies_before.size() and back.has("Павший"), "with every body that lay on it (%d of %d, ours too)" % [back.size(), bodies_before.size()])
+	var again = null
+	for q in server.players:
+		if q != null and q.corpse and q.name == "Павший":
+			again = q
+	_expect(again != null and again.slots.has(Net.ITEM_MEDKIT + Net.MEDKIT_USES), "and what it carried")
 	der._leave(true)
 	server.road.hulks = {}
 	server.gunnery.enemy_gone()
@@ -209,6 +233,52 @@ func _wreck_stays() -> void:
 		if q != null and q.pirate:
 			server.crew.remove(q)
 	_run(2)
+
+
+func _bodies_on_other() -> Array:
+	var names: Array = []
+	for q in server.players:
+		if q != null and q.corpse and server.map.is_other(q.st.y * server.map.width + q.st.x):
+			names.append(q.name)
+	return names
+
+
+func _take_chosen() -> void:
+	print("  -- the right-click menu takes the thing chosen from a pile (his note)")
+	var at := _open_row(3)
+	var p = _player("Сборщик", at)
+	var cell: int = at.y * server.map.width + at.x + 1
+	server.put_on_floor(cell, Net.ITEM_PATCH)
+	server.put_on_floor(cell, Net.ITEM_MAG)
+	server.put_on_floor(cell, Net.ITEM_MEDPATCH)
+	var pile: PackedByteArray = server.floor_things[cell]
+	var k := pile.find(Net.ITEM_PATCH)
+	_expect(server.inventory.take_from(p, cell, k) and p.slots.has(Net.ITEM_PATCH), "the patch at the bottom of the pile comes into the hands")
+	var left: PackedByteArray = server.floor_things[cell]
+	_expect(left.has(Net.ITEM_MAG) and left.has(Net.ITEM_MEDPATCH) and not left.has(Net.ITEM_PATCH), "the rest stays")
+	p.st.place(at.x + 1, at.y + 3) if server.map.walkable(at.x + 1, at.y + 3) else p.st.place(at.x - 2, at.y)
+	_expect(not server.inventory.take_from(p, cell, left.find(Net.ITEM_MAG)), "not from further than the next cell")
+	server.floor_things.erase(cell)
+	server.replication.floor_record(cell)
+	server.crew.remove(p)
+
+
+func _shotgun_close() -> void:
+	print("  -- the shotgun up close (his note: the pistol was much better)")
+	var at := _open_row(5)
+	var p = _player("Дробовик", at)
+	p.slots[0] = Net.ITEM_SHOTGUN + Net.SHOTGUN_ROUNDS
+	p.hand = 0
+	var foe = server.pirates.spawn(at.x + 2, at.y, false)
+	foe.ready_tick = 1 << 30
+	foe.ai_fire_tick = 1 << 30
+	foe.health = 100.0
+	foe.wounds = 0.0
+	server.combat.use_at(p, server.tick, Vector2(at.x + 2, at.y))
+	_expect(foe.health <= 100.0 - Items.PELLET_DAMAGE * Items.SHOTGUN_KNOCK + 0.5, "two cells off, most pellets hit (%.0f left)" % foe.health)
+	_expect(foe.stun_until > server.tick, "and it knocks the pirate down")
+	server.crew.remove(foe)
+	server.crew.remove(p)
 
 
 func _stops_for_outside() -> void:
@@ -252,3 +322,5 @@ func _out_cold_spared() -> void:
 	shooter.ready_tick = 0
 	server.combat.use_at(shooter, server.tick, Vector2(at.x + 2, at.y))
 	_expect(down.health < 100.0, "aimed at the one out cold, it hits (%.0f)" % down.health)
+	for q in [down, up, shooter]:
+		server.crew.remove(q)

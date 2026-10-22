@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v79 (version 0.72: polish after quarter steps; bots run from armed boarders, a guard bot fights) is the latest. Plans one to four are done except the darkness front (the
+Build v80 (version 0.73: the full run's fixes) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -78,7 +78,11 @@ a friend right by the shooter is never hit. Swapping places was left out (people
 v79 (his answers, `https://claude.ai/artifact/RMLhvSAPdwjWFUssNC8LDM`): the lying body on its spot, head where one looks;
 passing people drawn sliding a quarter aside; the camera leans toward the mouse; bots run from armed boarders and lie low,
 a guard bot fetches a gun and fights (`defence`); vsync off in the background (his "not responding" picture).
-Next: the fire round, his answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk` (v80). Fear: later,
+v80 (his full run's notes, `https://claude.ai/artifact/3A2HTzKTNpPbgQTuyAFFvc`): eleven bug fixes (holes never on machines,
+shots through space, mounts left alone, ships alongside stay behind, stopping for those outside, bodies kept), emergency
+light, lying across, a stronger shotgun, picking what to take in the right-click menu.
+Next: the ship editor for his artist (his top priority), questions on `https://claude.ai/artifact/68oyd5cH9wyAsoT5Gcwfww`
+(v81), with the human wall. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
 when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -426,6 +430,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   its order waits. Tests that keep armed pirates near bots and count on the bots working set `server.defence.on = false`.
   `Pirates.foe` treats a bot like our robots. `Net.DOING_HIDE`/`DOING_FIGHT` are new (protocol 55). The camera's lean is
   `WorldView._lean` (with the mouse view only); the sliding-past push is drawing only (`WorldView._passing`).
+- (v80) No breach on a wall cell with a fitting or gun (`ShipMap.hull`). Shots stop at `passable`, not `walkable`: they
+  fly through open space. A bot may take a mounted gun down or put one up only on the console's order (`Mounts.can`);
+  `Player.mended` keeps a mend's hold from going on to unmount. A ship alongside leaves as soon as `ship.moving`, and a
+  hulk comes back only to a stopped ship: a test that moves the ship on purpose by setting `pos` (not `moving`) keeps it.
+  `Navigation.update` stops a flying ship while `derelict.someone_outside()`. Bodies on the ship alongside go into the
+  hulk (`"bodies"`) or `_left_bodies` and come back with it. `C_TAKE` takes one chosen floor thing (protocol 56).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

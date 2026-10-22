@@ -1298,6 +1298,15 @@ func send_search(id: int) -> void:
 		_send_hands(Net.C_SEARCH, id)
 
 
+func send_take(cell: int, at: int) -> void:
+	## (v80) Takes one chosen thing off the floor in our cell or one next to us (Net.C_TAKE).
+	if phase != PLAYING:
+		return
+	var msg := PackedByteArray([Net.C_TAKE, 0, 0, 0, 0, at])
+	msg.encode_u32(1, cell)
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_drag(id: int) -> void:
 	## Takes hold of somebody lying next to us (Net.NOBODY: lets go).
 	if phase == PLAYING:

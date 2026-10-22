@@ -11,6 +11,7 @@ const Sight := preload("res://src/shared/sight.gd")
 
 const TREAT_TICKS := 60             # one use of a first-aid kit takes 3 s
 const SHOT_TICKS := 6                # a pistol fires at most this often
+const SHOTGUN_PACE := 1.5            # (v80) a shotgun takes this much longer between shots (2.0 until v80)
 const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
 const BLOW_TICKS := 16               # a blow with a baton
 const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
@@ -76,7 +77,7 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 	var slow := ARM_SLOWER if p.arm else 1.0
 	if rounds > 0:
 		p.slots[p.hand] = item - 1
-		p.ready_tick = server.tick + roundi(SHOT_TICKS * slow * (2.0 if Items.INFO[item].has("pellets") else 1.0))
+		p.ready_tick = server.tick + roundi(SHOT_TICKS * slow * (SHOTGUN_PACE if Items.INFO[item].has("pellets") else 1.0))
 		if p.arm:
 			at += Vector2(_rng.randf_range(-ARM_SPREAD, ARM_SPREAD), _rng.randf_range(-ARM_SPREAD, ARM_SPREAD))
 		if Items.INFO[item].has("pellets"):
@@ -329,6 +330,8 @@ func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 		p.train(Net.SKILL_GUNS)
 	for q: Player in hits:
 		hurt(q, Items.PELLET_DAMAGE * int(hits[q]), p, CAUSE_PELLET)
+		if int(hits[q]) >= Items.SHOTGUN_KNOCK and q.cond != Net.COND_DEAD:
+			stun_for(q, Items.SHOTGUN_KNOCK_SECONDS * (ROBOT_STUN if q.robot else 1.0))   # (v80) a blast at close range
 
 
 func _throw(p: Player, at: Vector2) -> void:

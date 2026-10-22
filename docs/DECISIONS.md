@@ -1427,7 +1427,7 @@ my pick until he answers otherwise. Checked by `tools/fullruntest.gd`.
   anybody is outside. I could not repeat "a dead body holds the ship"; asked him to describe it if it was that.
 - **Emergency light** ("the lights don't go out in a blackout", P2 "A"): his pictures were the engine failing and the SMES
   carrying the ship, which by the v61 rule keeps everything going. The client now dims the lights to `EMERGENCY_DIM`
-  (0.5, the red alert's is 0.3) while the power monitor's flags say the SMES carries the ship (bit 4), outside the
+  (0.67, a third of the light, his comment "1/3?" on P2; the red alert's is 0.3) while the power monitor's flags say the SMES carries the ship (bit 4), outside the
   backup-lit bridge. Drawing only: sight and the server's light are unchanged.
 - **The worn suit's gauge** ("putting on an empty suit fills its air", O1 "A"): the server kept the air; the hotbar and the
   inventory always drew the worn suit as `ITEM_SUIT + 10` (full). Both now draw `Items.suit_with(client.tank)`; the

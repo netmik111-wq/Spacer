@@ -543,6 +543,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_SWAP:
 		if pkt.size() > 2:
 			inventory.swap(p, pkt[1], pkt[2])
+	elif kind == Net.C_TAKE:
+		if pkt.size() > 5:
+			inventory.take_from(p, pkt.decode_u32(1), pkt[5])
 	elif kind == Net.C_DROP:
 		inventory.put_down(p)
 	elif kind == Net.C_ACT:

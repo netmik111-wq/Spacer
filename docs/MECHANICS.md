@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v79 (version 0.72).
+Last updated: build v80 (version 0.73).
 
 Contents:
 
@@ -42,6 +42,7 @@ Contents:
 32. [Art and walking (v74)](#32-art-and-walking-v74)
 33. [Polish (v75)](#33-polish-v75)
 34. [The evening's bugs, the view and bots on a slant (v77)](#34-the-evenings-bugs-the-view-and-bots-on-a-slant-v77)
+35. [The full run's fixes (v80)](#35-the-full-runs-fixes-v80)
 
 ---
 
@@ -59,6 +60,8 @@ Contents:
   over you unless they are aimed at you (meant for a point within **1 cell** of you). Climbing a ladder or
   being knocked out stands you up. (v79, the author's note and L1 "A") The body lies on the spot where you are,
   seen from above, **head toward where you look** (8 ways), so it always matches your light and view.
+  (v80, his note "feels very strange" and L1 "A") It always **lies across**: head to the left or right, the side you
+  look to; looking straight up or down keeps the last side.
 - (v79, the author's W1 note) People still walk through one another. Two close together (under **1 cell**
   apart) while either walks are drawn **stepping aside**, each up to a **quarter of a cell** off its line, as if
   sliding past; only the picture moves. Two standing still keep the spots they chose.
@@ -282,6 +285,9 @@ Contents:
   It cannot make a jump: a jump needs the engine.
 - **Power failure** (event): the engine stalls for 8–15 s with nothing broken; the SMES carries the ship
   through it, so only an empty SMES makes it dark.
+- (v80, his note "the lights don't go out in a blackout", P2 "A", "1/3?") While the SMES carries the ship (the engine
+  down or stalled), the ship runs on **emergency light**: **a third** of the light everywhere but the backup-lit bridge.
+  Machines work as before.
 - **Ion storm** (v61, a kind of sector): see section 19.
 
 ## 8. Machines, breakdowns and repair
@@ -575,6 +581,10 @@ Contents:
   - **dragged** (F): you move half as fast, they follow one cell behind you, including
     up and down ladders. F again — let go. The dragged person is always visible, even behind your back.
 - Someone standing on their feet can't be searched or dragged.
+- (v80, his note) With several bodies or things in one cell, the **right-click menu** lists each: «Тащить: имя»,
+  «Обыскать: имя» for every body, «Взять: вещь» for every thing in the pile (your cell or the next one).
+- (v80, his note) Bodies on a wreck or a derelict (ours and theirs, with what they carried) are still there when it
+  comes alongside again.
 
 ## 17. Pirates
 
@@ -1758,8 +1768,10 @@ The author's P, M, H, G, B and W answers (`/mnt/project-files/plans/every-part-p
   - **Kidnapper**: hauls one of ours who is lying (within 14 cells, on its deck) to its hole and leaves with him: he is
     lost, no body is left. A player comes back from the reserve as after a death; a bot after 15 s.
 - **Weapons** (B3, B2):
-  - **Shotgun** (45 cr.): **5 pellets** in a fan, **10** each, reach **7** cells, **4** shells (a box of 4 shells: 6 cr.).
-    Up close all pellets hit.
+  - **Shotgun** (45 cr.): **6 pellets** in a fan (**0.2** rad to the outermost), **15** each, reach **6** cells,
+    **4** shells (a box of 4 shells: 6 cr.), a shot every **0.45 s** (the pistol: 0.3 s). Up close all pellets hit (90);
+    **4 or more** pellets of one shot knock the target down for **1.5 s** (a robot a fifth of that). (v80, his note "the
+    pistol is much better"; until v80: 5 pellets of 10, 7 cells, a shot every 0.6 s, no knockdown.)
   - **Stun baton** (the guard's): a blow of **5** that knocks down for **5 s** (a machine 1 s).
   - **Flashbang**: click where to throw (up to **6** cells, it stops short of walls). **1 s** later everybody within **4**
     cells who sees it falls for **3 s**, ours too.
@@ -1974,3 +1986,27 @@ The author's answers on the page "Spacer v77 Movement and View" and his seven no
   - SOS, "the crew died": a real dead ship comes alongside (section 25).
 - Left for **v78** (the author's M1 D and C1 B): quarter-tile steps for players, lying down, swapping places with a friend,
   and shots that pass a friend standing right by the shooter (as in RimWorld).
+
+## 35. The full run's fixes (v80)
+
+The author and friends played a whole campaign on v79 and left eleven bug notes and four suggestions. His answers are on
+the page "Spacer v80 Playthrough" (https://claude.ai/artifact/3A2HTzKTNpPbgQTuyAFFvc).
+
+- **No hole on a machine**: a breach never opens on a wall cell with a machine, console or gun mount in it (one on the
+  supply locker could not be patched: E opened the locker).
+- **Shooting in open space**: bullets and pellets fly on through space (they stopped at its first cell); a flashbang can
+  land there.
+- **Mounted guns**: a bot takes a gun down or puts one up only when the gun console ordered it (G1 "A"). After mending a
+  mount, let go of E before a new hold takes its gun down.
+- **A ship alongside stays behind** (W1 "A"): a wreck, derelict or SOS ship stays at its mark as soon as our ship gets
+  under way; stop near the mark and it comes alongside again.
+- **Somebody outside** (P1 "A"): the ship waits for anybody of ours alive outside, out cold too, and the helm says who:
+  «Не все на борту: <имя> снаружи корабля без сознания: заберите его на борт». The dead never hold it. A ship already
+  flying in the system **stops** when one of ours goes outside.
+- **Shots over the fallen** (S1 "A"): a bullet hits the first living person along its line; bodies never stop it.
+  Somebody out cold on the floor is now passed over like somebody lying low, unless the shot is aimed at them.
+- **The worn suit's gauge** (O1 "A"): the hotbar and the inventory show the air really left in the suit you wear (it was
+  always drawn full; the air itself was right).
+- **Blood** stays only on floors (never in open space), and blood on a ship alongside goes with it.
+- **The flagship's mark** on the cluster chart sits above its system, so the system stays visible.
+- Emergency light, lying across, the shotgun, choosing what to take and bodies kept: sections 7, 1, 28 and 16.

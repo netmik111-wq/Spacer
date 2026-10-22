@@ -1693,12 +1693,18 @@ func _open_menu(at: Vector2) -> void:
 		if e.x != c.x or e.y != c.y or e.id == client.my_id:
 			continue
 		if e.cond != Net.COND_OK and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
+			# (v80, the author's note: "if a lot of bodies lie there, choose which to pull") one line each
 			var id := e.id
 			add.call("Тащить: %s  [%s]" % [client.player_name(id), Options.key_text("drag")], func() -> void:
 				var f := client.click_facing(c)
 				if f > 0:
 					client.face(f)
 				client.send_drag(id))
+			add.call("Обыскать: %s" % client.player_name(id), func() -> void:
+				var f := client.click_facing(c)
+				if f > 0:
+					client.face(f)
+				client.send_search(id))
 		if client.is_bot(e.id) and e.cond == Net.COND_OK:
 			var id := e.id
 			var now := -1
@@ -1708,6 +1714,13 @@ func _open_menu(at: Vector2) -> void:
 			for post in Net.POST_NAMES.size():
 				var p := post
 				add.call("Приказ: %s%s" % [Net.POST_NAMES[post], "  ✓" if post == now else ""], func() -> void: client.send_order(id, p))
+	if client.floor_things.has(cell) and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
+		# (v80, the author's note: "and what items to take from the floor") each thing in the pile
+		var pile: PackedByteArray = client.floor_things[cell]
+		for k in range(pile.size() - 1, -1, -1):
+			if pile[k] != Net.ITEM_NONE:
+				var at_k := k
+				add.call("Взять: %s" % Items.name_of(pile[k]), func() -> void: client.send_take(cell, at_k))
 	if client.dragging():
 		add.call("Отпустить  [%s]" % Options.key_text("drag"), func() -> void: client.send_drag(Net.NOBODY))
 	if title != "":

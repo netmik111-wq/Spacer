@@ -727,7 +727,8 @@ func _hulks_saved() -> Dictionary:
 			for e: Array in h["things"]:
 				things.append([int(e[0]), Array(e[1] as PackedByteArray)])
 			list.append({"x": (h["pos"] as Vector2).x, "y": (h["pos"] as Vector2).y, "layout": h["layout"], "name": h["name"],
-				"things": things, "outcome": h["outcome"], "party": h["party"], "boarded": h["boarded"], "classic": (h["design"] as Dictionary).has("classic")})
+				"things": things, "outcome": h["outcome"], "party": h["party"], "boarded": h["boarded"], "classic": (h["design"] as Dictionary).has("classic"),
+				"bodies": h.get("bodies", [])})
 		out[str(k)] = list
 	return out
 
@@ -761,7 +762,7 @@ func load_from(d: Dictionary) -> void:
 				things.append([int(t[0]), PackedByteArray(t[1])])
 			add_hulk(int(k), {"pos": Vector2(float(e["x"]), float(e["y"])), "layout": int(e["layout"]), "name": str(e["name"]),
 				"id": server.new_ship_id(), "things": things, "air": {}, "outcome": str(e.get("outcome", "dead")),
-				"party": int(e.get("party", 0)), "boarded": bool(e.get("boarded", true)),
+				"party": int(e.get("party", 0)), "boarded": bool(e.get("boarded", true)), "bodies": e.get("bodies", []),
 				"design": {"layout": int(e["layout"]), "classic": true} if e.get("classic", false) else {"layout": int(e["layout"])}})
 	_fight = {}
 	_places_for = -1

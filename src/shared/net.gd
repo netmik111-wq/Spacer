@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 55
+const PROTOCOL := 56
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -239,6 +239,7 @@ const C_EVADE := 32
 # (v68, the author's J4) u8 ALERT_*: the alert level, from the ship's controls (the captain, or anybody without one)
 const C_ALERT := 33
 const C_SWAP := 34                  # (v73) u8 slot, u8 slot: swap what is in two of our slots (dragged in the inventory)
+const C_TAKE := 35                  # (v80) u32 cell, u8 place in its stack: take that one thing off the floor (the right-click menu)
 const ALERT_GREEN := 0
 const ALERT_YELLOW := 1
 const ALERT_RED := 2

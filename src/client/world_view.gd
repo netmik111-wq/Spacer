@@ -9,7 +9,7 @@ extends Node2D
 ## whoever stands on them.
 
 const RED_ALERT_DIM := 0.3           # (v68) how far a red alert dims the lights (0 lit .. 1 dark)
-const EMERGENCY_DIM := 0.5           # (v80, the author's note) the engine down and the SMES carrying the ship: emergency light
+const EMERGENCY_DIM := 0.67          # (v80, the author's note and his P2 "1/3?") the engine down, the SMES carrying the ship: a third of the light
 const Net := preload("res://src/shared/net.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const Sight := preload("res://src/shared/sight.gd")
@@ -640,7 +640,7 @@ func _update_ship(delta: float) -> void:
 	# (v61) the bridge backup lights its room; (v68) the lights' breaker off is dark, a red alert dims them
 	var lit_here := client.light_at(client.pred.y * map.width + client.pred.x)
 	# (v80, the author's note: "the lights do not go out in a blackout") with the engine down the SMES keeps
-	# the ship going, but only on emergency light: half as bright (the backup-lit bridge stays as it was)
+	# the ship going, but only on emergency light: a third of the light (the backup-lit bridge stays as it was)
 	var emergency := int(client.power_mon.get("flags", 0)) & 4 != 0 and not map.on_backup(client.pred.y * map.width + client.pred.x)
 	var lit_dim := maxf(RED_ALERT_DIM if client.alert == Net.ALERT_RED else 0.0, EMERGENCY_DIM if emergency else 0.0)
 	_dark = move_toward(_dark, lit_dim if lit_here else 1.0, delta * 2.5)
