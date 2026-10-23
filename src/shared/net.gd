@@ -133,6 +133,7 @@ const OUTFIT_SUIT := 0
 const OUTFIT_JUMPSUIT := 1
 const OUTFIT_BARE := 2
 const LOOKS := 6
+const LOOK_TANK := 8                # (v85, the author's C2) in the look byte: it breathes from its oxygen tank (the visor is down)
 
 # things that can be carried
 const ITEM_NONE := 0

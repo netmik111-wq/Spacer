@@ -11,8 +11,10 @@ extends RefCounted
 ## bob and a lifted foot).
 ##
 ## What it makes has the old sheet's layout (see Net.LOOKS): a row per colour and look, 24 frames of
-## 8 ways x 3 (standing, step, step), cells of CHAR_W x CHAR_H with a 1-pixel border; after those,
-## HALF_ROW + colour holds the half-visor frames, shown for a moment while a suit goes on or off.
+## 8 ways x 3 (standing, step, step), cells of CHAR_W x CHAR_H with a 1-pixel border, the face behind
+## clear glass; (the author's C2: the visor shows the oxygen tank) VISOR_ROW + the same row with the
+## visor down, breathing from the tank; HALF_ROW + colour the half-down visor, shown for a moment
+## while the tank is switched on or off.
 ## The navy of his suit is repainted in the colour of the row (the job's, the pirates'); a grey
 ## undersuit for one with no jumpsuit.
 
@@ -26,7 +28,9 @@ const VIEWS := 5
 const FEET := 61                       # the lowest row of the figure in a frame (the shadow lies round it)
 const OLD := Vector2i(32, 48)          # a frame of assets/chars.png (the machines), with its 1-pixel border
 const ROWS := (Net.ARMOUR_COLOUR + 1) * Net.LOOKS
-const HALF_ROW := ROWS                 # + colour: the half-visor frames
+const VISOR_ROW := ROWS                # + colour * LOOKS + look: on the tank, the visor down
+const HALF_ROW := ROWS + Net.PIRATE_COLOURS * Net.LOOKS + Net.SUIT_COLOURS * Net.LOOKS   # + colour: the half-down visor
+const ALL_ROWS := HALF_ROW + Net.SUIT_COLOURS + Net.PIRATE_COLOURS
 # the colours of the rows, as tools/make_assets.py has them (SUIT_COLOURS): the crew's jobs, then the pirates
 const TINTS: Array[Color] = [
 	Color8(200, 55, 45), Color8(47, 111, 208), Color8(58, 154, 74), Color8(217, 165, 32),
@@ -87,7 +91,7 @@ static func build() -> Image:
 	var src := source()
 	var cols := src.get_width() / FRAME.x
 	_settle(src, cols)
-	var out := Image.create(CELL.x * 24, CELL.y * (ROWS + Net.ARMOUR_COLOUR + 1), false, Image.FORMAT_RGBA8)
+	var out := Image.create(CELL.x * 24, CELL.y * ALL_ROWS, false, Image.FORMAT_RGBA8)
 	var shadow := _shadow()
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
@@ -101,8 +105,8 @@ static func build() -> Image:
 			var outfit := look / 2
 			var art := grey if outfit == Net.OUTFIT_BARE else painted
 			var art_m := grey_m if outfit == Net.OUTFIT_BARE else mirrored
-			var helmet := 2 if outfit == Net.OUTFIT_SUIT else 0
-			_row(out, colour * Net.LOOKS + look, art, art_m, cols, helmet, shadow)
+			_row(out, colour * Net.LOOKS + look, art, art_m, cols, 0, shadow)
+			_row(out, VISOR_ROW + colour * Net.LOOKS + look, art, art_m, cols, 2, shadow)
 		_row(out, HALF_ROW + colour, painted, mirrored, cols, 1, shadow)
 	# the machines and the heavy boarders keep the old drawn pictures
 	var old := Sprites.sheet("chars").get_image()

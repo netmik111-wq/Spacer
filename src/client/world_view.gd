@@ -38,7 +38,7 @@ const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 18, 6: 21, 7: 12, 8: 15}
 # (v85: the spriter's taller figure holds its hands higher)
 const HAND_AT := {1: Vector2(-11, -23), 2: Vector2(11, -23), 3: Vector2(-6, -22), 4: Vector2(6, -22),
 	5: Vector2(-9, -23), 6: Vector2(9, -23), 7: Vector2(-9, -23), 8: Vector2(9, -23)}
-const VISOR_TURN := 0.3              # (v85) seconds the half-down visor shows while a suit goes on or off
+const VISOR_TURN := 0.3              # (v85) seconds the half-down visor shows while the oxygen tank goes on or off
 const HAND_SIZE := 12.0
 
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
@@ -615,19 +615,22 @@ func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
 
 
 func _row_of(id: int) -> int:
-	## (v85) The sheet's row for that character: its colour and look, or for a moment the half-down
-	## visor while its suit goes on or off (CrewArt.HALF_ROW).
+	## (v85) The sheet's row for that character: its colour and look, the visor down while it breathes
+	## from its tank (the author's C2), and for a moment the half-down visor as the tank goes on or off.
 	var colour := client.player_colour(id)
 	var look := client.look_of(id)
-	var suited := look / 2 == Net.OUTFIT_SUIT
+	var on_tank := look & Net.LOOK_TANK != 0
+	look &= Net.LOOK_TANK - 1
+	if colour >= CrewArt.TINTS.size():
+		return colour * Net.LOOKS + look               # the machines and heavy boarders: the old pictures
 	var now := Time.get_ticks_msec() / 1000.0
 	var was: Array = _visor.get(id, [])
-	if was.is_empty() or bool(was[0]) != suited:
-		was = [suited, now + VISOR_TURN if not was.is_empty() else 0.0]
+	if was.is_empty() or bool(was[0]) != on_tank:
+		was = [on_tank, now + VISOR_TURN if not was.is_empty() else 0.0]
 		_visor[id] = was
-	if now < float(was[1]) and colour < CrewArt.TINTS.size():
+	if now < float(was[1]):
 		return CrewArt.HALF_ROW + colour
-	return colour * Net.LOOKS + look
+	return (CrewArt.VISOR_ROW if on_tank else 0) + colour * Net.LOOKS + look
 
 
 func _cell(column: int, row: int) -> Rect2:
