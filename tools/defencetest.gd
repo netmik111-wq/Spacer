@@ -155,7 +155,8 @@ func _guard() -> void:
 			break
 	_expect(armed, "it has a pistol from the locker")
 	_expect(int(server.ship.store.get(Net.ITEM_PISTOL, 0)) == 0, "the locker gave it")
-	_expect(g.count(Net.ITEM_MAG) >= 1, "with magazines")
+	# (it may have loaded both by now if it missed a lot: what counts is that it took them)
+	_expect(int(server.ship.store.get(Net.ITEM_MAG, 0)) <= 3 - Defence.AMMO_TAKEN, "with magazines (%d left in the locker)" % int(server.ship.store.get(Net.ITEM_MAG, 0)))
 	_expect(fought, "it says it fights")
 	_expect(q.health < 100.0 or q.cond != Net.COND_OK, "and hit the pirate (health %.0f)" % q.health)
 	_expect(not g.st.prone, "it does not lie low while it fights")
