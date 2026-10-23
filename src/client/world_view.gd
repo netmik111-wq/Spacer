@@ -23,10 +23,11 @@ const FightFx := preload("res://src/client/fight_fx.gd")
 const Sprites := preload("res://src/client/sprites.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Music := preload("res://src/client/music.gd")
+const CrewArt := preload("res://src/client/crew_art.gd")
 
 const CHAR_W := 32
-const CHAR_H := 48
-const CHAR_PAD := 1                  # transparent border around every frame in assets/chars.png
+const CHAR_H := 64                   # (v85) the spriter's character is 32x64 (it was 48: see CrewArt)
+const CHAR_PAD := 1                  # transparent border around every frame of the people's sheet (CrewArt)
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
 const LIE_TURN := 0.2                # (v82) seconds to turn over lying down or getting up
 const PRONE_CENTRE := Vector2(0, -8)  # (v79) the middle of a body lying low, from where its feet would stand
@@ -34,8 +35,10 @@ const PRONE_CENTRE := Vector2(0, -8)  # (v79) the middle of a body lying low, fr
 # v74: then down-left, down-right, up-left, up-right)
 const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 18, 6: 21, 7: 12, 8: 15}
 # (v74) where the hand is, from the feet, for each facing (the thing held is drawn there)
-const HAND_AT := {1: Vector2(-8, -17), 2: Vector2(8, -17), 3: Vector2(-5, -16), 4: Vector2(5, -16),
-	5: Vector2(-7, -17), 6: Vector2(7, -17), 7: Vector2(-7, -17), 8: Vector2(7, -17)}
+# (v85: the spriter's taller figure holds its hands higher)
+const HAND_AT := {1: Vector2(-11, -23), 2: Vector2(11, -23), 3: Vector2(-6, -22), 4: Vector2(6, -22),
+	5: Vector2(-9, -23), 6: Vector2(9, -23), 7: Vector2(-9, -23), 8: Vector2(9, -23)}
+const VISOR_TURN := 0.3              # (v85) seconds the half-down visor shows while the oxygen tank goes on or off
 const HAND_SIZE := 12.0
 
 const BELOW_TINT := Color(0.6, 0.66, 0.8)        # a deck seen through the floor
@@ -271,6 +274,7 @@ var _dark := 0.0                     # 0 = the lights are on, 1 = no power: ease
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
 var _lie := {}                       # (v82) id -> 0 standing .. 1 lying: how far over the body is turned
 var _prone_side := {}                # (v80) id -> 1.0 or -1.0: the side a body lying low has its head to
+var _visor := {}                     # (v85) id -> [in a suit, until when the half-down visor shows]
 var _stand := {}                     # (v83) id -> where its feet are drawn (pixels on its deck), whether it stands or lies
 var _casings: Array = []             # (v82) spent casings: [deck, position on its deck, angle, cell, seconds left]
 var _kick := Vector2.ZERO            # (v82) the camera thrown back by our own shot (pixels), easing home
@@ -292,7 +296,7 @@ func setup(p_client: GameClient) -> void:
 	_tile = map.tile_size
 	_stride = map.deck_stride
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_chars_tex = Sprites.sheet("chars")
+	_chars_tex = CrewArt.sheet()
 	_breach_tex = Sprites.sheet("breach")
 
 	var tiles := TileSet.new()
@@ -608,6 +612,25 @@ func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
 		hand.queue_redraw()
 	hand.position = HAND_AT.get(facing, HAND_AT[Net.DIR_DOWN])
 	hand.show_behind_parent = facing == Net.DIR_UP or facing == Net.DIR_UP_LEFT or facing == Net.DIR_UP_RIGHT
+
+
+func _row_of(id: int) -> int:
+	## (v85) The sheet's row for that character: its colour and look, the visor down while it breathes
+	## from its tank (the author's C2), and for a moment the half-down visor as the tank goes on or off.
+	var colour := client.player_colour(id)
+	var look := client.look_of(id)
+	var on_tank := look & Net.LOOK_TANK != 0
+	look &= Net.LOOK_TANK - 1
+	if colour >= CrewArt.TINTS.size():
+		return colour * Net.LOOKS + look               # the machines and heavy boarders: the old pictures
+	var now := Time.get_ticks_msec() / 1000.0
+	var was: Array = _visor.get(id, [])
+	if was.is_empty() or bool(was[0]) != on_tank:
+		was = [on_tank, now + VISOR_TURN if not was.is_empty() else 0.0]
+		_visor[id] = was
+	if now < float(was[1]):
+		return CrewArt.HALF_ROW + colour
+	return (CrewArt.VISOR_ROW if on_tank else 0) + colour * Net.LOOKS + look
 
 
 func _cell(column: int, row: int) -> Rect2:
@@ -2150,7 +2173,7 @@ func _process(delta: float) -> void:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
-		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
+		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, _row_of(id))
 		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		# (v82, his crawl video) lying down, getting up and falling turn the body over in LIE_TURN
 		# seconds rather than flipping it; a body first seen already lies
@@ -2172,7 +2195,7 @@ func _process(delta: float) -> void:
 			if look_x != 0.0 and (was_t <= 0.0 or not _prone_side.has(id)):
 				_prone_side[id] = 1.0 if look_x > 0.0 else -1.0
 			var head := Vector2(float(_prone_side.get(id, 1.0)), 0.0)
-			sprite.region_rect = _frame(s[1], false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
+			sprite.region_rect = _frame(s[1], false, pos, _row_of(id))
 			sprite.rotation = wrapf(head.angle() + PI / 2.0, -PI, PI) * t
 			var lying_at := ((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round() / zoom
 			sprite.position = (stand_at.lerp(lying_at, t) * zoom).round() / zoom
@@ -2184,7 +2207,7 @@ func _process(delta: float) -> void:
 		else:
 			# on the floor: the figure is turned on its side and slid back over its tile
 			sprite.rotation = PI / 2.0 * t
-			sprite.position += (Vector2(-22.0, -7.0) * t * zoom).round() / zoom
+			sprite.position += (Vector2(2.0 - CHAR_H * 0.5, -7.0) * t * zoom).round() / zoom
 			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
 		if _flash.has(id):
 			sprite.modulate = sprite.modulate.lerp(Color(1.0, 0.2, 0.2), clampf(float(_flash[id]) / HIT_FLASH, 0.0, 1.0))
@@ -2204,6 +2227,7 @@ func _process(delta: float) -> void:
 			_prone_side.erase(id)
 			_lie.erase(id)
 			_stand.erase(id)
+			_visor.erase(id)
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
@@ -2300,4 +2324,4 @@ func _process(delta: float) -> void:
 	_ghost.visible = show_ghost and mine != null and map.deck_of(mine.y) == my_deck
 	if _ghost.visible:
 		_ghost.position = _feet(Vector2(mine.x, map.local_y(mine.y)))
-		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), client.player_colour(client.my_id) * Net.LOOKS + client.look_of(client.my_id))
+		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), _row_of(client.my_id))

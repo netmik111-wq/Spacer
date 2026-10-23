@@ -169,6 +169,16 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
+- «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
+  power, air, guns, lockers, fuel, food and bots, one purse, either helm flies both, each burns its own fuel. Pirates
+  mostly pick the weaker ship; a ship whose hull breaks goes dark and the run goes on until both are lost. A guest picks
+  a ship when joining. Saves keep both (protocol 61).
+- The crew is drawn from his spriter's sheet (`sprites/crew.png`): job colours repainted, pirates in red, the visor down
+  while on the oxygen tank (his C2 words), a small made step.
+- New test `tools/fleettest.gd` (42 scripts). Version 0.78, build in `/mnt/project-files/builds/v85/`.
+- His note for later: enemy fleets, more pirate ships joining a fight (in the vision).
+
 ### v84 (his answers on "Spacer v84 Next": hosting on your own ship)
 - «Корабль:» in the main menu picks a new campaign's ship (the game's or a drawing from «ships»), with a small picture;
   a ship with no helm or no engine (or any red editor problem) cannot start. The menu has two columns (it fits 720 rows).

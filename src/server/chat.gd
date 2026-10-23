@@ -199,7 +199,7 @@ func on_bridge(q: Player) -> bool:
 	if _bridge_map != map:
 		_bridge_map = map
 		_bridge = {}
-		for c: int in map.helm.keys() + map.gun_console.keys() + map.chart.keys():
+		for c: int in map.all_of("helm").keys() + map.all_of("gun_console").keys() + map.all_of("chart").keys():   # (v85: every ship's)
 			var front := map.fitting_front(c)
 			if front >= 0 and map.room_of[front] >= 0:
 				_bridge[map.room_of[front]] = true

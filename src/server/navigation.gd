@@ -41,6 +41,7 @@ func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 	if go and server.ship.tank <= 0.0:
 		server.chat.say("Баки пусты: своим ходом корабль не пойдёт. Залейте канистру топлива у двигателя.")   # (v67)
 		return
+	server.fleet.use(0)                  # (v85, the author's FS4) either ship's helm moves the whole fleet: the first leads
 	server.ship.moving = go
 	server.ship.dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else server.ship.pos
 	server.to_all(server.ship.helm_packet(server.tick))
@@ -57,7 +58,7 @@ func update() -> void:
 	if server.ship.moving:
 		var was := server.ship.pos
 		server.ship.pos = server.ship.pos.move_toward(server.ship.dest, Sectors.SHIP_SPEED * Net.TICK_SEC)
-		if server.ship.jump_to == Net.NO_SECTOR:
+		if server.ship.jump_to == Net.NO_SECTOR and not server.fleet.is_lost():   # (v85: a lost first ship only shows the way)
 			# (v67, the author's R3) flying inside a system burns fuel by the distance (not coasting into a jump)
 			server.ship.tank = maxf(server.ship.tank - was.distance_to(server.ship.pos) * Net.FLIGHT_FUEL, 0.0)
 			if server.ship.tank <= 0.0:
@@ -80,13 +81,17 @@ func update() -> void:
 		Sectors.STATION:
 			if now_in:
 				server.air.refill()
-				server.ship.store_air = Net.STORE_AIR_FULL
-				var topped := server.ship.tank < Net.STATION_FUEL
-				if topped:
-					server.ship.tank = Net.STATION_FUEL
-				var patched := server.ship.hull < server.ship.hull_max
-				server.ship.hull = server.ship.hull_max
-				server.supplies.tell_store()
+				var topped := false
+				var patched := false
+				for i in server.fleet.size():    # (v85) every ship of the fleet
+					server.fleet.use(i)
+					server.ship.store_air = Net.STORE_AIR_FULL
+					topped = topped or server.ship.tank < Net.STATION_FUEL
+					server.ship.tank = maxf(server.ship.tank, Net.STATION_FUEL)
+					patched = patched or server.ship.hull < server.ship.hull_max
+					server.ship.hull = server.ship.hull_max
+					server.supplies.tell_store()
+				server.fleet.use(0)
 				server.chat.say("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %
 					[", топлива в баке теперь %d единиц" % Net.STATION_FUEL if topped else "",
 					", обшивка залатана" if patched else ""])
@@ -140,12 +145,17 @@ func jump_asked(p: Player, target: int) -> void:
 		server.chat.say("Прыгнуть не на чем: для прыжка нужно %d единиц топлива в баке, а там %d. Залейте канистры у двигателя." % [
 			server.outfit.jump_fuel(target == Sectors.EXIT_JUMP), floori(server.ship.tank)])
 		return
+	var short: String = server.fleet.can_jump(target == Sectors.EXIT_JUMP)   # (v85) every ship of the fleet jumps on its own fuel
+	if short != "":
+		server.chat.say(short)
+		return
 	var held := server.derelict.holds_ship()
 	if held == "":
 		held = server.flagship.holds_jump()
 	if held != "":
 		server.chat.say(held)
 		return
+	server.fleet.use(0)                  # (v85) the fleet jumps together: the first ship leads
 	start_jump(target, p.name)
 
 
@@ -186,7 +196,7 @@ func update_jump() -> void:
 	var long_jump := server.ship.jump_to == Sectors.EXIT_JUMP
 	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to] if not long_jump else Vector2i.ZERO
 	var burn: int = server.outfit.jump_fuel(long_jump)
-	if not server.ship.can_jump(long_jump):
+	if (not server.fleet.is_lost() and not server.ship.can_jump(long_jump)) or server.fleet.can_jump(long_jump) != "":
 		# the tank ran low while the drive was charging
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
@@ -202,12 +212,15 @@ func update_jump() -> void:
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
 		return
-	server.ship.tank = maxf(server.ship.tank - burn, 0.0)          # (v67) by the engine's tier; the long jump twice
-	server.supplies.tell_store()
+	if server.fleet.many():
+		server.fleet.burn_jump(long_jump)                         # (v85) every ship burns its own
+	else:
+		server.ship.tank = maxf(server.ship.tank - burn, 0.0)      # (v67) by the engine's tier; the long jump twice
+		server.supplies.tell_store()
 	server.ship.jump_to = Net.NO_SECTOR
 	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1
-	server.outfit.jumped()                   # (v62) the welding drone
+	server.fleet.each(server.outfit.jumped)  # (v62) the welding drone (v85: every ship's)
 	server.salvage.jumped()                  # (v67) what floats outside stays behind
 	if long_jump:
 		server.road.next_cluster(server.sectors.exit_of(server.ship.sector))   # (v64) into the next cluster
@@ -249,5 +262,5 @@ func landed() -> void:
 		_:
 			server.chat.say("Сектор %s." % server.sectors.describe(server.ship.sector))
 	server.director.entered_sector()
-	server.garden.jumped()               # (v63) the crew eat
+	server.fleet.each(server.garden.jumped)   # (v63) the crew eat (v85: each ship's from its own lockers)
 	server.story.entered_sector()

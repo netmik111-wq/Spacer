@@ -35,6 +35,9 @@ var _preview: ShipPreview
 var _ship_note: Label
 var _own: CheckBox                    # (v84, the author's H5) one's own other drawings come in the run
 var _saved_ship := STANDARD_SHIP
+var _second: OptionButton             # (v85, the author's FS3) the fleet's second ship: item 0 = none, then as _ship
+var _saved_second := ""
+var _fleet_pick: OptionButton         # (v85) the ship of the fleet one asks for on joining: any, 1st, 2nd
 
 
 func _ready() -> void:
@@ -157,6 +160,18 @@ func _ready() -> void:
 	_ship.tooltip_text = "Свои корабли рисуют в «Редакторе кораблей» (папка ships рядом с игрой).\nДрузьям ничего копировать не нужно: игра пришлёт им чертёж при подключении."
 	_ship.item_selected.connect(func(_i: int) -> void: _show_ship())
 	ship_row.add_child(_ship)
+	# (v85, the author's FS3) a second ship of ours: «нет» by default
+	var second_row := HBoxContainer.new()
+	second_row.add_theme_constant_override("separation", 10)
+	right.add_child(second_row)
+	var second_caption := Label.new()
+	second_caption.text = "Второй корабль:"
+	second_row.add_child(second_caption)
+	_second = OptionButton.new()
+	_second.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_second.tooltip_text = "Флотилия: второй корабль летит и прыгает вместе с первым. У каждого своя обшивка, питание, воздух,\nпушки, склады, топливо и боты (ботов указанное число на каждом). Деньги общие. Штурвал любого из них ведёт обоих.\nКампания проиграна, только когда потеряны оба. Перейти с корабля на корабль можно в скафандре через шлюз."
+	_second.item_selected.connect(func(_i: int) -> void: _show_ship())
+	second_row.add_child(_second)
 	_preview = ShipPreview.new()
 	right.add_child(_preview)
 	_ship_note = Label.new()
@@ -190,6 +205,12 @@ func _ready() -> void:
 	var join := _button("Подключиться")
 	join.pressed.connect(_on_join)
 	join_row.add_child(join)
+	_fleet_pick = OptionButton.new()      # (v85) which ship of a fleet to come aboard
+	_fleet_pick.add_item("любой корабль")
+	for i in Net.FLEET_MAX:
+		_fleet_pick.add_item("корабль %d" % (i + 1))
+	_fleet_pick.tooltip_text = "Если у хозяина игры флотилия из нескольких кораблей: на какой из них прийти.\n«Любой» — туда, где меньше людей."
+	join_row.add_child(_fleet_pick)
 	left.add_child(_gap(6))
 
 	_status = Label.new()
@@ -231,6 +252,8 @@ func _ready() -> void:
 		_job.select(clampi(int(cfg.get_value("player", "job", Net.JOB_CAPTAIN)) - Net.JOB_CAPTAIN, 0, Net.JOBS - 1 - Net.JOB_CAPTAIN))
 		_saved_ship = str(cfg.get_value("player", "ship", STANDARD_SHIP))
 		_own.button_pressed = bool(cfg.get_value("player", "own_others", false))
+		_saved_second = str(cfg.get_value("player", "second", ""))
+		_fleet_pick.select(clampi(int(cfg.get_value("player", "fleet_pick", 0)), 0, Net.FLEET_MAX))
 	_show_job()
 	refresh_ships()
 	_name.grab_focus()
@@ -250,6 +273,7 @@ func refresh_ships() -> void:
 	## (v84) The ship list again (the ship editor may have saved a new drawing since): the game's own ship,
 	## then every drawing of our own ship in the «ships» folder, with what would keep it from being played.
 	var keep := _saved_ship if _ship_names.is_empty() else ship_name()
+	var keep_second := _saved_second if _ship_names.is_empty() else second_name()
 	_ship.clear()
 	_ship_names = [STANDARD_SHIP]
 	_ship_errors = [""]
@@ -264,6 +288,11 @@ func refresh_ships() -> void:
 		_ship_errors.append(error)
 		_ship.add_item(str(d["file"]) + ("  (не готов)" if error != "" else ""))
 	_ship.select(maxi(_ship_names.find(keep), 0))
+	_second.clear()
+	_second.add_item("нет")
+	for i in _ship_names.size():
+		_second.add_item(_ship.get_item_text(i))
+	_second.select(_ship_names.find(keep_second) + 1 if keep_second != "" else 0)
 	var usable := ShipMap.coming_in_run().size()
 	_own.disabled = usable == 0
 	_own.tooltip_text = ("Своих рисунков пиратских кораблей, обломков и астероидов, годных для игры: %d из %d.\nОни встречаются в пути вместе с обычными (не подходящие по размеру к шлюзу корабля не встретятся)." % [usable, others]) \
@@ -298,6 +327,23 @@ func _show_ship() -> void:
 		_ship_note.modulate = Color(0.75, 0.85, 1.0)
 	else:
 		_ship_note.text = ""
+
+
+func second_name() -> String:
+	## (v85) The fleet's second ship, or "" (none).
+	var i := maxi(_second.selected, 0) - 1
+	return _ship_names[i] if i >= 0 and i < _ship_names.size() else ""
+
+
+func fleet_name() -> String:
+	## (v85) The map a new campaign starts on: one ship, or both of the fleet joined (ShipMap.FLEET_JOIN).
+	var second := second_name()
+	return ship_name() + (ShipMap.FLEET_JOIN + second if second != "" else "")
+
+
+func wanted_ship() -> int:
+	## (v85) The ship of a fleet one asks for on joining: 1.., or 0 = any.
+	return maxi(_fleet_pick.selected, 0)
 
 
 func ship_name() -> String:
@@ -362,11 +408,16 @@ func _save() -> void:
 	cfg.set_value("player", "job", job())
 	cfg.set_value("player", "ship", ship_name())
 	cfg.set_value("player", "own_others", _own.button_pressed)
+	cfg.set_value("player", "second", second_name())
+	cfg.set_value("player", "fleet_pick", wanted_ship())
 	cfg.save(SETTINGS)
 
 
 func _on_host() -> void:
 	var error: String = _ship_errors[maxi(_ship.selected, 0)] if maxi(_ship.selected, 0) < _ship_errors.size() else ""
+	var second := maxi(_second.selected, 0) - 1
+	if error == "" and second >= 0 and second < _ship_errors.size():
+		error = _ship_errors[second]      # (v85) the second ship must be playable too
 	if error != "":
 		show_status("На этом корабле не начать: " + error, true)
 		return
@@ -377,7 +428,7 @@ func _on_host() -> void:
 	_new_armed = false
 	_save()
 	host_requested.emit(player_name(), Net.DEFAULT_PORT, int(_bots.value), "new",
-		Net.MODE_KEYS[maxi(_mode.selected, 0)] + ("+complex" if _complex.button_pressed else "+plain"), ship_name(), _own.button_pressed)
+		Net.MODE_KEYS[maxi(_mode.selected, 0)] + ("+complex" if _complex.button_pressed else "+plain"), fleet_name(), _own.button_pressed)
 
 
 func _on_continue() -> void:

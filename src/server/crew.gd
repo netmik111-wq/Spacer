@@ -56,7 +56,9 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			back_from_reserve = true
 		else:
 			end_campaign(Net.OVER_CREW_LOST)    # nobody alive and nobody left to send
-	var p := new_player(_unique_name(wanted))
+	# (v85, the author's FS1) the ship of our fleet asked for (u8 after the job: 1.. a ship, 0 any), else the one with fewest people
+	var ship_asked: int = pkt[5 + n] - 1 if pkt.size() > 5 + n else -1
+	var p := new_player(_unique_name(wanted), ship_asked if ship_asked >= 0 and ship_asked < server.fleet.size() else _ship_wanting(false))
 	p.peer = peer
 	p.quarters = true                      # (v78) a player steps by quarters of a tile
 	server.admin.joined(p)
@@ -185,6 +187,8 @@ func restore_character(p: Player, c: Dictionary) -> void:
 	var x := int(c["x"])
 	var y := int(c["y"])
 	var map := server.map
+	p.fleet_ship = clampi(int(c.get("fleet", p.fleet_ship)), 0, server.fleet.size() - 1)   # (v85)
+	server.fleet.use(p.fleet_ship)
 	if x < 0 or y < 0 or x >= map.width or y * map.width + x >= map.walk.size() \
 			or not (map.on_ship(y * map.width + x) or map.is_other(y * map.width + x)):
 		# (v77, the author's note: back after a drop, afloat where a ship alongside had been)
@@ -266,45 +270,64 @@ func alloc(player_name: String) -> Player:
 	return p
 
 
-func new_player(player_name: String) -> Player:
+func new_player(player_name: String, ship: int = -1) -> Player:
+	## (v85) aboard that ship of our fleet (-1: the one in place)
 	var p := alloc(player_name)
 	p.colour = p.slot % Net.SUIT_COLOURS
+	server.fleet.use(ship)
+	p.fleet_ship = server.fleet.on
 	var spot := spawn_point()
 	p.st.place(spot.x, spot.y)
 	return p
 
 
-func add_bot() -> void:
+func add_bot(ship: int = -1) -> void:
+	## (v85, the author's FS8) to that ship of our fleet; -1: the one shortest of crew
 	var n := 1
 	for q: Player in server.players:
 		if q != null and q.bot:
 			n += 1
-	var p := new_player(_unique_name("Бот %d" % n))
+	var p := new_player(_unique_name("Бот %d" % n), ship if ship >= 0 else _ship_wanting(true))
 	p.bot = true
 	p.st.access = Net.ACCESS_ALL | Net.ACCESS_OURS     # (bots go everywhere; v60: and through our blast doors)
 	p.add(Net.ITEM_FLASHLIGHT, true)
 	announce_join(p, null)
 
 
-func _crew_aboard() -> int:
-	## Our people alive, players and bots alike.
+func _crew_aboard(ship: int = -1) -> int:
+	## Our people alive, players and bots alike (v85: of that ship of our fleet; -1 all).
 	var n := 0
 	for q: Player in server.players:
-		if q != null and not q.pirate and not q.ally and not q.corpse and q.cond != Net.COND_DEAD:
+		if q != null and not q.pirate and not q.ally and not q.corpse and q.cond != Net.COND_DEAD and (ship < 0 or q.fleet_ship == ship):
 			n += 1
 	return n
+
+
+func _ship_wanting(bots_too: bool) -> int:
+	## (v85) The ship of our fleet with fewest of our people (players only, or bots too); the first on a tie.
+	var best := 0
+	var least := 1 << 20
+	for i in server.fleet.size():
+		var n := 0
+		for q: Player in server.players:
+			if q != null and not q.pirate and not q.ally and not q.corpse and q.fleet_ship == i and (bots_too or not q.bot):
+				n += 1
+		if n < least and not server.fleet.is_lost(i):
+			best = i
+			least = n
+	return best
 
 
 func _bot_makes_way(newcomer: Player) -> void:
 	## (v60, the author's word: "if people join the game they take place of a bot")
 	## With the crew already full, one bot leaves for the newcomer: a free one, up
 	## and about, if there is one. What it carried goes back into the supply locker.
-	if _crew_aboard() <= server.crew_size:
+	if _crew_aboard(newcomer.fleet_ship) <= server.crew_size:
 		return
 	var best: Player = null
 	var best_score := -1
 	for q: Player in server.players:
-		if q == null or not q.bot or q.corpse or q.cond == Net.COND_DEAD or q.dragged_by >= 0:
+		if q == null or not q.bot or q.corpse or q.cond == Net.COND_DEAD or q.dragged_by >= 0 or q.fleet_ship != newcomer.fleet_ship:
 			continue
 		var score := (2 if q.order == Net.POST_FREE else 0) + (1 if q.cond == Net.COND_OK else 0)
 		if score > best_score:
@@ -320,11 +343,11 @@ func _bot_makes_way(newcomer: Player) -> void:
 	server.chat.say("%s уступает место: на борт поднимается %s." % [who, newcomer.name])
 
 
-func _bot_takes_over(gone: String) -> void:
-	## (v60) ... "if they leave, bot takes their place".
-	if _crew_aboard() >= server.crew_size or server.over != Net.OVER_NONE:
+func _bot_takes_over(gone: String, ship: int = 0) -> void:
+	## (v60) ... "if they leave, bot takes their place". (v85) On their ship of our fleet.
+	if _crew_aboard(ship) >= server.crew_size or server.over != Net.OVER_NONE:
 		return
-	add_bot()
+	add_bot(ship)
 	server.chat.say("%s уходит с вахты: его место занимает бот." % gone)
 
 
@@ -444,7 +467,7 @@ func drop(peer: ENetPacketPeer, coming_back: bool = false) -> void:
 			server.saved_crew[p.name] = Campaign.character(p)   # kept for when they come back
 		remove(p)
 		if not p.bot and not p.pirate and not coming_back:
-			_bot_takes_over(p.name)
+			_bot_takes_over(p.name, p.fleet_ship)
 	server.log_line.emit("%s вышел (игроков: %d)." % [p.name, server.player_count()])
 
 
@@ -638,6 +661,7 @@ func respawn(p: Player) -> void:
 		# hands (the author's word: only the first crew comes aboard with gear)
 		p.skills.fill(0)
 		p.take_job(p.job)
+	server.fleet.use(p.fleet_ship)           # (v85) back aboard their own ship of the fleet
 	var spot := spawn_point()
 	if not p.bot:
 		var pod := cryo_spot()               # (v63) the one from the reserve wakes in a cryopod
@@ -707,8 +731,8 @@ func check_crew() -> void:
 
 func hull_hit(amount: int) -> void:
 	## The hull takes a blow. At nothing it gives way and the campaign is over.
-	if server.over != Net.OVER_NONE:
-		return
+	if server.over != Net.OVER_NONE or server.fleet.is_lost():
+		return                               # (v85) a lost ship of the fleet is already broken
 	var was := server.ship.hull
 	server.ship.hull = maxi(server.ship.hull - amount, 0)
 	if server.ship.hull == 0 and server.mode == Net.MODE_EASY and server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST:
@@ -718,6 +742,9 @@ func hull_hit(amount: int) -> void:
 		server.chat.say("Обшивка не выдержала, но экипаж успел залатать каркас: корабль держится. Наибольшая прочность теперь %d%s." % [
 			server.ship.hull_max, "" if server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST else " — следующий раз станет последним"])
 		tell_campaign()
+	elif server.ship.hull == 0 and server.fleet.standing() > 1:
+		if not server.fleet.is_lost():
+			server.fleet.ship_lost()      # (v85, the author's FS6) the run goes on while another ship of ours stands
 	elif server.ship.hull == 0:
 		end_campaign(Net.OVER_WRECKED)
 	elif was > 50 and server.ship.hull <= 50:
@@ -794,6 +821,8 @@ func campaign_packet() -> PackedByteArray:
 	out.encode_u8(15, server.ship.hull_max)
 	out.encode_u8(16, server.mode)
 	out.encode_u8(17, Net.CAMPAIGN_COMPLEX if server.complex_repairs else 0)   # (v71)
+	out.append(server.ship.id & 0xFF)     # (v85) the ship of the fleet the hull is of
+	out.append(server.ship.id >> 8)
 	return out
 
 

@@ -68,6 +68,9 @@ var ents := {}                       # id -> Ent, exactly as the server reported
 var hidden := {}                     # id -> the cell it was last seen in: the server stopped telling us about it because we no longer
                                      # see it (Net.FACING_HIDDEN); its silhouette may still fade where it was
 var my_ship := Net.CREW_SHIP         # the network id of the ship we are on (see Net.S_SHIPS)
+var my_fleet := 0                    # (v85) its number in our fleet (Net.S_BOARD); 0 with one ship
+var wanted_ship := 0                 # (v85) the ship of our fleet asked for on joining: 1.., 0 = any
+var board_changes := 0               # (v85) counts the times we went aboard another ship of our fleet
 var ships := {}                      # id -> {"kind": Net.SHIP_*, "docked": bool, "at": Vector2i, "name": String}
 var predict := true                  # predict our own character (false = wait for the server)
 var admin_token := ""                # set when this game started the server: unlocks the host's test tools
@@ -1609,6 +1612,7 @@ func _poll() -> void:
 				hello.encode_u8(3, name_bytes.size())
 				hello.append_array(name_bytes)
 				hello.append(job)
+				hello.append(wanted_ship)        # (v85)
 				_peer.send(0, hello, ENetPacketPeer.FLAG_RELIABLE)
 				phase = GREETING
 			ENetConnection.EVENT_DISCONNECT:
@@ -1877,7 +1881,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				jump_cost = maxi(pkt[t + 2], 1)
 				fuel_max = pkt.decode_u16(t + 3)
 		Net.S_CAMPAIGN:
-			if pkt.size() >= 14:
+			if pkt.size() >= 20 and pkt.decode_u16(18) != my_ship:
+				pass                         # (v85) another ship of our fleet's hull
+			elif pkt.size() >= 14:
 				hull = pkt[1]
 				reserve = pkt[2]
 				over = pkt[3]
@@ -1969,6 +1975,14 @@ func _on_packet(pkt: PackedByteArray) -> void:
 		Net.S_SOUND:
 			if pkt.size() >= 6:
 				heard.emit(pkt[1], pkt.decode_s16(2), pkt.decode_s16(4))
+		Net.S_BOARD:
+			# (v85) we are aboard another ship of our fleet: what we are told from now on is about it
+			if pkt.size() >= 4:
+				my_ship = pkt.decode_u16(1)
+				my_fleet = pkt[3]
+				map.use_ship(my_fleet)
+				board_changes += 1
+				ship_changes += 1
 		Net.S_SUMMARY:
 			if pkt.size() >= 10:
 				var deaths: Array = []
@@ -2068,7 +2082,7 @@ func _on_ships(pkt: PackedByteArray) -> void:
 	var derelict := false
 	other_docked = false
 	for id: int in ships.keys():
-		if id != my_ship:
+		if id != my_ship and int(ships[id]["kind"]) != Net.SHIP_CREW:   # (v85: the fleet's ships are drawn in our grid)
 			at = ships[id]["at"]
 			wreck = int(ships[id]["kind"]) == Net.SHIP_WRECK
 			rock = int(ships[id]["kind"]) == Net.SHIP_ROCK

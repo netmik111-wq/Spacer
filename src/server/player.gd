@@ -10,6 +10,8 @@ var peer: ENetPacketPeer = null      # null for bots
 var name := ""
 var colour := 0
 var bot := false
+var fleet_ship := 0                  # (v85) the ship of our fleet it belongs to (its number in Fleet.ships)
+var aboard := -1                     # (v85) the ship of our fleet its client was last told it is aboard
 var corpse := false                  # a body left behind: it only lies there
 var admin := false                   # may use the admin panel (see Admin)
 var host := false                    # is the hosting player (proved with the server's secret text)
@@ -235,9 +237,9 @@ func has_suit() -> bool:
 
 
 func look() -> int:
-	## How it is dressed, as a row of the sheet (see Net.LOOKS).
+	## How it is dressed, as a row of the sheet (see Net.LOOKS); (v85) Net.LOOK_TANK while on its oxygen tank.
 	var outfit := Net.OUTFIT_SUIT if has_suit() else (Net.OUTFIT_JUMPSUIT if worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE else Net.OUTFIT_BARE)
-	return outfit * 2 + (1 if worn[Net.WEAR_PACK] != Net.ITEM_NONE else 0)
+	return outfit * 2 + (1 if worn[Net.WEAR_PACK] != Net.ITEM_NONE else 0) + (Net.LOOK_TANK if supply or (pirate and not robot and has_suit()) else 0)
 
 
 func holds_in(wear: int) -> bool:

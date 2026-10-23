@@ -58,7 +58,8 @@ func _initialize() -> void:
 	p.slots[0] = Net.ITEM_BACKPACK
 	_expect(server.inventory.act(p) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK and p.count(Net.ITEM_NONE) == Net.SLOTS,
 		"a backpack goes on: %d slots now" % Net.SLOTS)
-	_expect(p.look() == Net.OUTFIT_SUIT * 2 + 1, "and shows")
+	_expect(p.look() & (Net.LOOK_TANK - 1) == Net.OUTFIT_SUIT * 2 + 1, "and shows")
+	_expect((p.look() & Net.LOOK_TANK != 0) == p.supply, "(v85) the visor is down exactly while on the tank")
 	p.slots[Net.SLOTS - 1] = Net.ITEM_PATCH
 	_expect(not server.inventory.take_off(p, Net.WEAR_PACK) and p.worn[Net.WEAR_PACK] == Net.ITEM_BACKPACK, "it does not come off with things in it")
 	p.slots[Net.SLOTS - 1] = Net.ITEM_NONE

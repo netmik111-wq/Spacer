@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 60
+const PROTOCOL := 61
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -133,6 +133,7 @@ const OUTFIT_SUIT := 0
 const OUTFIT_JUMPSUIT := 1
 const OUTFIT_BARE := 2
 const LOOKS := 6
+const LOOK_TANK := 8                # (v85, the author's C2) in the look byte: it breathes from its oxygen tank (the visor is down)
 
 # things that can be carried
 const ITEM_NONE := 0
@@ -523,6 +524,8 @@ const S_HIT := 46                   # (v75, the author's F1) somebody hurt, to t
 const S_SUMMARY := 47               # (v75, the author's E1) the run's story at its end: u16 pirate ships beaten, u16 boarders
                                     # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8);
                                     # (v82) then u8 things, per thing u8 length + name (UTF-8), u16 times people used it
+const S_BOARD := 48                 # (v85) u16 ship id, u8 its number in our fleet: the ship of ours we are aboard now
+const FLEET_MAX := 2                # (v85, the author's FS2) ships in our fleet at most
 const BLOOD_FLESH := 0
 const BLOOD_METAL := 1
 const GROW_EMPTY := 0

@@ -83,7 +83,7 @@ static func snapshot(server: Node) -> Dictionary:
 			holes.append(cell)
 	var broken: Array = []
 	for cell: int in server.ship.broken:
-		if not map.is_other(cell):
+		if not map.is_other(cell) and server.fleet.mine(cell):
 			broken.append(cell)
 	var own_doors: int = map.other_first_door if map.other_kind >= 0 else map.doors.size()
 	var jammed: PackedByteArray = server.doors.jammed.slice(0, own_doors)
@@ -130,7 +130,81 @@ static func snapshot(server: Node) -> Dictionary:
 		"road": server.road.save(),                                          # (v64)
 		# (v84, the author's H4) the drawings of one's own it is played with, as they were: the files may change since
 		"drawings": ShipMap.drawings_in_use(map.map_name), "own_others": ShipMap.own_others,
+		"fleet": _fleet_of(server),                                          # (v85)
 	}
+
+
+static func _fleet_of(server: Node) -> Array:
+	## (v85) Every other ship of our fleet's own: lockers, fuel, hull, guns, power, gear, food, breakdowns.
+	var out: Array = []
+	for i in range(1, server.fleet.size()):
+		server.fleet.use(i)
+		var s = server.ship
+		var store := {}
+		for item: int in s.store:
+			store[str(item)] = s.store[item]
+		var broken: Array = []
+		for cell: int in s.broken:
+			if not server.map.is_other(cell) and server.fleet.mine(cell):
+				broken.append(cell)
+		out.append({
+			"store": store, "store_air": s.store_air, "tank": s.tank, "hull": s.hull, "hull_max": s.hull_max,
+			"lost": server.fleet.is_lost(i), "broken": broken,
+			"mounts": Array(s.mounts), "armed": Array(s.armed), "shield_on": s.shield_on, "hardened": s.hardened,
+			"mount_fx": Array(s.mount_fx), "guard": s.guard, "guard_armed": s.guard_armed,
+			"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(),
+			"gear": Array(s.gear), "modules": Array(s.modules), "smes": server.power.save(), "garden": server.garden.save(),
+		})
+	server.fleet.use(0)
+	return out
+
+
+static func _fleet_back(server: Node, saved: Array) -> void:
+	## (v85) The other ships of our fleet as they were saved (the first is put back by restore itself).
+	for i in range(1, mini(server.fleet.size(), saved.size() + 1)):
+		var d: Dictionary = saved[i - 1]
+		server.fleet.use(i)
+		var s = server.ship
+		s.store.clear()
+		for item in Items.kept_in_locker():
+			s.store[item] = 0
+		for item: String in d["store"]:
+			s.store[int(item)] = int(d["store"][item])
+		s.store_air = float(d["store_air"])
+		s.tank = float(d["tank"])
+		s.hull_max = int(d["hull_max"])
+		s.hull = int(d["hull"])
+		server.fleet.lost[i] = bool(d.get("lost", false))
+		var mounts := PackedByteArray(d["mounts"])
+		var armed := PackedByteArray(d["armed"])
+		if mounts.size() == s.mounts.size() and armed.size() == mounts.size():
+			s.mounts = mounts
+			s.armed = armed
+		s.shield_on = bool(d["shield_on"])
+		s.hardened = bool(d["hardened"])
+		var fx := PackedByteArray(d["mount_fx"])
+		if fx.size() == s.mount_fx.size():
+			s.mount_fx = fx
+		s.guard = int(d["guard"])
+		s.guard_armed = bool(d["guard_armed"])
+		var loaded := PackedByteArray(d["loaded"])
+		if loaded.size() == server.mounts.loaded.size():
+			server.mounts.loaded = loaded
+		server.power.load_panel(d["panel"])
+		var gear := PackedByteArray(d["gear"])
+		if gear.size() == Gear.SYSTEMS:
+			s.gear = gear
+		var modules := PackedByteArray(d["modules"])
+		if modules.size() >= Gear.MODULE_SLOTS and modules.size() <= Gear.MODULE_SLOTS_MAX:
+			s.modules = modules
+		s.phase_ready = 0
+		server.outfit.refresh()
+		server.garden.load_from(d["garden"])
+		server.power.load_from(d["smes"])
+		s.broken.clear()
+		for cell in d["broken"]:
+			s.broken[int(cell)] = true
+	server.fleet.use(0)
 
 
 static func _keyed(d: Dictionary) -> Dictionary:
@@ -154,7 +228,7 @@ static func character(p: RefCounted) -> Dictionary:
 		"x": p.st.x, "y": p.st.y, "facing": p.st.facing,
 		"health": p.health, "wounds": p.wounds, "tank": p.tank, "supply": p.supply,
 		"slots": Array(p.slots), "worn": Array(p.worn), "hand": p.hand,
-		"job": p.job, "skills": Array(p.skills),
+		"job": p.job, "skills": Array(p.skills), "fleet": p.fleet_ship,
 	}
 
 
@@ -274,6 +348,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.air.wake()
 	for cell in data["broken"]:
 		server.ship.broken[int(cell)] = true
+	_fleet_back(server, data.get("fleet", []))
 	var jammed := Marshalls.base64_to_raw(str(data["jammed"]))
 	var faulty := Marshalls.base64_to_raw(str(data["faulty"]))
 	for d in mini(jammed.size(), server.doors.jammed.size()):

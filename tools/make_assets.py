@@ -5,7 +5,8 @@
                                                                      see-through floors drawn in code)
   maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically;
                                                                      one drawing per deck)
-  (generated in code)     -> assets/chars.png                       (placeholder crew, 8 directions)
+  (generated in code)     -> assets/chars.png                       (robots, heavy boarders; the old drawn crew)
+  art_src/crew.png        -> assets/crew.png                        (v85: the author's spriter's character, padded to 96x320)
   art_src/hud.dmi         -> assets/hud_monitor.png                 (heartbeat monitor animation)
 
 Run from the project folder:  python3 tools/make_assets.py
@@ -1390,6 +1391,29 @@ def build_fx():
     print("fx: assets/breach.png")
 
 
+CREW_CELL = (32, 64)        # (v85) a frame of the spriter's character sheet
+CREW_SIZE = (CREW_CELL[0] * 3, CREW_CELL[1] * 5)   # 3 helmet looks x 5 views (see src/client/crew_art.gd)
+
+
+def build_crew():
+    # (v85) the spriter's sheet as he drew it; only padded to whole frames (his last row was cut short)
+    src = Image.open(os.path.join(SRC, "crew.png")).convert("RGBA")
+    w = max(CREW_SIZE[0], src.width - src.width % CREW_CELL[0])
+    out = Image.new("RGBA", (w, CREW_SIZE[1]), (0, 0, 0, 0))
+    out.paste(src.crop((0, 0, min(w, src.width), min(CREW_SIZE[1], src.height))), (0, 0))
+    # his first sheet (2026-10-23) has the front three-quarter row the other way round (visor, half, glass):
+    # every row is put as clear glass, half, visor; his back row has one picture, used for all three
+    fw, fh = CREW_CELL
+    row = out.crop((0, fh, fw * 3, fh * 2))
+    for c in range(3):
+        out.paste(row.crop(((2 - c) * fw, 0, (3 - c) * fw, fh)), (c * fw, fh))
+    back = out.crop((0, fh * 4, fw, fh * 5))
+    for c in (1, 2):
+        out.paste(back, (c * fw, fh * 4))
+    out.save(os.path.join(OUT, "crew.png"))
+    print(f"crew: {src.width}x{src.height} -> assets/crew.png {out.width}x{out.height}")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(ROOT, "tools", "preview"), exist_ok=True)
@@ -1397,6 +1421,7 @@ def main():
     print(f"tiles: {len(ids)} -> assets/tiles.png")
     build_maps(images, ids)
     build_chars()
+    build_crew()
     build_hud()
     build_fx()
 
