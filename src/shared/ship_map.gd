@@ -21,6 +21,14 @@ static var drawings := {}            # (v84) "ships:NAME" -> its drawing's text,
 static var own_others: Array[String] = []   # (v84, the author's H5) drawings of one's own that come in the run
                                      # (pirate ships, derelicts, asteroids), after the game's own in `others`
 
+const FLEET_JOIN := "|"              # (v85, the author's FS1) "ship02|ship01": our fleet, its ships' drawings one below another
+const FLEET_GAP := 4                 # rows of open space between two ships of the fleet
+# (v85) what each ship of the fleet has of its own: set in place by use_ship (the server's and the client's
+# code ask `helm`, `guns`, `smes`... of the ship they work for; a gun or a tray is numbered within its ship)
+const FLEET_FITS := ["oxygen", "helm", "chart", "engine", "air_plant", "locker", "intercom", "holo", "shield", "bench",
+	"bay", "autodoc", "scanner", "smes", "smes_small", "comms", "trays", "cryo", "stove", "backup_rooms", "guns",
+	"gun_console", "drone_console", "lock_pump", "vents", "spawns"]
+
 const DOOR_BAND := 0                 # a door in a horizontal wall ('D' in the drawing)
 const DOOR_AIRLOCK := 1              # an airlock in a vertical wall ('A')
 
@@ -105,6 +113,10 @@ var base_cells := PackedInt32Array()
 var base_walk := PackedByteArray()
 var base_opaque := PackedByteArray()
 
+var fleet_rows := PackedInt32Array([0])   # (v85) per ship of our fleet: the row of each deck its drawing starts on
+var fleet_names := PackedStringArray()   # and its drawing's name
+var fleet_on := -1                   # the ship whose own things are in place now (-1: all of them)
+var _fits: Array = []                # per ship: field of FLEET_FITS -> its part; [-1] (the last) all of them
 var held := {}                       # (v81, the author's human wall) cells somebody holds (Mover.State.hold): nobody
                                      # else walks into them. The server marks them every tick; a client marks those
                                      # of the others it sees, so its own walking is predicted alike
@@ -125,6 +137,28 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	## Returns "" on success or a description of what went wrong.
 	var tiles_text := FileAccess.get_file_as_string("res://assets/tiles.json")
 	var data: Variant = null
+	fleet_rows = PackedInt32Array([0])
+	fleet_names = PackedStringArray([name])
+	if name.contains(FLEET_JOIN):
+		# (v85) our fleet: every ship's drawing laid one below another, built as one
+		var texts := []
+		for part in name.split(FLEET_JOIN):
+			var t := drawing_text(part)
+			if t.is_empty():
+				return "Не найден корабль «%s»." % part.trim_prefix(USER_PREFIX)
+			texts.append(t)
+		var joined: Dictionary = MapBuilder.fleet_text(texts, FLEET_GAP)
+		var built := MapBuilder.build("fleet", str(joined["text"]))
+		var problems: Array = built["problems"]
+		if not problems.is_empty():
+			return "Флотилия: %s" % (problems[0] as Dictionary)["text"]
+		fleet_rows = joined["rows"]
+		fleet_names = name.split(FLEET_JOIN)
+		kind = "ship"
+		var problem := load_data(name, tiles_text, built["data"], needs_spawns)
+		if problem == "":
+			_split_fits()
+		return problem
 	if name.begins_with(USER_PREFIX):
 		# (v81) a ship of one's own, drawn in the ship editor: built here from its drawing;
 		# (v84) the copy the server sent or the save kept comes first, and a drawing read is kept
@@ -148,6 +182,74 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		data = JSON.parse_string(map_text)
 		kind = MapBuilder.kind_of(name, "")
 	return load_data(name, tiles_text, data, needs_spawns)
+
+
+static func drawing_text(name: String) -> String:
+	## (v85) The text of a drawing: one of one's own (the copy kept, else the «ships» folder) or the game's.
+	if name.begins_with(USER_PREFIX):
+		var text := str(drawings.get(name, ""))
+		if text.is_empty():
+			text = FileAccess.get_file_as_string(ships_dir().path_join(name.substr(USER_PREFIX.length()) + ".txt"))
+			if not text.is_empty():
+				drawings[name] = text
+		return text
+	return FileAccess.get_file_as_string("res://maps/%s.txt" % name)
+
+
+func fleet_size() -> int:
+	return fleet_rows.size()
+
+
+func fleet_of(cell: int) -> int:
+	## (v85) Which ship of our fleet a cell is in (0 = the first); -1 for the ship alongside.
+	if fleet_rows.size() < 2:
+		return 0
+	if is_other(cell):
+		return -1
+	var row := local_y(cell / width)
+	for i in range(fleet_rows.size() - 1, 0, -1):
+		if row >= fleet_rows[i] - FLEET_GAP / 2:
+			return i
+	return 0
+
+
+func use_ship(i: int) -> void:
+	## (v85) Puts that ship's own things in place (FLEET_FITS); -1 puts every ship's.
+	if _fits.is_empty() or i == fleet_on:
+		return
+	fleet_on = i
+	var fits: Dictionary = _fits[i] if i >= 0 else _fits[-1]
+	for f: String in FLEET_FITS:
+		set(f, fits[f])
+
+
+func _split_fits() -> void:
+	_fits = []
+	for i in fleet_rows.size() + 1:
+		var fits := {}
+		for f: String in FLEET_FITS:
+			var all: Variant = get(f)
+			if i == fleet_rows.size():
+				fits[f] = all
+				continue
+			var mine: Variant
+			if all is Dictionary:
+				mine = {}
+				for k: Variant in (all as Dictionary).keys():
+					var c := int(k) if f != "backup_rooms" else int((rooms[int(k)] as PackedInt32Array)[0])
+					if fleet_of(c) == i:
+						mine[k] = all[k]
+			elif all is PackedInt32Array:
+				mine = PackedInt32Array()
+				for c: int in all:
+					if fleet_of(c) == i:
+						mine.append(c)
+			else:
+				mine = all.filter(func(v: Vector2i) -> bool: return fleet_of(v.y * width + v.x) == i)
+			fits[f] = mine
+		_fits.append(fits)
+	fleet_on = -1
+	use_ship(0)
 
 
 static func ships_dir() -> String:
@@ -562,7 +664,9 @@ static func coming_in_run() -> Array[String]:
 static func drawings_in_use(main: String) -> Dictionary:
 	## (v84) The texts of the drawings of one's own a game on `main` uses: sent to every guest, kept in the save.
 	var out := {}
-	var names: Array[String] = [main]
+	var names: Array[String] = []
+	for n in main.split(FLEET_JOIN):         # (v85) every ship of the fleet
+		names.append(n)
 	names.append_array(other_maps())
 	for n: String in names:
 		if n.begins_with(USER_PREFIX) and drawings.has(n):

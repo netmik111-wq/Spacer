@@ -87,6 +87,65 @@ static func read(text: String) -> Dictionary:
 	return {"decks": decks, "marks": marks}
 
 
+static func fleet_text(texts: Array, gap: int = 4) -> Dictionary:
+	## (v85, the author's FS1) Our fleet as one drawing: each ship's decks laid below the one before, `gap` empty
+	## rows apart (a later ship's empty rows on top are dropped; the first keeps its own, where ships come
+	## alongside). Its marks move with it. {"text", "rows": the row of each deck where each ship starts}.
+	var parts: Array = []
+	var decks := 0
+	for t: String in texts:
+		var part := read(t)
+		parts.append(part)
+		decks = maxi(decks, (part["decks"] as Array).size())
+	var lines: Array = []
+	for d in decks:
+		lines.append(PackedStringArray())
+	var names := PackedStringArray()
+	var marks := PackedStringArray()
+	var rows := PackedInt32Array()
+	var at := 0
+	for k in parts.size():
+		var ship_decks: Array = parts[k]["decks"]
+		var tall := 0
+		var top := 1 << 20
+		for sd: Array in ship_decks:
+			var r: PackedStringArray = sd[1]
+			tall = maxi(tall, r.size())
+			var empty := 0
+			while empty < r.size() and r[empty].strip_edges() == "":
+				empty += 1
+			top = mini(top, empty)
+		if k == 0 or top >= tall:
+			top = 0
+		if k > 0:
+			at += gap
+		rows.append(at)
+		for d in decks:
+			var r := PackedStringArray()
+			if d < ship_decks.size():
+				r = ship_decks[d][1]
+				if names.size() <= d:
+					names.append(str(ship_decks[d][0]))
+			var mine: PackedStringArray = lines[d]
+			while mine.size() < at:
+				mine.append("")
+			for y in range(top, tall):
+				mine.append(r[y] if y < r.size() else "")
+			lines[d] = mine
+		for m: String in parts[k]["marks"]:
+			var bits := m.substr(1).split(" ", false)
+			if bits.size() == 4 and bits[2].is_valid_int():
+				bits[2] = str(int(bits[2]) - top + at)
+			marks.append(m.substr(0, 1) + " " + " ".join(bits))
+		at += tall - top
+	var out := PackedStringArray(["; kind = ship"])
+	out.append_array(marks)
+	for d in decks:
+		out.append("= " + (names[d] if d < names.size() else "Палуба %d" % (d + 1)))
+		out.append_array(lines[d])
+	return {"text": "\n".join(out), "rows": rows}
+
+
 static func build(name: String, text: String) -> Dictionary:
 	## {"data": the layout as maps/*.json holds it, "problems": [{"deck", "x", "y", "text"}], "kind"}.
 	## deck -1 is a problem of the whole ship.
