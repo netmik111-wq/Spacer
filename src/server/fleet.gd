@@ -51,6 +51,16 @@ func setup(p_server: GameServer) -> void:
 		s.map = server.map
 		s.name = server.map.fleet_names[i]
 		s.purse = server.ship
+		var lead: Ship = server.ship         # starts as the first one does (GameServer.start)
+		s.store = lead.store.duplicate()
+		s.store_air = lead.store_air
+		s.tank = lead.tank
+		s.hull_max = lead.hull_max
+		s.hull = lead.hull
+		s.sector = lead.sector
+		s.pos = lead.pos
+		s.dest = lead.dest
+		s.in_reach = lead.in_reach
 		ships.append(s)
 		lost.append(false)
 		_kept.append({})
@@ -139,13 +149,13 @@ func ship_lost() -> void:
 	## The hull of the ship in place gave way while another of ours still stands: it goes dark and
 	## drops out of the fight; the run goes on. Mended above nothing again (from outside), it comes back.
 	lost[on] = true
-	server.chat.alarm("Корабль «%s» потерян: обшивка не выдержала, он обесточен. Флотилия идёт дальше." % name_of(on))
+	server.chat.alarm("Корабль %s потерян: обшивка не выдержала, он обесточен. Флотилия идёт дальше; его можно залатать снаружи." % name_of(on))
 	server.systems.power_changed()
 
 
 func name_of(i: int) -> String:
-	var n: String = (ships[i] as Ship).name
-	return n.trim_prefix(server.map.USER_PREFIX)
+	## How chat names a ship of the fleet: by its number (both may be drawn alike).
+	return str(i + 1)
 
 
 func target() -> int:
@@ -174,7 +184,7 @@ func can_jump(long_jump: bool) -> String:
 			continue
 		use(i)
 		if not server.ship.can_jump(long_jump):
-			short = "Прыгнуть не на чем: кораблю «%s» нужно %d единиц топлива в баке, а там %d. Залейте канистры у его двигателя." % [
+			short = "Прыгнуть не на чем: кораблю %s нужно %d единиц топлива в баке, а там %d. Залейте канистры у его двигателя." % [
 				name_of(i), server.outfit.jump_fuel(long_jump), floori(server.ship.tank)]
 			break
 	use(was)
@@ -207,7 +217,7 @@ func follow() -> void:
 				lead.dest = lead.pos
 				lead.moving = false
 				server.to_all(lead.helm_packet(server.tick))
-				server.chat.say("Баки корабля «%s» опустели: флотилия легла в дрейф. Залейте канистру топлива у его двигателя." % name_of(i))
+				server.chat.say("Баки корабля %s опустели: флотилия легла в дрейф. Залейте канистру топлива у его двигателя." % name_of(i))
 				helm = true
 		s.sector = lead.sector
 		s.jump_to = lead.jump_to
@@ -229,7 +239,7 @@ func tick() -> void:
 	for i in ships.size():
 		if is_lost(i) and (ships[i] as Ship).hull > 0:
 			lost[i] = false                  # its hull mended from outside: it is ours again
-			server.chat.say("Корабль «%s» снова держит обшивку." % name_of(i))
+			server.chat.say("Корабль %s снова держит обшивку и снова в строю." % name_of(i))
 	# who is aboard which ship: the client is told, and told that ship's state anew
 	for p: Player in server.players:
 		if p == null or p.peer == null or p.corpse:

@@ -58,7 +58,7 @@ func update() -> void:
 	if server.ship.moving:
 		var was := server.ship.pos
 		server.ship.pos = server.ship.pos.move_toward(server.ship.dest, Sectors.SHIP_SPEED * Net.TICK_SEC)
-		if server.ship.jump_to == Net.NO_SECTOR:
+		if server.ship.jump_to == Net.NO_SECTOR and not server.fleet.is_lost():   # (v85: a lost first ship only shows the way)
 			# (v67, the author's R3) flying inside a system burns fuel by the distance (not coasting into a jump)
 			server.ship.tank = maxf(server.ship.tank - was.distance_to(server.ship.pos) * Net.FLIGHT_FUEL, 0.0)
 			if server.ship.tank <= 0.0:
@@ -196,7 +196,7 @@ func update_jump() -> void:
 	var long_jump := server.ship.jump_to == Sectors.EXIT_JUMP
 	var arrived: Vector2i = server.sectors.cell[server.ship.jump_to] if not long_jump else Vector2i.ZERO
 	var burn: int = server.outfit.jump_fuel(long_jump)
-	if not server.ship.can_jump(long_jump) or server.fleet.can_jump(long_jump) != "":
+	if (not server.fleet.is_lost() and not server.ship.can_jump(long_jump)) or server.fleet.can_jump(long_jump) != "":
 		# the tank ran low while the drive was charging
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
@@ -212,11 +212,11 @@ func update_jump() -> void:
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
 		return
-	server.ship.tank = maxf(server.ship.tank - burn, 0.0)          # (v67) by the engine's tier; the long jump twice
-	server.supplies.tell_store()
 	if server.fleet.many():
-		server.ship.tank += burn                                  # (v85) every ship burns its own
-		server.fleet.burn_jump(long_jump)
+		server.fleet.burn_jump(long_jump)                         # (v85) every ship burns its own
+	else:
+		server.ship.tank = maxf(server.ship.tank - burn, 0.0)      # (v67) by the engine's tier; the long jump twice
+		server.supplies.tell_store()
 	server.ship.jump_to = Net.NO_SECTOR
 	server.ship.drive_ready = server.tick + roundi(Net.DRIVE_REST_TICKS * server.outfit.jump_share())
 	server.jumps += 1

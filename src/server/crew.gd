@@ -187,6 +187,8 @@ func restore_character(p: Player, c: Dictionary) -> void:
 	var x := int(c["x"])
 	var y := int(c["y"])
 	var map := server.map
+	p.fleet_ship = clampi(int(c.get("fleet", p.fleet_ship)), 0, server.fleet.size() - 1)   # (v85)
+	server.fleet.use(p.fleet_ship)
 	if x < 0 or y < 0 or x >= map.width or y * map.width + x >= map.walk.size() \
 			or not (map.on_ship(y * map.width + x) or map.is_other(y * map.width + x)):
 		# (v77, the author's note: back after a drop, afloat where a ship alongside had been)
@@ -729,8 +731,8 @@ func check_crew() -> void:
 
 func hull_hit(amount: int) -> void:
 	## The hull takes a blow. At nothing it gives way and the campaign is over.
-	if server.over != Net.OVER_NONE:
-		return
+	if server.over != Net.OVER_NONE or server.fleet.is_lost():
+		return                               # (v85) a lost ship of the fleet is already broken
 	var was := server.ship.hull
 	server.ship.hull = maxi(server.ship.hull - amount, 0)
 	if server.ship.hull == 0 and server.mode == Net.MODE_EASY and server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST:

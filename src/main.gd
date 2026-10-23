@@ -446,6 +446,7 @@ func _join_game(player: String, address: String, port: int) -> void:
 func _connect(player: String, address: String, port: int) -> bool:
 	_pending_port = port
 	var job := int(_opt["job"]) if _opt.has("job") else (_menu.job() if _menu != null else Net.JOB_CREWMAN)
+	_client.wanted_ship = int(_opt.get("fleet_pick", _menu.wanted_ship() if _menu != null else 0))   # (v85)
 	var problem := _client.connect_to(address, port, player, job)
 	if problem != "":
 		_stop_server(0)

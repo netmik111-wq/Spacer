@@ -734,6 +734,8 @@ func tick() -> void:
 func tick_enemy() -> void:
 	## The pirate ship we fight: it fires, runs, mends, offers ransom. (v85) Its shots land on the ship of our
 	## fleet it picked (target), so that ship's state is in place meanwhile.
+	if server.fleet.is_lost(target):
+		target = server.fleet.target()       # (v85) that ship of ours is lost: they turn on another
 	server.fleet.use(target)
 	_land_due()
 	if fighting():

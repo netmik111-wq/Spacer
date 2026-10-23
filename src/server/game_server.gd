@@ -327,6 +327,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	for k in range(1, fleet.size()):     # (v85, the author's FS8) every other ship of the fleet: its own crew of bots
 		for i in crew_size:
 			crew.add_bot(k)
+	fleet.use(0)
 	log_line.emit("Сервер запущен: порт %d, карта «%s», ботов %d." % [port, map.map_name, bots])
 	return ""
 
@@ -622,7 +623,7 @@ func new_ship_id() -> int:
 
 func ships_packet() -> PackedByteArray:
 	## Net.S_SHIPS: every ship in the world now.
-	var all: Array = [ship]
+	var all: Array = fleet.ships.duplicate() if fleet.many() else [ship]   # (v85: every ship of our fleet)
 	if derelict.ship != null:
 		all.append(derelict.ship)
 	var out := PackedByteArray([Net.S_SHIPS, all.size()])
