@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v84 (version 0.77).
+Last updated: build v85 (version 0.78).
 
 Contents:
 
@@ -46,6 +46,7 @@ Contents:
 36. [The ship editor, asteroids, holding position (v81)](#36-the-ship-editor-asteroids-holding-position-v81)
 37. [Polish without extra depth (v82)](#37-polish-without-extra-depth-v82)
 38. [Hosting on your own ship (v84)](#38-hosting-on-your-own-ship-v84)
+39. [Our fleet and the new character (v85)](#39-our-fleet-and-the-new-character-v85)
 
 ---
 
@@ -2140,4 +2141,49 @@ The author's answers on the page "Spacer v84 Next" (https://claude.ai/artifact/R
 - **A blow that meets nobody** (his bug note and S1): a baton or a fist used at a far tile drew its hit circle where the
   mouse was. Now a blow shows a short **white swing** in front of the one striking, toward the mouse; the circle (and the
   red of a hit) only on someone actually hit. A miss makes a soft **whoosh** (`swing`, range 4, replaceable from «sounds»).
+
+## 39. Our fleet and the new character (v85)
+
+The author's answers on the page "Spacer v85 Ships" (https://claude.ai/artifact/G35RhEtEWHhMGPeuhahtuK): all my picks,
+with his words on the visor (C2) and the walking (C3).
+
+### The fleet
+
+- **«Второй корабль:»** on the main menu (his FS3), «нет» at first: the same list as «Корабль:» (the standard ship or a
+  drawing of ours). With a second ship a new campaign starts as a **fleet of two** (FS2: two for now). A ship that cannot
+  be played refuses here too.
+- **Where they lie**: the second ship lies **below** the first in the same world, 4 rows of open space between them.
+  People cross over in a spacesuit, out of one ship's airlock and into the other's, as to any ship alongside.
+- **Each ship has its own** (FS1, FS7): hull, power (engine, SMES, power panel, backup), air plant, airlocks, vents,
+  guns and shield, mounts and gunners, lockers, fuel tank, food and hydroponic trays, gear and module bay, breakdowns,
+  alert level and battle position, helm, chart, comms, holomap and the rest. Consoles show the ship one stands in.
+- **One purse** (FS7): credits are the fleet's; whatever is earned or spent on either ship is the same money.
+- **Bots** (FS8): the menu's bot count is per ship. The first ship keeps one place for the host, as before; the second has
+  a bot in that place too. A player who joins takes a bot's place **on their ship**; one who leaves is replaced there.
+- **Joining**: next to «Подключиться» a list picks «любой корабль», «корабль 1» or «корабль 2». «Любой» goes where fewer
+  players are (the first on a tie). A returning player comes back on the ship they were on.
+- **Flying** (FS4): **either ship's helm** moves the whole fleet, and either ship's chart jumps it. The ships fly as one:
+  the same system, place and course. **Each burns its own fuel**: a jump needs enough in **every** tank (the chart says
+  which ship is short), and if one ship's tank runs dry while flying the fleet stops.
+- **Pirates** (FS5): a pirate ship that comes picks one of ours to fight and board: the **weaker** (lower hull share)
+  **70 %** of the time, otherwise either at random. Both ships' guns fire at it. If its target is lost it turns on the other.
+- **Losing a ship** (FS6): a ship whose hull breaks while the other still stands is **lost**: it goes dark (no power at
+  all, even from its SMES), takes no more hits, and drops out of the fight; the run goes on. Patching its hull from
+  outside above 0 brings it back. **The run is over only when both are lost** (or the crew is, as before).
+- **Saving** keeps both ships: each one's lockers, fuel, hull, guns and mounts, power panel and SMES, gear, food and
+  breakdowns; every character is saved with the ship they belong to.
+- Later (his FS1 note): enemy fleets, more pirate ships joining a fight. Ships of ours flying apart is the step after.
+
+### The new character (his spriter's sheet)
+
+- **The crew is drawn from his sheet** (`sprites/crew.png`, 32×64 per picture; his C1: kept at full size, so people
+  stand a bit taller than a tile). Five ways are drawn; the other three are mirrored.
+- **The helmet** (his C2 B, "oxygen tank on and off"): **clear glass** while breathing the room's air, the **orange
+  visor** down while on the oxygen tank (Q); for **0.3 s** after switching, the half-down picture shows.
+- **Walking** (his C3): a small step made from the standing picture: the body bobs 1 pixel and one foot lifts 2 pixels,
+  in turn. If his spriter draws step pictures (columns 3 to 6 of the sheet, see `sprites/README.txt`), they are used
+  instead.
+- **Job colours** (C4): the game repaints the **navy** parts of the suit in the job's colour; the white and orange stay.
+- **Pirates** (C5) get the same body in their dark reds. Robots and heavy boarders keep their old pictures until he
+  draws them.
 

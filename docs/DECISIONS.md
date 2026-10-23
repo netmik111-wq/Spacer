@@ -1593,3 +1593,46 @@ several friendly ships before more variety) and P1 (no playtest evening soon).
   greeted (bot takes over, chat line) players whose own leave ENet had already done but not yet reported, and Godot
   logged "Unable to send packet". `Crew.remove` already skipped those; now `announce_join`, `Chat.say` and
   `GameServer.to_all` skip any peer not `STATE_CONNECTED` too (0 of 8 runs after).
+
+## v85: our fleet and the new character (2026-10-23)
+
+His answers on "Spacer v85 Ships" (https://claude.ai/artifact/G35RhEtEWHhMGPeuhahtuK): all my picks, C2 B in his words
+("oxygen tank on and off for now").
+
+- **One grid, ships one below another** (FS1 A): the fleet's drawings are joined into one map (`MapBuilder.fleet_text`,
+  map names joined by `ShipMap.FLEET_JOIN` "|", `FLEET_GAP` 4 empty rows between), so movement, doors, air, sight and
+  replication need nothing new, and crossing over is a walk through space like any ship alongside. The alternative (a
+  second world) would have doubled every system.
+- **A context swap, not a rewrite**: about 500 places say `server.ship` and the parts keep one ship's state. `Fleet.use(i)`
+  puts ship i in place: `server.ship`, the map's per-ship fittings (`ShipMap.use_ship`, the `FLEET_FITS` lists filtered
+  by `fleet_of(cell)`; guns and trays are numbered per ship again) and the fields of the parts named in `Fleet.OWN`. A
+  tick runs the ship-wide parts once per ship (`Fleet.each`); a packet from a player runs for the ship they stand in
+  (`use_for`). With one ship nothing moves, so the single-ship game is unchanged (all 41 old scripts pass as they were).
+  The cost: a new per-ship field in a part must go into `Fleet.OWN`, or both ships share it.
+- **Two ships for now** (FS2 A, `Net.FLEET_MAX`). Nothing in the code is limited to two except the menus.
+- **Either helm moves the fleet** (FS4 A): the first ship leads (`navigation` puts it in place); `Fleet.follow` copies its
+  place, course and jump to the others every tick. Each ship burns its own fuel, and a jump waits for every tank, so the
+  second crew's fuel matters. A lost first ship still leads but burns nothing.
+- **The weaker 70 %** (FS5 A): enough that the weak ship is usually the one in trouble (the other crew has a reason to help)
+  without making it certain. Pirates turn to a standing ship if theirs is lost (the soak found them shooting a dead hull
+  until the run ended).
+- **A lost ship** (FS6 A): dark, no more hits, not a target; mending its hull from outside above 0 brings it back. The
+  run ends only when every ship is lost (`Crew.hull_hit`). The easy mode's "the hull costs its top strength" still comes
+  first for each ship.
+- **One purse** (FS7 A): `Ship.purse` points the second ship's credits at the first's; `earned` counts on the lead.
+- **Bots** (FS8 A): the menu's count is per ship; the second ship gets `crew_size` bots (the host's spare place filled
+  too, as nobody hosts there). Joining asks for a ship (a byte after the job in the hello, 0 = any; "any" = fewest players).
+- **The client** is told which ship it is aboard (`S_BOARD`, protocol 61) when it crosses over, then that ship's nav,
+  helm, devices, power, store and campaign packets; `S_CAMPAIGN` carries the ship's id. It filters its map's fittings to
+  that ship, so the gun console's numbers match the server's.
+- **Saves**: the first ship's fields stay where they were (an older save loads as before); the others go in `"fleet"`, and
+  a character keeps `"fleet"`, the ship it belongs to.
+- **Enemy fleets** (his FS1 note): written into the vision; not in this build (it needs two of every fight part).
+- **The character** (C1 A): his 32×64 frames are kept at full size (shrinking pixel art blurs it). `CrewArt` builds the
+  people's sheet at start (about 220 ms, made in the menu like the sounds so joining is not slowed): job colours by
+  repainting the navy (hue 205–252°, saturation 0.28 and up), pirates in their reds, three mirrored ways, feet set on
+  one line, a soft shadow, and made steps (1 px bob, one foot up 2 px). His row 1 runs visor-to-glass, the others
+  glass-to-visor; `make_assets.py` turns it round, and copies his single back picture into the visor columns.
+- **The visor is the oxygen tank** (his C2 B): `Net.LOOK_TANK` (8) in the look byte while `supply` is on (pirates in
+  suits always); the half picture shows 0.3 s after a change, drawn by the client alone.
+
