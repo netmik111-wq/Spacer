@@ -608,7 +608,7 @@ func _draw_helm() -> void:
 		chart.draw_line(dest + Vector2(-5, 5), dest + Vector2(5, -5), Color.WHITE, 1.0)
 	chart.draw_circle(ship, 5.0, Color.WHITE)
 	chart.draw_arc(ship, 9.0, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 1.0)
-	if client.other_here() and (client.map.other_kind != Net.OTHER_DERELICT or sectors.kind[here] != Sectors.DERELICT):
+	if client.other_here() and (not client.other_derelict or sectors.kind[here] != Sectors.DERELICT):
 		# (v74, the author's note: a pirate ship our guns wrecked was not on the chart) the ship alongside
 		var colour := PLACE_COLOURS[Sectors.P_HULK] if client.other_dark() else HUNTER
 		var by := ship + Vector2(16, -10)

@@ -175,7 +175,7 @@ func say(text: String) -> void:
 	## A line in everybody's chat from the ship itself.
 	var msg := chat_packet(Net.SYSTEM_ID, Net.CHAT_SHIP, text)
 	for q: Player in server.players:
-		if q != null and q.peer != null:
+		if q != null and q.peer != null and q.peer.get_state() == ENetPacketPeer.STATE_CONNECTED:   # (v84, as in Crew.remove)
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 	server.log_line.emit("[корабль] %s" % text)
 

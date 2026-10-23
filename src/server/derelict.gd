@@ -113,7 +113,7 @@ func setup(p_server: Node) -> void:
 
 func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
 	if of_kind == Net.OTHER_DERELICT:
-		return _spots.has(Net.OTHER_DERELICT)
+		return not _derelict_spots().is_empty()
 	return not _pirate_spots().is_empty()
 
 
@@ -123,6 +123,16 @@ func _pirate_spots() -> Array:
 	for k: int in _spots.keys():
 		if map.others_of("pirate").has(k):
 			out.append(k)
+	return out
+
+
+func _derelict_spots() -> Array:
+	## (v84) The derelicts' drawings that can lie off our airlock: the game's own, then one's own (the author's H5).
+	var out := []
+	for k: int in map.others_of("derelict"):
+		if _spots.has(k):
+			out.append(k)
+	out.sort()
 	return out
 
 
@@ -520,9 +530,10 @@ func sos_ship() -> bool:
 
 
 func _arrive(called := "Брошенный корабль") -> void:
-	_comes(Net.OTHER_DERELICT, Net.OTHER_DERELICT, called)
-	_place(_spots[layout][0])
 	var key := Sectors.key(server.sectors.cell[server.ship.sector])
+	var drawn := _derelict_spots()           # (v84) the same drawing every time in a place (what was left on it fits)
+	_comes(Net.OTHER_DERELICT, drawn[absi(key) % drawn.size()], called)
+	_place(_spots[layout][0])
 	var cells := _floor_cells()
 	# air: room by room, some empty, the rest thin
 	for room: Array in _rooms():

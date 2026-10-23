@@ -15,6 +15,9 @@ extends Node
 ##                       campaign=off neither reads nor writes a save
 ##   mode=normal         (v63) a new campaign's mode: easy, normal or hard (a continued one keeps its own);
 ##                       (v71) "+complex" or "+plain" after it turns complex repairs on or off (the hard mode has them on)
+##   map=ship02          (v84) a new campaign's ship: ship02, or ships:NAME for a drawing of one's own in the
+##                       «ships» folder (a continued campaign keeps the ship of its save); --own_others: one's own
+##                       pirate ships, derelicts and asteroids come in the run too
 ##   --editor           (v81) open the ship editor straight away; editor_open=PATH opens that drawing in it
 ##                       (res://maps/ship02.txt, or a file of one's own); with try_after=SECONDS its «Попробовать»
 ## Other keys: F11 toggles full screen.
@@ -113,6 +116,7 @@ var _host_bots := 0
 var _host_campaign := "continue"    # a hosted game goes on with the saved campaign, or starts a new one
 var _host_mode := "normal"           # (v63) and the mode a new one is played in (Net.MODE_KEYS)
 var _host_map := "ship02"            # (v81) the ship a hosted game is played on
+var _host_own := false               # (v84, the author's H5) one's own other drawings come in the run
 var _editor: ShipEditor = null       # (v81) the ship editor, kept while the game runs so its undo survives a try
 var _trial := ""                     # (v81) the kind of drawing «Попробовать» is playing ("" = a real game)
 var _tried := false
@@ -193,7 +197,8 @@ func _ready() -> void:
 		_server.shutdown_requested.connect(func() -> void: _quit_server.call_deferred())
 		_server.measure = _opt.has("bench")
 		_set_mode(_server, str(_opt.get("mode", "normal")))
-		var problem := _server.start(port, "ship02", bots)
+		var how := str(_opt.get("campaign", "continue"))
+		var problem := _server.start(port, _prepare_ships(how, str(_opt.get("map", "ship02")), _flags.has("own_others")), bots)
 		if problem == "":
 			problem = _open_campaign(_server, str(_opt.get("campaign", "continue")))
 		if problem != "":
@@ -260,6 +265,7 @@ func _show_menu(message: String, is_error: bool = false) -> void:
 		_menu.editor_requested.connect(_open_editor)
 	_menu.visible = true
 	_menu.set_busy(false)
+	_menu.refresh_ships()                # (v84) the editor may have saved a new ship
 	if Music.current != null:
 		Music.current.play(Sounds.MUSIC_MENU)
 	_menu.show_status(message, is_error)
@@ -283,6 +289,8 @@ func _try_ship(ship: String, kind: String) -> void:
 	## played on; any other kind lies at the airlock of the game's ship. The server runs inside the game
 	## (ShipMap.try_other is read by both sides), with no save and no events.
 	_trial = kind
+	ShipMap.drawings = {}                # (v84) the drawing as it is now, not as an earlier try read it
+	ShipMap.own_others = []
 	ShipMap.try_other = "" if kind == "ship" else ShipMap.USER_PREFIX + ship
 	_host_map = ShipMap.USER_PREFIX + ship if kind == "ship" else "ship02"
 	_editor.visible = false
@@ -321,6 +329,26 @@ func _stop_server(wait_ms: int = 1500) -> void:
 		_server_pid = -1
 
 
+static func _prepare_ships(how: String, wanted: String, own: bool, path: String = Campaign.PATH) -> String:
+	## (v84) The ship a hosted game is played on, with the drawings of one's own it uses ready in ShipMap: a
+	## continued campaign's from its save (the author's H4: the save keeps its own copies, so the drawing may
+	## change since), a new one's from the «ships» folder as they are now.
+	ShipMap.drawings = {}
+	ShipMap.own_others = []
+	if how == "continue":
+		var data := Campaign.read(path)
+		if not data.is_empty():
+			var kept: Dictionary = data.get("drawings", {})
+			for n: String in kept:
+				ShipMap.drawings[n] = str(kept[n])
+			for n: Variant in data.get("own_others", []):
+				ShipMap.own_others.append(str(n))
+			return str(data.get("map", "ship02"))
+	if own:
+		ShipMap.own_others = ShipMap.coming_in_run()
+	return wanted
+
+
 func _open_campaign(server: GameServer, how: String) -> String:
 	## Where the server keeps its campaign, and whether it goes on with the saved one.
 	if how == "off":
@@ -341,16 +369,21 @@ func _start_server_process(port: int, bots: int) -> bool:
 		args.append_array(PackedStringArray(["--path", ProjectSettings.globalize_path("res://")]))
 	args.append_array(PackedStringArray(["--", "--server", "--autoquit",
 		"port=%d" % port, "bots=%d" % bots, "token=%s" % _server_token, "campaign=%s" % _host_campaign,
-		"mode=%s" % _host_mode]))
+		"mode=%s" % _host_mode, "map=%s" % _host_map]))
+	if _host_own:
+		args.append("--own_others")
 	_server_pid = OS.create_process(OS.get_executable_path(), args)
 	_server_started = Time.get_ticks_msec() / 1000.0
 	return _server_pid > 0
 
 
-func _host_game(player: String, port: int, bots: int, campaign: String = "", mode: String = "") -> void:
+func _host_game(player: String, port: int, bots: int, campaign: String = "", mode: String = "",
+		ship: String = "", own: bool = false) -> void:
 	_stop_server()
 	_host_campaign = campaign if campaign != "" else str(_opt.get("campaign", "continue"))
 	_host_mode = mode if mode != "" else str(_opt.get("mode", "normal"))
+	_host_map = ship if ship != "" else str(_opt.get("map", "ship02"))   # (v84, the author's H2)
+	_host_own = own or _flags.has("own_others")
 	_hosting = true
 	_host_name = player
 	_host_bots = bots
@@ -387,7 +420,8 @@ func _host_inside(port: int) -> void:
 	_set_mode(_server, _host_mode)
 	if _flags.has("log"):
 		_server.log_line.connect(func(text: String) -> void: print(text))
-	var problem := _server.start(port, _host_map, _host_bots)
+	var ship := _host_map if _trial != "" else _prepare_ships(_host_campaign, _host_map, _host_own)
+	var problem := _server.start(port, ship, _host_bots)
 	if problem == "" and _trial != "":
 		_server.director.auto = false    # (v81) a try is a calm walk round: no events, hunters or calls
 		_server.road.auto = false

@@ -110,6 +110,7 @@ var store := {}                      # the ship's supplies in the locker: thing 
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
 var other_wreck := false            # the ship alongside is a pirate ship our guns wrecked: dark and dead
 var other_rock := false             # (v81) what lies alongside is an asteroid (Net.SHIP_ROCK)
+var other_derelict := false         # (v84) what lies alongside is a derelict (Net.SHIP_DERELICT), whatever its drawing
 var _glows := {}                     # pools of light worked out lately (see glow)
 var other_changes := 0               # goes up whenever the other ship comes, goes or moves: views redraw on it
 var gun_weapon := PackedByteArray()  # per gun mount: the weapon on it (Weapons.*; see Net.S_GUNS)
@@ -824,12 +825,12 @@ func other_here() -> bool:
 
 func pirates_alongside() -> bool:
 	## Is a pirate ship (still able to fight) alongside?
-	return other_here() and map.other_kind >= Net.OTHER_PIRATE and not other_wreck and not other_rock
+	return other_here() and not other_derelict and not other_wreck and not other_rock
 
 
 func other_dark() -> bool:
 	## Is the ship alongside one without light of its own (a derelict, or a wreck)?
-	return other_here() and (map.other_kind == Net.OTHER_DERELICT or other_wreck or other_rock)
+	return other_here() and (other_derelict or other_wreck or other_rock)
 
 
 func dark_cell(cell: int) -> bool:
@@ -2064,15 +2065,18 @@ func _on_ships(pkt: PackedByteArray) -> void:
 	var kind := Net.OTHER_DERELICT
 	var wreck := false
 	var rock := false
+	var derelict := false
 	other_docked = false
 	for id: int in ships.keys():
 		if id != my_ship:
 			at = ships[id]["at"]
 			wreck = int(ships[id]["kind"]) == Net.SHIP_WRECK
 			rock = int(ships[id]["kind"]) == Net.SHIP_ROCK
+			derelict = int(ships[id]["kind"]) == Net.SHIP_DERELICT   # (v84: an own derelict's drawing is not the first)
 			kind = int(ships[id]["layout"]) if int(ships[id]["layout"]) < map.others.size() else Net.OTHER_DERELICT
 			other_docked = ships[id]["docked"]
-	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck or rock != other_rock:
+	if at != map.other_at or (at != ShipMap.NO_OTHER and kind != map.other_kind) or wreck != other_wreck or rock != other_rock \
+			or derelict != other_derelict:
 		if at != map.other_at or kind != map.other_kind:
 			map.place_other(at, kind)
 			for d in range(map.other_first_door, map.doors.size()):
@@ -2080,8 +2084,9 @@ func _on_ships(pkt: PackedByteArray) -> void:
 				doors.set_flags(d, 0)
 		other_wreck = wreck
 		other_rock = rock
+		other_derelict = derelict
 		for d in range(map.other_first_door, map.doors.size()):
-			doors.dead[d] = 1 if kind == Net.OTHER_DERELICT or wreck or rock else 0
+			doors.dead[d] = 1 if derelict or wreck or rock else 0
 		other_changes += 1
 		ship_changes += 1
 		_rebuild_prediction()
@@ -2105,8 +2110,14 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	my_ship = pkt.decode_u16(11)
 	var n := pkt[13]
 	var map_name := pkt.slice(14, 14 + n).get_string_from_utf8()
+	# (v84, the author's H1) the server sends the drawings of its own the game is played with: nothing to copy by hand
+	var maps := ShipMap.unpack_maps(pkt, 14 + n)
+	var others: Array = maps.get("others", ShipMap.other_maps())
+	if not maps.is_empty():
+		ShipMap.drawings = maps["drawings"]
+	map = ShipMap.new()
 	var problem := map.load_from(map_name)
-	for other_map in map.other_maps():
+	for other_map: String in others:
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
 	holo_cells = PackedInt32Array()
@@ -2127,6 +2138,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	other_docked = false
 	other_wreck = false
 	other_rock = false
+	other_derelict = false
 	pumps.clear()
 	air.resize(map.width * map.height)
 	air.fill(0)

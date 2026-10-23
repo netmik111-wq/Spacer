@@ -169,6 +169,19 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v84 (his answers on "Spacer v84 Next": hosting on your own ship)
+- «Корабль:» in the main menu picks a new campaign's ship (the game's or a drawing from «ships»), with a small picture;
+  a ship with no helm or no engine (or any red editor problem) cannot start. The menu has two columns (it fits 720 rows).
+- The server sends its drawings of one's own to every guest in the welcome (protocol 60): friends copy nothing.
+- The save keeps copies of the drawings it plays with; a continued run is on the save's ship.
+- «Мои пираты, обломки и астероиды встречаются в пути»: own pirate ships join every pirate class's hulls, own derelicts
+  and asteroids share those places by place.
+- His bug note: a blow at a far tile drew its circle far away; now a swing in front, the circle only on a hit, a whoosh.
+- An old rare server error when several players leave at once (a greeting to an already gone peer) is fixed.
+- New test `tools/hosttest.gd` (41 scripts). Version 0.77, build in `/mnt/project-files/builds/v84/`.
+- His other answers: after v84, several friendly ships (E1 B), then fire (v85, the simpler form: oxygen, burnt air and
+  heat; he: "we will make it deeper in future versions"). No playtest evening soon (P1 B).
+
 ### v83 (his notes: crawl like SS13, the mouse in the middle, shots on the move)
 - Lying down picks the head's side once; turning while down shows the turned-over figure for the new way and keeps the
   head in place, as his SS13 video shows. The camera, light and sight stay on one's spot when lying down.

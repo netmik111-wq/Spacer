@@ -215,6 +215,8 @@ var lap_at := -1
 func start(p_port: int, map_name: String, bots: int) -> String:
 	## Opens the port and starts ticking. Returns "" or what went wrong.
 	var problem := map.load_from(map_name)
+	if problem == "" and map_name.begins_with(ShipMap.USER_PREFIX) and map.serious() != "":
+		problem = "Корабль «%s»: %s" % [map_name.trim_prefix(ShipMap.USER_PREFIX), map.serious()]   # (v84, the author's H3)
 	for other_map in map.other_maps():
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
@@ -630,7 +632,7 @@ func _tell_ships() -> void:
 
 func to_all(msg: PackedByteArray) -> void:
 	for q: Player in players:
-		if q != null and q.peer != null:
+		if q != null and q.peer != null and q.peer.get_state() == ENetPacketPeer.STATE_CONNECTED:   # (v84, as in Crew.remove)
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
