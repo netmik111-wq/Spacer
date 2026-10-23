@@ -88,6 +88,7 @@ const GameScreen := preload("res://src/ui/game_screen.gd")
 const MainMenu := preload("res://src/ui/main_menu.gd")
 const Campaign := preload("res://src/server/campaign.gd")
 const Sounds := preload("res://src/client/sounds.gd")
+const CrewArt := preload("res://src/client/crew_art.gd")
 const Music := preload("res://src/client/music.gd")
 const Options := preload("res://src/client/options.gd")
 const Player := preload("res://src/server/player.gd")
@@ -214,6 +215,7 @@ func _ready() -> void:
 	Engine.max_fps = FPS_ACTIVE
 	_define_inputs()                     # (sets the frame limit the player chose)
 	Sounds.prepare()
+	CrewArt.sheet()                      # (v85) the people's sheet, made before joining (as the sounds)
 	add_child(Music.new())               # (v75) the music, for the whole run
 	_client = GameClient.new()
 	add_child(_client)

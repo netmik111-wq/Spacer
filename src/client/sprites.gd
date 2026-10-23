@@ -84,6 +84,11 @@ static func item(item: int) -> Texture2D:
 	return tex
 
 
+static func own_image(file: String) -> Image:
+	## (v85) A picture of one's own of that name in the folder, or null.
+	return _own(file)
+
+
 static func _own(file: String) -> Image:
 	for dir in dirs():
 		var path := dir.path_join(file)
