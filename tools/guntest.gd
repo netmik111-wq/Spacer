@@ -140,6 +140,8 @@ func _initialize() -> void:
 	for q in server.players:
 		if q != null and q.pirate:
 			server.crew.remove(q)
+	for cell: int in server.pirates.bombs.keys():
+		server.pirates._lift_bomb(cell)         # a bomb they left would break a gun the next checks fire (1 run in 30)
 
 	# a raid: a fight at a distance
 	# (the gunner breathes from a tank and is patched up: the hull around the console may be holed by now)
