@@ -276,7 +276,7 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 	var end := from + way * best
 	if hit != null:
 		p.train(Net.SKILL_GUNS)
-	tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y)
+	tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y, 0, 0, p)
 	server.chat.sound(Net.SOUND_SHOT, p.st.x, p.st.y, p.slot)
 	if hit != null:
 		hurt(hit, Items.PISTOL_DAMAGE, p, CAUSE_SHOT)
@@ -330,7 +330,7 @@ func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 			if (pos - (from + way * along)).length() <= HIT_RADIUS:
 				best = along
 				hit = q
-		tell_shot(Net.SHOT_BULLET, hit != null, from, from + way * best, p.st.y)
+		tell_shot(Net.SHOT_BULLET, hit != null, from, from + way * best, p.st.y, 0, 0, p)
 		if hit != null:
 			hits[hit] = int(hits.get(hit, 0)) + 1
 	server.chat.sound(Net.SOUND_SHOTGUN, p.st.x, p.st.y, p.slot)
@@ -486,7 +486,7 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
 	var q := _beside(p, at, false)
 	var to := at if q == null else Vector2(q.st.x, q.st.y)
-	tell_shot(Net.SHOT_BLOW, q != null, Vector2(p.st.x, p.st.y), to, p.st.y)
+	tell_shot(Net.SHOT_BLOW, q != null, Vector2(p.st.x, p.st.y), to, p.st.y, 0, 0, p)
 	server.chat.sound(Net.SOUND_ZAP if stun > 0.0 else Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
 	if q != null:
 		hurt(q, damage, p, CAUSE_BLOW)
@@ -527,11 +527,13 @@ func tell_hit(q: Player) -> void:
 			o.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
-func tell_shot(kind: int, hit, from: Vector2, to: Vector2, row: int, delay := 0, flight := 0) -> void:
+func tell_shot(kind: int, hit, from: Vector2, to: Vector2, row: int, delay := 0, flight := 0, by: Player = null) -> void:
 	## Draws a shot for everybody near either end of it on its deck. `hit` is a
 	## bool for a hand weapon, or (a ship's shot) 0 shield, Net.LANDED, Net.MISSED.
 	## (v56) A ship's shot shows `delay` ticks from now and flies `flight` ticks.
-	var msg := PackedByteArray([Net.S_SHOT, kind, int(hit), 0, 0, 0, 0, 0, 0, 0, 0, clampi(delay, 0, 255), clampi(flight, 0, 255)])
+	## (v83) `by`, the one who fired or struck: each client starts the trace where it draws him.
+	var msg := PackedByteArray([Net.S_SHOT, kind, int(hit), 0, 0, 0, 0, 0, 0, 0, 0, clampi(delay, 0, 255), clampi(flight, 0, 255), 0, 0])
+	msg.encode_u16(13, by.slot if by != null else 0xFFFF)
 	msg.encode_s16(3, roundi(from.x * 16.0))
 	msg.encode_s16(5, roundi(from.y * 16.0))
 	msg.encode_s16(7, roundi(to.x * 16.0))

@@ -1534,3 +1534,26 @@ His note: "Need add layers for floors so object have priority on layers. Like fl
 - **Objects win**: a floor stroke never removes an object (his "priority"); the eraser in "both" takes the object
   first. Delete on a selection in "both" wipes both layers, as before, since that is what a box delete is for.
 - Keys Q (cycle the layer) and O (show objects) were free.
+
+
+## v83: crawl like SS13, the mouse in the middle, shots on the move (2026-10-23)
+
+His notes: "where you lay, the head stays in the same position, like in SS13 (video)"; "when I put the mouse in the
+middle of the screen it becomes buggy"; a video: "when you move, shots spawn behind and no shake after shots, for all guns".
+
+- **Head stays put** (his SS13 video, frames checked): SS13 turns the lying sprite a quarter round its middle and keeps
+  that angle; turning while down changes only the sprite's frame. We do the same: `WorldView._prone_side` is taken only
+  on the frame the body starts going down (`was_t <= 0`), and the frame drawn is the facing's own. Before, the body
+  flipped end to end whenever one looked the other way.
+- **The camera stays on one's feet** (`WorldView._stand`, `_my_spot`): the lying body is drawn half a body to one side,
+  and the camera and the light followed the drawn sprite, so lying down or flipping slid the screen. Sight is by tile
+  on the server, so the feet are the right origin.
+- **The mouse dead zone** (`GameClient.LOOK_STILL` 0.8 cell, measured from the body's middle, 0.3 cell above the feet;
+  `LOOK_NEAR` 2 cells with triple stick): right by the body one pixel of the mouse is many degrees, and the 8-way body
+  flicked with the hand's tremor. 0.35 was too small.
+- **Whose shot** (`S_SHOT` + u16 shooter, protocol 59): the client guessed "mine" by distance from its predicted place,
+  but its own place runs ahead of the server by the ping, so a shot fired on the move was never "mine" (no kick) and
+  its trace began where the server had us, behind. Now the trace starts at the shooter's drawn feet (ours and others'),
+  its end stays where the server says it landed. Ship guns pass no shooter.
+- **Kick** 2.5 -> 4 px and a short shake of 1.6 px (`KICK_SHAKE`, both times the shake setting): he asked for a shake
+  after every shot; small enough not to spoil aiming.

@@ -169,6 +169,14 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v83 (his notes: crawl like SS13, the mouse in the middle, shots on the move)
+- Lying down picks the head's side once; turning while down shows the turned-over figure for the new way and keeps the
+  head in place, as his SS13 video shows. The camera, light and sight stay on one's spot when lying down.
+- The mouse within 0.8 cell of one's body moves nothing (it shook the view and body); near the body turns need more.
+- Shots and blows carry the shooter's id (`S_SHOT`, protocol 59): the trace starts where the shooter is drawn (it started
+  behind a walker), and one's own kick works on the move; the kick is a little stronger, with a short shake.
+- eveningtest checks the still mouse and the shooter's id. Version 0.76, build in `/mnt/project-files/builds/v83/`.
+
 ### v82.1 (his note: layers in the ship editor)
 - Each cell has a floor layer and an object layer; objects keep their floor, the eraser takes the object first, a
   floor fill runs round objects; Q picks the layer the tools change, O hides objects. Editor only: no game rule or

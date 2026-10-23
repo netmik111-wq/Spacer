@@ -17,7 +17,7 @@ signal lost(reason: String)          # dropped while playing
 signal roster_changed
 signal chat(from_id: int, channel: int, text: String)
 signal notice(text: String)
-signal shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float)   # a shot or a blow, in cells
+signal shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float, by: int)   # a shot or a blow, in cells; (v83) by: the shooter's id or -1
 	# of the whole grid; (v56) a ship's shot shows `delay` seconds from now and flies `flight` seconds
 signal jolt(kind: int, shot: int, at: Vector2)   # (v56) a sound of the ship fight (Net.JOLT_*), in cells
 signal hit(blood: int, id: int, x: int, y: int)   # (v75) somebody near was hurt (see Net.S_HIT)
@@ -524,6 +524,8 @@ func _send_input(value: int) -> void:
 # half a turn in LOOK_TURN_SEC, and the body (what others see) takes the nearest of the 8 ways.
 const LOOK_TURN_SEC := 1.0 / 3.0     # (his V2) how long half a turn takes
 const LOOK_STICK_DEG := 6.0          # the body keeps its way this much past the half-way line, so it does not flicker
+const LOOK_STILL := 0.8              # (v83, his note) the mouse this close to us (cells) moves neither eyes nor body
+const LOOK_NEAR := 2.0               # (v83) and up to this far the body needs a wider margin to turn
 var want_free_look := true           # the player's setting (GameScreen sets it every frame)
 var look_angle := PI * 0.5           # where the eyes point, radians on screen (0 = right, PI/2 = down)
 var _look_sent_ms := -100000         # when the setting was last sent (sent again if the server did not take it)
@@ -551,7 +553,11 @@ func aim_at(at: Vector2, delta: float) -> void:
 		look_angle = Net.way(pred.facing).angle()
 		return
 	var d := at - Mover.visual_pos(pred, pred_time())
-	if not at.is_finite() or d.length() < 0.35:
+	# (v83, his note: "when I put the mouse in the middle of the screen it gets buggy") right by us a
+	# pixel of the mouse swings the way by many degrees, so the eyes and the body shook; near us they wait
+	# (measured from the middle of the drawn body, a third of a cell above where it stands)
+	var near := (d + Vector2(0, 0.3)).length()
+	if not at.is_finite() or near < LOOK_STILL:
 		return
 	var turn := angle_difference(look_angle, d.angle())
 	var most := PI / LOOK_TURN_SEC * delta
@@ -559,7 +565,8 @@ func aim_at(at: Vector2, delta: float) -> void:
 	if _turn_at > pred_tick:
 		return                       # (v77.1) one turn at a time: the next once this one is applied
 	var now := Net.way(pred.facing)
-	if absf(rad_to_deg(angle_difference(now.angle(), look_angle))) > 22.5 + LOOK_STICK_DEG:
+	var stick := LOOK_STICK_DEG * (3.0 if near < LOOK_NEAR else 1.0)
+	if absf(rad_to_deg(angle_difference(now.angle(), look_angle))) > 22.5 + stick:
 		var way := Vector2.from_angle(look_angle)
 		var best := pred.facing
 		var best_dot := -2.0
@@ -1942,9 +1949,11 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				garden = got
 				ship_changes += 1
 		Net.S_SHOT:
-			if pkt.size() >= 13:
+			if pkt.size() >= 15:
+				var by := pkt.decode_u16(13)
 				shot.emit(pkt[1], pkt[2], Vector2(pkt.decode_s16(3), pkt.decode_s16(5)) / 16.0,
-					Vector2(pkt.decode_s16(7), pkt.decode_s16(9)) / 16.0, float(pkt[11]) / Net.TICK_HZ, float(pkt[12]) / Net.TICK_HZ)
+					Vector2(pkt.decode_s16(7), pkt.decode_s16(9)) / 16.0, float(pkt[11]) / Net.TICK_HZ, float(pkt[12]) / Net.TICK_HZ,
+					-1 if by == 0xFFFF else by)
 		Net.S_VOLLEY:
 			if pkt.size() >= 7:
 				var now := Time.get_ticks_msec() / 1000.0
