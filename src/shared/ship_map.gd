@@ -213,6 +213,11 @@ func fleet_of(cell: int) -> int:
 	return 0
 
 
+func all_of(field: String) -> Variant:
+	## (v85) Every ship's of those fittings (FLEET_FITS), whichever ship's are in place.
+	return get(field) if _fits.is_empty() else (_fits[-1] as Dictionary)[field]
+
+
 func use_ship(i: int) -> void:
 	## (v85) Puts that ship's own things in place (FLEET_FITS); -1 puts every ship's.
 	if _fits.is_empty() or i == fleet_on:

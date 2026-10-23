@@ -26,7 +26,7 @@ func setup(p_server: GameServer) -> void:
 	watching.clear()
 	cells = PackedInt32Array()
 	for c in server.map.base_walk.size():
-		if server.map.on_ship(c):
+		if server.map.on_ship(c) and server.fleet.mine(c):      # (v85) the ship of the fleet it is set up for
 			cells.append(c)
 
 

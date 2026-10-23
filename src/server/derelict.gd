@@ -60,6 +60,9 @@ var layout := Net.OTHER_DERELICT     # its drawing: its number in Net.OTHER_MAPS
 var design := {}                     # (a pirate ship) what Shipyard rolled for it
 var docked := false
 var _spots := {}                     # drawing -> [where its corner lies alongside, where docked], for the drawings that fit
+var _spots_of: Array = []            # (v85) per ship of our fleet: its _spots (off its own airlock)
+var near := 0                        # (v85, the author's FS5) the ship of our fleet it lies alongside (or will)
+var _aimed_at := -1                  # the tick `near` was picked for the next one to come
 var _pirates_dock_at := -1           # the tick a pirate ship alongside docks by force (-1 = it has)
 var _pirates_party := 0             # its crew (or boarding party) still alive
 var raid := false                    # (a pirate ship) it came to fight at a distance, not to board
@@ -91,8 +94,30 @@ func setup(p_server: Node) -> void:
 	_rng.randomize()
 	_spots = {}
 	_pirates_dock_at = -1
-	if map.others.is_empty() or map.lock_pump.is_empty():
+	near = 0
+	_aimed_at = -1
+	_spots_of = []
+	for i in server.fleet.size():
+		server.fleet.use(i)
+		_spots_of.append(_spots_off_airlock())
+	server.fleet.use(0)
+	_spots = _spots_of[0]
+
+
+func _aim() -> void:
+	## (v85) Which ship of our fleet the next to come lies off: picked once a tick (Fleet.target), while none is here.
+	if here or _aimed_at == server.tick or _spots_of.size() < 2:
 		return
+	_aimed_at = server.tick
+	near = server.fleet.target()
+	_spots = _spots_of[near]
+
+
+func _spots_off_airlock() -> Dictionary:
+	## Where each other drawing can lie off the airlock of the ship of ours in place.
+	var spots := {}
+	if map.others.is_empty() or map.lock_pump.is_empty():
+		return spots
 	# its outer door goes right against ours
 	var ours: Vector2i = map.doors[int(map.lock_pump.values()[0]["outer"])]
 	for k in map.others.size():
@@ -108,7 +133,8 @@ func setup(p_server: Node) -> void:
 		var docked_at := ours - theirs - Vector2i(0, 1)
 		var alongside := docked_at - Vector2i(0, GAP)
 		if map.other_fits_kind(k, docked_at) and map.other_fits_kind(k, alongside):
-			_spots[k] = [alongside, alongside if o.kind == "asteroid" else docked_at]
+			spots[k] = [alongside, alongside if o.kind == "asteroid" else docked_at]
+	return spots
 
 
 func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
@@ -119,6 +145,7 @@ func possible(of_kind: int = Net.OTHER_DERELICT) -> bool:
 
 func _pirate_spots() -> Array:
 	## The pirate ships' drawings that can lie off our airlock.
+	_aim()
 	var out := []
 	for k: int in _spots.keys():
 		if map.others_of("pirate").has(k):
@@ -128,6 +155,7 @@ func _pirate_spots() -> Array:
 
 func _derelict_spots() -> Array:
 	## (v84) The derelicts' drawings that can lie off our airlock: the game's own, then one's own (the author's H5).
+	_aim()
 	var out := []
 	for k: int in map.others_of("derelict"):
 		if _spots.has(k):
@@ -138,6 +166,7 @@ func _derelict_spots() -> Array:
 
 func _rock_spots() -> Array:
 	## (v81) The asteroids' drawings that can lie off our airlock.
+	_aim()
 	var out := []
 	for k: int in _spots.keys():
 		if map.others_of("asteroid").has(k):

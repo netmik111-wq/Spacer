@@ -487,6 +487,8 @@ func update_shutters() -> void:
 	if not server.powered():
 		return
 	for d in server.map.other_first_door:                 # (the other ship's doors have no power)
+		if not server.fleet.mine(server.map.doors[d].y * server.map.width + server.map.doors[d].x):
+			continue                                         # (v85) another ship of the fleet's, by its own power
 		var a := server.map.door_sides[d * 2]
 		var b := server.map.door_sides[d * 2 + 1]
 		if server.doors.faulty[d] == 1 or server.doors.jammed[d] == 1:
@@ -585,6 +587,8 @@ func run_cycles() -> void:
 		return
 	var doors := server.doors
 	for pump: int in cycles.keys():
+		if not server.fleet.mine(pump):
+			continue                         # (v85) another ship of the fleet: its own turn (Fleet.each)
 		var door: int = cycles[pump][0]
 		var other: int = doors.partner[door]
 		if server.tick - int(cycles[pump][1]) > CYCLE_SECONDS * Net.TICK_HZ or not server.powered():

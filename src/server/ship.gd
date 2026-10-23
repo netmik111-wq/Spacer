@@ -46,11 +46,18 @@ var backup_told := false              # (v61) and of the bridge's backup SMES
 var store := {}                       # thing (Net.ITEM_*) -> how many
 var store_air := 0.0                  # air the air plant still has to give, in cells' worth
 var earned := 0                      # (v75, the author's E1) every credit that came in, for the run's summary
-var credits := 0:
+var purse = null                     # (v85, the author's FS7) another ship of our fleet whose credits these are (one purse)
+var _credits := 0
+var credits: int:
+	get:
+		return purse.credits if purse != null else _credits
 	set(v):
-		if v > credits:
-			earned += v - credits
-		credits = v
+		if purse != null:
+			purse.credits = v
+			return
+		if v > _credits:
+			earned += v - _credits
+		_credits = v
 var tank := float(Net.FUEL_START)     # (v67) fuel in the tank, in units (Net.FUEL_MAX at most)
 var jump_cost := 40                   # (v67) what a lane jump burns from it (Outfit sets it by the engine's tier)
 var store_told := PackedByteArray()   # the supplies as clients were last told

@@ -148,7 +148,7 @@ func works(u: Dictionary) -> bool:
 
 func gives(u: Dictionary) -> bool:
 	## Can it give power now: whole, not put out by ion, its output on, some charge left.
-	return works(u) and bool(u["output"]) and float(u["charge"]) > 0.0 and int(u["level"]) > 0
+	return works(u) and bool(u["output"]) and float(u["charge"]) > 0.0 and int(u["level"]) > 0 and not server.fleet.is_lost()
 
 
 func main_units() -> Array:
@@ -181,7 +181,8 @@ func _offer() -> int:
 
 func engine_running() -> bool:
 	## The engine makes power: it is whole and has not stalled (a power fault, see Systems.power_glitch).
-	return not server.ship.engine_down() and server.tick >= server.ship.power_out_until
+	## (v85) A ship of the fleet that is lost has none at all.
+	return not server.ship.engine_down() and server.tick >= server.ship.power_out_until and not server.fleet.is_lost()
 
 
 func reactor_now() -> int:

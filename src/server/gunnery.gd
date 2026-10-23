@@ -174,6 +174,7 @@ const STUN_FLOOR := -10.0           # (v57) a neural shot takes health no lower 
 const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what it means to hit this often (else the hull near the crew)
 var crewless := false                # (v62) a drone ship: no crew at its posts, a machine fights
 var teleport := false                # (v62) it carries a teleporter (an ordinary pirate's: see Assault)
+var target := 0                      # (v85, the author's FS5) the ship of our fleet it fights and boards (Fleet.target)
 var phase2 := false                  # (v62) the flagship's second phase, from a third of its hull (the author's K21)
 const PHASE2_SHARE := 1.0 / 3.0      # of its hull left when it comes
 const PHASE2_PACE := 1.3             # the battleship's guns charge this much faster in it
@@ -210,6 +211,7 @@ func setup(p_server: Node) -> void:
 func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	## A pirate ship rolled by Shipyard comes: its numbers, its guns, its rooms (none known yet).
 	_over = false
+	target = server.derelict.near
 	var boarders: int = design["crew"]
 	klass = design["klass"]
 	temper = design["temper"]
@@ -698,12 +700,12 @@ func guard_ready() -> bool:
 
 
 func tick() -> void:
+	## Our own guns, point defence and shield (v85: of the ship of our fleet in place; Fleet.each runs it for each).
 	var map = server.map
 	var ship = server.ship
 	for cell: int in ship.jammed.keys():
 		if server.tick >= int(ship.jammed[cell]):
 			ship.jammed.erase(cell)
-	_land_due()
 	for i in charge.size():
 		var w: int = ship.mounts[i]
 		if w == Weapons.NONE or ship.armed[i] == 0:
@@ -720,6 +722,20 @@ func tick() -> void:
 		ship.shield = 0.0
 	elif not jammed(gen):
 		ship.shield = minf(ship.shield + server.outfit.shield_regen() * server.stations.shield_pace() / Net.TICK_HZ, Weapons.SHIELD_FULL)
+	for i in beam_left.size():
+		if beam_left[i] > 0 and server.tick >= _beam_next[i]:
+			_beam_pulse(i)
+	var now := packet()
+	if now != _told:
+		_told = now
+		server.to_all(now)
+
+
+func tick_enemy() -> void:
+	## The pirate ship we fight: it fires, runs, mends, offers ransom. (v85) Its shots land on the ship of our
+	## fleet it picked (target), so that ship's state is in place meanwhile.
+	server.fleet.use(target)
+	_land_due()
 	if fighting():
 		var runs: float = Hulls.temper(temper)["flee"]
 		if not fleeing() and ransom == 0 and runs > 0.0 and (enemy_hull <= roundi(hull_full() * runs) or (down(Net.ESYS_WEAPONS) and enemy_hull * 2 <= hull_full())):
@@ -756,13 +772,7 @@ func tick() -> void:
 					_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE)
 		if fighting() and server.tick >= _mend_next:
 			_mend_tick()
-	for i in beam_left.size():
-		if beam_left[i] > 0 and server.tick >= _beam_next[i]:
-			_beam_pulse(i)
-	var now := packet()
-	if now != _told:
-		_told = now
-		server.to_all(now)
+	server.fleet.use(0)
 
 
 func _enemy_shield_tick() -> void:

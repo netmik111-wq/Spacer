@@ -41,6 +41,7 @@ extends Node
 ##   galley       (v71) the galley's stove, its dishes and what they do
 ##   defence      (v79) bots running from armed boarders, and a guard bot fetching a gun to fight them
 ##   usage        (v82) how often people used each system this run
+##   fleet        (v85) our fleet: several ships of ours, and whose state is in place now
 ## and, from before: director (events), pirates, derelict (another ship
 ## alongside), gunnery (ship's guns), campaign (saving), shipyard (v53: rolls
 ## every pirate ship that comes). The crew's ship itself
@@ -99,6 +100,7 @@ const Prisons := preload("res://src/server/prisons.gd")
 const Galley := preload("res://src/server/galley.gd")
 const Defence := preload("res://src/server/defence.gd")
 const Usage := preload("res://src/server/usage.gd")
+const Fleet := preload("res://src/server/fleet.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -194,6 +196,7 @@ var prisons := Prisons.new()           # (v70) pirates in our handcuffs
 var galley := Galley.new()             # (v71) the galley's stove and its dishes
 var defence := Defence.new()           # (v79) bots against armed boarders
 var usage := Usage.new()               # (v82) what people used this run
+var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
                                        # (the hard mode sets it, the menu may too), kept in the campaign
@@ -289,6 +292,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.pos = sectors.entry[ship.sector]
 	ship.dest = ship.pos
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
+	fleet.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
 	mounts.setup(self)
@@ -312,13 +316,17 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	robots.setup(self)
 	assault.setup(self)
 	outfit.setup(self)
+	fleet.prepare(Fleet.SETUPS)
 	rng.randomize()
 	tick = 0
 	_acc = 0.0
 	running = true
 	crew_size = bots + 1                 # (the one who hosts, and the bots asked for)
 	for i in bots:
-		crew.add_bot()
+		crew.add_bot(0)
+	for k in range(1, fleet.size()):     # (v85, the author's FS8) every other ship of the fleet: its own crew of bots
+		for i in crew_size:
+			crew.add_bot(k)
 	log_line.emit("Сервер запущен: порт %d, карта «%s», ботов %d." % [port, map.map_name, bots])
 	return ""
 
@@ -432,6 +440,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 				hello_usec.append(Time.get_ticks_usec() - t0)
 		return
 	var p: Player = players[slot_of[peer]]
+	fleet.use_for(p)                     # (v85) what a player does is done for the ship they are in
 	if kind == Net.C_INPUT:
 		if pkt.size() < 8:
 			return
@@ -665,6 +674,28 @@ func chunk_of(x: int, y: int) -> int:
 
 # ------------------------------------------------------------- simulation
 
+func _ship_power() -> void:
+	## (v85) The power of the ship in place (Fleet.each runs it for every ship).
+	power.tick()
+	systems.power_changed()
+	supplies.tell_store()
+
+
+func _ship_crew() -> void:
+	## (v85) The posts, mounts, guns, gear and holomap of the ship in place.
+	stations.tick()
+	mounts.tick()
+	gunnery.tick()
+	medbay.tick()
+	outfit.tick()
+	holomap.tick()
+
+
+func _ship_air() -> void:
+	systems.feed_air()
+	systems.run_pumps()
+
+
 func _tick() -> void:
 	tick += 1
 	lap_at = -1
@@ -675,27 +706,28 @@ func _tick() -> void:
 	for p: Player in players:
 		if p == null or p.corpse:
 			continue
+		fleet.use_for(p)
 		movement.move(p)
 		crew.update_vitals(p)
 		looting.update(p)
 		repairs.update(p)
 		workshop.update(p)
 		crew.tell_me(p)
+	fleet.use(0)
 	_lap("players")
-	power.tick()
-	systems.power_changed()
-	supplies.tell_store()
+	fleet.each(_ship_power)
 	if over == Net.OVER_NONE:
 		voyage_ticks += 1
 		if tick % Net.TICK_HZ == 0:
 			crew.check_crew()
 		if tick % Campaign.AUTOSAVE_TICKS == 0:
 			save_campaign()
-	crew.tell_campaign()
+	fleet.each(crew.tell_campaign)
 	systems.update_doors()
-	systems.run_cycles()          # (v69) airlock trips
+	fleet.each(systems.run_cycles)          # (v69) airlock trips
 	navigation.update_jump()
 	navigation.update()
+	fleet.follow()
 	road.tick()
 	hazards.tick()
 	outside.tick()
@@ -703,29 +735,25 @@ func _tick() -> void:
 	derelict.update()
 	flagship.tick()
 	story.tick()
-	garden.tick()
+	fleet.each(garden.tick)
 	galley.tick()
 	assault.tick()
 	robots.tick()
-	stations.tick()
-	mounts.tick()
-	gunnery.tick()
-	medbay.tick()
+	fleet.each(_ship_crew)
+	gunnery.tick_enemy()
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight
 	pirates.tick()                # (v70) the pirates' bombs
 	prisons.tick()
-	outfit.tick()
 	enemy_crew.tick()
 	drone.tick()
-	holomap.tick()
 	director.tick()
+	fleet.tick()
 	_lap("ship")
 	if tick % Net.AIR_EVERY == 0:
-		systems.feed_air()
-		systems.run_pumps()
+		fleet.each(_ship_air)
 		air.step(doors, tick)
-		systems.update_shutters()
+		fleet.each(systems.update_shutters)
 	if tick % Net.AIR_SEND_EVERY == 0:
 		replication.collect_air()
 	if tick % Net.TICK_HZ == 0:
