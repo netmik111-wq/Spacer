@@ -132,7 +132,8 @@ const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the
 const CASING_FADE := 3.0             # and the last seconds of it, fading
 const CASINGS_KEPT := 120
 const HURT_SHAKE := 3.0              # (v82) screen pixels the picture shakes when we are hurt
-const KICK_PX := 2.5                 # (v82) how far our own shot throws the camera back (a shotgun twice that)
+const KICK_PX := 4.0                 # (v82) how far our own shot throws the camera back (a shotgun twice that); (v83) was 2.5
+const KICK_SHAKE := 1.6              # (v83, his video) and how hard our own shot shakes the picture (a shotgun twice that)
 const STAINS_KEPT := 400             # (v75) drops of blood kept on the floors (the oldest go first)
 const RED_ALERT_TINT := 0.1          # (v75, the author's F3) how red the light is at red alert (it pulses round this)
 const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0.4, 0.9, 0.85), Color(0.6, 0.85, 1.0),
@@ -270,6 +271,7 @@ var _dark := 0.0                     # 0 = the lights are on, 1 = no power: ease
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
 var _lie := {}                       # (v82) id -> 0 standing .. 1 lying: how far over the body is turned
 var _prone_side := {}                # (v80) id -> 1.0 or -1.0: the side a body lying low has its head to
+var _stand := {}                     # (v83) id -> where its feet are drawn (pixels on its deck), whether it stands or lies
 var _casings: Array = []             # (v82) spent casings: [deck, position on its deck, angle, cell, seconds left]
 var _kick := Vector2.ZERO            # (v82) the camera thrown back by our own shot (pixels), easing home
 var _last_spent := -1000             # (v82) when the last bullet was seen fired (msec), and from where:
@@ -524,6 +526,12 @@ func _arrange(shown: int) -> void:
 func _on_deck(cell: int) -> Vector2:
 	## A cell of the map's grid as a place on its own deck, in tiles.
 	return Vector2(cell % client.map.width, (cell / client.map.width) % _stride)
+
+
+func _my_spot(me: Sprite2D) -> Vector2:
+	## (v83) Where our own feet stand on the deck, in pixels. Lying down turns the figure over but leaves
+	## the camera, the eyes and the light where they were (the drawn body moves; we do not).
+	return _stand.get(client.my_id, me.position)
 
 
 func _feet(pos_tiles: Vector2) -> Vector2:
@@ -868,7 +876,7 @@ func _light_picture(light: Dictionary, key: int) -> Array:
 
 
 
-func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float) -> void:
+func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float, by := -1) -> void:
 	var map := client.map
 	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
 	if kind >= Net.SHOT_CANNON and kind != Net.SHOT_FLASH:
@@ -879,12 +887,19 @@ func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, fli
 		return
 	var a := _feet(Vector2(from.x, from.y - deck * _stride)) + Vector2(0, -16)
 	var b := _feet(Vector2(to.x, to.y - deck * _stride)) + Vector2(0, -16)
+	# (v83, his video: "when you move, shots spawn behind") the server tells where the shooter stood when
+	# it fired, which for a walker is behind where we draw him (ourselves: ahead by the ping; others: a
+	# little behind or ahead). The trace starts where he is drawn, the end stays where it landed.
+	var at_px := a + Vector2(0, 16)
+	if _stand.has(by) and (_views[by] as Sprite2D).get_parent() == _decks[deck].chars:
+		at_px = _stand[by]
+		a = at_px + Vector2(0, -16)
 	if kind == Net.SHOT_BULLET:
-		_spent(from, to, deck)
+		_spent(from, to, deck, by == client.my_id if by >= 0 else from.distance_to(Vector2(client.pred.qx(), client.pred.qy()) / 4.0) < 0.8, at_px)
 	_shots.append([kind, hit != 0, a, b, deck, SHOT_SECONDS * (3.0 if kind == Net.SHOT_FLASH else 1.0)])
 
 
-func _spent(from: Vector2, to: Vector2, deck: int) -> void:
+func _spent(from: Vector2, to: Vector2, deck: int, mine: bool, at_px: Vector2) -> void:
 	## (v82, the author's F1) A gun fired: a casing falls by the shooter (one for a shotgun's
 	## whole spread), and our own shot kicks the camera back a little.
 	var now := Time.get_ticks_msec()
@@ -892,16 +907,18 @@ func _spent(from: Vector2, to: Vector2, deck: int) -> void:
 	_last_spent = now
 	_spent_from = from
 	var way := (to - from).normalized()
-	var mine := from.distance_to(Vector2(client.pred.qx(), client.pred.qy()) / 4.0) < 0.8
+	# (v83, his video: no kick while walking) whose shot it is comes with it now; the distance from our
+	# predicted place missed every shot fired on the move
 	if mine and Options.shake > 0.0:
 		_kick = -way * KICK_PX * (2.0 if again else 1.0) * Options.shake
+		_shake = maxf(_shake, KICK_SHAKE * (2.0 if again else 1.0) * Options.shake)
 	if again:
 		return
 	var cell := Vector2i(roundi(from.x), roundi(from.y))
 	if not client.map.walkable(cell.x, cell.y):
 		return
 	var side := Vector2(-way.y, way.x) * (1.0 if randf() < 0.5 else -1.0)
-	var at := _feet(Vector2(from.x, from.y - deck * _stride)) + side * randf_range(7.0, 13.0) + Vector2(randf_range(-3, 3), randf_range(-2, 2))
+	var at := at_px + side * randf_range(7.0, 13.0) + Vector2(randf_range(-3, 3), randf_range(-2, 2))
 	_casings.append([deck, at, randf_range(0.0, PI), cell.y * client.map.width + cell.x, CASING_SECONDS])
 	while _casings.size() > CASINGS_KEPT:
 		_casings.pop_front()
@@ -1386,7 +1403,7 @@ func _update_fan() -> void:
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
-	var origin := me.position + Vector2(0, -12)
+	var origin := _my_spot(me) + Vector2(0, -12)
 	var half := 0.0
 	for arc: Array in Sight.eye_arcs(false):
 		half = maxf(half, maxf(absf(arc[0]), absf(arc[1])))
@@ -1409,7 +1426,7 @@ func _draw_cone() -> void:
 	var white := Color(0, 1, 0, 1)
 	if me == null or me.get_parent() != _decks[_deck_shown].chars or client.my_cond != Net.COND_OK:
 		if me != null and client.my_cond != Net.COND_DEAD:
-			_cone.draw_circle(me.position + Vector2(0, -12), _tile * 0.6, white)
+			_cone.draw_circle(_my_spot(me) + Vector2(0, -12), _tile * 0.6, white)
 		return
 	_draw_light(_cone, _near, white, 0)
 
@@ -1420,13 +1437,13 @@ func _draw_look() -> void:
 	var me: Sprite2D = _views.get(client.my_id)
 	if me == null or me.get_parent() != _decks[_deck_shown].chars or client.my_cond != Net.COND_OK:
 		if me != null and client.my_cond != Net.COND_DEAD:
-			_look.draw_circle(me.position + Vector2(0, -12), _tile * 0.6, Color(0, 1, 0, 1))
+			_look.draw_circle(_my_spot(me) + Vector2(0, -12), _tile * 0.6, Color(0, 1, 0, 1))
 		return
 	var s := client.sample(client.my_id)
 	if s.is_empty():
 		return
 	var green := Color(0, 1, 0, 1)
-	var origin := me.position + Vector2(0, -12)
+	var origin := _my_spot(me) + Vector2(0, -12)
 	var ahead := client.look_way()               # (v77) the mouse's way, or the way we face
 	var start_cell := Vector2i(floori(origin.x / _tile), floori(origin.y / _tile))
 	_look.draw_rect(Rect2(Vector2(start_cell) * _tile, Vector2(_tile, _tile)), green)   # our own cell, not the wall beside it
@@ -2127,7 +2144,7 @@ func _process(delta: float) -> void:
 		_shown[id] = sprite.visible
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
-		_hold(sprite, Net.DIR_DOWN if cond == Net.COND_OK and client.prone_of(id) else s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
+		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		# (v82, his crawl video) lying down, getting up and falling turn the body over in LIE_TURN
 		# seconds rather than flipping it; a body first seen already lies
 		var lies := cond != Net.COND_OK or client.prone_of(id)
@@ -2135,16 +2152,20 @@ func _process(delta: float) -> void:
 		var t := move_toward(was_t, 1.0 if lies else 0.0, delta / LIE_TURN)
 		_lie[id] = t
 		var stand_at := sprite.position
+		_stand[id] = stand_at
 		if cond == Net.COND_OK and (client.prone_of(id) or t > 0.0):
 			# (v78) lying low, in its own colours. (v79, his note) Seen from above on its back, the body over
 			# its own spot, not slid back like one knocked down. (v80, his note: "this feels very strange": looking
 			# up it stood upright, looking down it stood on its head) Always lying across, as in SS13: the head
 			# to the side it looks to, kept while it looks straight up or down.
+			# (v83, his note with the SS13 video: "where you lay, the head stays in the same place") The side is
+			# taken once, as it lies down; turning while down keeps the head where it is and only shows the
+			# figure's frame for the new way, turned over with it, as SS13 does.
 			var look_x := Net.way(s[1]).x
-			if look_x != 0.0 and (client.prone_of(id) and t >= 1.0 or not _prone_side.has(id)):
+			if look_x != 0.0 and (was_t <= 0.0 or not _prone_side.has(id)):
 				_prone_side[id] = 1.0 if look_x > 0.0 else -1.0
 			var head := Vector2(float(_prone_side.get(id, 1.0)), 0.0)
-			sprite.region_rect = _frame(Net.DIR_DOWN, false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
+			sprite.region_rect = _frame(s[1], false, pos, client.player_colour(id) * Net.LOOKS + client.look_of(id))
 			sprite.rotation = wrapf(head.angle() + PI / 2.0, -PI, PI) * t
 			var lying_at := ((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round() / zoom
 			sprite.position = (stand_at.lerp(lying_at, t) * zoom).round() / zoom
@@ -2175,12 +2196,13 @@ func _process(delta: float) -> void:
 			_seen.erase(id)
 			_prone_side.erase(id)
 			_lie.erase(id)
+			_stand.erase(id)
 
 	# camera follows our character; a ship smaller than the screen stays centred
 	var me: Sprite2D = _views.get(client.my_id)
 	# what our eyes reach is worked out again only when something it depends on changed
 	var mine_now := client.sample(client.my_id)
-	var look_key := hash([me.position if me != null else Vector2.INF, me != null and me.get_parent() == _decks[my_deck].chars,
+	var look_key := hash([_my_spot(me) if me != null else Vector2.INF, me != null and me.get_parent() == _decks[my_deck].chars,
 		mine_now[1] if not mine_now.is_empty() else 0, roundi(rad_to_deg(client.look_angle)) if client.free_looking() else 0, my_deck, client.my_cond, hash(client.doors.ready), client.other_changes])
 	if look_key != _look_key:
 		_look_key = look_key
@@ -2191,7 +2213,7 @@ func _process(delta: float) -> void:
 		_me_over.global_transform = me.global_transform
 		_me_over.region_rect = me.region_rect
 		_me_over.modulate = me.modulate * Color(0.8, 0.8, 0.85)
-	var focus := me.position - Vector2(0, 14) if me != null else Vector2.ZERO
+	var focus := _my_spot(me) - Vector2(0, 14) if me != null else Vector2.ZERO
 	# (v79, the author's V1) with the view following the mouse the camera leans toward it, by how far
 	# the mouse is from the middle of the screen, at most Options.lean tiles; it eases there and back
 	var lean_to := Vector2.ZERO
@@ -2220,7 +2242,7 @@ func _process(delta: float) -> void:
 	# (v56) a blow to the hull throws the picture about, by whole screen pixels
 	_shake = move_toward(_shake * exp(-6.0 * delta), 0.0, delta)
 	# (v82) our own shot's kick, eased back in a tenth of a second or so
-	_kick = _kick.move_toward(Vector2.ZERO, delta * 40.0)
+	_kick = _kick.move_toward(Vector2.ZERO, delta * 30.0)
 	_camera.position += (_kick * zoom).round() / zoom
 	if _shake >= 1.0:
 		_camera.position += Vector2(randf_range(-_shake, _shake), randf_range(-_shake, _shake)).round() / zoom

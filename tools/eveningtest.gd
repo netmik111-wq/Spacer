@@ -54,6 +54,7 @@ func _go() -> void:
 	_bot_walks_slant()
 	await _rejoin()
 	await _mouse_spin()
+	await _near_and_whose()
 	server.stop()
 	server.free()
 	print("eveningtest: %d failed" % failed)
@@ -414,6 +415,39 @@ func _mouse_spin() -> void:
 	_expect(worst < 6, "the queued inputs stay close to now (at most %d ticks ahead, %d frames)" % [worst, k])
 	_expect(ways.size() >= 4, "the server turned it many ways (%d)" % ways.size())
 	_expect(cells.size() >= 3, "and it walked (%d cells)" % cells.size())
+	c.close()
+	get_root().remove_child(c)
+	c.free()
+	await _frames(5)
+
+
+func _near_and_whose() -> void:
+	print("  -- (v83) the mouse right by us moves nothing; a shot says whose it is")
+	_calm()
+	var c := GameClient.new()
+	get_root().add_child(c)
+	c.connect_to("127.0.0.1", PORT, "Стрелок")
+	await _until_playing(c)
+	_expect(c.phase == GameClient.PLAYING, "the link joins")
+	if c.phase != GameClient.PLAYING:
+		return
+	c.want_free_look = true
+	for i in 10:
+		c.aim_at(Vector2(c.pred.x, c.pred.y) + Vector2(4, 0), 0.1)
+		await process_frame
+	var was := c.look_angle
+	var me := Vector2(c.pred.x, c.pred.y)
+	for i in 30:
+		c.aim_at(me + Vector2.from_angle(i * 1.3) * 0.5, 0.1)
+		await process_frame
+	_expect(c.look_angle == was, "the eyes stay put while the mouse wobbles round us (%.2f -> %.2f)" % [was, c.look_angle])
+	var got: Array = []
+	c.shot.connect(func(_k: int, _h: int, _f: Vector2, _t: Vector2, _d: float, _l: float, by: int) -> void: got.append(by))
+	var p = server.players[c.my_id]
+	server.combat.tell_shot(Net.SHOT_BULLET, false, Vector2(p.st.x, p.st.y), Vector2(p.st.x + 3, p.st.y), p.st.y, 0, 0, p)
+	server.combat.tell_shot(Net.SHOT_BULLET, false, Vector2(p.st.x, p.st.y), Vector2(p.st.x + 3, p.st.y), p.st.y)
+	await _frames(20)
+	_expect(got == [c.my_id, -1], "our shot comes with our id, a shot of nobody's with none (%s)" % [got])
 	c.close()
 	get_root().remove_child(c)
 	c.free()

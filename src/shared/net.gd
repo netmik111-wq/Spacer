@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 58
+const PROTOCOL := 59
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -420,7 +420,8 @@ const TEMPER_UNKNOWN := 255
 const C_WEAR := 20                  # u8 WEAR_*: take that off, into the hand (or a free slot)
 const S_SHOT := 25                  # u8 kind (SHOT_*), u8 hit (1 = somebody was hit), s16 from x * 16,
                                     # s16 from y * 16, s16 to x * 16, s16 to y * 16: for drawing; (v56) then
-                                    # u8 ticks before it shows, u8 ticks it flies (0 = a trace drawn at once)
+                                    # u8 ticks before it shows, u8 ticks it flies (0 = a trace drawn at once);
+                                    # (v83) u16 the shooter's id (0xFFFF: none), so it starts where he is drawn
 const SHOT_BULLET := 1
 const SHOT_BLOW := 2
 const SHOT_CANNON := 3              # a ship's gun firing, or the enemy's shot landing on us

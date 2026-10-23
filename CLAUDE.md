@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v82.1 (version 0.75.1: layers in the ship editor) is the latest. Plans one to four are done except the darkness front (the
+Build v83 (version 0.76: crawl like SS13, the mouse in the middle, shots on the move) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -89,7 +89,9 @@ case), getting up takes 1 s as in SS13, the autodoc alone heals on at half pace,
 counts of what people used (`usage.txt`), one's own sounds heard, empty click, casings, a camera kick, console sounds; (his answers) a healing
 cross and bar at the autodoc, work ticks, a welded door's seam, being hit shakes, cries and reddens the screen's edges.
 v82.1 (his note): the ship editor's two layers, floor under objects (`Drawing.base`, Q picks the layer, O hides objects).
-Next: v83 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
+v83 (his notes and two videos): the lying head's side is chosen once (turning while down keeps it, as in SS13), the camera
+stays on one's feet, a 0.8-cell mouse dead zone round the body, shots carry the shooter (traces start at the drawn shooter,
+the kick works on the move, a short shake). Next: v84 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
 when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -459,6 +461,9 @@ The parameters for these checks are described in the header of `src/main.gd`.
   section (20 bytes, protocol 58); a test that sends RISE must step the state RISE_TICKS times. Whatever people choose to
   use goes through `server.usage.note(p, key)` (bots skipped); a new key goes into `Usage.NAMES`. `Chat.sound` now sends a
   sound back to the one who made it, except footsteps. He chose no general depth rule: judge each mechanic on its own.
+- (v83) `S_SHOT` ends with the shooter's id (`Combat.tell_shot(..., by)`, protocol 59): pass the Player for hand shots and
+  blows, so the client draws the trace from where it shows him and knows its own shots. The camera, light and sight
+  origin follow `WorldView._my_spot()` (the feet), never the drawn sprite (a lying body is drawn to one side).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

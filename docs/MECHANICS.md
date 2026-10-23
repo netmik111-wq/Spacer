@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v82.1 (version 0.75.1).
+Last updated: build v83 (version 0.76).
 
 Contents:
 
@@ -64,6 +64,9 @@ Contents:
   seen from above, **head toward where you look** (8 ways), so it always matches your light and view.
   (v80, his note "feels very strange" and L1 "A") It always **lies across**: head to the left or right, the side you
   look to; looking straight up or down keeps the last side.
+  (v83, his SS13 video) The side is chosen **once, as you lie down**: turning while down keeps the head where it is and
+  shows the figure turned over for the new way (face up, face down, on its side), as in SS13. Lying down no longer
+  moves the camera or your light: they stay on your spot.
 - (v79, the author's W1 note) People still walk through one another. Two close together (under **1 cell**
   apart) while either walks are drawn **stepping aside**, each up to a **quarter of a cell** off its line, as if
   sliding past; only the picture moves. Two standing still keep the spots they chose.
@@ -460,6 +463,9 @@ Contents:
   at full speed while looking ahead. The body turns with the eyes in 8 ways (others see where you look); E uses what you
   face. The setting «Взгляд за мышью» (Settings, Picture) turns it off: then you look where you walk, as before. While a
   console or a window is open the eyes stay still. Bots and pirates look where they walk.
+  (v83, his note) With the cursor within **0.8 cell** of the middle of your body, the eyes and body do not move at all,
+  and within **2 cells** the body needs **18°** past the half-way line to turn (6° further out), so a mouse resting on
+  your character no longer shakes the view.
 - (v79, the author's V1 "A") With the view following the mouse, **the camera leans toward the mouse**: by how far
   the cursor is from the middle of the screen, up to **2 cells** at the screen's edge (setting «Камера смещается к
   мыши»: none, 1, 2 or 3 cells), easing there in about a third of a second. It shows more of the side you look at;
@@ -2091,7 +2097,9 @@ note, and the questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp
 - **Hand guns**: an empty gun with no magazine **clicks** (range 4); putting in a new magazine is heard (**reload**, range 5);
   every shot drops a **spent casing** by the shooter (one for a shotgun's spread) that lies **30 s** and fades in its last 3;
   your own shot **kicks the camera back** 2.5 screen pixels (a shotgun 5), eased back at once, times the screen-shake
-  setting.
+  setting. (v83, his video) The kick is now **4** pixels (shotgun 8) with a short **shake** of 1.6 pixels (shotgun 3.2),
+  and it works while walking (before, a shot fired on the move was not known as yours). Every shot's trace starts
+  where its shooter is drawn, not behind a walker.
 - **Small sounds**: picking a thing up (range 4), a console's screen opening and closing, and a low buzz when a console
   will not open for lack of power. All can be replaced from the «sounds» folder (`click`, `reload`, `pickup`, `ui_open`,
   `ui_close`, `ui_deny`).
