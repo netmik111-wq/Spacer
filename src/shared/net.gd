@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 59
+const PROTOCOL := 60
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -82,7 +82,8 @@ const C_DOCK := 19                  # u8 on: bring the derelict alongside up aga
 const C_ACT := 17                   # nothing else: use the thing in the hand by itself (switch a flashlight)
 
 # --- packets, server -> client ---
-const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u16 id of your ship, u8 name length, map name
+const S_WELCOME := 10               # u16 your id, u32 tick, u32 map crc, u16 id of your ship, u8 name length, map name;
+                                    # (v84) then the other drawings and the texts of one's own (ShipMap.pack_maps)
 const S_REJECT := 11                # u8 reason
 const S_ROSTER := 12                # u16 count, then roster entries: u16 id, u8 colour, u8 kind (KIND_*), u8 job, u8 name length, name
 const S_JOIN := 13                  # one roster entry
@@ -635,7 +636,8 @@ const SOUND_ZAP := 15               # (v70) a stun baton
 const SOUND_CLICK := 16              # (v82) a gun clicking empty
 const SOUND_RELOAD := 17             # (v82) a magazine pushed home
 const SOUND_PICKUP := 18             # (v82) a thing picked up
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4]
+const SOUND_SWING := 19              # (v84, the author's S1) a blow that met nothing: a whoosh
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4, 4]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 

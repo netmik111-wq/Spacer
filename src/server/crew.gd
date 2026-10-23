@@ -84,6 +84,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	w.encode_u16(11, server.ship.id)
 	w.encode_u8(13, map_name.size())
 	w.append_array(map_name)
+	w.append_array(server.map.pack_maps(server.map.map_name))   # (v84) the other drawings, and those of one's own
 	peer.send(0, w, ENetPacketPeer.FLAG_RELIABLE)
 
 	var roster := PackedByteArray()
@@ -331,7 +332,8 @@ func announce_join(p: Player, except: ENetPacketPeer) -> void:
 	var msg := PackedByteArray([Net.S_JOIN])
 	msg.append_array(roster_entry(p))
 	for q: Player in server.players:
-		if q != null and q.peer != null and q.peer != except:
+		# (v84) a player leaving at the same moment may already be past sending to, as in `remove`
+		if q != null and q.peer != null and q.peer != except and q.peer.get_state() == ENetPacketPeer.STATE_CONNECTED:
 			q.peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 

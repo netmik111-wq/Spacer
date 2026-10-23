@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v83 (version 0.76: crawl like SS13, the mouse in the middle, shots on the move) is the latest. Plans one to four are done except the darkness front (the
+Build v84 (version 0.77: hosting a game on one's own ship) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -91,8 +91,12 @@ cross and bar at the autodoc, work ticks, a welded door's seam, being hit shakes
 v82.1 (his note): the ship editor's two layers, floor under objects (`Drawing.base`, Q picks the layer, O hides objects).
 v83 (his notes and two videos): the lying head's side is chosen once (turning while down keeps it, as in SS13), the camera
 stays on one's feet, a 0.8-cell mouse dead zone round the body, shots carry the shooter (traces start at the drawn shooter,
-the kick works on the move, a short shake). Next: v84 hosting a game on one's own ship. Fire: answers pending on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`. Fear: later,
-when he has the concept.
+the kick works on the move, a short shake).
+v84 (his answers, `https://claude.ai/artifact/RVoV4nte7rCpgf2AhH6TTb`): a new campaign's ship picked in the menu (with a
+picture, two-column menu), the server sends its drawings to guests, saves keep their copies, a ship with no helm or engine
+cannot start, own pirate ships/derelicts/asteroids in the run (a tick), the blow's swing. Next (his E1 B): several friendly
+ships; then fire as v85 (his fire answers on `https://claude.ai/artifact/GrbXt4V21HzZUojDiYqEKk`: SS13-like gas and heat, agreed
+to start simpler: oxygen, burnt air, heat; measure the air's cost first). Fear: later, when he has the concept.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -123,7 +127,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 40 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 41 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -164,6 +168,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/defencetest.gd (since v79: bots run from armed pirates and lie low, a guard bot fetches a gun and fights, the camera lean setting)
     godot --headless --path . --script res://tools/fullruntest.gd (since v80: no holes on machines, shots through space, mounts left alone, wrecks stay behind, stopping for those outside, out cold spared)
     godot --headless --path . --script res://tools/edittest.gd (since v81: builder = script, drawing tools, own ships, checks, trials, asteroids, hold position)
+    godot --headless --path . --script res://tools/hosttest.gd (since v84: own ship, drawings sent to guests, serious problems, saves' copies, own others, the swing)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -188,7 +193,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 40 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 41 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -270,6 +275,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `first_shift.gd` (v74, H and the first-shift checklist).
   (v81) `ship_editor.gd` (the ship editor) with `src/ui/editor/`: `drawing.gd` (the model, tools, undo, text), `canvas.gd`
   (drawing and the mouse), `checks.gd` (the problems panel).
+  (v84) `ship_preview.gd`, the main menu's small picture of a ship.
   (v75) `src/client/music.gd` (one music player with a crossfade, menu and fight), `src/client/bug_report.gd` (the zip).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
@@ -464,6 +470,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
 - (v83) `S_SHOT` ends with the shooter's id (`Combat.tell_shot(..., by)`, protocol 59): pass the Player for hand shots and
   blows, so the client draws the trace from where it shows him and knows its own shots. The camera, light and sight
   origin follow `WorldView._my_spot()` (the feet), never the drawn sprite (a lying body is drawn to one side).
+- (v84) A "ships:NAME" drawing's text comes from `ShipMap.drawings` first (what the server read or sent, or the save
+  kept), then the «ships» folder; clear it before starting anything that should read the files anew (`main.gd
+  _prepare_ships`). Own other drawings are `ShipMap.own_others`, after `Net.OTHER_MAPS` in `others`: never take a layout
+  number as a kind (a derelict is `Net.SHIP_DERELICT`, client `other_derelict`). `S_WELCOME` ends with
+  `ShipMap.pack_maps` (protocol 60). `GameServer.start` refuses an own ship without helm or engine (`ShipMap.serious`).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

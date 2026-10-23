@@ -46,7 +46,9 @@ func make(party: int, raid: bool, fits: Array, harder: int = 0, temper_of: int =
 	var far: int = (server.sectors.far_from_start(server.ship.sector) if server.sectors.count > 0 else 0) + harder
 	if classic and fits.has(Net.OTHER_PIRATE):
 		return _classic(party, far)
-	# the class: one that may come this far out and has a hull that fits
+	# the class: one that may come this far out and has a hull that fits; (v84) the pirate ships one drew
+	# oneself are hulls of every class but the drone ship's and the flagships'
+	var own: Array = server.map.others_of("pirate").filter(func(l: int) -> bool: return l >= Net.OTHER_MAPS.size())
 	var choice: Array = []
 	var total := 0
 	for k: int in Hulls.CLASSES.keys():
@@ -58,6 +60,8 @@ func make(party: int, raid: bool, fits: Array, harder: int = 0, temper_of: int =
 		if int(c["from"]) > far and force_class < 0:
 			continue
 		var hulls: Array = (c["layouts"] as Array).filter(func(l: int) -> bool: return fits.has(l))
+		if not c.get("drone", false):
+			hulls.append_array(own.filter(func(l: int) -> bool: return fits.has(l)))   # (v84, the author's H5)
 		if hulls.is_empty():
 			continue
 		choice.append([k, hulls])

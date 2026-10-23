@@ -15,6 +15,7 @@ const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 
 const PATH := "user://campaign.json"
 const VERSION := 1
@@ -31,9 +32,11 @@ static func summary(path: String = PATH) -> String:
 	if data.is_empty():
 		return ""
 	var minutes := int(data.get("voyage", 0)) / Net.TICK_HZ / 60
-	return "%s, секторов пройдено: %d, продержались %s, в резерве %d" % [Net.MODE_NAMES[clampi(int(data.get("mode", 0)), 0, 2)].to_lower() + " режим",
+	var ship := str(data.get("map", "ship02"))
+	var on := (", корабль «%s»" % ship.trim_prefix(ShipMap.USER_PREFIX)) if ship.begins_with(ShipMap.USER_PREFIX) else ""
+	return "%s, секторов пройдено: %d, продержались %s, в резерве %d%s" % [Net.MODE_NAMES[clampi(int(data.get("mode", 0)), 0, 2)].to_lower() + " режим",
 		(data.get("been", []) as Array).size(),
-		("%d ч %02d мин" % [minutes / 60, minutes % 60]) if minutes >= 60 else ("%d мин" % minutes), int(data.get("reserve", 0))]
+		("%d ч %02d мин" % [minutes / 60, minutes % 60]) if minutes >= 60 else ("%d мин" % minutes), int(data.get("reserve", 0)), on]
 
 
 static func read(path: String = PATH) -> Dictionary:
@@ -125,6 +128,8 @@ static func snapshot(server: Node) -> Dictionary:
 		"complex": server.complex_repairs,                                      # (v71)
 		"story": server.story.save(), "roam": server.flagship.save(), "garden": server.garden.save(),
 		"road": server.road.save(),                                          # (v64)
+		# (v84, the author's H4) the drawings of one's own it is played with, as they were: the files may change since
+		"drawings": ShipMap.drawings_in_use(map.map_name), "own_others": ShipMap.own_others,
 	}
 
 

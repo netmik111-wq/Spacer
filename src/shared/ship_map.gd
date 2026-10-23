@@ -16,6 +16,10 @@ const USER_PREFIX := "ships:"        # (v81) a map named "ships:NAME" is ships/N
 static var ships_override := ""      # (tests) another «ships» folder
 static var try_other := ""           # (v81) the ship editor's «Попробовать»: a drawing of one's own that comes alongside
                                      # (the game's server runs inside the game then, so both sides read this)
+static var drawings := {}            # (v84) "ships:NAME" -> its drawing's text, read before the «ships» folder: what the
+                                     # server read at start or from the save, what a guest was sent by the server (H1)
+static var own_others: Array[String] = []   # (v84, the author's H5) drawings of one's own that come in the run
+                                     # (pirate ships, derelicts, asteroids), after the game's own in `others`
 
 const DOOR_BAND := 0                 # a door in a horizontal wall ('D' in the drawing)
 const DOOR_AIRLOCK := 1              # an airlock in a vertical wall ('A')
@@ -122,11 +126,15 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 	var tiles_text := FileAccess.get_file_as_string("res://assets/tiles.json")
 	var data: Variant = null
 	if name.begins_with(USER_PREFIX):
-		# (v81) a ship of one's own, drawn in the ship editor: built here from its drawing
-		var text := FileAccess.get_file_as_string(ships_dir().path_join(name.substr(USER_PREFIX.length()) + ".txt"))
+		# (v81) a ship of one's own, drawn in the ship editor: built here from its drawing;
+		# (v84) the copy the server sent or the save kept comes first, and a drawing read is kept
+		var text := str(drawings.get(name, ""))
+		if text.is_empty():
+			text = FileAccess.get_file_as_string(ships_dir().path_join(name.substr(USER_PREFIX.length()) + ".txt"))
 		if text.is_empty():
 			return "Не найден корабль «%s» в папке ships." % name.substr(USER_PREFIX.length())
-		var built := MapBuilder.build(name, text)
+		drawings[name] = text
+		var built := MapBuilder.build(name.substr(USER_PREFIX.length()), text)   # (its kind by the file's name, too)
 		var problems: Array = built["problems"]
 		if not problems.is_empty():
 			var p: Dictionary = problems[0]
@@ -507,9 +515,128 @@ func _find_rooms() -> void:
 static func other_maps() -> Array[String]:
 	## The drawings of other ships that may come alongside, in the order `others` numbers them.
 	var out: Array[String] = Net.OTHER_MAPS.duplicate()
+	out.append_array(own_others)
 	if try_other != "":
 		out.append(try_other)
 	return out
+
+
+static func own_drawings() -> Array[Dictionary]:
+	## (v84) The drawings in the «ships» folder, by name: {"name" ("ships:NAME"), "file" (NAME), "kind", "text"}.
+	var out: Array[Dictionary] = []
+	var dir := DirAccess.open(ships_dir())
+	if dir == null:
+		return out
+	var files := Array(dir.get_files())
+	files.sort()
+	for f: String in files:
+		if f.get_extension() != "txt":
+			continue
+		var text := FileAccess.get_file_as_string(ships_dir().path_join(f))
+		if text.is_empty():
+			continue
+		out.append({"name": USER_PREFIX + f.get_basename(), "file": f.get_basename(),
+			"kind": MapBuilder.kind_of(f.get_basename(), text), "text": text})
+	return out
+
+
+static func coming_in_run() -> Array[String]:
+	## (v84, the author's H5) Own drawings of pirate ships, derelicts and asteroids the game can use: they load,
+	## and a pirate ship has a room for each of its systems. One that does not fit off our airlock is never met.
+	var out: Array[String] = []
+	for d: Dictionary in own_drawings():
+		if not ["pirate", "derelict", "asteroid"].has(str(d["kind"])):
+			continue
+		var built := MapBuilder.build(str(d["file"]), str(d["text"]))
+		if not (built["problems"] as Array).is_empty():
+			continue
+		var o: RefCounted = load("res://src/shared/ship_map.gd").new()
+		if o.load_data(str(d["name"]), FileAccess.get_file_as_string("res://assets/tiles.json"), built["data"], false) != "":
+			continue
+		if str(d["kind"]) == "pirate" and o.rooms.size() < Net.ESYS_COUNT - 2:
+			continue
+		out.append(str(d["name"]))
+	return out
+
+
+static func drawings_in_use(main: String) -> Dictionary:
+	## (v84) The texts of the drawings of one's own a game on `main` uses: sent to every guest, kept in the save.
+	var out := {}
+	var names: Array[String] = [main]
+	names.append_array(other_maps())
+	for n: String in names:
+		if n.begins_with(USER_PREFIX) and drawings.has(n):
+			out[n] = drawings[n]
+	return out
+
+
+static func pack_maps(main: String) -> PackedByteArray:
+	## (v84, the author's H1) The end of S_WELCOME: the other ships' drawings by name in the order `others`
+	## numbers them (u8 count, then u8 length and name each), then the drawings of one's own those use
+	## (u8 count, then u8 name length, name, u32 text size, u32 packed size, the text deflated each).
+	var w := PackedByteArray()
+	var names := other_maps()
+	w.append(names.size())
+	for n: String in names:
+		var b := n.to_utf8_buffer()
+		w.append(b.size())
+		w.append_array(b)
+	var used := drawings_in_use(main)
+	w.append(used.size())
+	for n: String in used:
+		var b := n.to_utf8_buffer()
+		var text := str(used[n]).to_utf8_buffer()
+		var packed := text.compress(FileAccess.COMPRESSION_DEFLATE)
+		w.append(b.size())
+		w.append_array(b)
+		var at := w.size()
+		w.resize(at + 8)
+		w.encode_u32(at, text.size())
+		w.encode_u32(at + 4, packed.size())
+		w.append_array(packed)
+	return w
+
+
+static func unpack_maps(pkt: PackedByteArray, pos: int) -> Dictionary:
+	## The other side of pack_maps: {"others": [names], "drawings": {name: text}}, or {} if it is cut short.
+	var names: Array[String] = []
+	var got := {}
+	if pos >= pkt.size():
+		return {}
+	var count := pkt[pos]
+	pos += 1
+	for i in count:
+		if pos >= pkt.size() or pos + 1 + pkt[pos] > pkt.size():
+			return {}
+		names.append(pkt.slice(pos + 1, pos + 1 + pkt[pos]).get_string_from_utf8())
+		pos += 1 + pkt[pos]
+	if pos >= pkt.size():
+		return {}
+	count = pkt[pos]
+	pos += 1
+	for i in count:
+		if pos >= pkt.size() or pos + 1 + pkt[pos] + 8 > pkt.size():
+			return {}
+		var n := pkt.slice(pos + 1, pos + 1 + pkt[pos]).get_string_from_utf8()
+		pos += 1 + pkt[pos]
+		var size := pkt.decode_u32(pos)
+		var packed := pkt.decode_u32(pos + 4)
+		pos += 8
+		if pos + packed > pkt.size():
+			return {}
+		got[n] = pkt.slice(pos, pos + packed).decompress(size, FileAccess.COMPRESSION_DEFLATE).get_string_from_utf8()
+		pos += packed
+	return {"others": names, "drawings": got}
+
+
+func serious() -> String:
+	## (v84, the author's H3) What makes this drawing unplayable as our own ship, or "" (a ship with nowhere to
+	## appear never loads at all). The rest of the ship editor's problems only warn.
+	if helm.is_empty():
+		return "нет штурвала (пульт управления, «3»): кораблём нельзя править."
+	if engine.is_empty():
+		return "нет двигателя («6»): кораблю нечем лететь."
+	return ""
 
 
 func others_of(of_kind: String) -> Array[int]:

@@ -1557,3 +1557,39 @@ middle of the screen it becomes buggy"; a video: "when you move, shots spawn beh
   its end stays where the server says it landed. Ship guns pass no shooter.
 - **Kick** 2.5 -> 4 px and a short shake of 1.6 px (`KICK_SHAKE`, both times the shake setting): he asked for a shake
   after every shot; small enough not to spoil aiming.
+
+## v84: hosting on one's own ship (2026-10-23)
+
+His answers on "Spacer v84 Next" (https://claude.ai/artifact/RVoV4nte7rCpgf2AhH6TTb): all my picks except E1 (he wants
+several friendly ships before more variety) and P1 (no playtest evening soon).
+
+- **The server sends the drawings** (H1): `ShipMap.pack_maps` appends to `S_WELCOME` the other ships' map names in the
+  server's order and the texts of every "ships:" drawing in use, deflated (protocol 60). The client fills
+  `ShipMap.drawings` from it and loads from those before the «ships» folder, so a guest's own files never matter and are
+  never written. Sending the other maps' order also lets the server add drawings the client has never heard of.
+- **`ShipMap.drawings` is the one source for a "ships:" text**: `load_from` keeps whatever it read there. The host clears it
+  for a new campaign or a try (so an edited drawing is read anew), fills it from the save for a continued one
+  (`main.gd _prepare_ships`), and saves `drawings_in_use` (H4). The save's ship wins over the menu's for «Продолжить»:
+  the alternative (refuse, "the save was played on another ship") only confuses.
+- **Serious problems** (H3) are the editor's red ones: build problems and no spawn place were already refused by
+  `load_from`; no helm and no engine are now refused by `GameServer.start` too (`ShipMap.serious`), with the editor's words.
+  A ship with no helm can never jump; one with no engine can never move or charge. Everything else stays a warning.
+- **Own other drawings** (H5): `ShipMap.own_others` (after `Net.OTHER_MAPS` in `others`). Pirate ships of ours join every
+  class's hulls except the drone ship and the bosses, so they come about as often as one class's own hull; one with fewer
+  rooms than systems (6) is left out (`coming_in_run`). A derelict place picks its drawing by `Sectors.key % count`, so
+  what was left on it lines up on the next visit. The client no longer takes "layout 0" to mean a derelict: it reads the
+  ship's kind (`GameClient.other_derelict`).
+- **The kind of a "ships:" drawing** comes from the file's name too (`MapBuilder.build` is given the name without the
+  prefix): a copied `pirate_x.txt` with no `; kind` line was taken for our own ship.
+- **The menu in two columns**: with the ship row and its picture the one column ran past a 720-row window (it already
+  did with a save). Left: who one is and joining. Right: one's own game.
+- **The blow's circle** (his note, S1): `Combat.swing_end` keeps a miss within `REACH` (0.8 cell) of the striker; the
+  client draws a swing arc round the striker toward that end, and the circle only on a hit; a miss sounds `SOUND_SWING`.
+- **Fire after this** (his fire page): he picked SS13's gas mix and heat (F1 B, F3 B) against my FTL pick. My second
+  opinion: per-tile gas and heat roughly doubles the air's tick cost, and it is the depth he worried about in v82. He
+  agreed to start simpler: oxygen, burnt air and heat, deeper later. Measure the air's cost first (`tools/bench.sh`).
+
+- **Several leaving at once** (found by nettest with lag, 2 runs of 13): when one player's leave was handled, the server
+  greeted (bot takes over, chat line) players whose own leave ENet had already done but not yet reported, and Godot
+  logged "Unable to send packet". `Crew.remove` already skipped those; now `announce_join`, `Chat.say` and
+  `GameServer.to_all` skip any peer not `STATE_CONNECTED` too (0 of 8 runs after).

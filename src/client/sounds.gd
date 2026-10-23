@@ -25,7 +25,8 @@ const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: 
 	Net.SOUND_DROP: "drop", Net.SOUND_LADDER: "ladder", Net.SOUND_SHOT: "shot", Net.SOUND_BLOW: "blow",
 	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load", Net.SOUND_BANG: "bang", Net.SOUND_BEEP: "beep",
 	Net.SOUND_SHOTGUN: "shotgun", Net.SOUND_ZAP: "zap",
-	Net.SOUND_CRY: "cry", Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup"}   # (v82)
+	Net.SOUND_CRY: "cry", Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup",
+	Net.SOUND_SWING: "swing"}   # (v82; v84 the swing)
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -104,6 +105,7 @@ static func prepare() -> void:
 	_streams[Net.SOUND_CLICK] = [_click()]           # (v82)
 	_streams[Net.SOUND_RELOAD] = [_reload()]
 	_streams[Net.SOUND_PICKUP] = [_pickup()]
+	_streams[Net.SOUND_SWING] = [_swing(1.0), _swing(0.85)]   # (v84)
 	_streams[UI_OPEN] = [_ui_blip(1.0)]
 	_streams[UI_CLOSE] = [_ui_blip(0.75)]
 	_streams[UI_DENY] = [_ui_deny()]
@@ -469,6 +471,15 @@ static func _pickup() -> AudioStreamWAV:
 	var out := _buffer(0.2)
 	_noise(out, 0.0, 0.08, 0.14, 40.0, 0.7)
 	_tone(out, 0.03, 1250.0, 0.08, 60.0)
+	return _wav(out)
+
+
+static func _swing(pitch: float) -> AudioStreamWAV:
+	# (v84, the author's S1) a blow through empty air: a soft rising and falling whoosh
+	var out := _buffer(0.24)
+	_noise(out, 0.0, 0.22, 0.22 * pitch, 6.0, 0.15)
+	_tone(out, 0.02, 180.0 * pitch, 0.04, 10.0, 120.0)
+	_fade(out, 0.03)
 	return _wav(out)
 
 

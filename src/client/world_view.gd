@@ -126,7 +126,7 @@ void fragment() {
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
 const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
 	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд",   # (v75: the kinds from 10 on were never played)
-	"щелчок", "перезарядка", "взял"]   # (v82)
+	"щелчок", "перезарядка", "взял", "взмах"]   # (v82; v84 the swing)
 const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt figure shows red
 const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the floor
 const CASING_FADE := 3.0             # and the last seconds of it, fading
@@ -1307,6 +1307,13 @@ func _draw_shade() -> void:
 			# (v70) a flashbang or a bomb: a white burst
 			_shade.draw_circle(b, 40.0 + 60.0 * (1.0 - left), Color(1.0, 1.0, 0.95, 0.75 * left))
 			continue
+		elif int(sh[0]) == Net.SHOT_BLOW:
+			# (v84, the author's S1) a swing in front of the one striking, toward the mouse; the ring only on a hit
+			var ang := (b - a).angle() if b != a else 0.0
+			_shade.draw_arc(a, 18.0, ang - 0.9, ang + 0.9, 12, Color(1.0, 1.0, 1.0, 0.7 * left), 3.0)
+			if not bool(sh[1]):
+				continue
+			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
 		else:
 			_shade.draw_arc(b, 9.0, 0.0, TAU, 16, Color(1.0, 1.0, 1.0, 0.8 * left), 2.0)
 		if bool(sh[1]):

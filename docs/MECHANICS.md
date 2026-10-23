@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v83 (version 0.76).
+Last updated: build v84 (version 0.77).
 
 Contents:
 
@@ -45,6 +45,7 @@ Contents:
 35. [The full run's fixes (v80)](#35-the-full-runs-fixes-v80)
 36. [The ship editor, asteroids, holding position (v81)](#36-the-ship-editor-asteroids-holding-position-v81)
 37. [Polish without extra depth (v82)](#37-polish-without-extra-depth-v82)
+38. [Hosting on your own ship (v84)](#38-hosting-on-your-own-ship-v84)
 
 ---
 
@@ -2055,7 +2056,7 @@ The author's answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68o
   you back to the editor.
 - **«Обновить картинки»** rereads the «sprites» folder, so an artist sees new tiles without restarting. A tiles sheet
   from an older build (shorter) is laid over the game's, so the new v81 tiles still show.
-- Hosting a game on your own ship comes in v82.
+- (v84) A game can be hosted on your own ship: see section 38.
 
 - (v82.1, the author's note) **Layers**: every cell has a **floor layer** (space, wall, floor, glass, catwalk, rock)
   and an **object layer** on top (doors, windows, consoles, machines, guns, spawn places, ladders). An object keeps its
@@ -2110,4 +2111,33 @@ note, and the questions page "Spacer v82 Polish" (https://claude.ai/artifact/NTp
 - **Getting hurt is felt**: a small camera shake when you are wounded (times the screen-shake setting), a short cry
   (`cry`, heard by those near), and red at the screen's edges once your health is below **75**, deeper and darker down to
   **15**, with a brighter flash at each blow.
+
+## 38. Hosting on your own ship (v84)
+
+The author's answers on the page "Spacer v84 Next" (https://claude.ai/artifact/RVoV4nte7rCpgf2AhH6TTb), all on my picks.
+
+- **The main menu has two columns** so it fits a 720-row window: name, job and joining on the left; one's own game on the
+  right.
+- **«Корабль:»** (his H2) picks the ship of a **new** campaign: «Стандартный корабль» (ship02) or any drawing of our own
+  ship in the «ships» folder (made in the ship editor). A small picture of the chosen ship shows its decks side by side
+  (walls, floors, doors, machines). The choice is remembered.
+- **A ship that cannot be played** (his H3) is marked «(не готов)» with the reason in red, and «Новая кампания» refuses it.
+  Serious problems are the editor's red ones: a drawing that does not build, nowhere for the crew to appear, **no helm**
+  («3») or **no engine** («6»). The rest (no shield, no guns, no cryopods...) only warn in the editor; such a ship plays
+  without them. A server started on such a drawing by other means refuses it with the same words.
+- **Friends need nothing** (his H1): when someone joins, the host's game sends the drawings it plays with (our ship and
+  any of our own that come alongside), packed. The guest's own «ships» folder is not read or written. Before v84 a guest
+  needed the same files.
+- **A continued campaign keeps its ship** (his H4): the save holds its own copy of every drawing of ours it uses, so
+  editing or deleting the file later changes nothing in that run. «Продолжить кампанию» always plays on the save's ship
+  (the menu's ship is for new campaigns); the save's line in the menu names an own ship.
+- **«Мои пираты, обломки и астероиды встречаются в пути»** (his H5, off at first): our own drawings of other kinds come in
+  the run with the game's own. A **pirate ship** of ours becomes one more hull of every pirate class (not the drone ship's
+  or the flagships'); it needs at least **6 rooms** (one per system) to be used. A **derelict** of ours shares the derelict
+  places with the game's: which one a place has goes by the place, the same every visit. An **asteroid** of ours shares
+  the asteroid places the same way. A drawing too big to lie off our ship's airlock is never met. The tick is greyed out
+  when the folder has none that can be played.
+- **A blow that meets nobody** (his bug note and S1): a baton or a fist used at a far tile drew its hit circle where the
+  mouse was. Now a blow shows a short **white swing** in front of the one striking, toward the mouse; the circle (and the
+  red of a hit) only on someone actually hit. A miss makes a soft **whoosh** (`swing`, range 4, replaceable from «sounds»).
 

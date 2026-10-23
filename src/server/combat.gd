@@ -14,6 +14,7 @@ const SHOT_TICKS := 6                # a pistol fires at most this often
 const SHOTGUN_PACE := 1.5            # (v80) a shotgun takes this much longer between shots (2.0 until v80)
 const RELOAD_TICKS := 30             # putting a fresh magazine in takes 1.5 s
 const BLOW_TICKS := 16               # a blow with a baton
+const REACH := 0.8                   # (v84) cells: how far a blow that meets nobody is drawn toward the click
 const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
 const FRIEND_CLOSE := 1.25          # (v78) a friend this close (in cells, across and down) to the shooter is never hit
 const PRONE_AIMED := 1.0             # (v78) one lying down is hit only by a shot aimed this close to it
@@ -483,11 +484,18 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 	return best
 
 
+static func swing_end(from: Vector2, at: Vector2) -> Vector2:
+	## (v84) Where a blow that met nobody is drawn: toward the click, within arm's reach.
+	return from + (at - from).limit_length(REACH)
+
+
 func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
 	var q := _beside(p, at, false)
-	var to := at if q == null else Vector2(q.st.x, q.st.y)
-	tell_shot(Net.SHOT_BLOW, q != null, Vector2(p.st.x, p.st.y), to, p.st.y, 0, 0, p)
-	server.chat.sound(Net.SOUND_ZAP if stun > 0.0 else Net.SOUND_BLOW, p.st.x, p.st.y, p.slot)
+	var from := Vector2(p.st.x, p.st.y)
+	# (v84, the author's note) a miss lands within arm's reach toward the click, never where a far click was
+	var to := swing_end(from, at) if q == null else Vector2(q.st.x, q.st.y)
+	tell_shot(Net.SHOT_BLOW, q != null, from, to, p.st.y, 0, 0, p)
+	server.chat.sound(Net.SOUND_SWING if q == null else (Net.SOUND_ZAP if stun > 0.0 else Net.SOUND_BLOW), p.st.x, p.st.y, p.slot)
 	if q != null:
 		hurt(q, damage, p, CAUSE_BLOW)
 		if stun > 0.0:
