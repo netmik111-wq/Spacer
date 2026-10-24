@@ -13,7 +13,7 @@ extends RefCounted
 
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
-const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCG"
+const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFV"
 const FLOOR_CHARS := ".sgcH"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
@@ -21,7 +21,7 @@ const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window
 	"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 	"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 	"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-	"P": "tray", "C": "cryo", "G": "stove"}
+	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
 const KINDS := ["ship", "pirate", "derelict", "asteroid"]
 
 static var _tiles := {}              # tile name -> id (from assets/tiles.json)
@@ -89,8 +89,8 @@ static func read(text: String) -> Dictionary:
 
 static func fleet_text(texts: Array, gap: int = 4) -> Dictionary:
 	## (v85, the author's FS1) Our fleet as one drawing: each ship's decks laid below the one before, `gap` empty
-	## rows apart (a later ship's empty rows on top are dropped; the first keeps its own, where ships come
-	## alongside). Its marks move with it. {"text", "rows": the row of each deck where each ship starts}.
+	## rows apart. (v86) Each keeps its own empty rows on top, where ships come alongside it (v85 dropped a later
+	## ship's, so nothing could come alongside it). Its marks move with it. {"text", "rows": the row of each deck where each ship starts}.
 	var parts: Array = []
 	var decks := 0
 	for t: String in texts:
@@ -115,8 +115,7 @@ static func fleet_text(texts: Array, gap: int = 4) -> Dictionary:
 			while empty < r.size() and r[empty].strip_edges() == "":
 				empty += 1
 			top = mini(top, empty)
-		if k == 0 or top >= tall:
-			top = 0
+		top = 0                          # (v86, the author's note) every ship keeps its own: pirates come alongside each
 		if k > 0:
 			at += gap
 		rows.append(at)

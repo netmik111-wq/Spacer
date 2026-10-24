@@ -16,6 +16,7 @@ const SHEETS := {
 	"breach": "res://assets/breach.png",
 	"hud_monitor": "res://assets/hud_monitor.png",
 	"hud_alerts": "res://assets/hud_alerts.png",
+	"shuttle": "res://assets/shuttle.png",   # (v86) the fleet's shuttle, nose up (4 x 3 tiles)
 }
 
 static var own_files := PackedStringArray()   # the pictures of one's own in use (for the log)

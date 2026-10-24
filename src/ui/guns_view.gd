@@ -61,6 +61,7 @@ var _guard_power: Button
 var _guard_mount: Button
 var _enemy_line: Label
 var _target: Label
+var _foes: HBoxContainer              # (v86) two buttons: the ship alongside, the wingman
 var _probe: Button
 var _ransom: Button
 var _enemy_shield: ColorRect
@@ -131,6 +132,18 @@ func setup(p_client: GameClient) -> void:
 	var right := VBoxContainer.new()
 	right.add_theme_constant_override("separation", 6)
 	row.add_child(right)
+	_foes = HBoxContainer.new()             # (v86, the author's E1) with a wingman: which of the two our guns shoot at
+	_foes.add_theme_constant_override("separation", 6)
+	_foes.visible = false
+	right.add_child(_foes)
+	for k in 2:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 13)
+		var which := k
+		b.pressed.connect(func() -> void: client.send_gunset(Net.GUNSET_FOE, which, 0))
+		_foes.add_child(b)
 	_target = _label(right, 13)
 	_enemy_line = _label(right, 12)
 	_enemy_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -210,6 +223,7 @@ func _fighting() -> bool:
 func refresh(delta: float) -> void:
 	## Called every frame while the screen is shown.
 	_time += delta
+	_update_foes()
 	var fighting := _fighting()
 	if fighting:
 		var what := ""
@@ -229,7 +243,11 @@ func refresh(delta: float) -> void:
 				" (двигатель выбит: стоит на месте)" if client.enemy_sys[Net.ESYS_ENGINE] == 0 else ""]
 		if client.enemy_flags & Net.ENEMY_HELD:
 			what += " Захватный луч держит их: не уклоняются, не уходят и не подходят."
-		_status.text = "Корпус пиратского корабля: %d из %d. %s" % [client.enemy_hull, client.enemy_full, what]
+		if EnemyPlan.wing_shown(client):
+			what = "Второй пират бьёт издалека и не подходит." + ("" if not client.enemy_flags & Net.ENEMY_FLEEING else
+				" Заряжает прыжок: %s." % ("прыжок сорван, пока не починят" if client.enemy_jumps_in == 65535 else "уйдёт через %d с" % client.enemy_jumps_in))
+		_status.text = "Корпус %s: %d из %d. %s" % ["второго пиратского корабля" if EnemyPlan.wing_shown(client) else "пиратского корабля",
+			client.enemy_hull, client.enemy_full, what]
 		var names := PackedStringArray()
 		for k in client.enemy_weapons.size():
 			var ew: int = client.enemy_weapons[k]
@@ -257,7 +275,7 @@ func refresh(delta: float) -> void:
 	if fighting and client.goal != Net.GOAL_NONE:
 		_target.text += "\n" + goal_line(client.goal, client.goal_flags, client.goal_pay)
 	var unknown := client.enemy_rooms.count(Net.ROOM_UNKNOWN)
-	_probe.disabled = not fighting or client.probes <= 0 or client.ecrew_probe > 0
+	_probe.disabled = not fighting or client.probes <= 0 or client.ecrew_probe > 0 or EnemyPlan.wing_shown(client)   # (v86) only to the ship alongside
 	_probe.text = "Запустить зонд-сканер (в трюме: %d)%s" % [client.probes,
 		(", не просканировано отсеков: %d" % unknown) if fighting and unknown > 0 else ""]
 	_ransom.visible = fighting and client.ransom > 0
@@ -507,9 +525,26 @@ func _update_guard() -> void:
 
 # ---------------------------------------------------------------- the enemy's plan
 
+func _update_foes() -> void:
+	## (v86) The two targets' buttons, while a wingman fights.
+	_foes.visible = client.wing_fighting()
+	if not _foes.visible:
+		return
+	for k in 2:
+		var b: Button = _foes.get_child(k)
+		var f: PackedByteArray = client.foes[k]
+		var there: bool = f[0] == 1 and (k == 1 or client.lead_fighting())
+		b.disabled = not there
+		b.set_pressed_no_signal(client.foe == k)
+		b.text = ("%s: %d/%d" % ["У шлюза" if k == 0 else "Второй", f[1], f[2]]) if there else ("У шлюза: нет" if k == 0 else "Второй: нет")
+		b.tooltip_text = "Наводить орудия на этот корабль"
+
+
 func _enemy_name() -> String:
+	if EnemyPlan.wing_shown(client):
+		return "второй пиратский корабль"
 	for id: int in client.ships.keys():
-		if id != client.my_ship:
+		if id != client.my_ship and int(client.ships[id]["kind"]) != Net.SHIP_CREW:   # (v86: not our other ship)
 			return str(client.ships[id]["name"])
 	return "пиратский корабль"
 

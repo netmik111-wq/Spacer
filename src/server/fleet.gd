@@ -20,7 +20,7 @@ const OWN := {
 	"power": ["units", "_told", "_was_on", "breaker", "engines", "over_until", "over_rest_until"],
 	"outfit": ["_told"],
 	"mounts": ["gunners", "wanted", "loaded", "_told"],
-	"gunnery": ["charge", "beam_left", "_beam_next", "_beam_room", "_beam_log", "guard_charge", "aim", "_told"],
+	"gunnery": ["charge", "beam_left", "_beam_next", "_beam_room", "_beam_log", "guard_charge", "aim", "_told", "foe"],
 	"stations": ["position", "goal", "manoeuvre_until", "spots", "_at", "_lapse", "_sabotage", "_told", "evade_until",
 		"evade_ready", "meteor_at", "meteor_tried", "meteor_missed", "alert", "_alert_auto", "_fight_seen"],
 	"garden": ["plants", "stage", "growth", "care_at", "neglect", "hunger", "_hungry", "starved", "_sent"],
@@ -170,7 +170,7 @@ func target() -> int:
 			best = i
 	if others.is_empty():
 		return 0
-	if others.size() > 1 and server.rng.randf() >= TARGET_WEAKER:
+	if others.size() > 1 and server.mode != Net.MODE_HARD and server.rng.randf() >= TARGET_WEAKER:   # (v86, the author's N3: hard focuses)
 		return others[server.rng.randi_range(0, others.size() - 1)]
 	return best
 

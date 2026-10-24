@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v85 (version 0.78).
+Last updated: build v86 (version 0.79).
 
 Contents:
 
@@ -47,6 +47,7 @@ Contents:
 37. [Polish without extra depth (v82)](#37-polish-without-extra-depth-v82)
 38. [Hosting on your own ship (v84)](#38-hosting-on-your-own-ship-v84)
 39. [Our fleet and the new character (v85)](#39-our-fleet-and-the-new-character-v85)
+40. [The fleet's fixes, the pirates' wingman, the shuttle (v86)](#40-the-fleets-fixes-the-pirates-wingman-the-shuttle-v86)
 
 ---
 
@@ -2186,4 +2187,51 @@ with his words on the visor (C2) and the walking (C3).
 - **Job colours** (C4): the game repaints the **navy** parts of the suit in the job's colour; the white and orange stay.
 - **Pirates** (C5) get the same body in their dark reds. Robots and heavy boarders keep their old pictures until he
   draws them.
+
+## 40. The fleet's fixes, the pirates' wingman, the shuttle (v86)
+
+The author's notes from playing the fleet and his answers on the page "Spacer v86 Fleet and Fire"
+(https://claude.ai/artifact/N2RrzNRQjXg2h2Lxq3KZ8U). Fire waits (his FQ5 B: ships and pirate groups first).
+
+### The fleet's fixes (his notes)
+
+- **The holomap** shows only the ship it stands in (N2).
+- **Bots work only aboard their own ship** (N4): they mend holes and doors and fetch supplies only there, and never try
+  to cross to the other ship.
+- **«Все по местам»** sends each ship's bots to **their own ship's** posts (N5). The crew window (O) lists the bots by
+  ship, with a heading per ship and «(вы здесь)» on the one you stand in.
+- **A pirate ship docked to one of our ships** can no longer be shot by that ship's guns (they cannot reach it), but the
+  **other ship's guns still can** (N3); before, its gun console said «Целей нет».
+- Pirates may now come alongside **the second ship** too (in v85 it had no room off its airlock).
+- **On hard** pirates always go for the **weaker** ship (his N3 note: on high difficulty they focus one ship); on easy and
+  normal it stays the weaker 70 % of the time.
+- A fleet campaign saved in 0.78 does not load (the ships lie differently now): start a new one.
+
+### The pirates' wingman (his E1 A)
+
+- A fight with an ordinary pirate ship (not the flagship, not a drone ship) may get a **second pirate ship**: in
+  **25 %** of fights on normal, **10 %** on easy, **40 %** on hard. It comes out of the dark **25 to 50 s** into the fight,
+  with a red banner.
+- It fights **at a distance**: guns, shield and hull of its own, rolled like any raider. It never docks, never boards and
+  offers no ransom. It shoots the weaker ship of ours (on hard: the same ship as the first pirate).
+- **The gun console** shows both enemies as two buttons at the top («У шлюза: hull» and «Второй: hull»); the one pressed
+  is what this ship's guns shoot and aim at. Each ship of ours picks its own. The probe works only on the ship alongside.
+- **Wrecked**, it pays its reward at once (shared like any salvage); its wreck drifts away, so there is nothing to search.
+- **When the ship alongside is beaten or gone**, the wingman charges its jump and is gone in **12 s** unless it is
+  wrecked first. **Jumping away** leaves it behind.
+
+### The shuttle and the hangars (his N1 idea)
+
+- **The hangar**: a room of each ship with a **force field** in its outer wall (`F` in a drawing): it holds the air in
+  and lets light and sight through, no power needed, and it is never holed. The **dock console** (`V`) stands beside it.
+  The standard ship has its hangar on the lower deck, over the room to the right of the shield generator.
+- **The shuttle** waits outside one hangar's field. It works only in a fleet of two whose ships both have a hangar.
+- At the dock console (**E**): «Сесть в челнок» when it is there (**4 seats**), or «Вызвать челнок сюда» when it waits
+  empty at the other ship.
+- **Aboard**, its screen shows «Лететь к кораблю N» and «Выйти» (E or Esc gets out while it stands). Nobody walks
+  aboard; those inside are not seen and not hit. Any passenger can fly it.
+- **The flight takes 10 s.** The passengers' view moves to the far hangar at once, so they watch the shuttle come in.
+  There **everyone steps out**, each on a free cell of the hangar. There is no getting out in flight.
+- Visitors stay crew of their own ship (they come back there from the reserve). **Bots never use the shuttle** (N4).
+- The ship editor has both signs and warns when an own ship has no hangar.
 

@@ -113,6 +113,7 @@ func _process(_delta: float) -> void:
 	var ids := PackedInt32Array()
 	for b: Array in client.crew_bots:
 		ids.append(int(b[0]))
+	ids.append(client.my_fleet)
 	if ids != _shown_ids:
 		_shown_ids = ids
 		_build_rows()
@@ -151,8 +152,22 @@ func _build_rows() -> void:
 		for k in Net.POSTS:
 			_rows.add_child(Control.new())
 		return
+	var ships := {}
+	for b: Array in client.crew_bots:
+		ships[int(b[3]) if b.size() > 3 else 0] = true
+	var heading := -1
 	for b: Array in client.crew_bots:
 		var id := int(b[0])
+		var ship := int(b[3]) if b.size() > 3 else 0
+		if ships.size() > 1 and ship != heading:
+			# (v86, the author's note) our fleet: each ship's bots under its own heading
+			heading = ship
+			var title := Label.new()
+			title.text = "Корабль %d%s" % [ship + 1, " (вы здесь)" if ship == client.my_fleet else ""]
+			title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
+			_rows.add_child(title)
+			for k in Net.POSTS:
+				_rows.add_child(Control.new())
 		var name := Label.new()
 		name.custom_minimum_size = Vector2(200, 0)
 		_rows.add_child(name)

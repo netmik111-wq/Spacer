@@ -115,6 +115,7 @@ var goal_cell := -1                  # the machine, the locker or the bomb's pla
 var way_in := -1                     # the cell it came aboard at: where it goes back out
 var goal_work := 0                   # ticks of work done at it
 var angry_until := 0                 # it was hurt: it fights back until this tick, goal or not
+var in_shuttle := false              # (v86) a passenger of the fleet's shuttle: out of the world until it lands (Shuttle)
 var taken := false                   # (v70) dragged off by pirates: gone, no body left (until it comes back from the reserve)
 # (v71, the author's L1 and L2) hunger and the galley's meals
 var weak := false                    # weak with long hunger: it walks slowly, like with a broken leg (see Garden)

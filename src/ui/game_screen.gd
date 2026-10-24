@@ -29,6 +29,7 @@ const GalleyView := preload("res://src/ui/galley_view.gd")
 const Upkeep := preload("res://src/shared/upkeep.gd")
 const PowerView := preload("res://src/ui/power_view.gd")
 const CommsView := preload("res://src/ui/comms_view.gd")
+const ShuttleView := preload("res://src/ui/shuttle_view.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
 const Look := preload("res://src/ui/look.gd")
@@ -118,6 +119,7 @@ var _bench_view: BenchView           # (v58) the workbench's screen, set up when
 var _galley_view: GalleyView         # (v71) the galley stove's screen, the same way
 var _power_view: PowerView           # (v61) an SMES's terminal, set up when first shown
 var _comms_view: CommsView           # (v63) the comms console, set up when first shown
+var _shuttle_view: ShuttleView       # (v86) the shuttle's dock console (and the shuttle's own screen aboard)
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _drag_slot := -1                 # (v73) the slot whose thing is being dragged along the bar
@@ -724,6 +726,9 @@ func _build_console(root: Control) -> void:
 	_comms_view = CommsView.new()
 	_comms_view.visible = false
 	box.add_child(_comms_view)
+	_shuttle_view = ShuttleView.new()
+	_shuttle_view.visible = false
+	box.add_child(_shuttle_view)
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
@@ -749,11 +754,15 @@ func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
 	## The bridge consoles and the holomap need power (v61: the bridge's backup SMES keeps those in its
 	## room going); the supply locker and the workbench are worked by hand, an SMES's terminal is its own.
-	return target == 12 or target == 22 or target == 28 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
+	return target == 12 or target == 22 or target == 28 or target == 46 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
 		or target == 30 or target == 44) and client.power_at(client.use_cell()))
 
 
 func _open_console(kind: int) -> void:
+	if client.riding() and kind != 46:
+		if kind == 0 and client.shuttle_to < 0:
+			client.send_shuttle(Net.SHUTTLE_LEAVE)   # (v86) stepping away from the shuttle's screen gets one out
+		return                               # (in flight there is no getting out)
 	if _console_kind == 13 and kind != 13 and client.search_id >= 0:
 		client.send_search(Net.NOBODY)       # we step back from the one we were searching
 		client.search_id = -1
@@ -775,7 +784,7 @@ func _open_console(kind: int) -> void:
 		_shift.mark(FirstShift.LOCKER if kind == 12 else FirstShift.HELM)
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44 or kind == 46
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
@@ -787,6 +796,8 @@ func _open_console(kind: int) -> void:
 		_galley_view.setup(client)
 	if kind == 30 and _comms_view.client == null:
 		_comms_view.setup(client)
+	if kind == 46 and _shuttle_view.client == null:
+		_shuttle_view.setup(client)
 	if kind == 28:
 		if _power_view.client == null:
 			_power_view.setup(client)
@@ -800,6 +811,7 @@ func _open_console(kind: int) -> void:
 	_galley_view.visible = kind == 44
 	_power_view.visible = kind == 28
 	_comms_view.visible = kind == 30
+	_shuttle_view.visible = kind == 46
 	_chart.visible = not own_view
 	_console_text.visible = not own_view
 	_needs_box.visible = kind == 3 or kind == 4
@@ -807,16 +819,16 @@ func _open_console(kind: int) -> void:
 	_jump_box.visible = not own_view
 	_jump_box.columns = 2
 	_console_style.border_color = Color(0.75, 0.62, 0.38) if kind == 12 else (Color(0.85, 0.4, 0.3) if kind == 17 else
-		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 or kind == 44 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 else Color(0.3, 0.75, 0.45)))))))
+		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 or kind == 44 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 or kind == 46 else Color(0.3, 0.75, 0.45)))))))
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
 		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения",
-		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита"}.get(kind, "")
+		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита", 46: "Челнок флотилии"}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
 	if kind == 21:
 		_drone_view.opened()
-	_console_shut.text = Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))))
+	_console_shut.text = Options.keyed("Выйти из челнока (E или Esc)") if client.riding() else Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))))
 
 
 func _show_trade(on: bool) -> void:
@@ -833,8 +845,16 @@ func _show_trade(on: bool) -> void:
 func _update_console() -> void:
 	if client.search_id >= 0 and _console_kind != 13:
 		_open_console(13)                    # the server let us search somebody: show their pockets
+	if client.riding() and _console_kind != 46:
+		_open_console(46)                    # (v86) in the shuttle: its screen, whatever we faced
 	if not _console.visible:
 		return
+	if _console_kind == 46 and client.riding():
+		_shuttle_view.refresh()
+		_console_shut.text = Options.keyed("Выйти из челнока (E или Esc)")
+		_console_shut.disabled = client.shuttle_to >= 0
+		return
+	_console_shut.disabled = false
 	if _console_kind == 13:
 		if client.search_id < 0 or client.my_cond != Net.COND_OK:
 			_open_console(0)                 # they came round, we were pulled apart, or we went down
@@ -872,6 +892,9 @@ func _update_console() -> void:
 		return
 	if _console_kind == 30:
 		_comms_view.refresh()
+		return
+	if _console_kind == 46:
+		_shuttle_view.refresh()
 		return
 	_update_needs()
 	if _console_kind == 4:
@@ -1505,7 +1528,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-const CONSOLE_KINDS := [3, 4, 17, 20, 21, 28, 30]   # (v70) use_target kinds that are consoles (a concussion keeps one from them)
+const CONSOLE_KINDS := [3, 4, 17, 20, 21, 28, 30, 46]   # (v70) use_target kinds that are consoles (a concussion keeps one from them)
 const DAZED := "Контузия: в глазах двоится, с пультом не разобраться. Пройдёт сама; быстрее с аптечкой или в автодоке под присмотром."
 
 
@@ -1918,7 +1941,7 @@ func _process(delta: float) -> void:
 			want = _step_dir
 	if forced_dir >= 0:
 		want = forced_dir
-	client.want_dir = want
+	client.want_dir = 0 if client.riding() else want   # (v86) nobody walks in the shuttle
 	if _menu_hold:
 		# "work, until done" from the menu: held as the key would be, until the job ends,
 		# a key of our own is pressed or the character moves

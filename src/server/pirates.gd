@@ -181,7 +181,7 @@ func cut_in() -> Vector2i:
 func foe(p, q) -> bool:
 	## (v62) Is `q` one that `p` fights? Pirates (and their robots) fight our
 	## people and our security robots; our robots (and, v79, a guard bot) fight pirates.
-	if q == null or q == p or q.corpse or q.prisoner or q.taken:
+	if q == null or q == p or q.corpse or q.prisoner or q.taken or q.in_shuttle:
 		return false                         # (v70) nobody fights a prisoner
 	return q.pirate if p.ally or p.bot else not q.pirate
 

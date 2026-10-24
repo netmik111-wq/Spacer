@@ -175,6 +175,7 @@ const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what 
 var crewless := false                # (v62) a drone ship: no crew at its posts, a machine fights
 var teleport := false                # (v62) it carries a teleporter (an ordinary pirate's: see Assault)
 var target := 0                      # (v85, the author's FS5) the ship of our fleet it fights and boards (Fleet.target)
+var foe := 0                         # (v86, the author's E1) the enemy our guns aim at: 0 the ship alongside, 1 its wingman (Wing)
 var phase2 := false                  # (v62) the flagship's second phase, from a third of its hull (the author's K21)
 const PHASE2_SHARE := 1.0 / 3.0      # of its hull left when it comes
 const PHASE2_PACE := 1.3             # the battleship's guns charge this much faster in it
@@ -208,8 +209,9 @@ func setup(p_server: Node) -> void:
 	_fx.randomize()
 
 
-func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
+func enemy_arrives(design: Dictionary, p_raid: bool = false, wingman: bool = false) -> void:
 	## A pirate ship rolled by Shipyard comes: its numbers, its guns, its rooms (none known yet).
+	## (v86) `wingman`: the second one (Wing): it has no crew we see, no goal, nobody to board.
 	_over = false
 	target = server.derelict.near
 	var boarders: int = design["crew"]
@@ -251,11 +253,18 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false) -> void:
 	revealed = PackedByteArray()
 	revealed.resize(room_sys.size())
 	revealed.fill(1 if design.has("classic") else 0)        # (the old pirate ship was known through and through)
-	aim = Net.AIM_ANY
 	_mend_part = PackedFloat32Array()
 	_mend_part.resize(Net.ESYS_COUNT)
 	ransom = 0
 	_offered = false
+	if wingman:
+		held_until = 0
+		goal = Net.GOAL_NONE
+		goal_lost = false
+		cargo_room = -1
+		_flying = []
+		return
+	aim = Net.AIM_ANY
 	_roll_goal()
 	server.enemy_crew.board(boarders, int(design["layout"]))
 	if server.assault != null:
@@ -385,7 +394,7 @@ func probe_asked(p) -> void:
 	## Somebody at the gun console launches a scanning probe from the cargo.
 	if not server.systems.at_console(p, server.map.gun_console):
 		return
-	if not fighting():
+	if not engaged():
 		server.chat.tell(p, "Зонд запускать не к кому: целей нет.")
 		return
 	var ship = server.ship
@@ -479,7 +488,8 @@ func aim_asked(p, which: int) -> void:
 	## Somebody at the gun console points the guns at one of the enemy's systems, or anywhere.
 	if not server.systems.at_console(p, server.map.gun_console):
 		return
-	if which != Net.AIM_ANY and (which < 0 or which >= Net.ESYS_COUNT) and (which < Net.AIM_ROOM or which >= Net.AIM_ROOM + room_sys.size()):
+	var rooms: int = (server.wing.value(foe if server.wing.here else 0, "room_sys") as PackedByteArray).size()
+	if which != Net.AIM_ANY and (which < 0 or which >= Net.ESYS_COUNT) and (which < Net.AIM_ROOM or which >= Net.AIM_ROOM + rooms):
 		return
 	aim = which
 
@@ -499,9 +509,41 @@ func _any_room() -> int:
 
 
 func fighting() -> bool:
+	## Does a fight go on for the ship of our fleet in place (v86: with the ship alongside or its wingman)?
+	return server.wing.fighting() if server.wing != null else engaged()
+
+
+func engaged() -> bool:
 	## A pirate ship lies off the airlock and has not docked yet: guns can reach it, and it shoots.
+	## (v86, the author's note) Docked to one ship of our fleet, it is still a target for the other's guns.
+	## (v86) With the wingman in place (Wing.on): it is still in the fight.
+	if _wing():
+		return server.wing.here and enemy_hull > 0 and not _over
 	var d = server.derelict
-	return enemy_hull > 0 and d.here and d.kind == Net.OTHER_PIRATE and not d.docked and not d.wreck
+	return enemy_hull > 0 and d.here and d.kind == Net.OTHER_PIRATE and not d.wreck and (not d.docked or server.fleet.on != target)
+
+
+func alive() -> bool:
+	## (v86) Is the pirate ship alongside still to be fought, whichever ship of our fleet is in place
+	## (engaged() is false for the one it docked to)? Our shots on their way land while it is.
+	var d = server.derelict
+	return enemy_hull > 0 and d.here and d.kind == Net.OTHER_PIRATE and not d.wreck
+
+
+func _finds(from_ship: int) -> bool:
+	## (v86) Does a shot of ours fired from that ship of our fleet still find the pirate ship as it lands
+	## (not wrecked or gone, and not docked to that very ship)?
+	return alive() and not _over and (_wing() or not server.derelict.docked or from_ship != target)
+
+
+func _wing() -> bool:
+	## (v86) Is the wingman's state in place now (Wing.use)?
+	return server.wing != null and server.wing.on == 1
+
+
+func _manned(system: int) -> bool:
+	## Does one of its crew man that system? (v86) The wingman's crew is not seen: always.
+	return _wing() or server.enemy_crew.manned(system)
 
 
 func fleeing() -> bool:
@@ -513,7 +555,7 @@ func _jump_rate() -> float:
 	if down(Net.ESYS_ENGINE) or down(Net.ESYS_JUMP) or systems.size() <= Net.ESYS_JUMP:
 		return 0.0
 	return float(systems[Net.ESYS_JUMP]) / maxf(systems_full[Net.ESYS_JUMP], 1.0) \
-		* (1.0 if server.enemy_crew.manned(Net.ESYS_HELM) else UNMANNED_JUMP) * server.outfit.jump_jam()
+		* (1.0 if _manned(Net.ESYS_HELM) else UNMANNED_JUMP) * server.outfit.jump_jam()
 
 
 func jump_seconds_left() -> int:
@@ -580,6 +622,11 @@ func setup_asked(p, action: int, a: int, b: int) -> void:
 			probe_asked(p)
 		Net.GUNSET_RANSOM:
 			ransom_taken(p)
+		Net.GUNSET_FOE:
+			var to := 1 if a == 1 and server.wing.here else 0
+			if to != foe:
+				foe = to
+				aim = Net.AIM_ANY            # (its rooms are not the other's)
 		Net.GUNSET_ARM, Net.GUNSET_SHIELD:
 			# (v68, the author's F2) power moved to the power panel in the engine room
 			server.chat.tell(p, "Питание орудий и щита включают на щите питания у СМЭС в машинном отделении.")
@@ -724,7 +771,9 @@ func tick() -> void:
 		ship.shield = minf(ship.shield + server.outfit.shield_regen() * server.stations.shield_pace() / Net.TICK_HZ, Weapons.SHIELD_FULL)
 	for i in beam_left.size():
 		if beam_left[i] > 0 and server.tick >= _beam_next[i]:
+			server.wing.use(foe if server.wing.here else 0)   # (v86) a beam burns the enemy the console picked
 			_beam_pulse(i)
+			server.wing.use(0)
 	var now := packet()
 	if now != _told:
 		_told = now
@@ -738,7 +787,7 @@ func tick_enemy() -> void:
 		target = server.fleet.target()       # (v85) that ship of ours is lost: they turn on another
 	server.fleet.use(target)
 	_land_due()
-	if fighting():
+	if engaged():
 		var runs: float = Hulls.temper(temper)["flee"]
 		if not fleeing() and ransom == 0 and runs > 0.0 and (enemy_hull <= roundi(hull_full() * runs) or (down(Net.ESYS_WEAPONS) and enemy_hull * 2 <= hull_full())):
 			if not _offered and _rng.randf() < ransom_chance:
@@ -752,27 +801,29 @@ func tick_enemy() -> void:
 			_surrenders()
 			return
 		_scan_tick()
-		if (down(Net.ESYS_ENGINE) or fleeing() or held()) and server.derelict._pirates_dock_at >= 0:
+		if _wing():
+			pass                                           # (v86) the wingman never comes to dock
+		elif (down(Net.ESYS_ENGINE) or fleeing() or held()) and server.derelict._pirates_dock_at >= 0:
 			server.derelict._pirates_dock_at += 1          # it drifts, runs or is held: the time to fight it off stands still
 		elif server.stations.slows_docking() and server.derelict._pirates_dock_at >= 0 and server.tick % 2 == 0:
 			server.derelict._pirates_dock_at += 1          # (v55) we keep our distance: it closes in at half the pace
-		if fleeing() and not held() and not server.stations.ours_aboard:
+		if fleeing() and not held() and (_wing() or not server.stations.ours_aboard):
 			flee += _jump_rate()
 			if flee >= _flee_seconds() * Net.TICK_HZ:
 				_escaped()
 		if boss > 0 and not phase2 and enemy_hull > 0 and enemy_hull <= roundi(hull_full() * PHASE2_SHARE):
 			_phase_two()
 		_enemy_shield_tick()
-		if fighting() and not down(Net.ESYS_WEAPONS) and ransom == 0:
+		if engaged() and not down(Net.ESYS_WEAPONS) and ransom == 0:
 			var pace: float = 1.0 / _weapons_slowness() / _slower * float(Hulls.temper(temper)["pace"]) \
-				* (1.0 if server.enemy_crew.manned(Net.ESYS_WEAPONS) else UNMANNED_PACE) * server.hazards.enemy_pace() \
+				* (1.0 if _manned(Net.ESYS_WEAPONS) else UNMANNED_PACE) * server.hazards.enemy_pace() \
 				* (PHASE2_PACE if phase2 and boss == 1 else 1.0) * (RUNNER_PACE if goal == Net.GOAL_RUNNER else 1.0)
 			for k in enemy_weapons.size():
 				enemy_charge[k] = minf(enemy_charge[k] + pace / Weapons.charge_ticks(enemy_weapons[k]), 1.0)
-				if enemy_charge[k] >= 1.0 and fighting():
+				if enemy_charge[k] >= 1.0 and engaged():
 					enemy_charge[k] = 0.0
 					_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE)
-		if fighting() and server.tick >= _mend_next:
+		if engaged() and server.tick >= _mend_next:
 			_mend_tick()
 	server.fleet.use(0)
 
@@ -788,7 +839,7 @@ func _enemy_shield_tick() -> void:
 
 func held() -> bool:
 	## Does our tractor beam hold it now?
-	return fighting() and server.tick < held_until
+	return engaged() and server.tick < held_until
 
 
 func _enemy_shield_up() -> bool:
@@ -796,6 +847,18 @@ func _enemy_shield_up() -> bool:
 
 
 func packet() -> PackedByteArray:
+	## (v86) The enemy part is of the one our guns aim at (foe); both enemies' summaries go at the end.
+	var w = server.wing
+	w.use(foe if w.here else 0)
+	var out := _packet()
+	w.use(0)
+	out.append(foe if w.here else 0)
+	out.append_array(w.summary(0))
+	out.append_array(w.summary(1))
+	return out
+
+
+func _packet() -> PackedByteArray:
 	var map = server.map
 	var ship = server.ship
 	var out := PackedByteArray([Net.S_GUNS, ship.id & 0xFF, ship.id >> 8, charge.size()])
@@ -816,15 +879,15 @@ func packet() -> PackedByteArray:
 	out.append(roundi(ship.shield))
 	out.append(0 if gen < 0 else (Net.SHF_HAS | (Net.SHF_ON if ship.shield_on else 0) | (Net.SHF_BROKEN if ship.broken.has(gen) else 0)
 		| (Net.SHF_JAMMED if jammed(gen) else 0) | (Net.SHF_HARDENED if server.outfit.hardened() else 0)))
-	out.append(enemy_hull if fighting() else 0)
-	out.append(hull_full() if fighting() else 0)
+	out.append(enemy_hull if engaged() else 0)
+	out.append(hull_full() if engaged() else 0)
 	var left := 0
-	if fighting() and server.derelict._pirates_dock_at >= 0:
+	if engaged() and not _wing() and server.derelict._pirates_dock_at >= 0:
 		left = maxi(int(ceil(float(server.derelict._pirates_dock_at - server.tick) / Net.TICK_HZ)), 0)
 	out.append(left & 0xFF)
 	out.append(left >> 8)
 	out.append(aim)
-	if fighting():
+	if engaged():
 		out.append(systems.size())
 		for i in systems.size():
 			out.append(systems[i])
@@ -834,39 +897,39 @@ func packet() -> PackedByteArray:
 		out.append(0)
 	out.append(((Net.ENEMY_RAID if raid else 0) | (Net.ENEMY_FLEEING if fleeing() else 0) | (Net.ENEMY_HELD if held() else 0)
 		| (Net.ENEMY_RANSOM if ransom > 0 else 0) | (Net.ENEMY_PHASE2 if phase2 else 0) | (Net.ENEMY_CREWLESS if crewless else 0))
-		if fighting() else 0)
-	var jump := jump_seconds_left() if fighting() and fleeing() else 0
+		if engaged() else 0)
+	var jump := jump_seconds_left() if engaged() and fleeing() else 0
 	out.append(jump & 0xFF)
 	out.append(jump >> 8)
-	out.append(roundi(enemy_shield) if fighting() else 0)
+	out.append(roundi(enemy_shield) if engaged() else 0)
 	out.append(klass)
 	out.append(temper if temper_known else Net.TEMPER_UNKNOWN)
-	if fighting():
+	if engaged():
 		out.append(room_sys.size())
 		for r in room_sys.size():
 			out.append(room_sys[r] if revealed[r] == 1 else Net.ROOM_UNKNOWN)
 	else:
 		out.append(0)
 	out.append(mini(int(ship.store.get(Net.ITEM_PROBE, 0)), 255))
-	if fighting():
+	if engaged():
 		out.append(enemy_weapons.size())
 		out.append_array(enemy_weapons)
 	else:
 		out.append(0)
-	out.append(mini(ransom, 255) if fighting() else 0)
-	out.append(clampi(int(ceil(float(ransom_until - server.tick) / Net.TICK_HZ)), 0, 255) if fighting() and ransom > 0 else 0)
+	out.append(mini(ransom, 255) if engaged() else 0)
+	out.append(clampi(int(ceil(float(ransom_until - server.tick) / Net.TICK_HZ)), 0, 255) if engaged() and ransom > 0 else 0)
 	out.append_array(ship.mount_fx)
 	out.append(ship.guard)
 	out.append(roundi(guard_charge * 20.0) * 5)
 	out.append(Net.GUNF_ARMED if ship.guard_armed else 0)
-	out.append(1 if fighting() and enemy_guard else 0)
-	if fighting():
+	out.append(1 if engaged() and enemy_guard else 0)
+	if engaged():
 		out.append_array(enemy_fx)
 		# (v59) the top sensors show its guns charging, per gun 0..100 (255 = not seen)
 		for k in enemy_charge.size():
 			out.append(roundi(enemy_charge[k] * 20.0) * 5 if server.outfit.sees_charge() else 255)
 	# (v68) u8 its goal (GOAL_*), u8 GOALF_*, u8 the cargo pod's room (255 = none), u16 what the goal pays
-	var f := fighting()
+	var f := engaged()
 	out.append(goal if f else Net.GOAL_NONE)
 	out.append(Net.GOALF_LOST if goal_lost else 0)
 	out.append(cargo_room if f and cargo_room >= 0 else 255)
@@ -885,6 +948,9 @@ func _weapons_slowness() -> float:
 
 func _starts_to_flee() -> void:
 	flee = 0.0
+	if _wing():
+		server.chat.say("%s сильно повреждён и заряжает прыжок, чтобы уйти." % server.wing.name)
+		return
 	var why := "" if _jump_rate() > 0.0 else " Но %s выбит: пока его не починят, прыжка не будет." % \
 		("двигатель" if down(Net.ESYS_ENGINE) else "гипердвигатель")
 	server.chat.say("Пиратский корабль сильно повреждён и заряжает гипердвигатель, чтобы уйти: через %d с его не догнать. Выбейте двигатель или гипердвигатель, и он не уйдёт.%s" % [
@@ -894,6 +960,9 @@ func _starts_to_flee() -> void:
 func _escaped() -> void:
 	## It got its jump charged: it is gone, and nobody is paid for it.
 	enemy_hull = 0
+	if _wing():
+		server.chat.say("%s ушёл в прыжок." % server.wing.name)   # (v86) Wing.tick sees it gone
+		return
 	beam_left.fill(0)
 	server.derelict.pirates_escaped()
 	server.chat.say("Курьер ушёл в прыжок вместе с грузом. Упустили." if goal == Net.GOAL_RUNNER else "Пиратский корабль ушёл в прыжок. Упустили.")
@@ -901,12 +970,19 @@ func _escaped() -> void:
 
 
 func fire(p, which: int) -> void:
-	## Somebody at the gun console fires one gun, or every gun that is ready (which = 255).
+	## Somebody at the gun console fires one gun, or every gun that is ready (which = 255),
+	## (v86) at the enemy the console picked (foe).
+	server.wing.use(foe if server.wing.here else 0)
+	_fire(p, which)
+	server.wing.use(0)
+
+
+func _fire(p, which: int) -> void:
 	var map = server.map
 	var ship = server.ship
 	if not server.systems.at_console(p, map.gun_console):
 		return
-	if not fighting():
+	if not engaged():
 		server.chat.say("Стрелять не по кому: целей нет.")
 		return
 	var fired := 0
@@ -941,12 +1017,12 @@ func fire(p, which: int) -> void:
 			if fx == Weapons.FX_TWICE and _rng.randf() < Weapons.FX_TWICE_CHANCE:
 				# (v58) the effect «сдвоенный»: a second volley right behind the first, free of ammunition
 				_our_volley(i, w, fx, int(Weapons.info(w)["shots"]) * Weapons.BURST_GAP_TICKS + 6)
-		if not fighting() or _settle():
+		if not engaged() or _settle():
 			break
 	_aim_bonus = 0.0
 	if fired > 0:
 		p.train(Net.SKILL_GUNS)
-		if ransom > 0 and fighting():
+		if ransom > 0 and engaged():
 			_ransom_ends("Мы открыли огонь: пираты отзывают выкуп.")
 		_settle()
 
@@ -998,6 +1074,9 @@ func _settle() -> bool:
 
 func _broken_off() -> void:
 	## Its boarding party is dead: with nobody to send over it gives up and goes.
+	if _wing():
+		_wrecked()
+		return
 	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
 	_over = true
 	enemy_hull = 0
@@ -1008,7 +1087,7 @@ func _broken_off() -> void:
 
 func _hit_chance(w: int) -> float:
 	## Ours: better while its bridge is out (it cannot dodge) and while our tractor beam holds it.
-	var dodge := _dodge if server.enemy_crew.manned(Net.ESYS_HELM) else minf(_dodge, 0.0)
+	var dodge := _dodge if _manned(Net.ESYS_HELM) else minf(_dodge, 0.0)
 	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge + server.stations.our_hit_bonus() + _aim_bonus, 0.05, Weapons.BEST_HIT)
 	var bonus := (Weapons.BLIND_BONUS if down(Net.ESYS_HELM) else 0.0) + (Weapons.TRACTOR_BONUS if held() else 0.0)
 	if bonus > 0.0:
@@ -1052,7 +1131,7 @@ func _our_volley(i: int, w: int, fx: int = Weapons.FX_NONE, start: int = 0, focu
 	server.combat.jolt(Net.JOLT_FIRE, w, Vector2(x, y))
 	var shots: int = Weapons.info(w)["shots"]
 	var log := {"gun": i, "w": w, "fx": fx, "left": shots, "misses": 0, "stopped": 0, "down": 0, "ricochet": 0,
-		"hits": PackedStringArray(), "said": PackedStringArray(), "focus": focus > 0.0}
+		"hits": PackedStringArray(), "said": PackedStringArray(), "focus": focus > 0.0, "ship": server.fleet.on}
 	var shield := enemy_shield              # as the shield will be when each shot meets it
 	var pierce := (Weapons.FX_PIERCE_BY if fx == Weapons.FX_PIERCE else 0.0) + focus
 	for s in shots:
@@ -1094,7 +1173,7 @@ func _our_shot_lands(log: Dictionary, hit: bool, room: int, stop: bool, spot: Ve
 	## One shot of ours arrives (see _our_volley).
 	log["left"] -= 1
 	var w: int = log["w"]
-	if not fighting() or _over:
+	if not _finds(int(log.get("ship", 0))):
 		return                               # it is wrecked, gone or docked by now: the shot finds nothing
 	if how == HOW_DOWN:
 		log["down"] += 1
@@ -1237,8 +1316,8 @@ func _draw_beam(cell: int, kind: int, ends: int, room: int, w: int) -> void:
 func _room_spot(room: int) -> Vector2:
 	## A cell of that room of the pirate ship, by lot, in the grid's cells (-1, -1: none).
 	var o = server.map.other
-	if o == null or room < 0 or room >= o.rooms.size() or server.map.other_at == server.map.NO_OTHER:
-		return Vector2(-1, -1)
+	if _wing() or o == null or room < 0 or room >= o.rooms.size() or server.map.other_at == server.map.NO_OTHER:
+		return Vector2(-1, -1)                # ((v86) the wingman is not in the grid: it is not drawn)
 	var cells: Array = Array(o.rooms[room])
 	if cells.is_empty():
 		return Vector2(-1, -1)
@@ -1254,7 +1333,7 @@ func _enemy_box() -> Rect2:
 	## The pirate ship's drawing in the grid's cells.
 	var o = server.map.other
 	var at: Vector2i = server.map.other_at
-	return Rect2(Vector2(at), Vector2(o.width, o.height)) if o != null else Rect2()
+	return Rect2(Vector2(at), Vector2(o.width, o.height)) if o != null and not _wing() else Rect2()
 
 
 func _bubble_entry(from: Vector2, to: Vector2, box: Rect2) -> Vector2:
@@ -1303,7 +1382,7 @@ func in_flight() -> int:
 func _beam_pulse(i: int) -> void:
 	## A cutting beam burns a second more: never a miss, the shield permitting.
 	var map = server.map
-	if not fighting():
+	if not engaged():
 		beam_left[i] = 0
 		return
 	var w: int = server.ship.mounts[i]
@@ -1334,7 +1413,7 @@ func _beam_pulse(i: int) -> void:
 			parts.append("щит не пустил %d раз" % log[1])
 		server.chat.say_bridge("Орудие %d (%s): %s.%s%s" % [i + 1, Weapons.lower_name(w, server.ship.mount_fx[i]), ", ".join(parts),
 			"" if (log[2] as PackedStringArray).is_empty() else " " + " ".join(_unique(log[2])), _enemy_state()])
-	if fighting():
+	if engaged():
 		_settle()
 
 
@@ -1523,6 +1602,8 @@ func _wear_room(system: int, room: int, damage: int, wound: float = -1.0) -> Str
 		return hurt
 	var was: int = systems[system]
 	systems[system] = maxi(was - damage, 0)
+	if system == Net.ESYS_CREW and _wing():
+		return "Пираты в кубрике ранены."     # (v86) the wingman's crew is not seen
 	if system == Net.ESYS_CREW:
 		var left := boarders_left()
 		if left < server.derelict._pirates_party:
@@ -1545,6 +1626,8 @@ func _wear_room(system: int, room: int, damage: int, wound: float = -1.0) -> Str
 
 func _hole_near(room: int) -> void:
 	## A hole in the enemy's hull, next to the room that was hit where it can be (where it shows otherwise).
+	if _wing():
+		return                               # (v86) the wingman is not in the grid
 	var hull: PackedInt32Array = server.derelict._hull_cells()
 	if hull.is_empty():
 		return
@@ -1586,7 +1669,7 @@ func _mend_tick() -> void:
 		if k >= systems.size() or systems[k] >= systems_full[k]:
 			_mend_part[k] = 0.0
 			continue
-		var n: float = float(server.enemy_crew.menders(k)) if server.enemy_crew.o != null else 1.0
+		var n: float = float(server.enemy_crew.menders(k)) if server.enemy_crew.o != null and not _wing() else 1.0
 		if crewless:
 			n = DRONE_REPAIR if not down(Net.ESYS_DRONES) else 0.0   # (v62) its repair drones, while its core works
 		if n <= 0.0:
@@ -1602,8 +1685,8 @@ func _mend_tick() -> void:
 func crew_hit(room: int, wound: float = -1.0, kill_one: bool = false) -> String:
 	## A blow that got through into that room finds whoever is in it. What came of it ("" = nobody there was hurt).
 	## (v62) `wound`: the chance each one is wounded (-1: the plain one); `kill_one`: one of them dies («Термит»).
-	if room < 0 or server.enemy_crew.o == null:
-		return ""
+	if room < 0 or server.enemy_crew.o == null or _wing():
+		return ""                            # ((v86) the wingman's crew is not seen)
 	var r: Array = server.enemy_crew.hit_room(room, wound, kill_one)
 	var killed: int = r[0]
 	var wounded: int = r[1]
@@ -1661,11 +1744,11 @@ func _our_bomb(i: int, w: int, fx: int) -> void:
 		room = _any_room()
 	var hit := _rng.randf() < clampf(float(Weapons.info(w)["hit"]) + _aim_bonus, 0.05, Weapons.BEST_HIT)
 	var spot := _draw_ours(cell, w, Net.LANDED if hit else Net.MISSED, room, 0)
-	_after(Weapons.flight_ticks(w), _our_bomb_lands.bind(i, w, fx, room, hit, spot))
+	_after(Weapons.flight_ticks(w), _our_bomb_lands.bind(i, w, fx, room, hit, spot, server.fleet.on))
 
 
-func _our_bomb_lands(i: int, w: int, fx: int, room: int, hit: bool, spot: Vector2) -> void:
-	if not fighting() or _over:
+func _our_bomb_lands(i: int, w: int, fx: int, room: int, hit: bool, spot: Vector2, from_ship: int = 0) -> void:
+	if not _finds(from_ship):
 		return
 	var gun := "Орудие %d (%s)" % [i + 1, Weapons.lower_name(w, fx)]
 	if not hit or room < 0:
@@ -1816,7 +1899,7 @@ func _ransom_ends(why: String) -> void:
 
 
 func ransom_taken(p) -> void:
-	if ransom <= 0 or not fighting():
+	if ransom <= 0 or not engaged():
 		return
 	if server.stations.ours_aboard:
 		server.chat.tell(p, "Наши люди на борту пиратского корабля: пока они там, отпустить его нельзя.")
@@ -1839,7 +1922,7 @@ func ransom_taken(p) -> void:
 
 func swap_done(paid: int) -> void:
 	## (v70, the author's J5) We gave their man back (for `paid` credits): their ship leaves, no parting volley.
-	if not fighting():
+	if not engaged():
 		return
 	if paid > 0:
 		server.ship.credits = mini(server.ship.credits + paid, 65535)
@@ -1851,6 +1934,17 @@ func swap_done(paid: int) -> void:
 
 
 func _wrecked() -> void:
+	if _wing():
+		# (v86) the wingman: it breaks up out in the dark, too far to search; its reward is paid
+		server.ships_beaten += 1
+		_over = true
+		enemy_hull = 0
+		reward = roundi(reward * server.outfit.salvage_share())
+		server.ship.credits += reward
+		server.chat.say("%s разбит! За него начислено %d кредитов. Его обломки унесло во тьму.%s" % [server.wing.name, reward,
+			"" if not server.wing.engaged(0) else " Остался корабль у шлюза."])
+		server.supplies.tell_store()
+		return
 	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
 	server.ships_beaten += 1                # (v75) for the run's summary
 	_over = true
@@ -1961,7 +2055,7 @@ func parting_volley() -> void:
 	## (v67, the author's O3) Our ship jumps out of a fight: escaping is still always
 	## possible, but every gun of the pirates' charged PARTING_READY or more fires once
 	## as we go, landing at once, and the next hunter comes sooner (Road.escaped).
-	if not fighting():
+	if not engaged():
 		return
 	server.road.escaped()
 	if down(Net.ESYS_WEAPONS) or ransom > 0:

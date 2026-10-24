@@ -208,7 +208,7 @@ func _has(need: Dictionary) -> bool:
 	if need.has("item"):
 		return int(server.ship.store.get(int(need["item"]), 0)) > 0
 	if need.has("prisoner"):
-		return server.prisons.count() > 0 and server.gunnery.fighting()
+		return server.prisons.count() > 0 and server.gunnery.engaged()
 	for p: Player in server.players:
 		if p == null or p.pirate or p.ally or p.corpse or p.cond == Net.COND_DEAD:
 			continue

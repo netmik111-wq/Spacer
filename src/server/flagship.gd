@@ -162,7 +162,7 @@ func in_area(c: Vector2i) -> bool:
 
 func caught() -> bool:
 	## It is fighting us now (its clock stands still, it does not move).
-	return server.gunnery.boss > 0 and server.gunnery.fighting()
+	return server.gunnery.boss > 0 and server.gunnery.engaged()
 
 
 func seconds_to_grow() -> int:
@@ -337,7 +337,7 @@ func _watch_crew() -> void:
 func holds_jump() -> String:
 	## (v57, the author: "this is the end of the adventure, you win or you lose,
 	## no other exit") While the flagship fights, no jump can be made.
-	if server.gunnery.boss > 0 and server.gunnery.fighting():
+	if server.gunnery.boss > 0 and server.gunnery.engaged():
 		return "Флагман глушит гипердвигатель: уйти прыжком нельзя. Здесь либо победа, либо гибель."
 	return ""
 

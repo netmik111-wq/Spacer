@@ -105,7 +105,7 @@ func tick() -> void:
 				_breaks_free(q)
 	if _swap_at >= 0 and server.tick >= _swap_at:
 		_swap_at = -1
-		if server.gunnery.fighting() and server.gunnery.boss == 0 and not server.gunnery.crewless and count() > 0 and not server.map.comms.is_empty():
+		if server.gunnery.engaged() and server.gunnery.boss == 0 and not server.gunnery.crewless and count() > 0 and not server.map.comms.is_empty():
 			server.story.open(Tales.find("prisoner_swap"))
 
 
@@ -126,7 +126,7 @@ func give_back(ransom: int) -> String:
 	## (the call's answer) One prisoner goes back to them, and their ship leaves.
 	## Returns what to add to the call's outcome.
 	var list := all()
-	if list.is_empty() or not server.gunnery.fighting():
+	if list.is_empty() or not server.gunnery.engaged():
 		return " Но отдавать уже некого."
 	if server.stations.ours_aboard:
 		return " Но наши люди на их корабле: пока они там, пираты не уйдут. Бой продолжается."

@@ -32,9 +32,17 @@ static func fighting(client) -> bool:
 	return client.enemy_full > 0 and client.enemy_sys.size() == Net.ESYS_COUNT
 
 
+static func wing_shown(client) -> bool:
+	## (v86) Is it the wingman's plan (the second pirate ship, not in our grid) that is shown?
+	return client.foe == 1 and client.wing_fighting()
+
+
 static func layout(client, size: Vector2) -> Array:
 	## [the enemy's drawing (ShipMap), cell size, where its corner goes on the plan].
 	var o = client.map.other if client.pirates_alongside() else null
+	if wing_shown(client):
+		var lay: int = (client.foes[1] as PackedByteArray)[4]
+		o = client.map.others[lay] if lay < client.map.others.size() else null
 	if o == null:
 		return [null, 0.0, Vector2.ZERO]
 	var px := floorf(minf(size.x / o.width, size.y / o.height))
@@ -146,32 +154,33 @@ static func draw(canvas: Control, client, size: Vector2, time: float, hover_room
 			canvas.draw_arc(mid, rad, 0.0, TAU, 32, aim, 1.5)
 			for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 				canvas.draw_line(mid + d * rad * 0.6, mid + d * rad * 1.3, aim, 1.5)
-	# holes in its hull, where we have seen them
-	for y in o.height:
-		for x in o.width:
-			var cell: int = (client.map.other_at.y + y) * client.map.width + client.map.other_at.x + x
-			if client.holes.has(cell):
-				var mid := at + (Vector2(x, y) + Vector2(0.5, 0.5)) * px
-				canvas.draw_line(mid - Vector2(4, 4), mid + Vector2(4, 4), BAD, 2.0)
-				canvas.draw_line(mid - Vector2(4, -4), mid + Vector2(4, -4), BAD, 2.0)
-	# its crew, where we see them
-	for i in client.ecrew.size():
-		var c: int = client.ecrew[i]
-		var mid := at + (Vector2(c % o.width, c / o.width) + Vector2(0.5, 0.5)) * px
-		var f: int = client.ecrew_flags[i]
-		var colour := PIRATE.darkened(0.45) if f & Net.ECREW_HURT else PIRATE
-		canvas.draw_circle(mid, maxf(px * 0.28, 3.0), Color(0, 0, 0, 0.7))
-		canvas.draw_circle(mid, maxf(px * 0.22, 2.5), colour)
-		if f & Net.ECREW_MENDING:
-			canvas.draw_arc(mid, maxf(px * 0.36, 4.0), time * 4.0, time * 4.0 + PI * 1.3, 12, Color(1, 1, 1, 0.85), 1.5)
-	# our drone
-	if client.drone_state == Net.DRONE_INSIDE:
-		var d: int = client.drone_at
-		var mid := at + (Vector2(d % o.width, d / o.width) + Vector2(0.5, 0.5)) * px
-		var s := maxf(px * 0.3, 4.0)
-		canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.6, Vector2(s, s) * 1.2), Color(0, 0, 0, 0.7))
-		canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.45, Vector2(s, s) * 0.9), DRONE)
-		canvas.draw_arc(mid, s * 1.6, 0.0, TAU, 20, Color(DRONE, 0.35 + 0.35 * pulse), 1.5)
+	if not wing_shown(client):               # (v86) the wingman: no holes, crew or drone of ours seen
+		# holes in its hull, where we have seen them
+		for y in o.height:
+			for x in o.width:
+				var cell: int = (client.map.other_at.y + y) * client.map.width + client.map.other_at.x + x
+				if client.holes.has(cell):
+					var mid := at + (Vector2(x, y) + Vector2(0.5, 0.5)) * px
+					canvas.draw_line(mid - Vector2(4, 4), mid + Vector2(4, 4), BAD, 2.0)
+					canvas.draw_line(mid - Vector2(4, -4), mid + Vector2(4, -4), BAD, 2.0)
+		# its crew, where we see them
+		for i in client.ecrew.size():
+			var c: int = client.ecrew[i]
+			var mid := at + (Vector2(c % o.width, c / o.width) + Vector2(0.5, 0.5)) * px
+			var f: int = client.ecrew_flags[i]
+			var colour := PIRATE.darkened(0.45) if f & Net.ECREW_HURT else PIRATE
+			canvas.draw_circle(mid, maxf(px * 0.28, 3.0), Color(0, 0, 0, 0.7))
+			canvas.draw_circle(mid, maxf(px * 0.22, 2.5), colour)
+			if f & Net.ECREW_MENDING:
+				canvas.draw_arc(mid, maxf(px * 0.36, 4.0), time * 4.0, time * 4.0 + PI * 1.3, 12, Color(1, 1, 1, 0.85), 1.5)
+		# our drone
+		if client.drone_state == Net.DRONE_INSIDE:
+			var d: int = client.drone_at
+			var mid := at + (Vector2(d % o.width, d / o.width) + Vector2(0.5, 0.5)) * px
+			var s := maxf(px * 0.3, 4.0)
+			canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.6, Vector2(s, s) * 1.2), Color(0, 0, 0, 0.7))
+			canvas.draw_rect(Rect2(mid - Vector2(s, s) * 0.45, Vector2(s, s) * 0.9), DRONE)
+			canvas.draw_arc(mid, s * 1.6, 0.0, TAU, 20, Color(DRONE, 0.35 + 0.35 * pulse), 1.5)
 	_draw_fight(canvas, client, o, px, at, size, font)
 	if client.ecrew_probe > 0:
 		canvas.draw_string(font, Vector2(6, 14), "Зонд показывает экипаж: ещё %d с" % client.ecrew_probe, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, PIRATE.lightened(0.3))

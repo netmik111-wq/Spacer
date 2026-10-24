@@ -105,7 +105,7 @@ static func snapshot(server: Node) -> Dictionary:
 		if not here.has(c["name"]):
 			crew.append(c)                   # left this evening, or not back yet since the last
 	return {
-		"version": VERSION, "map": map.map_name,
+		"version": VERSION, "map": map.map_name, "fleet_rows": Array(map.fleet_rows),
 		"seed": server.space_seed, "been": been,
 		"at": [server.sectors.cell[server.ship.sector].x, server.sectors.cell[server.ship.sector].y],
 		"pos": [server.ship.pos.x, server.ship.pos.y],
@@ -237,6 +237,9 @@ static func restore(server: Node, data: Dictionary) -> String:
 	var map = server.map
 	if str(data.get("map", "")) != map.map_name:
 		return "Сохранённая кампания сыграна на другом корабле."
+	if map.fleet_size() > 1 and (data.get("fleet_rows", []) as Array).map(func(v: Variant) -> int: return int(v)) != Array(map.fleet_rows):
+		# (v86) a fleet saved by v85 lay its later ships closer: what it kept of them would land in the wrong cells
+		return "Эта кампания флотилии сохранена в версии 0.78, где корабли стояли иначе. Её не загрузить: начните новую."
 	server.space_seed = int(data["seed"])
 	server.won = bool(data.get("won", false))
 	server.been = {}

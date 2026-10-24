@@ -169,6 +169,16 @@ Open problems:
   (`GameClient.aim_at`, `facing_soon`). eveningtest spins the mouse for 4 s: inputs 421 ticks ahead before, 2 after.
   Version 0.70.1, build in `/mnt/project-files/builds/v77.1/`.
 
+### v86 (his fleet notes and answers on "Spacer v86 Fleet and Fire": fleet fixes, the wingman, the shuttle)
+- Five fleet notes fixed: the holomap shows its own ship, bots mend and take posts only aboard their own ship, the crew
+  window groups bots by ship, a pirate docked to one ship is still a target for the other, pirates may come to the
+  second ship. On hard pirates focus the weaker ship.
+- A second pirate ship may join a fight (25 % of fights on normal) and fight from afar; the gun console picks which of
+  the two to shoot; beaten, it pays; with the first one beaten it runs (protocol 62).
+- The shuttle (his N1 idea): a force-field hangar on each ship, a dock console, 4 seats, 10 s between the ships.
+- Fire waits (his FQ5 B); his fire answers kept for later. New tests `tools/wingtest.gd`, `tools/shuttletest.gd`
+  (44 scripts). Version 0.79, build in `/mnt/project-files/builds/v86/`.
+
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
   power, air, guns, lockers, fuel, food and bots, one purse, either helm flies both, each burns its own fuel. Pirates
