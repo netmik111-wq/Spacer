@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v87 (version 0.80: man and woman base bodies, two fleet bug fixes) is the latest. Plans one to four are done except the darkness front (the
+Build v87.1 (version 0.80.1: man and woman base bodies, two fleet bug fixes; no tank bubble, no made step) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -108,7 +108,7 @@ hangars (4 seats, 10 s). He put fire off (FQ5 B: "focus on ships and pirate grou
 Bots and the shuttle: he said "talk again when pods come; maybe a teleporter better".
 v87 (his base sheet "man and woman, just for now", answers on `https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg`): people drawn
 from `body.png` (32x48, four ways, a slant shows the side), man or woman picked on the menu (bots by lot), job colours on the
-top and shorts, a glass bubble while on the tank; fixed: the fleet's ships shared their gun charges (the second never fired),
+top and shorts (v87.1, his S4 B and S7 B: no tank sign on the body, no made step); fixed: the fleet's ships shared their gun charges (the second never fired),
 and an admin-called pirate could not come while a wreck lay alongside. Next art step he may take: clothes as layers.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 

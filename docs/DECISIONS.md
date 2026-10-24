@@ -1699,3 +1699,6 @@ His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
 - **No pirate after a won forced fight** (his note): the beaten ship's wreck stays alongside (v72) and `pirates_can_come`
   refuses while anything is there. `Derelict.make_room()` lets it drift off (as `cast_off` does for a hunter; kept on the
   chart) for the admin's calls only (B1): in a normal game a wreck still gives a breather until the ship leaves.
+- **v87.1, his answers**: all my picks but two. S4 B: no sign of the oxygen tank on the body (the bubble is gone); S7 B: no
+  made step, the figure slides standing. The tank rows and the step columns of the made sheet stay (holding the plain
+  standing body), so the helmet and the spriter's steps can drop in without moving the layout.

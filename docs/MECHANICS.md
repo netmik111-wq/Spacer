@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v87 (version 0.80).
+Last updated: build v87.1 (version 0.80.1).
 
 Contents:
 
@@ -2251,9 +2251,10 @@ Base Bodies" (https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg), built on my pi
   settings). Bots and pirates are men or women by lot (by their name).
 - **Job colours** (S3): the navy top and shorts are repainted in the job's colour (pirates in their own); with no jumpsuit
   on they are grey.
-- **The oxygen tank** (S4): while someone breathes from the tank (Q) a **glass bubble** is drawn round the head; for 0.3 s
-  after switching it shows half seen. (It stands in for the helmet the spriter draws later.)
-- **Walking**: the same made step (a 1-pixel bob and a foot lifted 2 pixels, in turn).
+- **The oxygen tank** (his S4 B, v87.1): nothing on the body shows it for now (the HUD still does); the helmet comes with
+  the spriter's clothes later. (v87 drew a glass bubble.)
+- **Walking** (his S7 B, v87.1): no step for now: the figure slides standing until the spriter draws step frames. (v87 kept
+  the made bob and lifted foot.)
 - Robots and heavy boarders keep their old pictures, in four ways too. The spriter's suited character (v85) is kept in the
   game files, unused, for clothes drawn over the body later (S6).
 

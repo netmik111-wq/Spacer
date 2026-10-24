@@ -6,14 +6,14 @@ extends RefCounted
 ##
 ## His sheet: frames of 32x48, four across (0 the front, looking down; 1 the right side; 2 the back; 3 the
 ## left side), the woman in the top row and the man below. Only four ways for now (his words): a slant
-## shows the side it leans to (WorldView.FACING_COLUMN). No walking frames: the steps are made here (a bob
-## and a lifted foot).
+## shows the side it leans to (WorldView.FACING_COLUMN). No walking frames: (his S7 B) the figure slides
+## standing, so the two step columns hold the standing picture until the spriter draws steps.
 ##
 ## What it makes: a row per colour and look (see Net.LOOKS), cells of CHAR_W x CHAR_H with a 1-pixel
 ## border; in each row the man's 12 frames (4 ways x 3: standing, step, step: down, up, left, right) and
-## from WOMAN_COLUMN the woman's. VISOR_ROW + the same row with a glass bubble over the head while it
-## breathes from its oxygen tank (the visor of v85's C2, until a helmet is drawn); HALF_ROW + colour the
-## bubble half seen, for a moment while the tank is switched on or off.
+## from WOMAN_COLUMN the woman's. VISOR_ROW + the rows for one on its oxygen tank and HALF_ROW + colour the
+## moment of switching it: (his S4 B) nothing shows the tank for now, so they hold the same body; they stay
+## for the helmet the spriter draws later.
 ## The navy of his top and shorts is repainted in the colour of the row (the job's, the pirates'); grey for
 ## one with no jumpsuit.
 
@@ -41,10 +41,6 @@ const UNDERSUIT := Color8(118, 120, 128)
 const NAVY_HUE := Vector2(205.0, 252.0)   # degrees: what counts as the clothes' navy
 const NAVY_SAT := 0.28
 const NAVY_TOP := 0.45                    # the lightest navy: it becomes the colour itself
-const LIFT := 2                           # pixels a foot comes up on a made step
-const GLASS := Color(0.70, 0.88, 1.0, 0.22)      # the bubble's glass
-const RIM := Color(0.85, 0.95, 1.0, 0.75)        # its edge
-const SHINE := Color(1.0, 1.0, 1.0, 0.85)        # a glint up on one side
 # per our way (Net.DIR_*, the four straight ones): his view, and the first column in the made sheet
 const VIEW_OF := {Net.DIR_DOWN: 0, Net.DIR_RIGHT: 1, Net.DIR_UP: 2, Net.DIR_LEFT: 3}
 const COLUMN_OF := {Net.DIR_DOWN: 0, Net.DIR_UP: 3, Net.DIR_LEFT: 6, Net.DIR_RIGHT: 9}
@@ -90,15 +86,13 @@ static func build() -> Image:
 	var shadow := _shadow()
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
-	var full := _bubbles(src, 1.0)
-	var half := _bubbles(src, 0.5)
 	for colour in TINTS.size():
 		var painted := _paint(src, navy, TINTS[colour])
 		for look in Net.LOOKS:
 			var art := grey if look / 2 == Net.OUTFIT_BARE else painted
-			_row(out, colour * Net.LOOKS + look, art, null, shadow)
-			_row(out, VISOR_ROW + colour * Net.LOOKS + look, art, full, shadow)
-		_row(out, HALF_ROW + colour, painted, half, shadow)
+			_row(out, colour * Net.LOOKS + look, art, shadow)
+			_row(out, VISOR_ROW + colour * Net.LOOKS + look, art, shadow)
+		_row(out, HALF_ROW + colour, painted, shadow)
 	# the machines and the heavy boarders keep the old drawn pictures (their four straight ways, for both bodies)
 	var old := Sprites.sheet("chars").get_image()
 	if old.is_compressed():
@@ -156,42 +150,6 @@ static func _paint(src: Image, navy: PackedInt32Array, tint: Color) -> Image:
 	return Image.create_from_data(src.get_width(), src.get_height(), false, Image.FORMAT_RGBA8, data)
 
 
-static func _bubbles(src: Image, strength: float) -> Image:
-	## (v87, S4) A sheet of the same size with a glass bubble round each figure's head, to lay over it.
-	var out := Image.create(src.get_width(), src.get_height(), false, Image.FORMAT_RGBA8)
-	for b in BODIES:
-		for v in VIEWS:
-			var frame := Rect2i(v * FRAME.x, b * FRAME.y, FRAME.x, FRAME.y)
-			var used := src.get_region(frame).get_used_rect()
-			if used.size.y <= 0:
-				continue
-			# the head: the top 12 rows of the figure, its middle the mean of their pixels
-			var top := used.position.y
-			var sum := 0.0
-			var n := 0
-			for y in range(top, mini(top + 12, FRAME.y)):
-				for x in FRAME.x:
-					if src.get_pixel(frame.position.x + x, frame.position.y + y).a > 0.5:
-						sum += x
-						n += 1
-			if n == 0:
-				continue
-			var centre := Vector2(sum / n + 0.5, top + 7.0)
-			var radius := Vector2(9.5, 9.0)
-			for y in range(maxi(0, int(centre.y - radius.y) - 1), mini(FRAME.y, int(centre.y + radius.y) + 2)):
-				for x in range(maxi(0, int(centre.x - radius.x) - 1), mini(FRAME.x, int(centre.x + radius.x) + 2)):
-					var d := Vector2((x + 0.5 - centre.x) / radius.x, (y + 0.5 - centre.y) / radius.y).length()
-					if d > 1.0:
-						continue
-					var c := RIM if d > 0.86 else GLASS
-					var glint := Vector2(x + 0.5 - (centre.x - radius.x * 0.45), y + 0.5 - (centre.y - radius.y * 0.5))
-					if glint.length() < 1.6:
-						c = SHINE
-					c.a *= strength
-					out.set_pixel(frame.position.x + x, frame.position.y + y, c)
-	return out
-
-
 static func _shadow() -> Image:
 	## A soft shadow under the feet, so the figure sits on the floor (as the old drawn ones had).
 	var im := Image.create(FRAME.x, FRAME.y, false, Image.FORMAT_RGBA8)
@@ -205,31 +163,12 @@ static func _shadow() -> Image:
 	return im
 
 
-static func _row(out: Image, row: int, art: Image, glass: Image, shadow: Image) -> void:
+static func _row(out: Image, row: int, art: Image, shadow: Image) -> void:
 	for body in BODIES:
 		var first := WOMAN_COLUMN if body == 0 else 0
 		for way: int in VIEW_OF.keys():
-			var at := Rect2i(int(VIEW_OF[way]) * FRAME.x, body * FRAME.y, FRAME.x, FRAME.y)
-			var figure := art.get_region(at)
-			if glass != null:
-				figure.blend_rect(glass, at, Vector2i.ZERO)
+			var figure := art.get_region(Rect2i(int(VIEW_OF[way]) * FRAME.x, body * FRAME.y, FRAME.x, FRAME.y))
 			for pose in 3:
-				var frame := figure if pose == 0 else _step(figure, pose == 1)
 				var cell := Vector2i((first + int(COLUMN_OF[way]) + pose) * CELL.x + PAD, row * CELL.y + PAD)
 				out.blit_rect(shadow, Rect2i(Vector2i.ZERO, FRAME), cell)
-				out.blend_rect(frame, Rect2i(Vector2i.ZERO, FRAME), cell)
-
-
-static func _step(frame: Image, left: bool) -> Image:
-	## A made step: the figure a pixel up, one foot LIFT pixels higher still.
-	var used := frame.get_used_rect()
-	var out := Image.create(FRAME.x, FRAME.y, false, Image.FORMAT_RGBA8)
-	out.blit_rect(frame, Rect2i(0, 1, FRAME.x, FRAME.y - 1), Vector2i.ZERO)
-	if used.size.y <= 0:
-		return out
-	var legs := maxi(6, used.size.y * 22 / 100)
-	var low := used.end.y - 1                          # (one up in `out`)
-	var half := Rect2i(0 if left else FRAME.x / 2, low - legs, FRAME.x / 2, legs + 1)
-	out.fill_rect(Rect2i(half.position.x, half.position.y - 1, half.size.x, half.size.y), Color(0, 0, 0, 0))
-	out.blend_rect(frame, half, half.position - Vector2i(0, 1 + LIFT))
-	return out
+				out.blend_rect(figure, Rect2i(Vector2i.ZERO, FRAME), cell)

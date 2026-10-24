@@ -186,6 +186,8 @@ Open problems:
 - Fixed: the fleet's two ships shared their gun charges (packed arrays were not copied per ship), so the second ship's
   gunner never fired; an admin-called pirate ship could not come while a wreck lay alongside (the wreck now drifts off).
 - Checks added to `weartest` and `wingtest` (44 scripts). Version 0.80, build in `/mnt/project-files/builds/v87/`.
+- v87.1 (0.80.1), his answers: no tank bubble (S4 B), no made step, figures slide standing (S7 B). Build in
+  `/mnt/project-files/builds/v87.1/`.
 
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
