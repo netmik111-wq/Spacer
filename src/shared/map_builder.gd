@@ -89,8 +89,8 @@ static func read(text: String) -> Dictionary:
 
 static func fleet_text(texts: Array, gap: int = 4) -> Dictionary:
 	## (v85, the author's FS1) Our fleet as one drawing: each ship's decks laid below the one before, `gap` empty
-	## rows apart (a later ship's empty rows on top are dropped; the first keeps its own, where ships come
-	## alongside). Its marks move with it. {"text", "rows": the row of each deck where each ship starts}.
+	## rows apart. (v86) Each keeps its own empty rows on top, where ships come alongside it (v85 dropped a later
+	## ship's, so nothing could come alongside it). Its marks move with it. {"text", "rows": the row of each deck where each ship starts}.
 	var parts: Array = []
 	var decks := 0
 	for t: String in texts:
@@ -115,8 +115,7 @@ static func fleet_text(texts: Array, gap: int = 4) -> Dictionary:
 			while empty < r.size() and r[empty].strip_edges() == "":
 				empty += 1
 			top = mini(top, empty)
-		if k == 0 or top >= tall:
-			top = 0
+		top = 0                          # (v86, the author's note) every ship keeps its own: pirates come alongside each
 		if k > 0:
 			at += gap
 		rows.append(at)

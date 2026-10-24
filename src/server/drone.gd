@@ -64,7 +64,7 @@ func _launch(p: Player) -> void:
 	if state != Net.DRONE_NONE:
 		server.chat.tell(p, "Дрон уже в деле.")
 		return
-	if not server.gunnery.fighting():
+	if not server.gunnery.engaged():
 		server.chat.tell(p, "Дрона посылать не к кому: рядом нет пиратского корабля.")
 		return
 	if int(store.get(Net.ITEM_DRONE, 0)) <= 0:
@@ -99,7 +99,7 @@ func sees(cell: int) -> bool:
 
 
 func tick() -> void:
-	if state != Net.DRONE_NONE and (not server.gunnery.fighting() or server.enemy_crew.o == null):
+	if state != Net.DRONE_NONE and (not server.gunnery.engaged() or server.enemy_crew.o == null):
 		_lost("Связь с дроном потеряна: пиратского корабля больше нет рядом.")
 	elif state == Net.DRONE_FLYING and server.tick >= _arrive and server.gunnery.enemy_guard and _rng.randf() < Weapons.GUARD_HIT:
 		_lost("Точечная оборона пиратов сбила дрона на подлёте.")    # (v58)

@@ -162,7 +162,7 @@ var our_dodge := 0                   # in %
 var our_hit := 0                     # what the position adds to our hits, in % (may be below 0)
 var their_hit := 0                   # and to theirs
 var posts_manned := 0                # Net.STATION_* bits
-var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*)]
+var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*), (v86) its ship of our fleet]
 var alert := Net.ALERT_GREEN         # (v68) the ship's alert level
 var bot_log: Array = []              # (v72) the bots' log for this game: per line [seconds since the game began, bot's name, text]
 var bot_log_count := 0               # lines received in all (the crew window adds the new ones)
@@ -173,6 +173,8 @@ var meteor_left := 0.0               # (v70) seconds until a meteor seen coming 
 var meteor_tried := false            # the pilot has steered for it already
 var alert_changes := 0               # goes up whenever the alert changes (sounds, the HUD)
 var goal := Net.GOAL_NONE            # (v68) what this fight is for (Net.S_GUNS)
+var foe := 0                         # (v86) the enemy our guns aim at: 0 the ship alongside, 1 its wingman (Net.S_GUNS)
+var foes: Array = [PackedByteArray([0, 0, 0, 0, 255]), PackedByteArray([0, 0, 0, 0, 255])]   # per enemy: in the fight 1/0, hull, full, class, drawing
 var goal_flags := 0                  # Net.GOALF_*
 var cargo_room := 255                # the room of the enemy's drawing with its cargo pod (255 = none)
 var goal_pay := 0
@@ -704,7 +706,19 @@ func may_order() -> bool:
 
 func fighting() -> bool:
 	## A pirate ship lies off the airlock and fights us (it has not docked, it is not a wreck).
-	return enemy_hull > 0 and pirates_alongside() and not other_docked
+	## (v86) Docked to the other ship of our fleet, it is still a target for ours; and a wingman may fight us.
+	return lead_fighting() or wing_fighting()
+
+
+func lead_fighting() -> bool:
+	## (v86) The pirate ship alongside fights the ship of our fleet we are aboard.
+	## (The server says so: not while it is docked to this very ship.)
+	return int((foes[0] as PackedByteArray)[0]) == 1 and pirates_alongside()
+
+
+func wing_fighting() -> bool:
+	## (v86, the author's E1) A second pirate ship fights us from the dark.
+	return int((foes[1] as PackedByteArray)[0]) == 1
 
 
 func send_drone(action: int, a: int = 0) -> void:
@@ -1772,6 +1786,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 					goal_flags = pkt[g + 1]
 					cargo_room = pkt[g + 2]
 					goal_pay = pkt.decode_u16(g + 3)
+				# (v86) which enemy our guns aim at, and both enemies at a glance
+				if pkt.size() >= g + 16:
+					foe = pkt[g + 5]
+					foes = [pkt.slice(g + 6, g + 11), pkt.slice(g + 11, g + 16)]
 		Net.S_GEAR:
 			if not _ours(pkt) or pkt.size() < 4:
 				return
@@ -1812,10 +1830,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			posts_manned = pkt[9]
 			crew_bots = []
 			for i in pkt[10]:
-				var at := 11 + i * 4
-				if pkt.size() >= at + 4:
-					crew_bots.append([pkt.decode_u16(at), pkt[at + 2], pkt[at + 3]])
-			var tail := 11 + pkt[10] * 4
+				var at := 11 + i * 5
+				if pkt.size() >= at + 5:
+					crew_bots.append([pkt.decode_u16(at), pkt[at + 2], pkt[at + 3], pkt[at + 4]])
+			var tail := 11 + pkt[10] * 5
 			if pkt.size() >= tail + 3:
 				if pkt[tail] != alert:
 					alert = pkt[tail]
@@ -1981,6 +1999,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				my_ship = pkt.decode_u16(1)
 				my_fleet = pkt[3]
 				map.use_ship(my_fleet)
+				_holo_cells()
 				board_changes += 1
 				ship_changes += 1
 		Net.S_SUMMARY:
@@ -2106,6 +2125,15 @@ func _on_ships(pkt: PackedByteArray) -> void:
 		_rebuild_prediction()
 
 
+func _holo_cells() -> void:
+	## The cells of our ship's floor, as the server sends their air (v86, the author's note: only the ship of
+	## our fleet we are aboard, as Holomap.setup does for each).
+	holo_cells = PackedInt32Array()
+	for c in map.base_walk.size():
+		if map.on_ship(c) and (map.fleet_size() < 2 or map.fleet_of(c) == my_fleet):
+			holo_cells.append(c)
+
+
 func _read_roster_entry(pkt: PackedByteArray, pos: int) -> int:
 	var n := pkt[pos + 5]
 	roster[pkt.decode_u16(pos)] = {
@@ -2134,10 +2162,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	for other_map: String in others:
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
-	holo_cells = PackedInt32Array()
-	for c in map.base_walk.size():
-		if map.on_ship(c):
-			holo_cells.append(c)
+	_holo_cells()
 	if problem == "" and map.crc != crc:
 		problem = "Карта «%s» на сервере отличается от вашей. Нужна одинаковая сборка игры." % map_name
 	if problem != "":

@@ -446,14 +446,14 @@ func set_alert(level: int, by: Player = null) -> void:
 		Net.ALERT_GREEN:
 			server.chat.say("%sОтбой тревоги. Зелёный уровень." % who)
 		Net.ALERT_YELLOW:
-			for q: Player in _bots():
+			for q: Player in _bots(true):
 				if q.order == Net.POST_FREE:
 					_set_order(q, Net.POST_REPAIR, by)
 					_alert_bots[q.slot] = Net.POST_REPAIR
 			server.chat.say("%sЖёлтая тревога! Всем быть наготове.%s" % [who, " (Пиратский корабль рядом.)" if by == null else ""])
 		Net.ALERT_RED:
 			_all_to_posts(by, true)
-			for q: Player in _bots():
+			for q: Player in _bots(true):
 				_alert_bots[q.slot] = q.order
 			if server.powered():
 				for d in server.map.other_first_door:
@@ -499,7 +499,12 @@ func order_asked(p: Player, id: int, post: int) -> void:
 		_alert_bots.erase(id)
 	if id == Net.NOBODY:
 		if post == Net.POST_ALL:
-			_all_to_posts(p)
+			# (v86) every ship of our fleet: its bots to its own posts
+			var was: int = server.fleet.on
+			for i in server.fleet.size():
+				server.fleet.use(i)
+				_all_to_posts(p, i != was)
+			server.fleet.use(was)
 		elif post == Net.POST_FREE:
 			for q: Player in _bots():
 				_set_order(q, Net.POST_FREE, p)
@@ -531,10 +536,12 @@ static func _order_words(post: int) -> String:
 	return "вольно"
 
 
-func _bots() -> Array:
+func _bots(aboard := false) -> Array:
+	## Our bots; `aboard`: only the crew of the ship of our fleet in place (v86, the author's note: bots were
+	## sent to the other ship's posts).
 	var out: Array = []
 	for q: Player in server.players:
-		if q != null and q.bot and not q.corpse:
+		if q != null and q.bot and not q.corpse and (not aboard or q.fleet_ship == server.fleet.on):
 			out.append(q)
 	return out
 
@@ -567,7 +574,7 @@ func _all_to_posts(by: Player, quiet: bool = false) -> void:
 		var g := server.mounts.gunner(i)
 		if server.ship.mounts[i] != Weapons.NONE and (g == null or g.bot):
 			wanted.append(Net.POST_MOUNTS)
-	var bots := _bots()
+	var bots := _bots(true)
 	for i in bots.size():
 		_set_order(bots[i], wanted[i] if i < wanted.size() else Net.POST_REPAIR, by)
 	if not quiet:
@@ -1138,7 +1145,7 @@ func _suited_helper(p: Player) -> Player:
 	## (v72, the author's comment on L1: "if a bot cannot take the job, he passes it to the next with a
 	## spacesuit") A bot in a suit with oxygen that mends (on «Работы», or free) to hand the job to; it
 	## takes it by itself (a job no bot holds is anybody's), this only names it. Null: none aboard.
-	for q: Player in _bots():
+	for q: Player in _bots(true):
 		if q != p and q.cond == Net.COND_OK and q.has_suit() and q.tank > 0.2 and q.order in [Net.POST_REPAIR, Net.POST_FREE]:
 			return q
 	return null
@@ -1285,10 +1292,11 @@ func _repair_jobs(p: Player) -> Array:
 	for d in mini(map.other_first_door, map.doors.size()):
 		if server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1:
 			var at: Vector2i = map.doors[d]
-			jobs.append(at.y * map.width + at.x)
+			if server.fleet.mine(at.y * map.width + at.x):   # (v86, the author's note) only aboard this ship of our fleet
+				jobs.append(at.y * map.width + at.x)
 	if p.count(Net.ITEM_PATCH) > 0 or int(server.ship.store.get(Net.ITEM_PATCH, 0)) > 0:
 		for c: int in server.air.holes.keys():
-			if not map.is_other(c):
+			if not map.is_other(c) and server.fleet.mine(c):
 				jobs.append(c)
 	for q: Player in server.players:
 		if q != null and q != p and q.bot and q.bot_job >= 0 and not q.corpse and q.cond == Net.COND_OK:
@@ -1303,12 +1311,13 @@ func _supplies_wanted(p: Player) -> Array:
 	var store: Dictionary = server.ship.store
 	var holes := false
 	for c: int in server.air.holes.keys():
-		holes = holes or not server.map.is_other(c)
+		holes = holes or not server.map.is_other(c) and server.fleet.mine(c)
 	if holes and p.count(Net.ITEM_PATCH) == 0 and int(store.get(Net.ITEM_PATCH, 0)) > 0:
 		want.append(Net.ITEM_PATCH)
 	var machines := not server.ship.broken.is_empty()
 	for d in mini(server.map.other_first_door, server.map.doors.size()):
-		machines = machines or server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1
+		var at: Vector2i = server.map.doors[d]
+		machines = machines or (server.doors.jammed[d] == 1 or server.doors.faulty[d] == 1) and server.fleet.mine(at.y * server.map.width + at.x)
 	if not server.complex_repairs:
 		if machines and p.count(Net.ITEM_PART) == 0 and int(store.get(Net.ITEM_PART, 0)) > 0:
 			want.append(Net.ITEM_PART)
@@ -1638,12 +1647,14 @@ func packet() -> PackedByteArray:
 		bits |= 1 << (post - 1)
 	out.append(bits)
 	var bots := _bots()
+	bots.sort_custom(func(a: Player, b: Player) -> bool: return a.fleet_ship < b.fleet_ship or a.fleet_ship == b.fleet_ship and a.slot < b.slot)
 	out.append(mini(bots.size(), 255))
 	for q: Player in bots:
 		out.append(q.slot & 0xFF)
 		out.append(q.slot >> 8)
 		out.append(q.order)
 		out.append(q.doing if q.cond == Net.COND_OK else Net.DOING_DOWN)
+		out.append(q.fleet_ship)            # (v86) the ship of our fleet it is crew of
 	# (v68) u8 the alert (ALERT_*), u8 tenths of a second of the evade left, u8 seconds until it is ready again
 	out.append(alert)
 	out.append(clampi(ceili(float(evade_until - server.tick) * 10.0 / Net.TICK_HZ), 0, 255) if evading() else 0)

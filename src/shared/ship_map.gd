@@ -206,6 +206,13 @@ func fleet_of(cell: int) -> int:
 		return 0
 	if is_other(cell):
 		return -1
+	return fleet_near(cell)
+
+
+func fleet_near(cell: int) -> int:
+	## (v86) The ship of our fleet whose rows that cell lies in (the ship alongside included: the one it lies off).
+	if fleet_rows.size() < 2:
+		return 0
 	var row := local_y(cell / width)
 	for i in range(fleet_rows.size() - 1, 0, -1):
 		if row >= fleet_rows[i] - FLEET_GAP / 2:

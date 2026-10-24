@@ -37,6 +37,7 @@ var _summary: Label
 var _plan: Control
 var _under: Label
 var _px := 16.0
+var _laid_for := 0                   # (v86) client.board_changes the plan was laid out for
 var _decks: Array = []               # per deck: [first row, rows, top on the plan]
 var _x0 := 0                         # the first column of the ship
 var _index := {}                     # cell -> its place in client.holo_cells
@@ -99,7 +100,8 @@ func _layout() -> void:
 		var last := -1
 		for y in range(d * map.deck_stride, mini(d * map.deck_stride + map.deck_height, map.height)):
 			for x in map.width:
-				if map.base_cells[y * map.width + x] >= 0:
+				var c := y * map.width + x
+				if map.base_cells[c] >= 0 and (map.fleet_size() < 2 or map.fleet_of(c) == client.my_fleet):   # (v86) our ship only
 					first = y if first < 0 else first
 					last = y
 					x0 = mini(x0, x)
@@ -121,6 +123,9 @@ func _layout() -> void:
 
 
 func opened() -> void:
+	if _laid_for != client.board_changes:
+		_laid_for = client.board_changes
+		_layout()               # (v86) aboard another ship of our fleet: its plan
 	_seen = -1
 	_hover = -1
 

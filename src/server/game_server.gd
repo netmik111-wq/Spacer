@@ -101,6 +101,7 @@ const Galley := preload("res://src/server/galley.gd")
 const Defence := preload("res://src/server/defence.gd")
 const Usage := preload("res://src/server/usage.gd")
 const Fleet := preload("res://src/server/fleet.gd")
+const Wing := preload("res://src/server/wing.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -197,6 +198,7 @@ var galley := Galley.new()             # (v71) the galley's stove and its dishes
 var defence := Defence.new()           # (v79) bots against armed boarders
 var usage := Usage.new()               # (v82) what people used this run
 var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
+var wing := Wing.new()                 # (v86, the author's E1) a second pirate ship that joins a fight: see Wing
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
                                        # (the hard mode sets it, the menu may too), kept in the campaign
@@ -293,6 +295,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.dest = ship.pos
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
 	fleet.setup(self)
+	wing.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
 	mounts.setup(self)
@@ -742,6 +745,7 @@ func _tick() -> void:
 	robots.tick()
 	fleet.each(_ship_crew)
 	gunnery.tick_enemy()
+	wing.tick()                   # (v86) the wingman, if one fights
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight
 	pirates.tick()                # (v70) the pirates' bombs

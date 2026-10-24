@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 61
+const PROTOCOL := 62
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -295,6 +295,7 @@ const GUNSET_MOUNT := 3             # a = mount, b = (v58) the thing from the ca
                                     # down into the cargo)
 const GUNSET_PROBE := 4             # (v53) launch a scanning probe from the cargo at the enemy
 const GUNSET_RANSOM := 5            # (v54) take the ransom a beaten pirate ship offers
+const GUNSET_FOE := 6               # (v86) a = 0 the pirate ship alongside, 1 its wingman: which one our guns shoot at
 const C_GUNS := 21                  # u8 gun (255 = all that are ready): fire at the enemy, from the gun console
 const C_AIM := 22                   # u8 ESYS_*, AIM_ROOM + room or AIM_ANY: where on the enemy the guns aim, from the gun console
 const C_HOLO := 23                  # u8 on: start (1) or stop (0) watching the holomap the player stands at

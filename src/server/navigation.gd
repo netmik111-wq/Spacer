@@ -208,6 +208,7 @@ func update_jump() -> void:
 		server.chat.say("Прыжок сорван: %s" % server.road.can_leave().to_lower())
 		return
 	server.gunnery.parting_volley()          # (v67) running from a fight costs a volley
+	server.wing.jumped()                     # (v86) its wingman is left behind
 	if server.over != Net.OVER_NONE:
 		server.ship.jump_to = Net.NO_SECTOR
 		tell_nav()
