@@ -179,6 +179,14 @@ Open problems:
 - Fire waits (his FQ5 B); his fire answers kept for later. New tests `tools/wingtest.gd`, `tools/shuttletest.gd`
   (44 scripts). Version 0.79, build in `/mnt/project-files/builds/v86/`.
 
+### v87 (his base sheet "man and woman, just for now" and two Notebook bugs; questions on "Spacer v87 Base Bodies")
+- People are drawn from his base bodies (`body.png`, 32x48): a man or a woman picked on the main menu, bots and pirates
+  by lot; only four ways (a slant shows the side); the top and shorts in the job's colour; a glass bubble round the head
+  while on the oxygen tank. The v85 suited character stays unused for clothes later (protocol 63).
+- Fixed: the fleet's two ships shared their gun charges (packed arrays were not copied per ship), so the second ship's
+  gunner never fired; an admin-called pirate ship could not come while a wreck lay alongside (the wreck now drifts off).
+- Checks added to `weartest` and `wingtest` (44 scripts). Version 0.80, build in `/mnt/project-files/builds/v87/`.
+
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
   power, air, guns, lockers, fuel, food and bots, one purse, either helm flies both, each burns its own fuel. Pirates

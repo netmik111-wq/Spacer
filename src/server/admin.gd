@@ -56,7 +56,13 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 		Net.ADMIN_SEAL:
 			server.systems.seal_all()
 		Net.ADMIN_EVENT:
-			server.director.fire(argument)
+			var d = server.director
+			if [d.PIRATE_SHIP, d.PIRATE_RAID, d.FLAGSHIP_BATTLESHIP, d.FLAGSHIP_CARRIER].has(argument):
+				server.derelict.make_room()          # (v87) a wreck alongside no longer holds every pirate off
+				if not server.derelict.pirates_can_come():
+					server.chat.tell(p, "Администратор: пиратский корабль сейчас подойти не может (рядом другой корабль или кто-то снаружи).")
+					return
+			d.fire(argument)
 		Net.ADMIN_AUTO:
 			server.director.auto = argument != 0
 			server.chat.say("Ивентер: события идут сами." if server.director.auto else "Ивентер: события только вручную.")
@@ -330,6 +336,7 @@ func fight(klass: int, temper: int, at_range: bool) -> void:
 		return
 	server.shipyard.force_class = klass
 	server.shipyard.force_temper = temper if Hulls.TEMPERS.has(temper) else -1
+	server.derelict.make_room()                      # (v87) a wreck alongside is let go first
 	if not server.derelict.pirates_come(server.director._party(), at_range):
 		server.chat.say("Администратор: пиратский корабль сейчас подойти не может (рядом другой корабль или кто-то снаружи).")
 	server.shipyard.force_class = -1

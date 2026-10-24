@@ -241,7 +241,7 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 	return true
 
 
-func cast_off() -> bool:
+func cast_off(hunter: bool = true) -> bool:
 	## (v69, the author's note: a hunter never came while we were docked) A hunter comes
 	## out at us: a derelict alongside is let go (undocked first) and drifts off, to come
 	## back once the fight is over and the ship is still near it. False while anybody of
@@ -255,9 +255,20 @@ func cast_off() -> bool:
 		_hulk_leaves()
 	_leave(true)
 	held_off_until = server.tick + 5 * Net.TICK_HZ
-	server.chat.say("Охотник выходит на нас! Пришлось отдать швартовы: %s отнесло в сторону. После боя к нему можно вернуться." % (
-		"брошенный корабль" if kind == Net.OTHER_DERELICT else ("астероид" if kind == Net.OTHER_ROCK else "разбитый корабль")))
+	var what := "брошенный корабль" if kind == Net.OTHER_DERELICT else ("астероид" if kind == Net.OTHER_ROCK else "разбитый корабль")
+	if hunter:
+		server.chat.say("Охотник выходит на нас! Пришлось отдать швартовы: %s отнесло в сторону. После боя к нему можно вернуться." % what)
+	else:
+		server.chat.say("Администратор: %s отнесло в сторону, чтобы освободить место у шлюза. Он отмечен на карте." % what)
 	return true
+
+
+func make_room() -> void:
+	## (v87, the author's note: after a forced pirate ship was beaten no other could be called) The host's
+	## call for a pirate ship lets a wreck or derelict alongside drift off (as a hunter does), unless one of
+	## ours is still on it. The game's own events still wait for the ship to leave it.
+	if here and (kind != Net.OTHER_PIRATE or wreck):
+		cast_off(false)
 
 
 func someone_outside() -> bool:

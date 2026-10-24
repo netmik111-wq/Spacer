@@ -31,13 +31,20 @@ func _initialize() -> void:
 	_expect(p.has_suit() and p.worn[Net.WEAR_JUMPSUIT] == Net.ITEM_JUMPSUIT and p.worn[Net.WEAR_PACK] == Net.ITEM_NONE,
 		"a newcomer wears a spacesuit and a jumpsuit")
 	_expect(p.count(Net.ITEM_NONE) == Net.BASE_SLOTS + Net.POCKETS, "and has %d slots: the jumpsuit's pockets count" % p.count(Net.ITEM_NONE))
-	_expect(p.look() == Net.OUTFIT_SUIT * 2, "and looks suited")
+	_expect(p.look() & ~Net.LOOK_WOMAN == Net.OUTFIT_SUIT * 2, "and looks suited")
+	# (v87) a man's or a woman's body goes with the look
+	var was: bool = p.woman
+	p.woman = true
+	var her: int = p.look()
+	p.woman = false
+	_expect(her & Net.LOOK_WOMAN != 0 and p.look() & Net.LOOK_WOMAN == 0 and her & ~Net.LOOK_WOMAN == p.look(), "(v87) the look tells a woman's body from a man's")
+	p.woman = was
 
 	# the suit
 	p.tank = 0.5
 	_expect(server.inventory.take_off(p, Net.WEAR_SUIT) and p.slots[0] == Net.ITEM_SUIT + 5 and not p.has_suit(),
 		"the suit comes off into the hand with half a tank in it")
-	_expect(p.look() == Net.OUTFIT_JUMPSUIT * 2, "and then the jumpsuit shows")
+	_expect(p.look() & ~Net.LOOK_WOMAN == Net.OUTFIT_JUMPSUIT * 2, "and then the jumpsuit shows")
 	server.inventory.set_supply(p, true)
 	_expect(not p.supply, "without a suit there is no oxygen supply")
 	p.st.place(2, 7)

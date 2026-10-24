@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v86 (version 0.79).
+Last updated: build v87 (version 0.80).
 
 Contents:
 
@@ -48,6 +48,7 @@ Contents:
 38. [Hosting on your own ship (v84)](#38-hosting-on-your-own-ship-v84)
 39. [Our fleet and the new character (v85)](#39-our-fleet-and-the-new-character-v85)
 40. [The fleet's fixes, the pirates' wingman, the shuttle (v86)](#40-the-fleets-fixes-the-pirates-wingman-the-shuttle-v86)
+41. [Man and woman base bodies (v87)](#41-man-and-woman-base-bodies-v87)
 
 ---
 
@@ -2175,7 +2176,7 @@ with his words on the visor (C2) and the walking (C3).
   breakdowns; every character is saved with the ship they belong to.
 - Later (his FS1 note): enemy fleets, more pirate ships joining a fight. Ships of ours flying apart is the step after.
 
-### The new character (his spriter's sheet)
+### The new character (his spriter's sheet; replaced by the base bodies in v87, see 41)
 
 - **The crew is drawn from his sheet** (`sprites/crew.png`, 32×64 per picture; his C1: kept at full size, so people
   stand a bit taller than a tile). Five ways are drawn; the other three are mirrored.
@@ -2235,3 +2236,34 @@ The author's notes from playing the fleet and his answers on the page "Spacer v8
 - Visitors stay crew of their own ship (they come back there from the reserve). **Bots never use the shuttle** (N4).
 - The ship editor has both signs and warns when an own ship has no hangar.
 
+## 41. Man and woman base bodies (v87)
+
+The author's base sheet ("man and woman, just for now") and his two Notebook bugs; questions on the page "Spacer v87
+Base Bodies" (https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg), built on my picks.
+
+### The bodies
+
+- **People are drawn from his base sheet** (`sprites/body.png`, 128×96: four pictures of 32×48 across, front, right side,
+  back, left side; the woman's row on top, the man's below). They are **48 pixels** tall again, as before v85.
+- **Only four ways are drawn** (his words: no slant pictures for now). Walking or looking on a slant shows the **side**
+  it leans to, as in SS13; the 8 ways of walking stay.
+- **A man or a woman** (S1): on the main menu under the job, «Персонаж: Мужчина / Женщина» (kept with the other
+  settings). Bots and pirates are men or women by lot (by their name).
+- **Job colours** (S3): the navy top and shorts are repainted in the job's colour (pirates in their own); with no jumpsuit
+  on they are grey.
+- **The oxygen tank** (S4): while someone breathes from the tank (Q) a **glass bubble** is drawn round the head; for 0.3 s
+  after switching it shows half seen. (It stands in for the helmet the spriter draws later.)
+- **Walking**: the same made step (a 1-pixel bob and a foot lifted 2 pixels, in turn).
+- Robots and heavy boarders keep their old pictures, in four ways too. The spriter's suited character (v85) is kept in the
+  game files, unused, for clothes drawn over the body later (S6).
+
+### Two fleet bugs (his notes)
+
+- **The second ship's guns never fired** (and sometimes ours did not): the two ships shared one set of gun charges by
+  mistake, so one ship's shot emptied the other's guns too and its gunner bot never found a gun ready. Each ship now
+  charges and fires its own guns. (The same mistake shared a few other per-ship lists; all are now each ship's own.)
+- **After beating a pirate ship called from the admin panel, no other could be called**: the wreck stays off the airlock,
+  and nothing comes while it is there. The admin's call for a pirate ship («Бой» or the events: pirate ship, raid,
+  flagship) now lets the wreck drift off first, as a hunter does; it stays on the chart and can be searched later. In a
+  normal game a wreck still keeps the next pirate ship away until the ship leaves (B1). If one of ours is on the wreck,
+  the admin is told that no ship can come.

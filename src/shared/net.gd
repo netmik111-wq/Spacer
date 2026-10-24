@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 62
+const PROTOCOL := 63
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -52,7 +52,7 @@ static func way(dir: int) -> Vector2:
 	return Vector2(DX[dir], DY[dir]).normalized() if dir > 0 and dir <= DIRS else Vector2.ZERO
 
 # --- packets, client -> server (first byte) ---
-const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job (JOB_*)
+const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job (JOB_*), u8 ship asked, (v87) u8 1 = a woman
 const C_INPUT := 2                  # u16 seq, u32 apply tick, u8 direction
 const C_CHAT := 3                   # u16 length, text
 const C_SHUTDOWN := 4               # secret text: the hosting player's game stops the server it started
@@ -133,6 +133,7 @@ const OUTFIT_SUIT := 0
 const OUTFIT_JUMPSUIT := 1
 const OUTFIT_BARE := 2
 const LOOKS := 6
+const LOOK_WOMAN := 16              # (v87, the author's base bodies) in the look byte: a woman's body
 const LOOK_TANK := 8                # (v85, the author's C2) in the look byte: it breathes from its oxygen tank (the visor is down)
 
 # things that can be carried

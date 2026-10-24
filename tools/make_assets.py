@@ -6,7 +6,8 @@
   maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically;
                                                                      one drawing per deck)
   (generated in code)     -> assets/chars.png                       (robots, heavy boarders; the old drawn crew)
-  art_src/crew.png        -> assets/crew.png                        (v85: the author's spriter's character, padded to 96x320)
+  art_src/crew.png        -> assets/crew.png                        (v85: the author's spriter's character, padded to 96x320; unused since v87)
+  art_src/body.png        -> assets/body.png                        (v87: the author's base bodies, woman and man, 4 ways of 32x48)
   art_src/hud.dmi         -> assets/hud_monitor.png                 (heartbeat monitor animation)
 
 Run from the project folder:  python3 tools/make_assets.py
@@ -1445,6 +1446,18 @@ def build_crew():
     print(f"crew: {src.width}x{src.height} -> assets/crew.png {out.width}x{out.height}")
 
 
+BODY_CELL = (32, 48)        # (v87) a frame of the author's base bodies: 4 ways (front, right, back, left) x 2 (woman, man)
+
+
+def build_body():
+    # (v87) his sheet as he drew it, checked for its size (src/client/crew_art.gd reads it)
+    src = Image.open(os.path.join(SRC, "body.png")).convert("RGBA")
+    want = (BODY_CELL[0] * 4, BODY_CELL[1] * 2)
+    assert src.size == want, f"art_src/body.png is {src.size}, {want} is needed"
+    src.save(os.path.join(OUT, "body.png"))
+    print(f"body: assets/body.png {src.width}x{src.height}")
+
+
 def build_shuttle():
     """(v86, the author's N1) The fleet's shuttle, seen from above, nose up: 4 x 3 tiles. A simple base
     picture for the artist («sprites/shuttle.png» of the same size replaces it)."""
@@ -1478,6 +1491,7 @@ def main():
     build_maps(images, ids)
     build_chars()
     build_crew()
+    build_body()
     build_hud()
     build_fx()
     build_shuttle()
