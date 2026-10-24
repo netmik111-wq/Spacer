@@ -103,11 +103,17 @@ func use(i: int) -> void:
 			keep[key] = o.get(f)
 			if put.has(key):
 				o.set(f, put[key])
-			elif keep[key] is Dictionary or keep[key] is Array:
-				o.set(f, keep[key].duplicate(true))      # (its first time in place: not the other ship's own)
+			elif typeof(keep[key]) >= TYPE_DICTIONARY:
+				# (its first time in place: not the other ship's own; v87: packed arrays too, which Godot
+				# passes by reference: the ships shared their guns' charge, so one ship's shot emptied both)
+				o.set(f, keep[key].duplicate(true) if not _packed(keep[key]) else keep[key].duplicate())
 	on = i
 	server.ship = ships[i]
 	server.map.use_ship(i)
+
+
+static func _packed(v: Variant) -> bool:
+	return typeof(v) > TYPE_ARRAY
 
 
 func of_cell(cell: int) -> int:

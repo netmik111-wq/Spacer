@@ -24,6 +24,7 @@ var _mode: OptionButton               # (v63) a new campaign's mode
 var _complex: CheckBox               # (v71) complex repairs in a new campaign
 var _job: OptionButton
 var _job_about: Label
+var _body: OptionButton               # (v87, the author's base bodies) a man or a woman
 var _status: Label
 var _new_armed := false              # "new campaign" was pressed once while a saved one exists
 var _buttons: Array[Button] = []
@@ -111,6 +112,11 @@ func _ready() -> void:
 	_job_about.add_theme_font_size_override("font_size", 13)
 	_job_about.modulate = Color(1, 1, 1, 0.6)
 	left.add_child(_job_about)
+	left.add_child(_caption("Персонаж"))
+	_body = OptionButton.new()
+	_body.add_item("Мужчина")
+	_body.add_item("Женщина")
+	left.add_child(_body)
 	left.add_child(_gap(6))
 
 	var host_row := HBoxContainer.new()
@@ -254,6 +260,7 @@ func _ready() -> void:
 		_own.button_pressed = bool(cfg.get_value("player", "own_others", false))
 		_saved_second = str(cfg.get_value("player", "second", ""))
 		_fleet_pick.select(clampi(int(cfg.get_value("player", "fleet_pick", 0)), 0, Net.FLEET_MAX))
+		_body.select(1 if bool(cfg.get_value("player", "woman", false)) else 0)
 	_show_job()
 	refresh_ships()
 	_name.grab_focus()
@@ -341,6 +348,11 @@ func fleet_name() -> String:
 	return ship_name() + (ShipMap.FLEET_JOIN + second if second != "" else "")
 
 
+func woman() -> bool:
+	## (v87) The player's character is a woman.
+	return _body.selected == 1
+
+
 func wanted_ship() -> int:
 	## (v85) The ship of a fleet one asks for on joining: 1.., or 0 = any.
 	return maxi(_fleet_pick.selected, 0)
@@ -410,6 +422,7 @@ func _save() -> void:
 	cfg.set_value("player", "own_others", _own.button_pressed)
 	cfg.set_value("player", "second", second_name())
 	cfg.set_value("player", "fleet_pick", wanted_ship())
+	cfg.set_value("player", "woman", woman())
 	cfg.save(SETTINGS)
 
 

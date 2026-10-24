@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v86 (version 0.79: the fleet's fixes, the pirates' wingman, the shuttle) is the latest. Plans one to four are done except the darkness front (the
+Build v87 (version 0.80: man and woman base bodies, two fleet bug fixes) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -106,6 +106,10 @@ aboard their own ship only, posts per ship, a docked pirate still a target for t
 ship), hard focuses the weaker ship, a second pirate ship (the wingman) joining fights, the shuttle with force-field
 hangars (4 seats, 10 s). He put fire off (FQ5 B: "focus on ships and pirate groups"); his fire answers are on that page.
 Bots and the shuttle: he said "talk again when pods come; maybe a teleporter better".
+v87 (his base sheet "man and woman, just for now", answers on `https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg`): people drawn
+from `body.png` (32x48, four ways, a slant shows the side), man or woman picked on the menu (bots by lot), job colours on the
+top and shorts, a glass bubble while on the tank; fixed: the fleet's ships shared their gun charges (the second never fired),
+and an admin-called pirate could not come while a wreck lay alongside. Next art step he may take: clothes as layers.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -279,7 +283,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
-  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet built from `crew.png`), `sprites.gd` (v74: pictures
+  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet; since v87 built from `body.png`), `sprites.gd` (v74: pictures
   replaced from `sprites/` next to the game; every sheet and item picture loads through it).
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
@@ -508,6 +512,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   The shuttle's passengers are `Player.in_shuttle`: whatever picks a target or counts who is seen must skip them (as
   `Combat`, `Pirates.foe` and `Replication` do); the tick loop runs only `Shuttle.hold` for them. Map signs `F`
   (`window_field`, a see-through wall never in `hull`) and `V` (`dock`, a fitting); docks are `ShipMap.shuttle_docks()`.
+- (v87) `Fleet.use` gives each ship its own copy of every Array, Dictionary and packed array in `Fleet.OWN`: Godot
+  passes packed arrays by reference, and before v87 the ships shared them (the second ship's guns never charged apart).
+  People are `CrewArt` from `body.png`; a woman's frames are `CrewArt.WOMAN_COLUMN` further on, chosen by `Net.LOOK_WOMAN`
+  in the look byte (mask it off with the tank bit for the outfit). Only four ways are drawn: `WorldView.FACING_COLUMN`
+  maps slants to sides. The hello ends with a byte for the body (protocol 63). The admin's pirate calls run
+  `Derelict.make_room()` first.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

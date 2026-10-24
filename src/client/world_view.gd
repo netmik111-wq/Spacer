@@ -26,18 +26,19 @@ const Music := preload("res://src/client/music.gd")
 const CrewArt := preload("res://src/client/crew_art.gd")
 
 const CHAR_W := 32
-const CHAR_H := 64                   # (v85) the spriter's character is 32x64 (it was 48: see CrewArt)
+const CHAR_H := 48                   # (v87) the author's base bodies are 32x48 (v85's suited character was 64: see CrewArt)
 const CHAR_PAD := 1                  # transparent border around every frame of the people's sheet (CrewArt)
 const FEET_Y := 29                   # where the feet rest inside a tile, in pixels from its top
 const LIE_TURN := 0.2                # (v82) seconds to turn over lying down or getting up
 const PRONE_CENTRE := Vector2(0, -8)  # (v79) the middle of a body lying low, from where its feet would stand
-# column of the first frame for each facing in assets/chars.png (down, up, left, right;
-# v74: then down-left, down-right, up-left, up-right)
-const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 18, 6: 21, 7: 12, 8: 15}
+# column of the first frame for each facing in the people's sheet (down, up, left, right). (v87, the author:
+# no slant pictures for now) A slant shows the side it leans to, as SS13 does; a woman's frames are
+# CrewArt.WOMAN_COLUMN further on.
+const FACING_COLUMN := {1: 3, 2: 0, 3: 6, 4: 9, 5: 6, 6: 9, 7: 6, 8: 9}
 # (v74) where the hand is, from the feet, for each facing (the thing held is drawn there)
-# (v85: the spriter's taller figure holds its hands higher)
-const HAND_AT := {1: Vector2(-11, -23), 2: Vector2(11, -23), 3: Vector2(-6, -22), 4: Vector2(6, -22),
-	5: Vector2(-9, -23), 6: Vector2(9, -23), 7: Vector2(-9, -23), 8: Vector2(9, -23)}
+# (v87: the base bodies' hands, a slant as its side)
+const HAND_AT := {1: Vector2(-10, -17), 2: Vector2(10, -17), 3: Vector2(-5, -16), 4: Vector2(5, -16),
+	5: Vector2(-5, -16), 6: Vector2(5, -16), 7: Vector2(-5, -16), 8: Vector2(5, -16)}
 const VISOR_TURN := 0.3              # (v85) seconds the half-down visor shows while the oxygen tank goes on or off
 const HAND_SIZE := 12.0
 
@@ -576,12 +577,17 @@ func _passing(samples: Dictionary) -> Dictionary:
 	return out
 
 
-func _frame(facing: int, moving: bool, pos_tiles: Vector2, colour: int) -> Rect2:
-	var column: int = FACING_COLUMN.get(facing, 0)
+func _frame(facing: int, moving: bool, pos_tiles: Vector2, id: int) -> Rect2:
+	var column: int = _column_of(facing, id)
 	if moving:
 		# alternate the two step poses tile by tile, switching in the middle of a slide
 		column += 1 + (int(floorf(pos_tiles.x + pos_tiles.y + 0.5)) & 1)
-	return _cell(column, colour)
+	return _cell(column, _row_of(id))
+
+
+func _column_of(facing: int, id: int) -> int:
+	## (v87) The first frame of that way for that character: a woman's are further on.
+	return FACING_COLUMN.get(facing, 0) + (CrewArt.WOMAN_COLUMN if client.look_of(id) & Net.LOOK_WOMAN != 0 else 0)
 
 
 class HandArt extends Node2D:
@@ -611,7 +617,7 @@ func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
 		hand.item = item
 		hand.queue_redraw()
 	hand.position = HAND_AT.get(facing, HAND_AT[Net.DIR_DOWN])
-	hand.show_behind_parent = facing == Net.DIR_UP or facing == Net.DIR_UP_LEFT or facing == Net.DIR_UP_RIGHT
+	hand.show_behind_parent = facing == Net.DIR_UP         # (v87) a slant shows the side: the hand in front
 
 
 func _row_of(id: int) -> int:
@@ -620,7 +626,7 @@ func _row_of(id: int) -> int:
 	var colour := client.player_colour(id)
 	var look := client.look_of(id)
 	var on_tank := look & Net.LOOK_TANK != 0
-	look &= Net.LOOK_TANK - 1
+	look &= Net.LOOK_TANK - 1            # (and not the woman's bit: v87)
 	if colour >= CrewArt.TINTS.size():
 		return colour * Net.LOOKS + look               # the machines and heavy boarders: the old pictures
 	var now := Time.get_ticks_msec() / 1000.0
@@ -2202,7 +2208,7 @@ func _process(delta: float) -> void:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
-		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, _row_of(id))
+		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, id)
 		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
 		# (v82, his crawl video) lying down, getting up and falling turn the body over in LIE_TURN
 		# seconds rather than flipping it; a body first seen already lies
@@ -2224,7 +2230,7 @@ func _process(delta: float) -> void:
 			if look_x != 0.0 and (was_t <= 0.0 or not _prone_side.has(id)):
 				_prone_side[id] = 1.0 if look_x > 0.0 else -1.0
 			var head := Vector2(float(_prone_side.get(id, 1.0)), 0.0)
-			sprite.region_rect = _frame(s[1], false, pos, _row_of(id))
+			sprite.region_rect = _frame(s[1], false, pos, id)
 			sprite.rotation = wrapf(head.angle() + PI / 2.0, -PI, PI) * t
 			var lying_at := ((_feet(pos) + PRONE_CENTRE - head * CHAR_H * 0.5) * zoom).round() / zoom
 			sprite.position = (stand_at.lerp(lying_at, t) * zoom).round() / zoom
@@ -2353,4 +2359,4 @@ func _process(delta: float) -> void:
 	_ghost.visible = show_ghost and mine != null and map.deck_of(mine.y) == my_deck
 	if _ghost.visible:
 		_ghost.position = _feet(Vector2(mine.x, map.local_y(mine.y)))
-		_ghost.region_rect = _cell(FACING_COLUMN.get(mine.facing, 0), _row_of(client.my_id))
+		_ghost.region_rect = _cell(_column_of(mine.facing, client.my_id), _row_of(client.my_id))

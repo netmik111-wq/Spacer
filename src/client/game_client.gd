@@ -70,6 +70,7 @@ var hidden := {}                     # id -> the cell it was last seen in: the s
 var my_ship := Net.CREW_SHIP         # the network id of the ship we are on (see Net.S_SHIPS)
 var my_fleet := 0                    # (v85) its number in our fleet (Net.S_BOARD); 0 with one ship
 var wanted_ship := 0                 # (v85) the ship of our fleet asked for on joining: 1.., 0 = any
+var woman := false                   # (v87) our character is a woman (sent on joining)
 var board_changes := 0               # (v85) counts the times we went aboard another ship of our fleet
 var ships := {}                      # id -> {"kind": Net.SHIP_*, "docked": bool, "at": Vector2i, "name": String}
 var predict := true                  # predict our own character (false = wait for the server)
@@ -1657,6 +1658,7 @@ func _poll() -> void:
 				hello.append_array(name_bytes)
 				hello.append(job)
 				hello.append(wanted_ship)        # (v85)
+				hello.append(1 if woman else 0)  # (v87)
 				_peer.send(0, hello, ENetPacketPeer.FLAG_RELIABLE)
 				phase = GREETING
 			ENetConnection.EVENT_DISCONNECT:

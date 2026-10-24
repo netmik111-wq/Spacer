@@ -1,5 +1,5 @@
 extends SceneTree
-## (v85) Saves the people's sheet the game makes from the spriter's character (src/client/crew_art.gd):
+## (v85) Saves the people's sheet the game makes (v87: from the author's base bodies; src/client/crew_art.gd):
 ##   godot --headless --path . --script res://tools/crewshot.gd -- OUT.png
 
 const CrewArt := preload("res://src/client/crew_art.gd")

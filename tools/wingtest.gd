@@ -232,6 +232,61 @@ func _initialize() -> void:
 			break
 	_expect(_ours() < ours or server.air.holes.size() > holes, "it fires at our ships from afar (%d -> %d)" % [ours, _ours()])
 
+	# (v87, the author's note: the second ship never fired) each ship's guns charge on their own
+	_clear()
+	for i in 2:                                      # (whole again after the wingman's hits above)
+		fleet.use(i)
+		server.ship.broken.clear()
+		server.ship.jammed.clear()
+		server.ship.hull = server.ship.hull_max
+		server.power.set_charge(1.0)
+	fleet.use(0)
+	fleet.use(0)
+	g.charge.fill(1.0)
+	fleet.use(1)
+	g.charge.fill(1.0)
+	fleet.use(0)
+	g.charge.fill(0.0)
+	fleet.use(1)
+	_expect(g.charge.size() > 0 and g.charge[0] >= 1.0, "(v87) emptying the first ship's guns leaves the second's charged")
+	fleet.use(0)
+	# both ships' bots at the gun consoles fire in a fight
+	d.near = 0
+	d._spots = d._spots_of[0]
+	d._aimed_at = server.tick
+	_expect(d.pirates_come(2), "(a pirate ship comes)")
+	d._pirates_dock_at = server.tick + 100000
+	var shots := [0, 0]
+	var before := [PackedFloat32Array(), PackedFloat32Array()]
+	for t in 600:
+		for i in 2:
+			fleet.use(i)
+			g.enemy_hull = maxi(g.enemy_hull, 3)          # (kept alive: the count is what matters)
+			g.enemy_charge.fill(0.0)                      # (and harmless: its hits may break a console or a gun)
+			before[i] = g.charge.duplicate()
+		fleet.use(0)
+		_run(1)
+		for i in 2:
+			fleet.use(i)
+			for k in g.charge.size():
+				if g.charge[k] < before[i][k] - 0.5:
+					shots[i] += 1
+		fleet.use(0)
+	var posted := [0, 0]
+	for q in server.players:
+		if q != null and q.bot and not q.corpse and q.order == Net.POST_GUNS:
+			fleet.use(q.fleet_ship)
+			posted[q.fleet_ship] += 1 if server.systems.at_console(q, server.map.gun_console) else 0
+	fleet.use(0)
+	_expect(shots[0] > 0 and shots[1] > 0, "(v87) both ships' gunner bots fire (%s; at the consoles %s)" % [str(shots), str(posted)])
+	# (v87, the author's note: after beating a pirate ship called by the admin, no other could be called)
+	g._wrecked()
+	_run(2)
+	_expect(d.here and d.wreck, "(the beaten ship stays alongside as a wreck)")
+	server.admin.fight(1, 0, false)
+	_expect(d.here and not d.wreck and g.alive(), "(v87) the admin's call lets the wreck drift off and a new pirate ship comes")
+	_expect(server.road.hulks.size() > 0, "and the wreck is kept on the chart")
+
 	server.stop()
 	server.free()
 	print("WINGTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))

@@ -1674,3 +1674,28 @@ His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
   the nearest field cells in its wall, which side is space). The standard ship's hangar is on the lower deck over the
   room right of the shield generator; the test ship's at the bottom of its lower deck.
 
+
+## v87: man and woman base bodies, two fleet bugs
+
+- **The base bodies** (his sheet, "man and woman, just for now"): `CrewArt` now reads `body.png` (4 ways x 2 bodies of
+  32x48) instead of v85's suited `crew.png`, which stays in `assets/` unused for the clothes layer later (S6). A new file
+  name, so an old suited `crew.png` left in someone's «sprites» folder cannot break the new body (S8).
+- **Four ways** (his words: no slant pictures, too much work for the spriter): the made sheet keeps its 24 columns, the
+  man's 12 frames (4 ways x 3 poses) then the woman's from `CrewArt.WOMAN_COLUMN`, so the sheet stays under the GPU's
+  16384-pixel size (two bodies in rows would not). A slant shows the side it leans to, as SS13 does (S2), in
+  `WorldView.FACING_COLUMN`; the hand on a slant is drawn as on that side.
+- **Man or woman** travels in the look byte (`Net.LOOK_WOMAN`, 16; the woman's columns), so nothing new per tick. The
+  player picks on the main menu (S1) and the pick goes in the hello (one byte after the ship asked for, protocol 63).
+  Bots and pirates by lot from their name's hash: the game's own dice are left alone, so tests' sequences don't move.
+- **Job colours** (S3): the navy repaint of v85 works on his top and shorts unchanged; no jumpsuit = grey, as before.
+- **The tank sign** (S4): v85's visor showed the oxygen tank (his C2). The body has no helmet, so a glass bubble is drawn
+  round the head (found from the figure's top 12 rows) on the rows that had the visor down; half seen for the switch.
+  A stand-in until the helmet layer.
+- **Height 48** (S5): drawn at his size, sharp; `WorldView.CHAR_H` back to 48 and the hands back to v84's places.
+- **The second ship never fired** (his note with a video): `Fleet.use` gave a ship its own copy of a part's field the
+  first time only for `Array` and `Dictionary`. Godot passes packed arrays (`PackedFloat32Array` charge, `beam_left`...)
+  by reference too, so both ships shared them: ship 1's bot fired, the shared charges dropped, and ship 2's bot never
+  found a ready gun. Now every value of type Dictionary or above (Array and the packed arrays) is duplicated.
+- **No pirate after a won forced fight** (his note): the beaten ship's wreck stays alongside (v72) and `pirates_can_come`
+  refuses while anything is there. `Derelict.make_room()` lets it drift off (as `cast_off` does for a hunter; kept on the
+  chart) for the admin's calls only (B1): in a normal game a wreck still gives a breather until the ship leaves.

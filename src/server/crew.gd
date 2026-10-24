@@ -60,6 +60,7 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	var ship_asked: int = pkt[5 + n] - 1 if pkt.size() > 5 + n else -1
 	var p := new_player(_unique_name(wanted), ship_asked if ship_asked >= 0 and ship_asked < server.fleet.size() else _ship_wanting(false))
 	p.peer = peer
+	p.woman = pkt.size() > 6 + n and pkt[6 + n] == 1   # (v87) the body the player picked
 	p.quarters = true                      # (v78) a player steps by quarters of a tile
 	server.admin.joined(p)
 	var demoted := false
@@ -266,6 +267,7 @@ func alloc(player_name: String) -> Player:
 		p.slot = server.free_slots.pop_back()
 		server.players[p.slot] = p
 	p.name = player_name
+	p.woman = hash(player_name) & 1 == 1   # (v87) bots and pirates are men or women by lot (a player's own pick replaces it)
 	p.dress()                            # everybody comes in a spacesuit and a jumpsuit
 	return p
 

@@ -47,6 +47,7 @@ var treating := -1                   # the slot of the one it is treating with a
 var health := 100.0                  # 100 = unhurt; 0 and below = unconscious; Net.HEALTH_DEAD = dead
 var cond := 0                        # Net.COND_*
 var tank := 1.0                      # oxygen left in the suit's tank, 1.0 = full
+var woman := false                   # (v87, the author's base bodies) drawn with a woman's body
 var supply := false                  # breathing from the tank instead of the air around
 var slots := PackedByteArray()       # what it carries: one item per slot (Net.ITEM_*), Net.SLOTS of them
 var slots_sent := PackedByteArray()  # the same as last told to its client (with what it wears after)
@@ -240,7 +241,8 @@ func has_suit() -> bool:
 func look() -> int:
 	## How it is dressed, as a row of the sheet (see Net.LOOKS); (v85) Net.LOOK_TANK while on its oxygen tank.
 	var outfit := Net.OUTFIT_SUIT if has_suit() else (Net.OUTFIT_JUMPSUIT if worn[Net.WEAR_JUMPSUIT] != Net.ITEM_NONE else Net.OUTFIT_BARE)
-	return outfit * 2 + (1 if worn[Net.WEAR_PACK] != Net.ITEM_NONE else 0) + (Net.LOOK_TANK if supply or (pirate and not robot and has_suit()) else 0)
+	return outfit * 2 + (1 if worn[Net.WEAR_PACK] != Net.ITEM_NONE else 0) + (Net.LOOK_TANK if supply or (pirate and not robot and has_suit()) else 0) \
+		+ (Net.LOOK_WOMAN if woman and not robot else 0)
 
 
 func holds_in(wear: int) -> bool:
