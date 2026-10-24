@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v88 (version 0.81: his suited man and woman, the visor shows the oxygen tank) is the latest. Plans one to four are done except the darkness front (the
+Build v88.1 (version 0.81.1: his suited man and woman, the visor shows the oxygen tank; pirates' visors red, a shadow along a lying body) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -111,7 +111,8 @@ from `body.png` (32x48, four ways, a slant shows the side), man or woman picked 
 top and shorts (v87.1, his S4 B and S7 B: no tank sign on the body, no made step); fixed: the fleet's ships shared their gun charges (the second never fired),
 and an admin-called pirate could not come while a wreck lay alongside. Next art step he may take: clothes as layers.
 v88 (his suit sheets, answers on `https://claude.ai/artifact/FMqARBDwoc4J2UUdpvwYr5`): anyone in a space suit is drawn from
-`suit_man.png`/`suit_woman.png` (3 visors x 4 ways of 32x48, `CrewArt.SUIT_AT`): clear glass, half, the visor down on the tank.
+`suit_man.png`/`suit_woman.png` (3 visors x 4 ways of 32x48, `CrewArt.SUIT_AT`): clear glass, half, the visor down on the tank;
+(v88.1) pirates' visors red, people's shadow drawn by the game (`WorldView.ShadowArt`), along the body when lying.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):

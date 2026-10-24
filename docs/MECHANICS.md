@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v88 (version 0.81).
+Last updated: build v88.1 (version 0.81.1).
 
 Contents:
 
@@ -2286,3 +2286,6 @@ The author's two suit sheets ("full models for suited up"); questions on the pag
   across, four rows: the back (one frame), the front (glass, half, visor), the left side and the right side (visor, half,
   glass).
 - The spriter's old suited sheet of v85 (`crew.png`) is no longer in the game (U4).
+- (v88.1, his U2 B) **Pirates' visors glow red** (the orange of their helmet turned red), so they stand out from ours.
+- (v88.1, his note) **The shadow follows the body**: a soft oval round the feet while standing, stretching along the whole
+  body while lying (crawling, out cold or dead). Robots and heavy boarders keep the shadow of their old pictures.

@@ -590,6 +590,40 @@ func _column_of(facing: int, id: int) -> int:
 	return FACING_COLUMN.get(facing, 0) + (CrewArt.WOMAN_COLUMN if client.look_of(id) & Net.LOOK_WOMAN != 0 else 0)
 
 
+class ShadowArt extends Node2D:
+	## (v88, his note: "when the character crawls the shadow is small, not for the whole body lying down") The
+	## soft shadow under a person, drawn by the game rather than baked into the sheet: a flat oval round the
+	## feet while standing, stretching along the whole body as it lies down (it turns over with the figure).
+	var lie := -1.0
+
+	func _draw() -> void:
+		var t := clampf(lie, 0.0, 1.0)
+		var centre := Vector2(0.0, lerpf(-1.0, -CHAR_H * 0.5, t))
+		var half := Vector2(lerpf(10.0, 9.0, t), lerpf(3.0, CHAR_H * 0.5 - 3.0, t))
+		for k in 2:                       # a darker middle in a lighter rim
+			var r := half * (1.0 - 0.3 * k)
+			var points := PackedVector2Array()
+			for i in 20:
+				points.append(centre + Vector2(cos(TAU * i / 20.0) * r.x, sin(TAU * i / 20.0) * r.y))
+			draw_colored_polygon(points, Color(0, 0, 0, 0.16))
+
+
+func _put_shadow(sprite: Sprite2D, t: float, show: bool) -> void:
+	## (v88) The person's shadow, along the body as far as it is lying (t 0 standing .. 1 lying).
+	var shadow: ShadowArt = sprite.get_node_or_null("shadow")
+	if shadow == null:
+		if not show:
+			return
+		shadow = ShadowArt.new()
+		shadow.name = "shadow"
+		shadow.show_behind_parent = true
+		sprite.add_child(shadow)
+	shadow.visible = show
+	if show and not is_equal_approx(shadow.lie, t):
+		shadow.lie = t
+		shadow.queue_redraw()
+
+
 class HandArt extends Node2D:
 	## (v74, the author's N6) The thing in a character's hand, drawn on the figure (the small
 	## picture the inventory shows, or the «sprites» folder's).
@@ -2216,6 +2250,8 @@ func _process(delta: float) -> void:
 		var was_t: float = _lie.get(id, 1.0 if lies else 0.0)
 		var t := move_toward(was_t, 1.0 if lies else 0.0, delta / LIE_TURN)
 		_lie[id] = t
+		# (v88) machines and heavy boarders keep the shadow drawn in their old pictures
+		_put_shadow(sprite, t, client.player_colour(id) < CrewArt.TINTS.size())
 		var stand_at := sprite.position
 		_stand[id] = stand_at
 		if cond == Net.COND_OK and (client.prone_of(id) or t > 0.0):

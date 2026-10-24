@@ -30,7 +30,8 @@ const CELL := FRAME + Vector2i(2 * PAD, 2 * PAD)
 const VIEWS := 4                       # front, right, back, left
 const BODIES := 2                      # rows of his sheet: 0 the woman, 1 the man
 const WOMAN_COLUMN := 12               # the woman's frames start here in the made sheet
-const FEET := 47                       # the lowest row of the figure in a frame (the shadow lies round it)
+const FEET := 47                       # the lowest row of the figure in a frame
+const HELMET_ROWS := 19                # (v88) the top rows of a suited frame that hold the helmet
 const ROWS := (Net.ARMOUR_COLOUR + 1) * Net.LOOKS
 const VISOR_ROW := ROWS                # + colour * LOOKS + look: on the tank, the bubble over the head
 const HALF_ROW := ROWS + Net.PIRATE_COLOURS * Net.LOOKS + Net.SUIT_COLOURS * Net.LOOKS   # + colour: the bubble half seen
@@ -129,7 +130,6 @@ static func build() -> Image:
 	var src := source()
 	_settle(src)
 	var out := Image.create(CELL.x * 24, CELL.y * ALL_ROWS, false, Image.FORMAT_RGBA8)
-	var shadow := _shadow()
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
 	# (v88) the suit with its visor up, half and down, its navy painted as the body's clothes are
@@ -143,13 +143,14 @@ static func build() -> Image:
 		var painted := _paint(src, navy, TINTS[colour])
 		var suits_painted: Array[Image] = []
 		for visor in 3:
-			suits_painted.append(_paint(suit[visor], suit_navy[visor], TINTS[colour]))
+			var made := _paint(suit[visor], suit_navy[visor], TINTS[colour])
+			suits_painted.append(_visor_red(made) if colour >= Net.SUIT_COLOURS else made)
 		for look in Net.LOOKS:
 			var in_suit := look / 2 == Net.OUTFIT_SUIT
 			var art := grey if look / 2 == Net.OUTFIT_BARE else painted
-			_row(out, colour * Net.LOOKS + look, suits_painted[0] if in_suit else art, shadow)
-			_row(out, VISOR_ROW + colour * Net.LOOKS + look, suits_painted[2] if in_suit else art, shadow)
-		_row(out, HALF_ROW + colour, suits_painted[1], shadow)
+			_row(out, colour * Net.LOOKS + look, suits_painted[0] if in_suit else art)
+			_row(out, VISOR_ROW + colour * Net.LOOKS + look, suits_painted[2] if in_suit else art)
+		_row(out, HALF_ROW + colour, suits_painted[1])
 	# the machines and the heavy boarders keep the old drawn pictures (their four straight ways, for both bodies)
 	var old := Sprites.sheet("chars").get_image()
 	if old.is_compressed():
@@ -207,25 +208,25 @@ static func _paint(src: Image, navy: PackedInt32Array, tint: Color) -> Image:
 	return Image.create_from_data(src.get_width(), src.get_height(), false, Image.FORMAT_RGBA8, data)
 
 
-static func _shadow() -> Image:
-	## A soft shadow under the feet, so the figure sits on the floor (as the old drawn ones had).
-	var im := Image.create(FRAME.x, FRAME.y, false, Image.FORMAT_RGBA8)
-	var halves := [9, 11, 11, 10, 7]
-	for k in halves.size():
-		var y := FEET - 2 + k
-		if y >= FRAME.y:
-			break
-		for x in range(16 - halves[k], 16 + halves[k]):
-			im.set_pixel(x, y, Color(0, 0, 0, 70.0 / 255.0))
-	return im
+static func _visor_red(im: Image) -> Image:
+	## (v88, his U2 B) Pirates' visors glow red, so they stand out from ours in the same suit: the bright orange
+	## of the helmet (the top of each frame; not the face, the hair or the suit's orange marks) turned red.
+	var out := im.duplicate() as Image
+	for y in out.get_height():
+		if y % FRAME.y >= HELMET_ROWS:
+			continue
+		for x in out.get_width():
+			var c := out.get_pixel(x, y)
+			if c.a > 0.0 and c.h * 360.0 >= 10.0 and c.h * 360.0 <= 35.0 and c.s >= 0.6 and c.v >= 0.6:
+				out.set_pixel(x, y, Color.from_hsv(0.0, minf(1.0, c.s + 0.1), c.v, c.a))
+	return out
 
 
-static func _row(out: Image, row: int, art: Image, shadow: Image) -> void:
+static func _row(out: Image, row: int, art: Image) -> void:
 	for body in BODIES:
 		var first := WOMAN_COLUMN if body == 0 else 0
 		for way: int in VIEW_OF.keys():
 			var figure := art.get_region(Rect2i(int(VIEW_OF[way]) * FRAME.x, body * FRAME.y, FRAME.x, FRAME.y))
 			for pose in 3:
 				var cell := Vector2i((first + int(COLUMN_OF[way]) + pose) * CELL.x + PAD, row * CELL.y + PAD)
-				out.blit_rect(shadow, Rect2i(Vector2i.ZERO, FRAME), cell)
-				out.blend_rect(figure, Rect2i(Vector2i.ZERO, FRAME), cell)
+				out.blit_rect(figure, Rect2i(Vector2i.ZERO, FRAME), cell)

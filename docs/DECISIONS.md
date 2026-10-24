@@ -1715,3 +1715,10 @@ His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
   switching the tank would have flashed a suit.
 - **Job colours on the suit** (U1 A): the same navy repaint as the body; his suit's navy (hue ~230) falls in `NAVY_HUE`.
 - **v85's `crew.png` removed** from `assets/` (U4 A; `art_src/crew.png` kept as a reference): his own suits replace it.
+- **v88.1, his answers** (all my picks but U2 B; "choose for yourself" on the rest): pirates' visors red, the bright
+  orange in a frame's top `HELMET_ROWS` (19) turned red (`CrewArt._visor_red`), so the face, hair and the suit's orange
+  marks lower down stay.
+- **v88.1, the shadow** (his note: crawling, the shadow stayed a small one at the feet): it was baked into every frame,
+  so it turned over with the figure. Now `WorldView.ShadowArt`, a child of the figure drawn behind it, goes from an oval
+  round the feet to one along the body by the same `_lie` amount that turns the body over. The machines' old pictures
+  still have theirs baked in, so they get none.

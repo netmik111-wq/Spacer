@@ -194,6 +194,8 @@ Open problems:
 - Anyone in a space suit is drawn from his suited man and woman: the visor clear, half or down by the oxygen tank, the
   suit's navy in the job's colour. `sprites/suit_man.png` and `suit_woman.png` replace them. v85's `crew.png` removed.
 - Version 0.81, build in `/mnt/project-files/builds/v88/`.
+- v88.1 (0.81.1), his answers and note: pirates' visors glow red (U2 B); the shadow is drawn by the game and lies along a
+  body lying down. Build in `/mnt/project-files/builds/v88.1/`.
 
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
