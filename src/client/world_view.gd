@@ -1921,6 +1921,34 @@ func lit(cell: int) -> bool:
 	return can_see(cell % map.width, cell / map.width)
 
 
+func _draw_shuttle(pen: CanvasItem, d: int) -> void:
+	## (v86) The fleet's shuttle outside a hangar's force field: waiting there, or pulling away from one
+	## and coming in to the other (it is out of sight in between).
+	var at := client.shuttle_at
+	if at < 0 or at >= client.shuttle_docks.size():
+		return
+	var t := client.shuttle_done
+	var draws: Array = []                # [dock, tiles out from its place, how solid]
+	if client.shuttle_to < 0:
+		draws.append([at, 0.0, 1.0])
+	else:
+		if t < 0.35:
+			draws.append([at, t / 0.35 * 7.0, 1.0 - t / 0.35])
+		if t > 0.65:
+			draws.append([client.shuttle_to, (1.0 - t) / 0.35 * 7.0, 1.0 - (1.0 - t) / 0.35])
+	var tex := Sprites.sheet("shuttle")
+	for one: Array in draws:
+		var dock: Dictionary = client.shuttle_docks[int(one[0])]
+		if dock.is_empty() or client.map.deck_of_cell(int(dock["console"])) != d:
+			continue
+		var side: int = int(dock["out"])
+		var park: Vector2 = dock["park"]
+		var mid := Vector2(park.x, fposmod(park.y, float(_stride)) + side * float(one[1])) * _tile
+		pen.draw_set_transform(mid, 0.0, Vector2(1, 1 if side < 0 else -1))   # the nose away from the ship
+		pen.draw_texture(tex, -tex.get_size() / 2.0, Color(1, 1, 1, clampf(float(one[2]), 0.0, 1.0)))
+		pen.draw_set_transform(Vector2.ZERO)
+
+
 func _draw_fx(d: int) -> void:
 	## The moving details of one deck. Next to a hole, streaks show the air rushing out.
 	## Thin air itself is deliberately not drawn: a compartment without air looks
@@ -1928,6 +1956,7 @@ func _draw_fx(d: int) -> void:
 	var map := client.map
 	var pen := _decks[d].fx
 	var now := Time.get_ticks_msec() / 1000.0
+	_draw_shuttle(pen, d)
 	# (v75) sparks off a robot that was hit
 	for sp: Array in _sparks:
 		if int(sp[0]) != d:
@@ -2168,7 +2197,7 @@ func _process(delta: float) -> void:
 		# out of our field of view (or in the dark) nobody is seen
 		# (and the one we haul along behind us is always felt there)
 		var hauled := client.dragging() and id == client.drag_id
-		sprite.visible = id == client.my_id or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
+		sprite.visible = id == client.my_id and not client.riding() or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
 		if bool(_shown.get(id, false)) and not sprite.visible and id != client.my_id:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible

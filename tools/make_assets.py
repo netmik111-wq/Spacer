@@ -18,7 +18,7 @@ import struct
 import sys
 import zlib
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "art_src")
@@ -122,6 +122,10 @@ for _cover in COVERS:
         TILES.append((_cover + _piece[5:], None, _cover))
 for _name, _src, _kind in list(TILES[-len(MIDDLES) * (len(COVERS) + 1):]):
     TILES.append((PIRATE + _name, None, _kind))
+# (v86, the author's N1) the shuttle's hangar: a force field in the hull that holds the air in and lets
+# light through (a window to the game), and the shuttle's dock console beside it; last, as above
+TILES.append(("window_field", None, "wall"))
+TILES.append(("dock", None, "wall"))
 ATLAS_COLS = 8
 
 
@@ -447,7 +451,14 @@ def make_machine(wall, what):
         for k, kx in enumerate((7, 12, 17, 22)):
             rect(kx, 19, kx + 3, 21, (70, 150, 230, 255) if k == 1 else dark)                 # the answer keys
         rect(23, 9, 24, 10, (90, 220, 110, 255))                                              # the link lamp
-    elif what == "tray":
+    elif what == "dock":
+        # (v86) the shuttle's dock console: a screen with the shuttle's outline, a lamp and a call key
+        rect(4, 4, 27, 24, body); rect(4, 4, 27, 5, cap); rect(4, 24, 27, 24, mid)
+        rect(6, 7, 25, 18, (10, 22, 30, 255))
+        blue = (110, 200, 255, 255)
+        rect(10, 11, 20, 14, blue); rect(21, 12, 22, 13, blue); rect(8, 12, 9, 13, (240, 190, 80, 255))
+        rect(12, 9, 14, 10, blue); rect(12, 15, 14, 16, blue)                                # its wings
+        rect(7, 20, 12, 22, (70, 200, 120, 255)); rect(19, 20, 24, 22, dark)                  # the keys
         # (v63) a hydroponic tray: a long trough of dark soil under a strip of grow lights
         rect(3, 5, 28, 25, mid); rect(3, 5, 28, 6, cap)
         rect(4, 7, 27, 9, (60, 60, 80, 255))                                                  # the lamp housing
@@ -500,6 +511,22 @@ def make_machine(wall, what):
         rect(7, 20, 24, 21, (111, 190, 240, 255))      # the outlet
         rect(7, 21, 24, 21, (70, 130, 200, 255))
         rect(22, 6, 23, 6, (90, 220, 110, 255))        # a lamp
+    return out
+
+
+def make_field(wall):
+    """(v86) A force field set into the hull: two emitters at the ends of a band of see-through blue
+    shimmer (light and sight pass, air does not)."""
+    out = wall.copy()
+    o = out.load()
+    for y in range(6, 26):
+        for x in range(T):
+            t = abs(y - 15.5) / 10.0
+            a = int(70 + 60 * (1.0 - t)) if (y % 3) else 170
+            o[x, y] = (90, 190, 255, a)
+    for y in range(4, 28):
+        for x in (0, 1, T - 2, T - 1):
+            o[x, y] = (60, 70, 90, 255)
     return out
 
 
@@ -577,6 +604,8 @@ def build_tiles():
         "tray": lambda: make_machine(images["wall_h"], "tray"),
         "cryo": lambda: make_machine(images["wall_h"], "cryo"),
         "stove": lambda: make_machine(images["wall_h"], "stove"),
+        "dock": lambda: make_machine(images["wall_h"], "dock"),
+        "window_field": lambda: make_field(images["wall_h"]),
         "floor_l_m": lambda: make_middle(images["floor_l_b"]),
         "floor_m_m": lambda: make_middle(images["floor_m_b"]),
         "floor_r_m": lambda: make_middle(images["floor_r_b"]),
@@ -630,6 +659,8 @@ def build_tiles():
 #   'P'  (v63) wall with a hydroponic tray: plants grow in it (two side by side may cross)
 #   'C'  (v63) wall with a cryosleep pod: the crew reserve sleeps in them and wakes from them
 #   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
+#   'F'  (v86) a force field in the hull: air stays in, light and sight pass; the shuttle parks outside it
+#   'V'  (v86) wall with the shuttle's dock console: board the shuttle here or call it (a fleet's ships)
 #   'R'  (v81) an asteroid's rock      'O'  (v81) a vein of ore in the rock      ','  (v81) bare rock ground
 #        (rock and ground follow no room rule: draw them any shape)
 #
@@ -656,7 +687,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCG")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFV")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -748,7 +779,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 else:
                     special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
                                "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove"}
+                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
@@ -1414,6 +1445,31 @@ def build_crew():
     print(f"crew: {src.width}x{src.height} -> assets/crew.png {out.width}x{out.height}")
 
 
+def build_shuttle():
+    """(v86, the author's N1) The fleet's shuttle, seen from above, nose up: 4 x 3 tiles. A simple base
+    picture for the artist («sprites/shuttle.png» of the same size replaces it)."""
+    w, h = 4 * T, 3 * T
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    hull, edge, dark, glass = (150, 158, 170, 255), (90, 96, 110, 255), (50, 54, 66, 255), (90, 190, 255, 255)
+    d.polygon([(16, 70), (40, 34), (88, 34), (112, 70), (100, 82), (28, 82)], fill=edge)        # the wings
+    d.rounded_rectangle((40, 10, 88, 88), radius=18, fill=hull, outline=edge, width=2)           # the body
+    d.polygon([(52, 8), (76, 8), (64, 0)], fill=hull)                                              # the nose
+    d.rounded_rectangle((52, 14, 76, 32), radius=8, fill=glass, outline=dark, width=2)           # the cockpit
+    for k in range(4):                                                                             # the seats' windows
+        y = 40 + k * 10
+        d.rectangle((46, y, 50, y + 5), fill=glass)
+        d.rectangle((78, y, 82, y + 5), fill=glass)
+    d.rectangle((60, 36, 68, 80), fill=dark)                                                       # the hatch's line
+    for x in (46, 74):                                                                             # two engines, glowing
+        d.rectangle((x, 86, x + 8, 93), fill=dark)
+        d.rectangle((x + 2, 90, x + 6, 95), fill=(255, 170, 70, 255))
+    d.rectangle((18, 68, 22, 72), fill=(230, 60, 50, 255))                                       # wing lamps
+    d.rectangle((106, 68, 110, 72), fill=(60, 220, 110, 255))
+    im.save(os.path.join(OUT, "shuttle.png"))
+    print("shuttle: assets/shuttle.png")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(ROOT, "tools", "preview"), exist_ok=True)
@@ -1424,6 +1480,7 @@ def main():
     build_crew()
     build_hud()
     build_fx()
+    build_shuttle()
 
 
 if __name__ == "__main__":

@@ -429,7 +429,7 @@ func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF, now >> 40)
 				known.erase(slot)
 			continue
-		if (not q.taken or q == p) and _seen_now(p, q, a_mine):   # (v70) one dragged off is gone
+		if (not q.taken and not q.in_shuttle or q == p) and _seen_now(p, q, a_mine):   # (v70) one dragged off is gone, (v86) one in the shuttle
 			if now != had:
 				_put_record(recs, slot, q.st.x, q.st.y, (now >> 32) & 0xFF, now >> 40)
 				known[slot] = now

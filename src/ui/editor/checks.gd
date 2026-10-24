@@ -61,6 +61,8 @@ static func run(d: Drawing) -> Array:
 					out.append(_p(-1, 0, 0, need[2], need[1]))
 			if map != null and not map.lock_pump.is_empty() and not _others_fit(map):
 				out.append(_p(-1, 0, 0, "Над наружной дверью шлюза мало пустого места: другие корабли не подойдут. Оставьте около 8 пустых рядов над ней.", false))
+			if map != null and (map.shuttle_docks()[0] as Dictionary).is_empty():   # (v86)
+				out.append(_p(-1, 0, 0, "Нет ангара челнока (силовое поле «F» в наружной стене и пульт челнока «V» рядом): во флотилии на этот корабль не перелететь.", false))
 		"pirate", "derelict":
 			if map != null and not _has_outer_door(map):
 				out.append(_p(-1, 0, 0, "Нет наружной двери в космос («D» в стене с пустотой с одной стороны): к нему не пристыковаться.", false))

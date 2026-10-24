@@ -242,6 +242,13 @@ const C_EVADE := 32
 const C_ALERT := 33
 const C_SWAP := 34                  # (v73) u8 slot, u8 slot: swap what is in two of our slots (dragged in the inventory)
 const C_TAKE := 35                  # (v80) u32 cell, u8 place in its stack: take that one thing off the floor (the right-click menu)
+const C_SHUTTLE := 36               # (v86) u8 SHUTTLE_*, u8 the ship of our fleet to fly to (SHUTTLE_FLY): the fleet's shuttle
+const SHUTTLE_BOARD := 0            # get in, at a dock console with the shuttle there
+const SHUTTLE_CALL := 1             # call the empty shuttle to this dock
+const SHUTTLE_FLY := 2              # (a passenger) fly to that ship's dock
+const SHUTTLE_LEAVE := 3            # (a passenger) get out, the shuttle standing at a dock
+const SHUTTLE_SEATS := 4            # (the author's N1) people it carries at most
+const SHUTTLE_SECONDS := 10.0       # a flight from one ship's hangar to the other's
 const ALERT_GREEN := 0
 const ALERT_YELLOW := 1
 const ALERT_RED := 2
@@ -526,6 +533,9 @@ const S_SUMMARY := 47               # (v75, the author's E1) the run's story at 
                                     # killed, u32 credits earned, u8 deaths, per death u8 length + name, u8 length + how (UTF-8);
                                     # (v82) then u8 things, per thing u8 length + name (UTF-8), u16 times people used it
 const S_BOARD := 48                 # (v85) u16 ship id, u8 its number in our fleet: the ship of ours we are aboard now
+const S_SHUTTLE := 49               # (v86) the fleet's shuttle: u8 the dock it stands at or left (255: no shuttle), u8 the dock
+                                    # it flies to (255: none), u8 the share of the flight done (0..255), u8 passengers,
+                                    # per passenger u16 id
 const FLEET_MAX := 2                # (v85, the author's FS2) ships in our fleet at most
 const BLOOD_FLESH := 0
 const BLOOD_METAL := 1

@@ -1636,3 +1636,41 @@ His answers on "Spacer v85 Ships" (https://claude.ai/artifact/G35RhEtEWHhMGPeuha
 - **The visor is the oxygen tank** (his C2 B): `Net.LOOK_TANK` (8) in the look byte while `supply` is on (pirates in
   suits always); the half picture shows 0.3 s after a change, drawn by the client alone.
 
+## v86: the fleet's fixes, the pirates' wingman, the shuttle (2026-10-24)
+
+His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
+(https://claude.ai/artifact/N2RrzNRQjXg2h2Lxq3KZ8U). He asked to be asked before the build started; fire waits (FQ5 B).
+
+- **The five fleet notes** came from one cause each: the holomap took every cell of the grid (now `GameClient._holo_cells`
+  keeps its own ship's); bots' repair jobs and supplies took holes and doors of the whole grid (now `fleet.mine`); «Все по
+  местам» gave one ship's posts to every bot (now per ship, `Stations._bots(aboard)`); a pirate docked to one ship was "no
+  target" for both (now `Gunnery.engaged()` is false only for the ship it is docked to). The second ship had no room for
+  pirates because `MapBuilder.fleet_text` dropped its empty top rows: they are kept now, so a fleet's rows differ from
+  0.78's and an old fleet save is refused rather than loaded wrong (`Campaign`, `"fleet_rows"`).
+- **Bots stay aboard** (his N4 A): "talk again when pods come; maybe a teleporter better". So bots never take the shuttle.
+- **Hard focuses one ship** (his N3 note): `Fleet.target()` always gives the weaker on hard, and a wingman on hard shoots
+  the same ship as the first pirate.
+- **The wingman** (his E1 A, the first step to enemy fleets): Gunnery was written for one enemy. Rather than doubling it,
+  `Wing` keeps the wingman's own copy of Gunnery's enemy fields (`Wing.ENEMY`) and swaps it in for its share of the tick
+  and for our shots at it, the way `Fleet` swaps our ships. It stays out of the grid (never docks or boards), so the
+  pirates' crew, assault, prisons and the drone need nothing. `Gunnery.engaged()` is "the enemy in place is in the fight
+  for this ship"; `fighting()` is "either enemy is". Calls that mean the ship alongside only (drone, flagship, prisons,
+  story) use `engaged()`. The odds (25/10/40 % by mode, 25–50 s in) are mine, to be tried in his own games; it comes only
+  while the director sends things, so tests are not surprised. Its wreck drifts off (no second hulk on the chart), and it
+  runs 12 s after the ship alongside is beaten so the fight still ends.
+- **The gun console's two buttons** (`Gunnery.foe`, per ship of ours, `GUNSET_FOE`): one choice for all guns of that ship,
+  simpler than a target per gun. `S_GUNS` gains a tail (foe and two summaries), protocol 62.
+- **The shuttle** (his N1 idea, picked on the card «Челнок и ангар с полем»): a hangar of each ship with a force field
+  (`F`, a window to light, air and movement: no new rule for air or sight) and the dock console (`V`); the field is not in
+  `ShipMap.hull`, as a hole in a field makes no sense. The shuttle itself is not laid into the grid (that would need a
+  third moving map): it is drawn outside the field, and its passengers are taken out of the world (`Player.in_shuttle`:
+  no walking, no air, not seen, not hit, not anybody's foe) and put back at the far hangar. Their view moves at the
+  take-off so they see it come in. 4 seats and 10 s are mine. Everyone steps out on landing (fewer buttons); one may get
+  out while it stands. Visitors keep their own ship's crew place (`fleet_ship`), so the bots-fill rule does not shuffle
+  bots. The flight is drawn as leaving one field and coming to the other; nothing in between, as the two ships lie in one
+  grid with no real space between them to show. It needs no power: the author's rule is that nothing breaks for want
+  of it.
+- **Docks**: `ShipMap.shuttle_docks()` finds each ship's dock the same way on the server and the client (the console,
+  the nearest field cells in its wall, which side is space). The standard ship's hangar is on the lower deck over the
+  room right of the shield generator; the test ship's at the bottom of its lower deck.
+

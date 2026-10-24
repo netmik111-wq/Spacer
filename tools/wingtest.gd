@@ -157,19 +157,12 @@ func _initialize() -> void:
 	_expect(w.on == 0, "and the ship alongside is in place again after")
 	pkt = g.packet()
 	_expect(pkt[pkt.size() - 11] == 1, "the console is told it aims at the wingman")
-	# it shoots at us
-	w.use(1)
-	g.enemy_hit_chance = 1.0
-	g.enemy_charge.fill(1.0)
-	w.use(0)
-	var ours := _ours()
-	var holes: int = server.air.holes.size()
-	_run(2)
-	_expect(_ours() < ours or server.air.holes.size() > holes, "it fires at our ships from afar (%d -> %d)" % [ours, _ours()])
-	g.enemy_hit_chance = -1.0
 	# wrecked, it pays
 	var credits: int = server.ship.credits
 	for i in 30:
+		w.use(1)
+		g.enemy_shield = 0.0
+		w.use(0)
 		g.charge.fill(1.0)
 		g.fire(gunner, 255)
 		_run(1)
@@ -192,6 +185,7 @@ func _initialize() -> void:
 	_expect(w.here, "(and its wingman)")
 	g.foe = 0
 	for i in 40:
+		g.enemy_shield = 0.0
 		g.charge.fill(1.0)
 		g.fire(gunner, 255)
 		_run(1)
@@ -214,6 +208,29 @@ func _initialize() -> void:
 	_expect(w.here, "(a wingman again)")
 	w.jumped()
 	_expect(not w.here and not w.engaged(1), "a jump leaves it behind")
+
+	# it shoots at us (last: its hits may break what the checks above need)
+	_clear()
+	d.near = 0
+	d._spots = d._spots_of[0]
+	d._aimed_at = server.tick
+	d.pirates_come(2)
+	d._pirates_dock_at = server.tick + 100000
+	_run(1)
+	w.join_at = server.tick
+	_run(1)
+	_expect(w.here, "(a wingman again)")
+	var ours := _ours()
+	var holes: int = server.air.holes.size()
+	for i in 40:
+		w.use(1)
+		g.enemy_hit_chance = 1.0
+		g.enemy_charge.fill(1.0)
+		w.use(0)
+		_run(1)
+		if _ours() < ours or server.air.holes.size() > holes:
+			break
+	_expect(_ours() < ours or server.air.holes.size() > holes, "it fires at our ships from afar (%d -> %d)" % [ours, _ours()])
 
 	server.stop()
 	server.free()

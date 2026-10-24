@@ -102,6 +102,7 @@ const Defence := preload("res://src/server/defence.gd")
 const Usage := preload("res://src/server/usage.gd")
 const Fleet := preload("res://src/server/fleet.gd")
 const Wing := preload("res://src/server/wing.gd")
+const Shuttle := preload("res://src/server/shuttle.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -199,6 +200,7 @@ var defence := Defence.new()           # (v79) bots against armed boarders
 var usage := Usage.new()               # (v82) what people used this run
 var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
 var wing := Wing.new()                 # (v86, the author's E1) a second pirate ship that joins a fight: see Wing
+var shuttle := Shuttle.new()           # (v86, the author's N1) the fleet's shuttle between the ships' hangars
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
                                        # (the hard mode sets it, the menu may too), kept in the campaign
@@ -296,6 +298,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
 	fleet.setup(self)
 	wing.setup(self)
+	shuttle.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
 	mounts.setup(self)
@@ -445,6 +448,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		return
 	var p: Player = players[slot_of[peer]]
 	fleet.use_for(p)                     # (v85) what a player does is done for the ship they are in
+	if p.in_shuttle and kind != Net.C_INPUT and kind != Net.C_CHAT and kind != Net.C_SHUTTLE and kind != Net.C_SHUTDOWN \
+			and kind != Net.C_ADMIN:
+		return                           # (v86) in the shuttle: nothing to do but talk, fly or get out
 	if kind == Net.C_INPUT:
 		if pkt.size() < 8:
 			return
@@ -581,6 +587,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_COMMS:
 		if pkt.size() > 1:
 			story.answer_asked(p, pkt[1])
+	elif kind == Net.C_SHUTTLE:
+		if pkt.size() > 2:
+			shuttle.asked(p, pkt[1], pkt[2])
 	elif kind == Net.C_ADMIN:
 		admin.asked(p, pkt)
 
@@ -711,6 +720,10 @@ func _tick() -> void:
 		if p == null or p.corpse:
 			continue
 		fleet.use_for(p)
+		if p.in_shuttle:
+			shuttle.hold(p)              # (v86) out of the world in the shuttle
+			crew.tell_me(p)
+			continue
 		movement.move(p)
 		crew.update_vitals(p)
 		looting.update(p)
@@ -746,6 +759,7 @@ func _tick() -> void:
 	fleet.each(_ship_crew)
 	gunnery.tick_enemy()
 	wing.tick()                   # (v86) the wingman, if one fights
+	shuttle.tick()                # (v86) the fleet's shuttle
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight
 	pirates.tick()                # (v70) the pirates' bombs

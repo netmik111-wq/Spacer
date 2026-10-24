@@ -966,6 +966,16 @@
    "id": 192,
    "name": "pirate_ladder_r_m",
    "kind": "ladder"
+  },
+  {
+   "id": 193,
+   "name": "window_field",
+   "kind": "wall"
+  },
+  {
+   "id": 194,
+   "name": "dock",
+   "kind": "wall"
   }
  ]
 }

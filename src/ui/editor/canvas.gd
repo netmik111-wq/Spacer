@@ -257,7 +257,7 @@ static func icon_tile(s: String) -> String:
 		"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 		"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 		"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-		"P": "tray", "C": "cryo", "G": "stove", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
+		"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
 
 
 # ---------------------------------------------------------------- the mouse

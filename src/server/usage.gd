@@ -16,6 +16,7 @@ const NAMES := {
 	"cuffs": "наручники", "sell_prisoners": "сдача пленных", "weld": "сварка дверей",
 	"hold": "держать позицию", "crawl": "лечь (C)", "drone": "дрон-разведчик",
 	"bench": "верстак", "comms": "ответы по связи", "trade": "торговля",
+	"shuttle": "челнок флотилии",
 }
 
 var server: GameServer

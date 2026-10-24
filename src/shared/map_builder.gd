@@ -13,7 +13,7 @@ extends RefCounted
 
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
-const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCG"
+const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFV"
 const FLOOR_CHARS := ".sgcH"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
@@ -21,7 +21,7 @@ const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window
 	"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 	"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 	"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-	"P": "tray", "C": "cryo", "G": "stove"}
+	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
 const KINDS := ["ship", "pirate", "derelict", "asteroid"]
 
 static var _tiles := {}              # tile name -> id (from assets/tiles.json)

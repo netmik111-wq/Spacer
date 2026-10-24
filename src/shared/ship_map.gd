@@ -76,6 +76,8 @@ var comms := {}                      # (v63) wall cells with the comms console: 
 var trays := PackedInt32Array()      # (v63) wall cells with a hydroponic tray, in the order they are numbered
 var cryo := PackedInt32Array()       # (v63) wall cells with a cryosleep pod: the reserve sleeps in them
 var stove := {}                      # (v71) wall cells with the galley's stove: meals cooked from rations (see Galley)
+var dock := {}                       # (v86) wall cells with the shuttle's dock console, all ships of the fleet (see Shuttle)
+var force_field := {}                    # (v86) hull cells with a hangar's force field: air-tight, see-through, never breached
 var backup_rooms := {}               # (v61) the rooms (numbers in `rooms`) the backup SMES faces: it keeps them lit
 var rooms: Array = []                # (v53) its floor split into rooms by walls and doors (a doorway is in none):
                                      # PackedInt32Array of cells each, top-left room first (see _find_rooms)
@@ -130,7 +132,7 @@ var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wa
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo", "stove"]
+	"comms", "tray", "cryo", "stove", "dock"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -218,6 +220,42 @@ func fleet_near(cell: int) -> int:
 		if row >= fleet_rows[i] - FLEET_GAP / 2:
 			return i
 	return 0
+
+
+func shuttle_docks() -> Array:
+	## (v86, the author's N1) Per ship of our fleet, its shuttle dock: {"console": the dock console's cell,
+	## "front": the floor in front of it, "park": where the shuttle waits outside the hangar's force field
+	## (its middle, in tiles of the grid), "out": -1 when space is above the field, 1 below}; an empty
+	## Dictionary for a ship with none. The same answer on the server and on every client.
+	var out: Array = []
+	for i in fleet_size():
+		out.append({})
+	var consoles: Array = dock.keys()
+	consoles.sort()
+	for c: int in consoles:
+		var i := fleet_of(c)
+		if i < 0 or not (out[i] as Dictionary).is_empty():
+			continue
+		var x := c % width
+		var y := c / width
+		# the force field's cells in the same wall, nearest the console first
+		var near := -1
+		for k in range(1, 9):
+			for fx: int in [x + k, x - k]:
+				if near < 0 and force_field.has(y * width + fx):
+					near = fx
+		var front := fitting_front(c)
+		if near < 0 or front < 0:
+			continue
+		var lo := near
+		var hi := near
+		while force_field.has(y * width + lo - 1):
+			lo -= 1
+		while force_field.has(y * width + hi + 1):
+			hi += 1
+		var side := -1 if is_space(near, y - 1) else 1
+		out[i] = {"console": c, "front": front, "park": Vector2((lo + hi + 1) / 2.0, y + 0.5 + side * 2.0), "out": side}
+	return out
 
 
 func all_of(field: String) -> Variant:
@@ -375,6 +413,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	trays = PackedInt32Array()
 	cryo = PackedInt32Array()
 	stove = {}
+	dock = {}
+	force_field = {}
 	backup_rooms = {}
 	guns = PackedInt32Array()
 	gun_console = {}
@@ -433,6 +473,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			cryo.append(i)
 		if cells[i] == tile_ids.get("stove", -1):
 			stove[i] = true
+		if cells[i] == tile_ids.get("dock", -1):
+			dock[i] = true
+		if cells[i] == tile_ids.get("window_field", -1):
+			force_field[i] = true
 		if cells[i] == tile_ids.get("smes_small", -1):
 			smes_small[i] = true
 			var front := fitting_front(i)
@@ -499,8 +543,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 				continue
 			# (v80, the author's note) never a hole on a machine set into the wall: its "use"
 			# would win over the patch and the hole could not be mended
-			if fitting_front(y * width + x) >= 0 or guns.has(y * width + x):
-				continue
+			if fitting_front(y * width + x) >= 0 or guns.has(y * width + x) or force_field.has(y * width + x):
+				continue                     # ((v86) nor in a force field: no wall there to hole)
 			var inside := walkable(x - 1, y) or walkable(x + 1, y) or walkable(x, y - 1) or walkable(x, y + 1)
 			var outside := is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 			if inside and outside:
@@ -1050,6 +1094,8 @@ func device_name(cell: int) -> String:
 		return "резервный СМЭС мостика"
 	if comms.has(cell):
 		return "пульт связи"
+	if dock.has(cell):
+		return "пульт челнока"
 	return ""
 
 

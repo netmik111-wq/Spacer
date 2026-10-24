@@ -265,7 +265,7 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 	var hit: Player = null
 	var best := reach
 	for q: Player in server.players:
-		if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
+		if q == null or q == p or q.corpse or q.in_shuttle or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
 			continue
 		var pos := place_at(q, seen_tick)
 		var along := (pos - from).dot(way)
@@ -322,7 +322,7 @@ func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 		var best := _ray(p, from, way, float(Items.SHOTGUN_RANGE))
 		var hit: Player = null
 		for q: Player in server.players:
-			if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
+			if q == null or q == p or q.corpse or q.in_shuttle or q.cond == Net.COND_DEAD or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
 				continue
 			var pos := place_at(q, seen_tick)
 			var along := (pos - from).dot(way)
@@ -386,7 +386,7 @@ func flash(cell: int, stun: float = FLASH_STUN, concuss: float = FLASH_CONCUSS) 
 	server.chat.sound(Net.SOUND_BANG, at.x, at.y)
 	var fell := 0
 	for q: Player in server.players:
-		if q == null or q.corpse or q.cond == Net.COND_DEAD or map.deck_of(q.st.y) != map.deck_of(at.y):
+		if q == null or q.corpse or q.in_shuttle or q.cond == Net.COND_DEAD or map.deck_of(q.st.y) != map.deck_of(at.y):
 			continue
 		var to := Vector2i(q.st.x, q.st.y)
 		if Vector2(to).distance_to(Vector2(at)) > FLASH_REACH:
@@ -473,7 +473,7 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 	var best: Player = null
 	var best_d := 1.6
 	for q: Player in server.players:
-		if q == null or q == p or q.corpse or q.cond == Net.COND_DEAD:
+		if q == null or q == p or q.corpse or q.in_shuttle or q.cond == Net.COND_DEAD:
 			continue
 		if absi(q.st.x - p.st.x) > 1 or absi(q.st.y - p.st.y) > 1 or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
 			continue

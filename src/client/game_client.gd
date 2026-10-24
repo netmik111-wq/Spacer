@@ -174,6 +174,12 @@ var meteor_tried := false            # the pilot has steered for it already
 var alert_changes := 0               # goes up whenever the alert changes (sounds, the HUD)
 var goal := Net.GOAL_NONE            # (v68) what this fight is for (Net.S_GUNS)
 var foe := 0                         # (v86) the enemy our guns aim at: 0 the ship alongside, 1 its wingman (Net.S_GUNS)
+# (v86, the author's N1) the fleet's shuttle (Net.S_SHUTTLE)
+var shuttle_docks: Array = []        # per ship of our fleet: ShipMap.shuttle_docks()
+var shuttle_at := -1                 # the dock it stands at or left (-1: no shuttle in this game)
+var shuttle_to := -1                 # the dock it flies to (-1: it stands)
+var shuttle_done := 0.0              # the share of the flight done, moved on between the server's word
+var shuttle_riders: Array[int] = []  # the ids of those aboard
 var foes: Array = [PackedByteArray([0, 0, 0, 0, 255]), PackedByteArray([0, 0, 0, 0, 255])]   # per enemy: in the fight 1/0, hull, full, class, drawing
 var goal_flags := 0                  # Net.GOALF_*
 var cargo_room := 255                # the room of the enemy's drawing with its cargo pod (255 = none)
@@ -467,6 +473,26 @@ func send_swap(a: int, b: int) -> void:
 		send_hand(a)
 
 
+func riding() -> bool:
+	## (v86) Are we in the fleet's shuttle?
+	return my_id >= 0 and shuttle_riders.has(my_id)
+
+
+func shuttle_dock_here() -> int:
+	## (v86) The dock whose console we face (-1: none).
+	var cell := use_cell()
+	for i in shuttle_docks.size():
+		if int((shuttle_docks[i] as Dictionary).get("console", -1)) == cell:
+			return i
+	return -1
+
+
+func send_shuttle(action: int, arg: int = 0) -> void:
+	## (v86) Get into the shuttle, call it, fly it to that ship (a passenger), get out (Net.SHUTTLE_*).
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_SHUTTLE, action, arg]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func turn_to(at: Vector2) -> void:
 	## Turns our character to face a place (in cells of the whole grid), the way a
 	## click does: sent as an input like walking, so it is predicted at once.
@@ -483,7 +509,7 @@ func turn_to(at: Vector2) -> void:
 
 func face(facing: int) -> void:
 	## Turns our character to face that way (Net.DIR_*), predicted at once.
-	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == facing_soon():
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == facing_soon() or riding():
 		return
 	_send_input(Mover.TURN + facing)
 	_turn_to = facing
@@ -1029,7 +1055,7 @@ func use_target(facing: int = -1) -> int:
 	## 40 = (v69) a door whose broken lock can be mended,
 	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
 	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove,
-	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out).
+	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1089,6 +1115,8 @@ func use_target(facing: int = -1) -> int:
 			return 22
 		if map.comms.has(cell):
 			return 30
+		if map.dock.has(cell):
+			return 46                        # (v86) the shuttle's dock console
 		if map.trays.has(cell):
 			return 31
 		if map.cryo.has(cell):
@@ -1610,6 +1638,8 @@ func _process(delta: float) -> void:
 			failed.emit("Сервер не отвечает. Проверьте адрес, порт и что сервер запущен.")
 	elif phase == PLAYING:
 		_advance(delta)
+		if shuttle_to >= 0:
+			shuttle_done = minf(shuttle_done + delta / Net.SHUTTLE_SECONDS, 1.0)
 
 
 func _poll() -> void:
@@ -2002,6 +2032,16 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				_holo_cells()
 				board_changes += 1
 				ship_changes += 1
+		Net.S_SHUTTLE:
+			if pkt.size() >= 5 and pkt.size() >= 5 + pkt[4] * 2:
+				shuttle_at = -1 if pkt[1] == 255 else pkt[1]
+				shuttle_to = -1 if pkt[2] == 255 else pkt[2]
+				var done := pkt[3] / 255.0
+				if shuttle_to < 0 or absf(done - shuttle_done) > 0.08 or done > shuttle_done:
+					shuttle_done = done          # (between the server's words it is moved on here)
+				shuttle_riders.clear()
+				for i in pkt[4]:
+					shuttle_riders.append(pkt.decode_u16(5 + i * 2))
 		Net.S_SUMMARY:
 			if pkt.size() >= 10:
 				var deaths: Array = []
@@ -2163,6 +2203,10 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
 	_holo_cells()
+	shuttle_docks = map.shuttle_docks()
+	shuttle_at = -1
+	shuttle_to = -1
+	shuttle_riders.clear()
 	if problem == "" and map.crc != crc:
 		problem = "Карта «%s» на сервере отличается от вашей. Нужна одинаковая сборка игры." % map_name
 	if problem != "":
