@@ -1702,3 +1702,16 @@ His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
 - **v87.1, his answers**: all my picks but two. S4 B: no sign of the oxygen tank on the body (the bubble is gone); S7 B: no
   made step, the figure slides standing. The tank rows and the step columns of the made sheet stay (holding the plain
   standing body), so the helmet and the spriter's steps can drop in without moving the layout.
+
+## v88: suited man and woman
+
+- **His suit sheets** ("full models for suited up", 96x192 each: 3 x 4 frames of 32x48): read as he drew them
+  (`CrewArt.SUIT_AT`), so nothing needs redrawing: the back once, the front from clear glass to visor, the sides from visor
+  to clear glass. Two files as he sent them (`suit_man.png`, `suit_woman.png`), each replaceable in the «sprites» folder.
+- **They fill the rows that waited for them**: the suited looks' plain rows take clear glass, the tank rows the visor down,
+  `HALF_ROW` the half visor. The made sheet's layout does not move. `CrewArt.suited` lays a visor's frames out as
+  body.png is, so the painting and `_row` work on both.
+- **The half visor only in a suit** (`WorldView._row_of`): `HALF_ROW` is per colour, not per look, so someone in a jumpsuit
+  switching the tank would have flashed a suit.
+- **Job colours on the suit** (U1 A): the same navy repaint as the body; his suit's navy (hue ~230) falls in `NAVY_HUE`.
+- **v85's `crew.png` removed** from `assets/` (U4 A; `art_src/crew.png` kept as a reference): his own suits replace it.

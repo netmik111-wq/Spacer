@@ -634,7 +634,7 @@ func _row_of(id: int) -> int:
 	if was.is_empty() or bool(was[0]) != on_tank:
 		was = [on_tank, now + VISOR_TURN if not was.is_empty() else 0.0]
 		_visor[id] = was
-	if now < float(was[1]):
+	if now < float(was[1]) and look / 2 == Net.OUTFIT_SUIT:      # (v88) only a helmet shows the visor
 		return CrewArt.HALF_ROW + colour
 	return (CrewArt.VISOR_ROW if on_tank else 0) + colour * Net.LOOKS + look
 

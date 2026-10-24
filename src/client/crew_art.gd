@@ -1,8 +1,8 @@
 extends RefCounted
 ## (v87, the author's base bodies: "man and woman, just for now") The people's sheet, made when the game
 ## starts from his base sheet (assets/body.png, or body.png in the «sprites» folder) and the old drawn
-## sheet (assets/chars.png) for the machines. (v85's suited character, assets/crew.png, waits unused for
-## the clothes drawn over the body later.)
+## sheet (assets/chars.png) for the machines. (v88) One in a space suit is drawn from his suited sheets
+## (assets/suit_man.png, suit_woman.png, or the same names in the «sprites» folder).
 ##
 ## His sheet: frames of 32x48, four across (0 the front, looking down; 1 the right side; 2 the back; 3 the
 ## left side), the woman in the top row and the man below. Only four ways for now (his words): a slant
@@ -12,8 +12,12 @@ extends RefCounted
 ## What it makes: a row per colour and look (see Net.LOOKS), cells of CHAR_W x CHAR_H with a 1-pixel
 ## border; in each row the man's 12 frames (4 ways x 3: standing, step, step: down, up, left, right) and
 ## from WOMAN_COLUMN the woman's. VISOR_ROW + the rows for one on its oxygen tank and HALF_ROW + colour the
-## moment of switching it: (his S4 B) nothing shows the tank for now, so they hold the same body; they stay
-## for the helmet the spriter draws later.
+## moment of switching it: (v88) a suited one's helmet shows it (his visor: clear glass, half, orange); without
+## a suit (his S4 B) nothing shows the tank, so those rows hold the same body.
+##
+## His suited sheets: frames of 32x48, three across and four down (SUIT_AT): the back once, then the front,
+## the left side and the right side, each with the clear glass, the visor half down and the visor down (the
+## sides from the visor down to clear glass).
 ## The navy of his top and shorts is repainted in the colour of the row (the job's, the pirates'); grey for
 ## one with no jumpsuit.
 
@@ -44,6 +48,14 @@ const NAVY_TOP := 0.45                    # the lightest navy: it becomes the co
 # per our way (Net.DIR_*, the four straight ones): his view, and the first column in the made sheet
 const VIEW_OF := {Net.DIR_DOWN: 0, Net.DIR_RIGHT: 1, Net.DIR_UP: 2, Net.DIR_LEFT: 3}
 const COLUMN_OF := {Net.DIR_DOWN: 0, Net.DIR_UP: 3, Net.DIR_LEFT: 6, Net.DIR_RIGHT: 9}
+# (v88) per our way and visor (0 clear glass, 1 half, 2 down): the frame of his suited sheet, as column, row
+const SUIT_AT := {
+	Net.DIR_UP: [Vector2i(0, 0), Vector2i(0, 0), Vector2i(0, 0)],
+	Net.DIR_DOWN: [Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)],
+	Net.DIR_LEFT: [Vector2i(2, 2), Vector2i(1, 2), Vector2i(0, 2)],
+	Net.DIR_RIGHT: [Vector2i(2, 3), Vector2i(1, 3), Vector2i(0, 3)],
+}
+const SUIT_FILES := ["suit_woman.png", "suit_man.png"]    # by the rows of body.png: 0 the woman, 1 the man
 const OLD := Vector2i(32, 48)             # a frame of assets/chars.png (the machines), with its 1-pixel border
 
 static var _sheet: Texture2D = null
@@ -79,6 +91,40 @@ static func source() -> Image:
 	return out
 
 
+static func suits() -> Array[Image]:
+	## (v88) His suited sheets, the woman's and the man's, as RGBA of 3 x 4 whole frames.
+	var out: Array[Image] = []
+	for file: String in SUIT_FILES:
+		var im := Sprites.own_image(file)
+		if im != null and (im.get_width() != FRAME.x * 3 or im.get_height() != FRAME.y * 4):
+			print("sprites/%s is %dx%d, %dx%d is needed: not used" % [file, im.get_width(), im.get_height(),
+				FRAME.x * 3, FRAME.y * 4])
+			im = null
+		if im == null:
+			im = (load("res://assets/" + file) as Texture2D).get_image()
+		else:
+			Sprites.own_files.append(file)
+		if im.is_compressed():
+			im.decompress()
+		im.convert(Image.FORMAT_RGBA8)
+		var whole := Image.create(FRAME.x * 3, FRAME.y * 4, false, Image.FORMAT_RGBA8)
+		whole.blit_rect(im, Rect2i(0, 0, mini(whole.get_width(), im.get_width()), mini(whole.get_height(), im.get_height())), Vector2i.ZERO)
+		_settle(whole)
+		out.append(whole)
+	return out
+
+
+static func suited(sheets: Array[Image], visor: int) -> Image:
+	## (v88) The suited figures with that visor, laid out as his base sheet (4 views x woman, man).
+	var out := Image.create(FRAME.x * VIEWS, FRAME.y * BODIES, false, Image.FORMAT_RGBA8)
+	for body in BODIES:
+		for way: int in VIEW_OF.keys():
+			var at: Vector2i = SUIT_AT[way][visor]
+			out.blit_rect(sheets[body], Rect2i(at.x * FRAME.x, at.y * FRAME.y, FRAME.x, FRAME.y),
+				Vector2i(int(VIEW_OF[way]) * FRAME.x, body * FRAME.y))
+	return out
+
+
 static func build() -> Image:
 	var src := source()
 	_settle(src)
@@ -86,13 +132,24 @@ static func build() -> Image:
 	var shadow := _shadow()
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
+	# (v88) the suit with its visor up, half and down, its navy painted as the body's clothes are
+	var sheets := suits()
+	var suit: Array[Image] = []
+	var suit_navy: Array[PackedInt32Array] = []
+	for visor in 3:
+		suit.append(suited(sheets, visor))
+		suit_navy.append(_navy(suit[visor]))
 	for colour in TINTS.size():
 		var painted := _paint(src, navy, TINTS[colour])
+		var suits_painted: Array[Image] = []
+		for visor in 3:
+			suits_painted.append(_paint(suit[visor], suit_navy[visor], TINTS[colour]))
 		for look in Net.LOOKS:
+			var in_suit := look / 2 == Net.OUTFIT_SUIT
 			var art := grey if look / 2 == Net.OUTFIT_BARE else painted
-			_row(out, colour * Net.LOOKS + look, art, shadow)
-			_row(out, VISOR_ROW + colour * Net.LOOKS + look, art, shadow)
-		_row(out, HALF_ROW + colour, painted, shadow)
+			_row(out, colour * Net.LOOKS + look, suits_painted[0] if in_suit else art, shadow)
+			_row(out, VISOR_ROW + colour * Net.LOOKS + look, suits_painted[2] if in_suit else art, shadow)
+		_row(out, HALF_ROW + colour, suits_painted[1], shadow)
 	# the machines and the heavy boarders keep the old drawn pictures (their four straight ways, for both bodies)
 	var old := Sprites.sheet("chars").get_image()
 	if old.is_compressed():
@@ -109,8 +166,8 @@ static func build() -> Image:
 
 
 static func _settle(src: Image) -> void:
-	## Each body's row moved up or down so the lowest pixel of its figures stands on FEET.
-	for b in BODIES:
+	## Each row of frames moved up or down so the lowest pixel of its figures stands on FEET.
+	for b in src.get_height() / FRAME.y:
 		var used := src.get_region(Rect2i(0, b * FRAME.y, src.get_width(), FRAME.y)).get_used_rect()
 		if used.size.y <= 0:
 			continue

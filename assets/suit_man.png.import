@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://s2aku17yrvsk"
-path="res://.godot/imported/crew.png-cad8fa008aed1c75c470321066676406.ctex"
+uid="uid://y50xis57hqdt"
+path="res://.godot/imported/suit_man.png-c5d3fd16c2f34f638d3126cefafeae41.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/crew.png"
-dest_files=["res://.godot/imported/crew.png-cad8fa008aed1c75c470321066676406.ctex"]
+source_file="res://assets/suit_man.png"
+dest_files=["res://.godot/imported/suit_man.png-c5d3fd16c2f34f638d3126cefafeae41.ctex"]
 
 [params]
 

@@ -189,6 +189,12 @@ Open problems:
 - v87.1 (0.80.1), his answers: no tank bubble (S4 B), no made step, figures slide standing (S7 B). Build in
   `/mnt/project-files/builds/v87.1/`.
 
+### v88 (his suit sheets "full models for suited up"; questions on "Spacer v88 Suits")
+
+- Anyone in a space suit is drawn from his suited man and woman: the visor clear, half or down by the oxygen tank, the
+  suit's navy in the job's colour. `sprites/suit_man.png` and `suit_woman.png` replace them. v85's `crew.png` removed.
+- Version 0.81, build in `/mnt/project-files/builds/v88/`.
+
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
   power, air, guns, lockers, fuel, food and bots, one purse, either helm flies both, each burns its own fuel. Pirates

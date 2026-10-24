@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v87.1 (version 0.80.1: man and woman base bodies, two fleet bug fixes; no tank bubble, no made step) is the latest. Plans one to four are done except the darkness front (the
+Build v88 (version 0.81: his suited man and woman, the visor shows the oxygen tank) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -110,6 +110,8 @@ v87 (his base sheet "man and woman, just for now", answers on `https://claude.ai
 from `body.png` (32x48, four ways, a slant shows the side), man or woman picked on the menu (bots by lot), job colours on the
 top and shorts (v87.1, his S4 B and S7 B: no tank sign on the body, no made step); fixed: the fleet's ships shared their gun charges (the second never fired),
 and an admin-called pirate could not come while a wreck lay alongside. Next art step he may take: clothes as layers.
+v88 (his suit sheets, answers on `https://claude.ai/artifact/FMqARBDwoc4J2UUdpvwYr5`): anyone in a space suit is drawn from
+`suit_man.png`/`suit_woman.png` (3 visors x 4 ways of 32x48, `CrewArt.SUIT_AT`): clear glass, half, the visor down on the tank.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -283,7 +285,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
   world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
-  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet; since v87 built from `body.png`), `sprites.gd` (v74: pictures
+  sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet; since v87 built from `body.png`, v88 the suits from `suit_man.png`/`suit_woman.png`), `sprites.gd` (v74: pictures
   replaced from `sprites/` next to the game; every sheet and item picture loads through it).
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
   helm), `store_view.gd`, `trade_view.gd`, `guns_view.gd`, `holo_view.gd`, `drone_view.gd` (`enemy_plan.gd`
