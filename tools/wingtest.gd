@@ -261,7 +261,7 @@ func _initialize() -> void:
 	for t in 600:
 		for i in 2:
 			fleet.use(i)
-			g.enemy_hull = maxi(g.enemy_hull, 3)          # (kept alive: the count is what matters)
+			g.enemy_hull = g.hull_full()                  # (kept whole, so it neither breaks nor runs: the count is what matters)
 			g.enemy_charge.fill(0.0)                      # (and harmless: its hits may break a console or a gun)
 			before[i] = g.charge.duplicate()
 		fleet.use(0)
@@ -280,7 +280,15 @@ func _initialize() -> void:
 	fleet.use(0)
 	_expect(shots[0] > 0 and shots[1] > 0, "(v87) both ships' gunner bots fire (%s; at the consoles %s)" % [str(shots), str(posted)])
 	# (v87, the author's note: after beating a pirate ship called by the admin, no other could be called)
-	g._wrecked()
+	if not g.alive():
+		# (our gunners may have killed its crew, and it broke off and went: call another)
+		_clear()
+		d.near = 0
+		d._spots = d._spots_of[0]
+		d._aimed_at = server.tick
+		d.pirates_come(2)
+	if g.alive():
+		g._wrecked()
 	_run(2)
 	_expect(d.here and d.wreck, "(the beaten ship stays alongside as a wreck)")
 	server.admin.fight(1, 0, false)

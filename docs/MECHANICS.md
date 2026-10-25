@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v87.1 (version 0.80.1).
+Last updated: build v88.1 (version 0.81.1).
 
 Contents:
 
@@ -49,6 +49,7 @@ Contents:
 39. [Our fleet and the new character (v85)](#39-our-fleet-and-the-new-character-v85)
 40. [The fleet's fixes, the pirates' wingman, the shuttle (v86)](#40-the-fleets-fixes-the-pirates-wingman-the-shuttle-v86)
 41. [Man and woman base bodies (v87)](#41-man-and-woman-base-bodies-v87)
+42. [Suited man and woman (v88)](#42-suited-man-and-woman-v88)
 
 ---
 
@@ -2255,8 +2256,8 @@ Base Bodies" (https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg), built on my pi
   the spriter's clothes later. (v87 drew a glass bubble.)
 - **Walking** (his S7 B, v87.1): no step for now: the figure slides standing until the spriter draws step frames. (v87 kept
   the made bob and lifted foot.)
-- Robots and heavy boarders keep their old pictures, in four ways too. The spriter's suited character (v85) is kept in the
-  game files, unused, for clothes drawn over the body later (S6).
+- Robots and heavy boarders keep their old pictures, in four ways too. The spriter's suited character (v85) was kept in the
+  game files, unused (S6), until his own suits came in v88 (see 42).
 
 ### Two fleet bugs (his notes)
 
@@ -2268,3 +2269,23 @@ Base Bodies" (https://claude.ai/artifact/QVjVrb4gyzMQF6hdfwPCPg), built on my pi
   flagship) now lets the wreck drift off first, as a hunter does; it stays on the chart and can be searched later. In a
   normal game a wreck still keeps the next pirate ship away until the ship leaves (B1). If one of ours is on the wreck,
   the admin is told that no ship can come.
+
+## 42. Suited man and woman (v88)
+
+The author's two suit sheets ("full models for suited up"); questions on the page "Spacer v88 Suits"
+(https://claude.ai/artifact/FMqARBDwoc4J2UUdpvwYr5), built on my picks.
+
+- **Anyone in a space suit** (ours, bots, pirates) is drawn from his suited sheets, man or woman as their body; without a
+  suit it is the base body of 41. Four ways, as the body: a slant shows the side.
+- **The visor shows the oxygen tank**: clear glass while off the tank, the orange visor down while breathing from it, and
+  for a moment (as the tank goes on or off) the visor half down. The back shows the helmet only. Without a suit nothing
+  shows the tank (his S4 B).
+- **Job colours** (U1): the navy parts of the suit take the job's colour (pirates their own); the white, the orange and the
+  black stay.
+- **His own sheets** go in the «sprites» folder as `suit_man.png` and `suit_woman.png`, 96×192 each: frames of 32×48, three
+  across, four rows: the back (one frame), the front (glass, half, visor), the left side and the right side (visor, half,
+  glass).
+- The spriter's old suited sheet of v85 (`crew.png`) is no longer in the game (U4).
+- (v88.1, his U2 B) **Pirates' visors glow red** (the orange of their helmet turned red), so they stand out from ours.
+- (v88.1, his note) **The shadow follows the body**: a soft oval round the feet while standing, stretching along the whole
+  body while lying (crawling, out cold or dead). Robots and heavy boarders keep the shadow of their old pictures.
