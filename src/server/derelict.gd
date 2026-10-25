@@ -394,6 +394,8 @@ func dark() -> bool:
 func becomes_wreck() -> void:
 	## Our guns have wrecked a raider: it stays alongside, dead. Who is aboard it
 	## and alive is settled now and found out when the first of us comes aboard.
+	if ship == null or not here:
+		return                           # (v89) nothing alongside any more (it was beaten and gone already)
 	_pirates_dock_at = -1
 	raid = false
 	wreck = true
