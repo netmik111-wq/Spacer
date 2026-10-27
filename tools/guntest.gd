@@ -38,6 +38,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.arena.enabled = false            # (v92) the fight as it was before it flew in space (arenatest has that)
 	server.gunnery.flies = false              # (v56) shots land the moment they are fired here
 	server.systems.knock_chance = 0.0   # (v68) pirate hits break nothing near them here
 	var map := server.map

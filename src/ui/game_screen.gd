@@ -30,6 +30,7 @@ const Upkeep := preload("res://src/shared/upkeep.gd")
 const PowerView := preload("res://src/ui/power_view.gd")
 const CommsView := preload("res://src/ui/comms_view.gd")
 const ShuttleView := preload("res://src/ui/shuttle_view.gd")
+const SpaceView := preload("res://src/ui/space_view.gd")
 const Plants := preload("res://src/shared/plants.gd")
 const BridgeView := preload("res://src/ui/bridge_view.gd")
 const Look := preload("res://src/ui/look.gd")
@@ -120,6 +121,11 @@ var _galley_view: GalleyView         # (v71) the galley stove's screen, the same
 var _power_view: PowerView           # (v61) an SMES's terminal, set up when first shown
 var _comms_view: CommsView           # (v63) the comms console, set up when first shown
 var _shuttle_view: ShuttleView       # (v86) the shuttle's dock console (and the shuttle's own screen aboard)
+var _space_view: SpaceView           # (v92) the fight in space: at the ship's controls (steering) and at a gun mount (aiming)
+var _space_small: SpaceView          # (v92) and small in a corner for anyone, by V
+var _turret_sent := 0                # (v92) msec the gun's aim was last sent
+var _turret_fire := false
+var _space_wanted := false           # (v92) V was pressed for the small view
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
 var _drag_slot := -1                 # (v73) the slot whose thing is being dragged along the bar
@@ -507,6 +513,17 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	root.add_child(_menu)
 
 	_build_console(root)
+	_space_small = SpaceView.new()          # (v92) V: the fight in space, small, at the top right
+	_space_small.setup(client)
+	_space_small.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_space_small.zoom = 2.2
+	_space_small.visible = false
+	_space_small.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_space_small.offset_left = -380.0
+	_space_small.offset_right = -12.0
+	_space_small.offset_top = 64.0
+	_space_small.offset_bottom = 304.0
+	root.add_child(_space_small)
 	_build_pause(root)
 	_root = root
 	if client.admin_token != "":
@@ -730,6 +747,11 @@ func _build_console(root: Control) -> void:
 	_shuttle_view = ShuttleView.new()
 	_shuttle_view.visible = false
 	box.add_child(_shuttle_view)
+	_space_view = SpaceView.new()
+	_space_view.custom_minimum_size = Vector2(640, 370)
+	_space_view.visible = false
+	box.add_child(_space_view)
+	_space_view.setup(client)
 	_chart = Control.new()
 	_chart.custom_minimum_size = Vector2(640, 300)
 	_chart.draw.connect(_draw_chart)
@@ -755,7 +777,7 @@ func _opens_panel(target: int) -> bool:
 	## Does the "use" key open a screen for this thing (see GameClient.use_target)?
 	## The bridge consoles and the holomap need power (v61: the bridge's backup SMES keeps those in its
 	## room going); the supply locker and the workbench are worked by hand, an SMES's terminal is its own.
-	return target == 12 or target == 22 or target == 28 or target == 46 or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
+	return target == 12 or target == 22 or target == 28 or target == 46 or (target == 49 and client.powered()) or ((target == 3 or target == 4 or target == 17 or target == 20 or target == 21
 		or target == 30 or target == 44) and client.power_at(client.use_cell()))
 
 
@@ -785,7 +807,7 @@ func _open_console(kind: int) -> void:
 		_shift.mark(FirstShift.LOCKER if kind == 12 else FirstShift.HELM)
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44 or kind == 46
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44 or kind == 46 or kind == 49
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
@@ -813,6 +835,10 @@ func _open_console(kind: int) -> void:
 	_power_view.visible = kind == 28
 	_comms_view.visible = kind == 30
 	_shuttle_view.visible = kind == 46
+	_space_view.visible = kind == 49
+	_space_view.mode = SpaceView.TURRET if kind == 49 else SpaceView.PILOT
+	_space_view.gun = client.turret_here(client.use_cell()) if kind == 49 else -1
+	_space_view.firing = false
 	_chart.visible = not own_view
 	_console_text.visible = not own_view
 	_needs_box.visible = kind == 3 or kind == 4
@@ -823,13 +849,14 @@ func _open_console(kind: int) -> void:
 		(Color(0.35, 0.7, 0.9) if kind == 20 else (Color(0.35, 0.9, 0.95) if kind == 21 else (Color(0.8, 0.65, 0.35) if kind == 22 or kind == 44 else (Color(0.9, 0.8, 0.3) if kind == 28 else (Color(0.45, 0.75, 1.0) if kind == 30 or kind == 46 else Color(0.3, 0.75, 0.45)))))))
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
 		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения",
-		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита", 46: "Челнок флотилии"}.get(kind, "")
+		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита", 46: "Челнок флотилии",
+		49: "Орудие %d: ручное наведение" % (_space_view.gun + 1)}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
 	if kind == 21:
 		_drone_view.opened()
-	_console_shut.text = Options.keyed("Выйти из челнока (E или Esc)") if client.riding() else Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else "Отойти от пульта (E или Esc)"))))
+	_console_shut.text = Options.keyed("Выйти из челнока (E или Esc)") if client.riding() else Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else ("Отойти от орудия (E или Esc)" if kind == 49 else "Отойти от пульта (E или Esc)")))))
 
 
 func _show_trade(on: bool) -> void:
@@ -897,14 +924,64 @@ func _update_console() -> void:
 	if _console_kind == 46:
 		_shuttle_view.refresh()
 		return
+	if _console_kind == 49:
+		_aim_turret()
+		return
 	_update_needs()
 	if _console_kind == 4:
+		# (v92) in a fight in real time the ship's controls show the fight in space and steer the ship
+		var flying := client.arena_on()
+		if _space_view.visible != flying:
+			_space_view.visible = flying
+			_chart.visible = not flying
+			_jump_box.visible = not flying
+			_console_shut.text = "Отойти от пульта (Esc)" if flying else Options.keyed("Отойти от пульта (E или Esc)")
+			_console.reset_size()
+		if flying:
+			_console_text.text = "Бой: ведите корабль сами. Орудия стреляют по тем, кто в их секторе обстрела."
+			return
 		_bridge.update_helm()
 		return
 	_bridge.update_chart()
 
 
 const NEED_COLOURS := [Color(0.45, 0.85, 0.5), Color(0.98, 0.8, 0.3), Color(1.0, 0.42, 0.35)]
+
+
+func _aim_turret() -> void:
+	## (v92) At a gun mount in a fight: the gun turns to the mouse and fires while the button is held.
+	if not client.arena_on() or _space_view.gun < 0:
+		_open_console(0)
+		return
+	var now := Time.get_ticks_msec()
+	if _space_view.firing != _turret_fire or now - _turret_sent >= 100:
+		_turret_fire = _space_view.firing
+		_turret_sent = now
+		client.send_turret(_space_view.gun, _space_view.aim_point(), _space_view.firing)
+
+
+func _space_small_shown() -> void:
+	_space_small.visible = _space_wanted and client.arena_on() and not _console.visible
+
+
+func _pilot_keys() -> void:
+	## (v92) At the ship's controls in a fight: W/S thrust, A/D turn, Q/E slide (Arena.KEY_*).
+	if _console_kind != 4 or not _console.visible or not client.arena_on():
+		return
+	var keys := 0
+	if Options.held("move_up"):
+		keys |= 1
+	if Options.held("move_down"):
+		keys |= 2
+	if Options.held("move_left"):
+		keys |= 4
+	if Options.held("move_right"):
+		keys |= 8
+	if Input.is_physical_key_pressed(KEY_Q):
+		keys |= 16
+	if Input.is_physical_key_pressed(KEY_E):
+		keys |= 32
+	client.send_pilot(keys)
 
 
 func _update_needs() -> void:
@@ -1220,6 +1297,8 @@ func open_panel(which: String) -> void:
 		"options":
 			_options_panel().open()
 			_options_panel().show_tab(tab)
+		"space":
+			_space_wanted = true                 # (v92) the fight in space, small
 		"pause":
 			_set_pause(true)
 		"trade":
@@ -1477,6 +1556,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_respawn()
 	elif _pause.visible:
 		done = false
+	elif Options.pressed(event, "use") and _console.visible and _console_kind == 4 and client.arena_on():
+		pass                                            # (v92) the pilot's E slides the ship; Esc steps away
 	elif Options.pressed(event, "use") and _console.visible:
 		_open_console(0)                                # the key closes a screen it opened
 	elif _console_kind == 4 and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
@@ -1510,6 +1591,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_inventory_panel().toggle()
 	elif Options.pressed(event, "crew"):
 		_crew_panel().toggle()
+	elif Options.pressed(event, "space"):
+		_space_wanted = not _space_wanted                   # (v92) the fight in space, small, in a corner
+		if not client.arena_on():
+			_say("[color=#9fc3ff]%s[/color]" % ("Окно боя в космосе откроется, когда начнётся бой (V)." if _space_wanted
+				else "Окно боя в космосе выключено."), TAB_SHIP, "space")
 	elif Options.pressed(event, "help"):
 		_help_book().toggle()
 		_shift.mark(FirstShift.HELP)
@@ -1947,6 +2033,8 @@ func _process(delta: float) -> void:
 	_update_banner(delta)
 	_update_hurt_edge(delta)
 	_update_console()
+	_pilot_keys()
+	_space_small_shown()
 	for m: Array in MOVES:
 		var dir: int = m[1]
 		var down := Options.held(m[0]) and not busy
@@ -2041,6 +2129,9 @@ func _process(delta: float) -> void:
 		var c: int = client.gun_charge[g] if g < client.gun_charge.size() else 0
 		_hint.text = "Орудие %d: %s. Стреляют с пульта орудий на мостике%s" % [g + 1, "нет питания" if no_power else ("готово" if c >= 100 else "заряжается, %d%%" % c),
 			"" if no_power else "; вы у орудия: оно заряжается быстрее"]
+	elif target == 49:
+		var g49 := client.turret_here(client.use_cell())
+		_hint.text = "Орудие %d. E: встать к орудию — наводить мышью и стрелять самому" % (g49 + 1)
 	elif target == 25:
 		var mount_why := client.mount_here(client.use_cell())
 		var g := client.map.guns.find(client.use_cell())

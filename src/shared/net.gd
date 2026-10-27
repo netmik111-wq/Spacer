@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 65
+const PROTOCOL := 66
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -244,6 +244,22 @@ const C_ALERT := 33
 const C_SWAP := 34                  # (v73) u8 slot, u8 slot: swap what is in two of our slots (dragged in the inventory)
 const C_TAKE := 35                  # (v80) u32 cell, u8 place in its stack: take that one thing off the floor (the right-click menu)
 const C_SHUTTLE := 36               # (v86) u8 SHUTTLE_*, u8 the ship of our fleet to fly to (SHUTTLE_FLY): the fleet's shuttle
+const C_PILOT := 37                 # (v92) u8 the pilot's keys (Arena.KEY_*): from the ship's controls in the fight's space
+const C_TURRET := 38                # (v92) u8 gun, s16 x*8, s16 y*8 (the point aimed at, in the fight's space), u8 1 = the
+                                    # trigger held: from a gun's mount, by the one who took its controls
+const S_ARENA := 50                 # (v92) the fight's space, to all (Arena.packet): u32 tick, u8 count, then per ship
+                                    # u8 body, u8 ARENA_*, s16 drawing (-1 ours), s16 x*8, y*8, vx*8, vy*8, u16 heading,
+                                    # s16 spin*1000, u8 shield, u8 guns, per gun s16 aim*1000, u8 1 bears | 2 by hand
+const S_ARENA_SHOT := 51            # (v92) a shot there: u8 ARENA_SHOT_*, then FLY: u16 id, u8 SHOT_*, u8 side (0 ours),
+                                    # u32 tick, s16 x*8, y*8, s16 vx*2, vy*2, u16 ticks to live; END: u16 id, u8 how
+                                    # (LANDED, 0 the shield, MISSED, SHOT_DOWN, RICOCHET), s16 x*8, y*8;
+                                    # BEAM: u8 0, u8 0, u8 SHOT_*, u8 0, s16 x*8, y*8 from, s16 x*8, y*8 to, u8 ticks
+const ARENA_THRUST := 1             # its engines push now
+const ARENA_GLUED := 2              # docked: it rides alongside the ship it boards
+const ARENA_PILOTED := 4            # a player steers it
+const ARENA_SHOT_FLY := 0
+const ARENA_SHOT_END := 1
+const ARENA_SHOT_BEAM := 2
 const SHUTTLE_BOARD := 0            # get in, at a dock console with the shuttle there
 const SHUTTLE_CALL := 1             # call the empty shuttle to this dock
 const SHUTTLE_FLY := 2              # (a passenger) fly to that ship's dock
