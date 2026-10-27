@@ -197,6 +197,18 @@ Open problems:
 - v88.1 (0.81.1), his answers and note: pirates' visors glow red (U2 B); the shadow is drawn by the game and lies along a
   body lying down. Build in `/mnt/project-files/builds/v88.1/`.
 
+### v89 (his 18 Notebook notes; questions on "Spacer v89 Notes")
+
+- Fixed: guns switched off by a power shortage (ion storm) now come back on by themselves; teleported pirates arrive
+  suited; the heavy boarder in the new suit; a wreck no longer vanishes when our people leave it; bodies stay on wrecks and
+  floating ones are left behind on a jump; bots climb ladders with a door or turret in front; a pile's things vanish one by
+  one; sounds heard from the character's feet (silent nose); a drawn gun sight.
+- His suggestions: the pirates' teleport 5 times rarer, with a 5 s warning (banner, hum, shimmer) and boarders spread over
+  rooms; meteors 3 times, pirate events 1.75 times rarer, hunters 1.25 times fewer; click a system on the chart to jump;
+  «К оружию» orders for bots; the «beaten» message tells the survivors.
+- Protocol 64; checks added to `enemytest` and `defencetest` (44 scripts). Version 0.82, build in
+  `/mnt/project-files/builds/v89/`.
+
 ### v85 (his answers on "Spacer v85 Ships": our fleet, the spriter's character)
 - «Второй корабль:» on the main menu starts a fleet of two ships of ours, one below the other: each with its own hull,
   power, air, guns, lockers, fuel, food and bots, one purse, either helm flies both, each burns its own fuel. Pirates

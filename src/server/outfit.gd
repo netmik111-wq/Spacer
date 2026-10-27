@@ -26,6 +26,8 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Player := preload("res://src/server/player.gd")
 
+const CUT_SHIELD := -2               # (v89) in Ship.cut: the shield; sorted first, so it comes back first
+const CUT_GUARD := -1                # (v89) in Ship.cut: the point defence
 const NOT_HERE := "-"                # can(): the thing ahead is not where that crate (or empty hands) does anything
 
 var server: GameServer
@@ -171,15 +173,63 @@ func fit_power() -> bool:
 		if ship.armed[i] == 1:
 			ship.armed[i] = 0
 			server.gunnery.charge[i] = 0.0
+			_was_cut(i)
 			cut = true
 	if server.gunnery.power_used() > budget and ship.guard_armed:
 		ship.guard_armed = false
+		_was_cut(CUT_GUARD)
 		cut = true
 	if server.gunnery.power_used() > budget and ship.shield_on:
 		ship.shield_on = false
 		ship.shield = 0.0
+		_was_cut(CUT_SHIELD)
 		cut = true
 	return cut
+
+
+func _was_cut(what: int) -> void:
+	if not server.ship.cut.has(what):
+		server.ship.cut.append(what)
+
+
+func restore_power() -> String:
+	## (v89, his note: after an ion storm or a teleported raid the guns stayed off and the crew
+	## could not tell how to bring them back) What a shortage switched off comes back on by itself,
+	## the shield first, then the guns in their order, as soon as the power is there again.
+	## Returns the names of what came back ("" for none).
+	var ship = server.ship
+	var g = server.gunnery
+	if ship.cut.is_empty() or g == null or server.power == null or not server.powered():
+		return ""
+	var back := PackedStringArray()
+	ship.cut.sort()
+	for what: int in ship.cut.duplicate():
+		var need := 0
+		if what == CUT_SHIELD:
+			need = Weapons.SHIELD_POWER if not ship.shield_on else 0
+		elif what == CUT_GUARD:
+			need = Weapons.power(ship.guard) if ship.guard != Weapons.NONE and not ship.guard_armed else 0
+		elif what < ship.mounts.size() and ship.mounts[what] != Weapons.NONE and ship.armed[what] == 0:
+			need = Weapons.power(ship.mounts[what])
+		else:
+			ship.cut.erase(what)               # taken down or already on
+			continue
+		if need == 0:
+			ship.cut.erase(what)
+			continue
+		if g.power_used() + need > server.power.budget():
+			continue
+		ship.cut.erase(what)
+		if what == CUT_SHIELD:
+			ship.shield_on = true
+			back.append("щит")
+		elif what == CUT_GUARD:
+			ship.guard_armed = true
+			back.append(Weapons.name_of(ship.guard))
+		else:
+			ship.armed[what] = 1
+			back.append(Weapons.name_of(ship.mounts[what]))
+	return ", ".join(back)
 
 
 # ---------------------------------------------------------------- installing

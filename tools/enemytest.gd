@@ -160,12 +160,21 @@ func _teleport() -> void:
 	var crew: int = g.boarders_left()
 	var aboard: int = server.pirates.aboard()
 	var n: int = server.assault.teleport()
-	_expect(n > 0 and n <= Assault.TELEPORT_PARTY, "it puts some of its crew aboard us (%d)" % n)
+	_expect(n > 0 and n <= Assault.TELEPORT_PARTY and server.assault.charging() and server.pirates.aboard() == aboard,
+		"(v89) its teleport charges first, nobody yet (%d to come)" % n)
+	_run(roundi(Assault.TELEPORT_WARN * Net.TICK_HZ) + 1)
+	_expect(not server.assault.charging(), "and lands them %d s later" % roundi(Assault.TELEPORT_WARN))
 	var landed := 0
+	var suited := 0
+	var rooms := {}
 	for p in server.players:
 		if p != null and p.pirate and not p.corpse and map.on_ship(p.st.y * map.width + p.st.x):
 			landed += 1
+			suited += 1 if p.has_suit() or p.toughness < 1.0 else 0
+			rooms[map.room_at(p.st.x, p.st.y)] = true
 	_expect(landed == n and server.pirates.aboard() == aboard + n, "they stand on our ship")
+	_expect(suited == landed, "(v89) all in suits (or heavy armour)")
+	_expect(rooms.size() == landed, "(v89) each in a room of its own")
 	_expect(g.boarders_left() == crew - n and server.enemy_crew.count() == crew - n and d._pirates_party == crew - n,
 		"its crew counts follow (%d left)" % g.boarders_left())
 	g.systems[Net.ESYS_TELEPORT] = 0

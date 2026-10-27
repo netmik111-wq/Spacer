@@ -9,6 +9,7 @@ extends SceneTree
 const GameServer := preload("res://src/server/game_server.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Net := preload("res://src/shared/net.gd")
+const Director := preload("res://src/server/director.gd")
 
 var failed := 0
 
@@ -18,6 +19,7 @@ func _initialize() -> void:
 		for kind in [Sectors.STATION, Sectors.EMPTY, Sectors.METEORS]:
 			for mends in [false, true]:
 				_run(crew, kind, mends)
+	_rarer()
 	print("DIRECTORTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
 	quit(1 if failed > 0 else 0)
 
@@ -46,6 +48,7 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 		server.sectors.reach[here] = 50
 	server.ship.sector = here
 	server.ship.pos = server.sectors.entry[here]      # in a meteor stream that is inside the stream
+	server.director.rarer = {}                        # (v89) the pace alone; the rarer kinds are checked below
 	server.director.entered_sector()
 	var minutes := 30
 	var most_holes := 0
@@ -78,6 +81,26 @@ func _run(crew: int, kind: int, mends: bool) -> void:
 	if not mends and kind != Sectors.STATION:
 		# a single volley may overshoot the limit by its own three hits, no more
 		_expect(most_holes <= limit + 2, "the director holds back while holes stay open (limit %d)" % limit)
+	server.stop()
+	server.free()
+
+
+func _rarer() -> void:
+	## (v89, the author's numbers) Meteors 3 times rarer, pirates 1.75: of many picks, about that share comes.
+	var server := GameServer.new()
+	get_root().add_child(server)
+	server.start(26100, "ship01", 0)
+	var d = server.director
+	var came := {}
+	var picks := 3000
+	for i in picks:
+		var e := {"id": [Director.MICROMETEORITE, Director.PIRATE_SHIP][i % 2]}
+		if d._rng.randf() * float(d.rarer.get(int(e["id"]), 1.0)) <= 1.0:
+			came[e["id"]] = int(came.get(e["id"], 0)) + 1
+	var meteors := float(came.get(Director.MICROMETEORITE, 0)) / (picks / 2)
+	var pirates := float(came.get(Director.PIRATE_SHIP, 0)) / (picks / 2)
+	_expect(absf(meteors - 1.0 / 3.0) < 0.06 and absf(pirates - 1.0 / 1.75) < 0.06,
+		"(v89) a picked meteor comes %.2f of the time, a pirate ship %.2f" % [meteors, pirates])
 	server.stop()
 	server.free()
 

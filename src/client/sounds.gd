@@ -19,6 +19,7 @@ const Options := preload("res://src/client/options.gd")
 const RATE := 22050
 const VOICES := 16                   # sounds that can play at once
 const MUFFLED_BUS := "Muffled"
+const TELEPORT_HUM := 5.0            # (v89) seconds: as long as the teleport's warning (Assault.TELEPORT_WARN)
 
 # (v56) the name of each sound, for files that replace it (see above)
 const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: "hiss", Net.SOUND_THUD: "thud",
@@ -26,7 +27,7 @@ const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: 
 	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load", Net.SOUND_BANG: "bang", Net.SOUND_BEEP: "beep",
 	Net.SOUND_SHOTGUN: "shotgun", Net.SOUND_ZAP: "zap",
 	Net.SOUND_CRY: "cry", Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup",
-	Net.SOUND_SWING: "swing"}   # (v82; v84 the swing)
+	Net.SOUND_SWING: "swing", Net.SOUND_TELEPORT: "teleport"}   # (v82; v84 the swing; v89 the teleport)
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -106,6 +107,7 @@ static func prepare() -> void:
 	_streams[Net.SOUND_RELOAD] = [_reload()]
 	_streams[Net.SOUND_PICKUP] = [_pickup()]
 	_streams[Net.SOUND_SWING] = [_swing(1.0), _swing(0.85)]   # (v84)
+	_streams[Net.SOUND_TELEPORT] = [_teleport()]        # (v89)
 	_streams[UI_OPEN] = [_ui_blip(1.0)]
 	_streams[UI_CLOSE] = [_ui_blip(0.75)]
 	_streams[UI_DENY] = [_ui_deny()]
@@ -480,6 +482,18 @@ static func _swing(pitch: float) -> AudioStreamWAV:
 	_noise(out, 0.0, 0.22, 0.22 * pitch, 6.0, 0.15)
 	_tone(out, 0.02, 180.0 * pitch, 0.04, 10.0, 120.0)
 	_fade(out, 0.03)
+	return _wav(out)
+
+
+static func _teleport() -> AudioStreamWAV:
+	# (v89, his note) a pirate teleport charging: a hum rising over the seconds of warning, with a crackle
+	var out := _buffer(TELEPORT_HUM)
+	var steps := 12
+	for k in steps:
+		var t := TELEPORT_HUM * k / steps
+		_tone(out, t, 140.0 + 60.0 * k, 0.05 + 0.006 * k, 2.5)
+	_noise(out, TELEPORT_HUM - 0.5, TELEPORT_HUM, 0.25, 8.0, 0.4)
+	_fade(out, 0.05)
 	return _wav(out)
 
 

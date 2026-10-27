@@ -648,6 +648,7 @@ func arm(p, a: int, on: bool) -> void:
 	if not on:
 		ship.armed[a] = 0
 		charge[a] = 0.0              # a gun without power loses its charge
+		ship.cut.erase(a)            # (v89) switched off by hand: it stays off
 	elif ship.armed[a] == 0:
 		if power_used() + Weapons.power(ship.mounts[a]) > server.power.budget():
 			if p != null:
@@ -665,6 +666,7 @@ func switch_shield(p, on: bool) -> void:
 	if not on:
 		ship.shield_on = false
 		ship.shield = 0.0
+		ship.cut.erase(-2)           # (v89) Outfit.CUT_SHIELD: switched off by hand, it stays off
 	elif not ship.shield_on:
 		if power_used() + Weapons.SHIELD_POWER > server.power.budget():
 			if p != null:
@@ -738,6 +740,7 @@ func arm_guard(p, on: bool) -> void:
 	ship.guard_armed = on
 	if not on:
 		guard_charge = 0.0
+		ship.cut.erase(-1)           # (v89) Outfit.CUT_GUARD
 
 
 func guard_ready() -> bool:
@@ -1998,8 +2001,8 @@ func _wrecked() -> void:
 		for i in Net.WRECK_FUEL:
 			server.derelict.drop_thing(Net.ITEM_FUEL)
 	var gun := _loot_gun(false)
-	server.chat.say("Пиратский корабль разбит%s! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s%s" % [
-		", не успев пристыковаться" if boarder else "", reward, gun, _goal_paid()])
+	server.chat.say("Пиратский корабль разбит%s! За него начислено %d кредитов. Его обломки остались у шлюза: туда можно добраться через открытый космос или пристыковаться с пульта управления и обыскать.%s%s%s" % [
+		", не успев пристыковаться" if boarder else "", reward, server.derelict.survivors_note(), gun, _goal_paid()])
 	server.supplies.tell_store()
 
 
