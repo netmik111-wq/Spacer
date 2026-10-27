@@ -330,7 +330,11 @@ func tick() -> void:
 	_small_tick()
 	_overcharge_tick()
 	if server.outfit.fit_power():
-		server.chat.say("Не хватает энергии: часть орудий отключена%s." % (" (ионный шторм ослабил реактор)" if server.hazards.in_storm() else ""))
+		server.chat.say("Не хватает энергии: часть орудий отключена%s. Включатся сами, когда энергии хватит." % (" (ионный шторм ослабил реактор)" if server.hazards.in_storm() else ""))
+	elif server.tick % Net.TICK_HZ == 0:
+		var back: String = server.outfit.restore_power()
+		if back != "":
+			server.chat.say("Энергии снова хватает: включено — %s." % back)
 	var now := on()
 	if now != _was_on:
 		_was_on = now

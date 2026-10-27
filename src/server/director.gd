@@ -83,6 +83,9 @@ const PACE := {
 	Sectors.DERELICT: [180.0, 360.0],
 	Sectors.ION_STORM: [180.0, 360.0],   # (v61) its surges come on their own pace (Hazards)
 }
+## (v89, the author's note: "meteors strike too often, 3 times; pirates come too often, 1.75 times")
+## an event picked by chance comes only one time in this many (the pace between picks stays)
+const RARER := {MICROMETEORITE: 3.0, METEOR_VOLLEY: 3.0, BOARDING: 1.75, PIRATE_SHIP: 1.75, PIRATE_RAID: 1.75}
 const MERCY_SECONDS := 20.0          # how long an event is put off while the ship is already in trouble
 const SETTLE_SECONDS := 15.0         # quiet after arriving in a sector
 const STREAM_GRACE_SECONDS := 8.0    # quiet after flying into or out of a meteor stream
@@ -94,6 +97,7 @@ var auto := true                     # false: only events fired by hand happen
 var quiet_start := true              # (v75, the author's E4) on easy and normal nothing comes in a campaign's first QUIET_START seconds
 const QUIET_START := 300.0
 var fired := 0                       # how many events have happened (for tests)
+var rarer := RARER.duplicate()       # (v89) tests: {} = every pick comes, to check the pace alone
 
 var _rng := RandomNumberGenerator.new()
 var _next_tick := 0
@@ -139,6 +143,9 @@ func tick() -> void:
 	var event := _pick()
 	if event.is_empty():
 		_schedule(60.0)
+		return
+	if _rng.randf() * float(rarer.get(int(event["id"]), 1.0)) > 1.0:
+		_schedule(0.0)                       # (v89) this time it passes us by
 		return
 	fire(int(event["id"]))
 	_schedule(0.0)

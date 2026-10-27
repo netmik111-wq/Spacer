@@ -17,6 +17,8 @@ var _labels: Array = []              # per bot row: its Label
 var _buttons: Array = []             # per bot row: its Buttons, one per Net.POST_*
 var _all: Button
 var _free: Button
+var _arms_all: Button               # (v89) every bot fights boarders
+var _arms_none: Button              # (v89) only the guards do
 var _log: RichTextLabel              # (v72) the bots' log
 var _log_shown := 0                  # GameClient.bot_log_count already in it
 var _log_any := false
@@ -70,8 +72,21 @@ func setup(p_client: GameClient) -> void:
 	_free.focus_mode = Control.FOCUS_NONE
 	_free.pressed.connect(func() -> void: client.send_order(Net.NOBODY, Net.POST_FREE))
 	row.add_child(_free)
+	# (v89, the author's note: "defenders of the ship... or only some of our crew fights back")
+	_arms_all = Button.new()
+	_arms_all.text = "Все к оружию"
+	_arms_all.tooltip_text = "Каждый бот при абордаже берёт оружие из шкафа снабжения и отбивается, как охранник"
+	_arms_all.focus_mode = Control.FOCUS_NONE
+	_arms_all.pressed.connect(func() -> void: client.send_order(Net.NOBODY, Net.POST_ARMS))
+	row.add_child(_arms_all)
+	_arms_none = Button.new()
+	_arms_none.text = "Оружие только охране"
+	_arms_none.tooltip_text = "Боты, кроме охранников, при абордаже снова укрываются"
+	_arms_none.focus_mode = Control.FOCUS_NONE
+	_arms_none.pressed.connect(func() -> void: client.send_order(Net.NOBODY, Net.POST_NO_ARMS))
+	row.add_child(_arms_none)
 	_rows = GridContainer.new()
-	_rows.columns = 1 + Net.POSTS
+	_rows.columns = 2 + Net.POSTS
 	_rows.add_theme_constant_override("h_separation", 4)
 	_rows.add_theme_constant_override("v_separation", 4)
 	box.add_child(_rows)
@@ -108,8 +123,10 @@ func _process(_delta: float) -> void:
 	_add_log()
 	_all.disabled = not may or client.crew_bots.is_empty()
 	_free.disabled = not may or client.crew_bots.is_empty()
+	_arms_all.disabled = _free.disabled
+	_arms_none.disabled = _free.disabled
 	_hint.text = ("" if may else "Приказы отдаёт капитан. ") + \
-		"Человек или бот у пульта управления уклоняет корабль от выстрелов пиратов, у двигателя добавляет уклонения, у генератора щита ускоряет его восстановление. Бот у пульта орудий сам стреляет готовыми орудиями туда, куда они наведены. «У орудия»: бот встаёт у орудия в корпусе, и оно заряжается быстрее. Бот на «Работах» чинит, сам приносит запчасти и заплатки из шкафа снабжения, носит и ставит орудия по приказам с пульта орудий. Раненый бот сам ложится в автодок, а без воздуха включает подачу кислорода."
+		"Человек или бот у пульта управления уклоняет корабль от выстрелов пиратов, у двигателя добавляет уклонения, у генератора щита ускоряет его восстановление. Бот у пульта орудий сам стреляет готовыми орудиями туда, куда они наведены. «У орудия»: бот встаёт у орудия в корпусе, и оно заряжается быстрее. Бот на «Работах» чинит, сам приносит запчасти и заплатки из шкафа снабжения, носит и ставит орудия по приказам с пульта орудий. Раненый бот сам ложится в автодок, а без воздуха включает подачу кислорода. «К оружию»: при абордаже бот берёт пистолет или дробовик из шкафа снабжения и отбивается, как охранник; без этого он укрывается от вооружённых пиратов."
 	var ids := PackedInt32Array()
 	for b: Array in client.crew_bots:
 		ids.append(int(b[0]))
@@ -127,6 +144,9 @@ func _process(_delta: float) -> void:
 			var button: Button = buttons[post]
 			button.button_pressed = int(b[1]) == post
 			button.disabled = not may
+		var arms: Button = buttons[Net.POSTS]
+		arms.button_pressed = b.size() > 4 and bool(b[4])
+		arms.disabled = not may
 
 
 func _add_log() -> void:
@@ -149,7 +169,7 @@ func _build_rows() -> void:
 		var none := Label.new()
 		none.text = "Ботов на борту нет. Их число задаётся при создании игры."
 		_rows.add_child(none)
-		for k in Net.POSTS:
+		for k in Net.POSTS + 1:
 			_rows.add_child(Control.new())
 		return
 	var ships := {}
@@ -166,7 +186,7 @@ func _build_rows() -> void:
 			title.text = "Корабль %d%s" % [ship + 1, " (вы здесь)" if ship == client.my_fleet else ""]
 			title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.45))
 			_rows.add_child(title)
-			for k in Net.POSTS:
+			for k in Net.POSTS + 1:
 				_rows.add_child(Control.new())
 		var name := Label.new()
 		name.custom_minimum_size = Vector2(200, 0)
@@ -182,6 +202,16 @@ func _build_rows() -> void:
 			button.pressed.connect(func() -> void: client.send_order(id, post))
 			_rows.add_child(button)
 			buttons.append(button)
+		# (v89) whether it fights boarders (the guard's job always does)
+		var arms := Button.new()
+		arms.text = "К оружию"
+		arms.tooltip_text = "При абордаже бот берёт оружие из шкафа снабжения и отбивается; без этого он укрывается"
+		arms.toggle_mode = true
+		arms.focus_mode = Control.FOCUS_NONE
+		arms.add_theme_font_size_override("font_size", 13)
+		arms.pressed.connect(func() -> void: client.send_order(id, Net.POST_ARMS if arms.button_pressed else Net.POST_NO_ARMS))
+		_rows.add_child(arms)
+		buttons.append(arms)
 		_buttons.append(buttons)
 
 

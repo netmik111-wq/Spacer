@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v88.1 (version 0.81.1).
+Last updated: build v89 (version 0.82).
 
 Contents:
 
@@ -50,6 +50,7 @@ Contents:
 40. [The fleet's fixes, the pirates' wingman, the shuttle (v86)](#40-the-fleets-fixes-the-pirates-wingman-the-shuttle-v86)
 41. [Man and woman base bodies (v87)](#41-man-and-woman-base-bodies-v87)
 42. [Suited man and woman (v88)](#42-suited-man-and-woman-v88)
+43. [The Notebook's 18 notes (v89)](#43-the-notebooks-18-notes-v89)
 
 ---
 
@@ -2289,3 +2290,68 @@ The author's two suit sheets ("full models for suited up"); questions on the pag
 - (v88.1, his U2 B) **Pirates' visors glow red** (the orange of their helmet turned red), so they stand out from ours.
 - (v88.1, his note) **The shadow follows the body**: a soft oval round the feet while standing, stretching along the whole
   body while lying (crawling, out cold or dead). Robots and heavy boarders keep the shadow of their old pictures.
+
+## 43. The Notebook's 18 notes (v89)
+
+All 18 open notes from his Notebook; questions on the page "Spacer v89 Notes"
+(https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJGqk), built on my picks.
+
+### The pirates' teleport (his note: "a little nerf, 5 times; random spawn on the ship; a visual, text and sound alert")
+
+- **5 times rarer**: a teleporting pirate ship sends a party every 225 s (was 45 s), the same size as before.
+- **A warning first**: 5 s before they land, a red banner «Пираты заряжают телепорт: через 5 с высадка абордажников (N; ...,
+  где мерцает)», a rising hum, and a flickering blue column of light on each spot where one will land (seen and heard
+  through the dark and walls, within 30 cells of sound).
+- **Spread over the ship**: each boarder lands in a different room of the ship being fought, picked by lot (never two in one
+  room, so a small ship gets a smaller party), no longer all in one spot.
+- **In suits**: teleported boarders always wear space suits (before, some came without one).
+- If our guns knock the pirates' teleporter out during the 5 s, nobody lands («Телепорт пиратов выбит: высадки не будет»).
+- **The heavy boarder («Штурмовик»)** is drawn in the new suit, painted dull steel with a red visor (it had the old picture).
+
+### Power
+
+- **What a power shortage switched off comes back on by itself.** When an ion storm's surge or a hit leaves too little power,
+  the game switches off guns, the point defence and the shield to fit (as before), and says they will come back. Once a
+  second it checks again, and switches them back on (the shield first, then the point defence, then the guns) as soon as
+  there is power for each: «Энергии снова хватает: включено — ...». Something switched off by hand at the power panel
+  stays off.
+
+### Wrecks and bodies
+
+- **A beaten ship no longer vanishes** when our people come back from it: it stays while our ship is within reach of where it
+  was beaten (its chart mark may lie a little further off).
+- **Bodies on a wreck stay with it**: dead pirates on their own ship were removed when it drifted off; now they stay aboard
+  the wreck and are there again when it comes back.
+- **Bodies floating in space are left behind on a jump**, as floating things are.
+- **Survivors are told**: the «Пиратский корабль разбит» message now ends with the sensors' count: «Сенсоры: живых на
+  обломках нет» or «на обломках живые пираты (N), они прячутся в отсеках подальше от шлюза». Boarding then goes as before
+  (they fight or surrender).
+
+### Bots
+
+- **A bot climbs a ladder on its way** whatever stands in front of it. Before, a bot on a ladder with a broken door, a turret
+  or a hole in front of it could not climb (the "use" key went to that thing) and stood there.
+- **«К оружию»** (his note: "defenders of the ship, or only some of our crew fights back"): the crew window (O) has a
+  «К оружию» toggle for each bot and two buttons, «Все к оружию» and «Оружие только охране»; the right-click menu on a bot
+  has it too. A bot told so does what the guard does when armed pirates are about: takes a pistol or a shotgun (with two
+  magazines) from the supply locker and fights them; with no gun to be had it hides like the others. Guard bots always
+  fight. Without the order, bots still hide (v79).
+
+### Fewer events (his numbers)
+
+- **Meteors 3 times rarer**: a micrometeorite or a meteor volley the director picks comes only one time in three (the pace
+  between picks stays, so the other times nothing happens).
+- **Pirates 1.75 times rarer**: the same for a boarding, a boarding pirate ship and a raid (one time in 1.75).
+- **Hunters 1.25 times fewer**: the first comes 375 s into a cluster (was 300), then one more every 300 s (was 240).
+
+### The chart and the interface
+
+- **Click a system to jump**: on the sector chart a click on a system a lane leads to (or on an exit's arrow) does what its
+  jump button does, when that button can be pressed.
+- **The gun sight is drawn by the game**: a light ring with four ticks and a dot, with a dark rim, the same on every PC (the
+  system's thin black cross could vanish against space). `sprites/cursor_sight.png` replaces it (up to 128×128, the shot goes
+  to its middle).
+- **Things taken off a pile disappear one by one** (the outline under the mouse drew the old pile again on top).
+- **Sounds are heard from where you stand**: at the edge of the map (the ship's nose) the camera stops short of the
+  character, and sounds used to be heard from the middle of the screen, out of their reach.
+

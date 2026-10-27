@@ -267,7 +267,7 @@ func _at(p: Player, t: Dictionary, goals: Dictionary, space: bool = false) -> bo
 	if step == -1:
 		p.st.dir = Net.DIR_NONE
 		if p.st.cd == 0:
-			server.movement.climb(p)
+			server.movement.climb(p, true)
 			t["from"] = -1
 	else:
 		p.st.dir = step

@@ -1722,3 +1722,52 @@ His notes from playing the fleet and his answers on "Spacer v86 Fleet and Fire"
   so it turned over with the figure. Now `WorldView.ShadowArt`, a child of the figure drawn behind it, goes from an oval
   round the feet to one along the body by the same `_lie` amount that turns the body over. The machines' old pictures
   still have theirs baked in, so they get none.
+
+## v89: the Notebook's 18 notes
+
+Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJGqk); built on my picks.
+- **Guns off after an ion storm or a teleport** (his "game breaker"): the panel itself worked. A surge (or a hit) left too
+  little power, `Outfit.fit_power` switched guns off and nothing ever switched them on, so it looked broken. What it switches
+  off is kept in `Ship.cut` (mount numbers, `Outfit.CUT_GUARD`, `CUT_SHIELD`); `Outfit.restore_power`, once a second from
+  `Power.tick`, brings each back in that order when `power_used + need <= budget`. Switching a thing off by hand (`arm`,
+  `switch_shield`, `arm_guard`) takes it off the list, so the player's own choice stands.
+- **Teleport** ("5 times" read as 5 times rarer, T1): `TELEPORT_SECONDS` 225 (was 45). `Assault.teleport` now charges:
+  `TELEPORT_WARN` 5 s with an alarm, `Net.SOUND_TELEPORT` (new kind 20, 30 cells, a rising hum) on each landing cell, and
+  the client draws a flickering column there, seen or not (a warning must reach those who cannot see the spot). Cells come
+  from `landing_cells`, one per random room of the ship being fought (`gunnery.target` in a fleet). `beam_in` lands them,
+  suited (`spawn_boarder(..., bare_ok = false)`: the bare boarders of v62 are for docking only); a teleporter knocked out
+  meanwhile lands nobody.
+- **The heavy boarder** wore chars.png's old frame. It is now the suit sheet painted `ARMOUR_TINT` with the white dulled
+  (`CrewArt._steel`) and the red visor, so all people share one art; chars.png keeps only the robots.
+- **A wreck vanishing as our people left it**: `_hulk_leaves` measured from `wreck_at`, which `Road.hulk_spot` may move off
+  to keep chart marks apart, so the ship stood "far" from its own wreck and it went the moment nobody was aboard. It now
+  measures from where it was beaten (`Derelict._wreck_seen`).
+- **Bodies on a wreck**: `_leave` removes pirates; dead ones on their own ship were not counted as bodies
+  (`_bodies_aboard` took only `p.corpse`). Dead pirates (not prisoners) are now kept as bodies too. Floating bodies are
+  dropped in `Salvage.jumped` with the floating things.
+- **"Enemies spawn after they lose"**: the wreck's survivors (v53) are made when we first board, which looks like spawning
+  from nothing. Kept (T3 A), but `Derelict.survivors_note()` adds the count to the «разбит» message, so it is fair.
+- **Bots stuck on a ladder**: `Movement.climb` refuses while `Repairs.usable_ahead` (the "use" key goes to the thing in
+  front). A bot whose route says climb (`bot_step == -1`, and the guard's, the runner's, the hull mender's and the pirates'
+  routes) now passes `on_way = true` and climbs anyway. Players still get the old rule.
+- **Defenders** (T4 A): his options were all bots fight, a button, or only some. All bots fighting by default would undo
+  "people over bots" (v70), so it is an order: `Player.defends`, set by `C_ORDER` with `Net.POST_ARMS` / `POST_NO_ARMS`
+  (with NOBODY: every bot). `Defence.think` treats such a bot as a guard. `S_STATIONS` carries it as `Net.ORDER_ARMS` (128)
+  in the order byte, so the packet's size does not change. Not saved (bots' orders never were).
+- **Rarer events** (his numbers): `Director.RARER` skips a picked event with chance 1 - 1/factor (meteors 3, pirate events
+  1.75), so each kind is exactly that much rarer while the pace and the others stay. Hunters: `HUNTER_FIRST` 375,
+  `HUNTER_EVERY` 300 (both x1.25). `directortest`'s lower bounds were lowered to match.
+- **Click on the chart** (S2 A): one click jumps, the same as the button and only while it is enabled (`BridgeView.chart_clicked`,
+  buttons carry `to`), so no new rule can slip in.
+- **The gun sight** ("no target with a gun", "cannot fight in space"): the server's shots work in space (`fullruntest`), so
+  the likely cause is Windows' cross cursor, thin and black, lost on the dark. The game sets its own `CURSOR_CROSS` image
+  (`GameScreen._set_sight_cursor`), replaceable by `sprites/cursor_sight.png`.
+- **Pile drawn whole while taken**: the hover outline redraws the things in the cell, and was redrawn only when the mouse
+  moved; it now also follows `client.floor_changes`.
+- **No sound in the nose**: `AudioStreamPlayer2D` hears from the screen's middle; at the map's edge the camera is clamped,
+  so the character can be half a screen away from it. An `AudioListener2D` at our feet (`WorldView._ears`).
+- Protocol 64 (the new sound kind).
+- **A rare wingtest crash** (seen on PR #63): our gunner bots killed the test pirate's crew, it broke off and left, and
+  `_wrecked` then hit a null ship. The test keeps the ship whole and calls another if it went; `becomes_wreck` returns when
+  nothing is alongside.
+

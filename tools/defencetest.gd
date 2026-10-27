@@ -35,6 +35,7 @@ func _initialize() -> void:
 	_hurt_unseen()
 	_guard()
 	_guard_without_gun()
+	_to_arms()
 	_switched_off()
 	_lean_kept()
 	print("defencetest: %d failed" % failed)
@@ -178,6 +179,37 @@ func _guard_without_gun() -> void:
 	_expect(g.doing == Net.DOING_HIDE, "it hides (%d)" % g.doing)
 	_gone(q)
 	_gone(g)
+	_ticks(roundi((Defence.CALM_SECONDS + 1.0) * Net.TICK_HZ))
+
+
+func _to_arms() -> void:
+	print("  -- (v89, the author's note) a crewman bot told «к оружию» fights as a guard does")
+	server.ship.store[Net.ITEM_PISTOL] = 1
+	server.ship.store[Net.ITEM_MAG] = 2
+	var at := _open_row(6)
+	var q = _pirate(at)
+	var g = _bot("Бот с приказом", at + Vector2i(3, 0))
+	var captain = server.crew.new_player("Капитан")
+	captain.job = Net.JOB_CAPTAIN
+	captain.st.place(at.x + 5, at.y)
+	server.stations.order_asked(captain, g.slot, Net.POST_ARMS)
+	_expect(g.defends, "the order is taken")
+	var armed := false
+	var hid := false
+	for s in 60:
+		_ticks(Net.TICK_HZ / 2, q, at)
+		armed = armed or server.defence.gun_slot(g) >= 0
+		hid = hid or g.doing == Net.DOING_HIDE
+		if armed:
+			break
+	_expect(armed and not hid, "it takes a gun from the locker instead of hiding")
+	var told: PackedByteArray = server.stations.packet()
+	_expect(told.size() > 12, "the crew list goes out")
+	server.stations.order_asked(captain, g.slot, Net.POST_NO_ARMS)
+	_expect(not g.defends, "and «не воевать» takes it back")
+	_gone(q)
+	_gone(g)
+	server.crew.remove(captain)
 	_ticks(roundi((Defence.CALM_SECONDS + 1.0) * Net.TICK_HZ))
 
 

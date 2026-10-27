@@ -163,7 +163,7 @@ var our_dodge := 0                   # in %
 var our_hit := 0                     # what the position adds to our hits, in % (may be below 0)
 var their_hit := 0                   # and to theirs
 var posts_manned := 0                # Net.STATION_* bits
-var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*), (v86) its ship of our fleet]
+var crew_bots: Array = []            # per bot of ours: [id, order (POST_*), what it does (DOING_*), (v86) its ship of our fleet, (v89) fights boarders]
 var alert := Net.ALERT_GREEN         # (v68) the ship's alert level
 var bot_log: Array = []              # (v72) the bots' log for this game: per line [seconds since the game began, bot's name, text]
 var bot_log_count := 0               # lines received in all (the crew window adds the new ones)
@@ -1864,7 +1864,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			for i in pkt[10]:
 				var at := 11 + i * 5
 				if pkt.size() >= at + 5:
-					crew_bots.append([pkt.decode_u16(at), pkt[at + 2], pkt[at + 3], pkt[at + 4]])
+					crew_bots.append([pkt.decode_u16(at), pkt[at + 2] & ~Net.ORDER_ARMS, pkt[at + 3], pkt[at + 4], pkt[at + 2] & Net.ORDER_ARMS != 0])
 			var tail := 11 + pkt[10] * 5
 			if pkt.size() >= tail + 3:
 				if pkt[tail] != alert:

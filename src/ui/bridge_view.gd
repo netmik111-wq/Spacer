@@ -68,7 +68,7 @@ func update_chart() -> void:
 	elif wait > 0.0:
 		lines.append("Корабль в секторе %s. Двигатель перезаряжается: ещё %d с." % [sectors.describe(client.sector), int(ceil(wait))])
 	else:
-		lines.append("Корабль в секторе %s. Двигатель готов. Куда прыгаем?" % sectors.describe(client.sector))
+		lines.append("Корабль в секторе %s. Двигатель готов. Куда прыгаем? (Кнопка ниже или щелчок по соседнему сектору на карте.)" % sectors.describe(client.sector))
 	# (v67) fuel in units: a lane jump burns jump_cost from the tank, the long jump EXIT_FUEL times that
 	var fuel := client.fuel
 	var cans := client.stock(Net.ITEM_FUEL)
@@ -122,6 +122,7 @@ func update_chart() -> void:
 			go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			go.pressed.connect(client.send_jump.bind(id))
 			go.set_meta("fuel", 1)              # (lane jumps' worth)
+			go.set_meta("to", id)               # (v89) a click on the chart finds its button
 			buttons.add_child(go)
 		if k >= 0:
 			var out := Button.new()
@@ -130,6 +131,7 @@ func update_chart() -> void:
 			out.pressed.connect(client.send_jump.bind(Sectors.EXIT_JUMP))
 			out.set_meta("fuel", Sectors.EXIT_FUEL)
 			out.set_meta("exit", true)
+			out.set_meta("to", Sectors.EXIT_JUMP)
 			buttons.add_child(out)
 		var view := Button.new()
 		view.text = "Карта скопления" if show_road else "Карта пути"
@@ -364,6 +366,38 @@ func helm_clicked(click: InputEventMouseButton) -> void:
 			client.send_helm(true, (click.position - area.position) / area.size * Sectors.SPAN)
 
 
+func chart_clicked(click: InputEventMouseButton) -> void:
+	## (v89, the author's note: "click on a system to move to it") A click on a system a lane leads to
+	## (or on an exit's arrow) does what its jump button does, while that button can be pressed.
+	if not click.pressed or click.button_index != MOUSE_BUTTON_LEFT or show_road or client.sectors.count == 0:
+		return
+	var sectors := client.sectors
+	var area := _chart_area()
+	var best := -1
+	var near := 16.0
+	for id in sectors.neighbours(client.sector):
+		var d := (area.position + Vector2(sectors.pos[id].x / 100.0, sectors.pos[id].y / 60.0) * area.size).distance_to(click.position)
+		if d < near:
+			near = d
+			best = id
+	if best < 0 and sectors.exit_of(client.sector) >= 0:
+		var at := area.position + Vector2(sectors.pos[client.sector].x / 100.0, sectors.pos[client.sector].y / 60.0) * area.size
+		if Rect2(at + Vector2(10, -14), Vector2(50, 22)).has_point(click.position):
+			best = Sectors.EXIT_JUMP
+	if best < 0:
+		return
+	for go in buttons.get_children():
+		if go is Button and go.has_meta("to") and int(go.get_meta("to")) == best:
+			if not (go as Button).disabled:
+				client.send_jump(best)
+			return
+
+
+func _chart_area() -> Rect2:
+	## Where the systems are drawn on the chart (as _draw_chart places them).
+	return Rect2(Vector2(30, 22), chart.size - Vector2(100, 68))
+
+
 func draw(kind: int) -> void:
 	## The picture of the console of that kind (as GameClient.use_target): the
 	## ship's controls (4) or the chart of sectors (3).
@@ -383,7 +417,7 @@ func _draw_chart() -> void:
 	if show_road:
 		_draw_road()
 		return
-	var area := Rect2(Vector2(30, 22), chart.size - Vector2(100, 68))
+	var area := _chart_area()
 	var place := func(id: int) -> Vector2:
 		return area.position + Vector2(sectors.pos[id].x / 100.0, sectors.pos[id].y / 60.0) * area.size
 	var font := ThemeDB.fallback_font

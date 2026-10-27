@@ -66,13 +66,15 @@ func mark_held() -> void:
 				server.map.held[t.y * server.map.width + t.x] = p.slot
 
 
-func climb(p: Player) -> bool:
+func climb(p: Player, on_way: bool = false) -> bool:
 	## The "use" key was pressed. On a ladder, with nothing else to use in front,
 	## the character goes to the other deck, and takes along whoever it hauls.
+	## (v89, the author's notes: bots stuck on a ladder by a door) a bot whose way goes
+	## up or down the ladder (`on_way`) climbs whatever is in front of it.
 	if p.cond != Net.COND_OK or p.corpse:
 		return false
 	var to := server.map.climb[p.st.y * server.map.width + p.st.x]
-	if to < 0 or server.repairs.usable_ahead(p):
+	if to < 0 or not on_way and server.repairs.usable_ahead(p):
 		return false
 	# Only the place changes: a key the player holds goes on being held, so the
 	# client's replay of its unconfirmed inputs still matches.

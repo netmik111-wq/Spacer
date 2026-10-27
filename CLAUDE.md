@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v88.1 (version 0.81.1: his suited man and woman, the visor shows the oxygen tank; pirates' visors red, a shadow along a lying body) is the latest. Plans one to four are done except the darkness front (the
+Build v89 (version 0.82: his 18 Notebook notes: guns back on after a power shortage, the teleport warned and rarer, «К оружию» for bots, rarer events, clicks on the chart) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -113,6 +113,10 @@ and an admin-called pirate could not come while a wreck lay alongside. Next art 
 v88 (his suit sheets, answers on `https://claude.ai/artifact/FMqARBDwoc4J2UUdpvwYr5`): anyone in a space suit is drawn from
 `suit_man.png`/`suit_woman.png` (3 visors x 4 ways of 32x48, `CrewArt.SUIT_AT`): clear glass, half, the visor down on the tank;
 (v88.1) pirates' visors red, people's shadow drawn by the game (`WorldView.ShadowArt`), along the body when lying.
+v89 (his 18 Notebook notes, answers on `https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJGqk`): what a power shortage cut comes
+back by itself, the teleport 5x rarer with a 5 s warning and boarders spread over rooms in suits, the heavy boarder in the
+suit, wrecks and bodies kept, bots climb ladders whatever is in front, «К оружию» per bot, meteors 3x / pirates 1.75x rarer,
+hunters 1.25x fewer, click a system to jump, a drawn gun sight, sounds heard from the feet.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -521,6 +525,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   in the look byte (mask it off with the tank bit for the outfit). Only four ways are drawn: `WorldView.FACING_COLUMN`
   maps slants to sides. The hello ends with a byte for the body (protocol 63). The admin's pirate calls run
   `Derelict.make_room()` first.
+- (v89) A power shortage's cuts are `Ship.cut` and come back through `Outfit.restore_power`: whatever switches a gun, the
+  guard or the shield off on purpose must take it off that list (as `Gunnery.arm`/`switch_shield`/`arm_guard` do), or it
+  comes back on by itself. The pirates' teleport charges first (`Assault.charging()`, `TELEPORT_WARN`): a test that wants
+  boarders aboard runs that long after `teleport()` (or calls `beam_in()`). A route's climb goes through
+  `Movement.climb(p, true)`; the plain call is the "use" key's. Director events by chance pass through `Director.RARER`.
+  A bot's «К оружию» is `Player.defends`, sent as `Net.ORDER_ARMS` in the order byte (mask it off for the post). Sounds are
+  heard at `WorldView._ears` (our feet), not the camera. `S_SOUND` kind 20 is the teleport (protocol 64).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

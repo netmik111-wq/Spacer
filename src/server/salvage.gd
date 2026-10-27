@@ -236,5 +236,12 @@ func jumped() -> void:
 	for c: int in out:
 		server.floor_things.erase(c)
 		server.replication.floor_record(c)
-	if not out.is_empty():
+	# (v89, his note: bodies floating by the ship were still there after a jump) the bodies out there too
+	var map = server.map
+	var bodies := 0
+	for p in server.players:
+		if p != null and (p.corpse or p.pirate and p.cond == Net.COND_DEAD) and map.floats(p.st.x, p.st.y):
+			server.crew.remove(p)
+			bodies += 1
+	if not out.is_empty() or bodies > 0:
 		server.chat.say("То, что плавало за бортом, осталось позади.")

@@ -13,7 +13,8 @@ extends RefCounted
 ## ammunition), then goes after the pirates by the pirates' own mind
 ## (Pirates.think, with the sides turned round, as our security robots do) until
 ## none is left about; it keeps the gun. The author's "people over bots" (v70)
-## still holds for everyone else: the other bots never fight.
+## still holds for everyone else: the other bots never fight, (v89, his note "or only some
+## of our crew fights back") unless the captain tells them to (Player.defends).
 ## Part of the server: GameServer keeps one of these and Movement asks it first
 ## each tick of a bot's mind.
 
@@ -101,7 +102,7 @@ func think(p: Player) -> bool:
 		_since[p.slot] = server.tick
 		server.stations._took(p, -1)          # the repair it had is free for another bot
 		p.using = false
-	if p.job == Net.JOB_GUARD and _guard(p, known):
+	if (p.job == Net.JOB_GUARD or p.defends) and _guard(p, known):
 		return true
 	_run(p, known)
 	return true
@@ -159,7 +160,7 @@ func _run(p: Player, known: Dictionary) -> void:
 	if p.bot_step == -1 and p.st.cd == 0:
 		p.st.prone = false
 		p.st.dir = Net.DIR_NONE
-		server.movement.climb(p)
+		server.movement.climb(p, true)
 		p.bot_plan_tick = -1000
 		return
 	if p.bot_step > 0 and p.bot_goal != here:
@@ -288,7 +289,7 @@ func _guard(p: Player, known: Dictionary) -> bool:
 	p.using = false
 	if p.bot_step == -1 and p.st.cd == 0:
 		p.st.dir = Net.DIR_NONE
-		server.movement.climb(p)
+		server.movement.climb(p, true)
 		p.bot_plan_tick = -1000
 	elif p.bot_step > 0 and p.bot_goal != here:
 		p.st.dir = Net.DIR_NONE if server.movement._would_vent(p.st.x, p.st.y, p.bot_step) else p.bot_step

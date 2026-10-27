@@ -75,6 +75,7 @@ var hardened := false                 # the shield stops rockets too (the rare u
 var jammed := {}                      # a gun or the shield generator put out by ion or EMP: wall cell -> the tick it is back
 var guard := 0                        # (v58) the point defence in its own mount (Weapons.GUARD, or NONE)
 var guard_armed := false              # it draws power and charges
+var cut := []                         # (v89, his note) what a power shortage switched off (mount numbers; CUT_GUARD, CUT_SHIELD): back on by itself
 var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours: by its armour plating, see Outfit)
 # (v59) its gear (see Gear, Outfit)
 var gear := PackedByteArray([1, 1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)

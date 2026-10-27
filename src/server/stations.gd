@@ -509,11 +509,19 @@ func order_asked(p: Player, id: int, post: int) -> void:
 			for q: Player in _bots():
 				_set_order(q, Net.POST_FREE, p)
 			server.chat.say("%s: «Отбой, все свободны»." % p.name)
+		elif post == Net.POST_ARMS or post == Net.POST_NO_ARMS:
+			for q: Player in _bots():
+				_arms(q, post == Net.POST_ARMS)
+			server.chat.say("%s: «%s»." % [p.name, "Все к оружию: отбиваем абордаж!" if post == Net.POST_ARMS else "Оружие только охране, остальным укрываться."])
 		return
-	if id >= server.players.size() or post >= Net.POSTS:
+	if id >= server.players.size() or post >= Net.POSTS and post != Net.POST_ARMS and post != Net.POST_NO_ARMS:
 		return
 	var q: Player = server.players[id]
 	if q == null or not q.bot or q.corpse:
+		return
+	if post == Net.POST_ARMS or post == Net.POST_NO_ARMS:
+		_arms(q, post == Net.POST_ARMS)
+		server.chat.say("%s: «%s, %s»." % [p.name, q.name, "к оружию, отбивай абордаж" if post == Net.POST_ARMS else "не воюй, укрывайся"])
 		return
 	_set_order(q, post, p)
 	server.chat.say("%s: «%s, %s»." % [p.name, q.name, _order_words(post)])
@@ -544,6 +552,16 @@ func _bots(aboard := false) -> Array:
 		if q != null and q.bot and not q.corpse and (not aboard or q.fleet_ship == server.fleet.on):
 			out.append(q)
 	return out
+
+
+func _arms(q: Player, on: bool) -> void:
+	## (v89, the author's note: "or only some of our crew fights back") The bot fights boarders
+	## as the guard does (Defence) or runs from them as before.
+	if q.job == Net.JOB_GUARD:
+		return                               # the guard fights whatever it is told
+	if q.defends != on:
+		q.defends = on
+		server.chat.bot_log(q, "приказ: %s." % ("к оружию" if on else "не воевать"))
 
 
 func _set_order(q: Player, post: int, by: Player) -> void:
@@ -635,7 +653,7 @@ func bot_think(p: Player) -> bool:
 		p.using = false
 		if p.st.cd > 0:
 			return true
-		server.movement.climb(p)
+		server.movement.climb(p, true)
 		p.bot_plan_tick = -1000
 		return true
 	if _through_lock(p) or _through_shutter(p):
@@ -1652,7 +1670,7 @@ func packet() -> PackedByteArray:
 	for q: Player in bots:
 		out.append(q.slot & 0xFF)
 		out.append(q.slot >> 8)
-		out.append(q.order)
+		out.append(q.order | (Net.ORDER_ARMS if q.defends or q.job == Net.JOB_GUARD else 0))
 		out.append(q.doing if q.cond == Net.COND_OK else Net.DOING_DOWN)
 		out.append(q.fleet_ship)            # (v86) the ship of our fleet it is crew of
 	# (v68) u8 the alert (ALERT_*), u8 tenths of a second of the evade left, u8 seconds until it is ready again

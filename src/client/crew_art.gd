@@ -43,6 +43,7 @@ const TINTS: Array[Color] = [
 	Color8(112, 72, 40), Color8(128, 28, 24), Color8(44, 40, 46),
 ]
 const UNDERSUIT := Color8(118, 120, 128)
+const ARMOUR_TINT := Color8(70, 74, 82)   # (v89) the heavy boarder's plates
 const NAVY_HUE := Vector2(205.0, 252.0)   # degrees: what counts as the clothes' navy
 const NAVY_SAT := 0.28
 const NAVY_TOP := 0.45                    # the lightest navy: it becomes the colour itself
@@ -151,12 +152,16 @@ static func build() -> Image:
 			_row(out, colour * Net.LOOKS + look, suits_painted[0] if in_suit else art)
 			_row(out, VISOR_ROW + colour * Net.LOOKS + look, suits_painted[2] if in_suit else art)
 		_row(out, HALF_ROW + colour, suits_painted[1])
-	# the machines and the heavy boarders keep the old drawn pictures (their four straight ways, for both bodies)
+	# (v89, his note "old textures on the stormtrooper") the heavy boarder: his suit in dull steel plates, visor down and red
+	var plates := _steel(_visor_red(_paint(suit[2], suit_navy[2], ARMOUR_TINT)))
+	for look in Net.LOOKS:
+		_row(out, Net.ARMOUR_COLOUR * Net.LOOKS + look, plates)
+	# the machines keep the old drawn pictures (their four straight ways, for both bodies)
 	var old := Sprites.sheet("chars").get_image()
 	if old.is_compressed():
 		old.decompress()
 	old.convert(Image.FORMAT_RGBA8)
-	for colour in range(TINTS.size(), Net.ARMOUR_COLOUR + 1):
+	for colour in range(TINTS.size(), Net.ARMOUR_COLOUR):
 		for look in Net.LOOKS:
 			var row := colour * Net.LOOKS + look
 			for c in 12:
@@ -206,6 +211,17 @@ static func _paint(src: Image, navy: PackedInt32Array, tint: Color) -> Image:
 		data[i + 1] = c.g8
 		data[i + 2] = c.b8
 	return Image.create_from_data(src.get_width(), src.get_height(), false, Image.FORMAT_RGBA8, data)
+
+
+static func _steel(im: Image) -> Image:
+	## (v89) The suit's white made dull steel: heavy armour plates rather than cloth.
+	var out := im.duplicate() as Image
+	for y in out.get_height():
+		for x in out.get_width():
+			var c := out.get_pixel(x, y)
+			if c.a > 0.0 and c.s < 0.12 and c.v > 0.55:
+				out.set_pixel(x, y, Color(c.r * 0.6, c.g * 0.63, c.b * 0.68, c.a))
+	return out
 
 
 static func _visor_red(im: Image) -> Image:

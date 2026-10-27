@@ -72,6 +72,7 @@ var _outcome := ""                   # (a wreck) what the first of us aboard fin
 var _boarded := false                # somebody of our crew has set foot on the wreck
 var _came_in := 0                    # the sector it came in (Sectors.key): it does not follow a jump
 var wreck_at := Vector2.ZERO         # (v69) where in the system a raider was wrecked: it stays alongside while we are near
+var _wreck_seen := Vector2.ZERO        # (v89) where our ship lay when the wreck came to be alongside (it is left once we go from there)
 var held_off_until := -1             # (v69) a derelict pushed away by a hunter does not come back alongside before this tick
 var _left := {}                      # sector key -> [[cell inside it, things], ...]: what was left on it
 var _left_bodies := {}               # (v80) sector key -> the bodies left on it (see _bodies_aboard)
@@ -313,7 +314,9 @@ func update() -> void:
 			# (v69, the author's note: a wreck could not be docked to) it drifts where it died:
 			# it is left behind only once we fly out of reach of that spot, or jump
 			# (v80, the author's note: the wreck flew along with us) or as soon as our ship gets under way
-			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.moving or server.ship.pos.distance_to(wreck_at) > Sectors.WRECK_REACH):
+			# (v89, his note: a ship we took vanished as soon as our people left it) measured from where our ship
+			# lay, not from its mark on the chart, which hulk_spot may put further off
+			if free and (server.ship.jump_to != Net.NO_SECTOR or server.ship.moving or server.ship.pos.distance_to(_wreck_seen) > Sectors.WRECK_REACH):
 				_hulk_leaves()
 				_leave()
 			return
@@ -400,6 +403,7 @@ func becomes_wreck() -> void:
 	raid = false
 	wreck = true
 	wreck_at = server.road.hulk_spot(server.ship.pos)   # (v69) where it stays on the chart (Road.hulks)
+	_wreck_seen = server.ship.pos
 	ship.kind = Net.SHIP_WRECK
 	ship.name = "Разбитый пиратский корабль" if design.has("classic") else "Обломки: " + ship.name.substr(0, 1).to_lower() + ship.name.substr(1)
 	for d in range(map.other_first_door, map.doors.size()):
@@ -441,6 +445,16 @@ func becomes_wreck() -> void:
 	for i in _rng.randi_range(1, 3):
 		_drop(cells, PIRATE_LOOT)
 	server.replication.sight_changed()
+
+
+func survivors_note() -> String:
+	## (v89, the author's note: "possible spawn of enemy bots after they lose") The sensors tell
+	## who is left alive on a wreck, so the pirates found aboard are no surprise out of nowhere.
+	if not wreck or _boarded:
+		return ""
+	if _pirates_party <= 0:
+		return " Сенсоры: живых на обломках нет."
+	return " Сенсоры: на обломках живые пираты (%d), они прячутся в отсеках подальше от шлюза." % _pirates_party
 
 
 func _raid_closes_in() -> void:
@@ -656,6 +670,7 @@ func _hulk_arrives(h: Dictionary) -> void:
 	ship.kind = Net.SHIP_WRECK
 	wreck = true
 	wreck_at = h["pos"]
+	_wreck_seen = server.ship.pos
 	_boarded = bool(h["boarded"])
 	_outcome = str(h["outcome"])
 	_pirates_party = int(h["party"])
@@ -728,7 +743,9 @@ func _bodies_aboard() -> Array:
 	## ship alongside, ours and theirs, as plain data: they are there again when it comes back.
 	var out: Array = []
 	for p in server.players:
-		if p != null and p.corpse and not p.taken and map.is_other(p.st.y * map.width + p.st.x):
+		# (v89, his note: every body vanished after a won fight on their ship) a pirate killed there is a body too
+		var body: bool = p != null and (p.corpse or p.pirate and p.cond == Net.COND_DEAD and not p.prisoner)
+		if body and not p.taken and map.is_other(p.st.y * map.width + p.st.x):
 			out.append({"at": _local(p.st.y * map.width + p.st.x, map.other_at), "name": p.name, "colour": p.colour, "job": p.job,
 				"slots": Array(p.slots), "worn": Array(p.worn), "tank": p.tank, "facing": p.st.facing, "wounds": p.wounds,
 				"pirate": p.pirate, "robot": p.robot})

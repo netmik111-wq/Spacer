@@ -120,9 +120,10 @@ func spawn(x: int, y: int, gunner: bool):
 	return p
 
 
-func spawn_boarder(x: int, y: int, gunner: bool, far: int = -1):
+func spawn_boarder(x: int, y: int, gunner: bool, far: int = -1, bare_ok: bool = true):
 	## (v62) A boarder who comes over by docking or by teleport: by how far out we are,
 	## now and then one without a sealed suit, or a heavy stormtrooper (the author's K12).
+	## (v89, his note) One who comes by teleport is always suited (bare_ok false).
 	var p = spawn(x, y, gunner)
 	if far < 0:
 		far = server.sectors.far_from_start(server.ship.sector) if server.sectors.count > 0 else 0
@@ -133,7 +134,7 @@ func spawn_boarder(x: int, y: int, gunner: bool, far: int = -1):
 		p.colour = Net.ARMOUR_COLOUR
 		p.name = "Штурмовик %d" % count
 		server.crew.announce_join(p, null)
-	elif far >= BARE_FROM and roll < HEAVY_SHARE + BARE_SHARE:
+	elif bare_ok and far >= BARE_FROM and roll < HEAVY_SHARE + BARE_SHARE:
 		p.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
 	give_goal(p)
 	return p
@@ -347,7 +348,7 @@ func think(p) -> void:
 			return
 	if p.ai_step == -1:
 		_stop(p)
-		server.movement.climb(p)
+		server.movement.climb(p, true)
 		p.ai_plan_tick = 0
 	else:
 		p.st.dir = p.ai_step

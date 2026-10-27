@@ -130,7 +130,7 @@ void fragment() {
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
 const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
 	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд",   # (v75: the kinds from 10 on were never played)
-	"щелчок", "перезарядка", "взял", "взмах"]   # (v82; v84 the swing)
+	"щелчок", "перезарядка", "взял", "взмах", "телепорт"]   # (v82; v84 the swing; v89 a pirate teleport charging)
 const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt figure shows red
 const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the floor
 const CASING_FADE := 3.0             # and the last seconds of it, fading
@@ -145,6 +145,8 @@ const SOUND_COLOUR: Array[Color] = [Color.WHITE, Color(0.85, 0.85, 0.9), Color(0
 	Color(1.0, 0.3, 0.3)]
 const STEP_MARK_GAP := 1.8                        # seconds: footsteps near an earlier mark of them make no new one
 const SHOT_SECONDS := 0.18                        # how long a shot's trace stays
+const TELEPORT_MARK := 5.0                        # (v89) seconds a teleport's shimmer shows (Assault.TELEPORT_WARN)
+const TELEPORT_COLOUR := Color(0.55, 0.75, 1.0)
 
 
 class DeckView:
@@ -166,6 +168,7 @@ var _decks: Array[DeckView] = []
 var _deck_shown := -1                # the deck the picture was last arranged for
 var _stride := 16                    # rows from one deck to the next in the map's grid
 var _camera: Camera2D
+var _ears: AudioListener2D           # (v89) where sounds are heard from: our feet, not the middle of the screen
 var _chars_tex: Texture2D
 var _breach_tex: Texture2D
 var _views := {}                     # id -> Sprite2D
@@ -188,6 +191,7 @@ var _hand_was := -1                  # (v82) the hand's slot last frame: a flick
 var _healing: Array[int] = []        # (v82, his D2 note) ids lying in a working autodoc: a green cross pulses over them
 var zoom_step := 0                   # (v73, the author's H6) Ctrl+wheel: one whole zoom step closer or farther
 var _hover_ink: Node2D               # under _hover_pen: the silhouettes of things on the floor, drawn round them
+var _hover_floor := -1               # (v89) client.floor_changes when the outline was last drawn
 var _body_ink: Sprite2D              # on a body under the mouse: its outline (OUTLINE_SHADER)
 var _tile_lines := {}                # tile id -> the outline of the thing fitted into that wall tile (null: none)
 var _tiles_image: Image              # the tile atlas, to find those outlines in
@@ -473,6 +477,9 @@ func setup(p_client: GameClient) -> void:
 	_camera = Camera2D.new()
 	add_child(_camera)
 	_camera.make_current()
+	_ears = AudioListener2D.new()
+	add_child(_ears)
+	_ears.make_current()
 
 	_label_layer = CanvasLayer.new()
 	_label_layer.layer = 2
@@ -662,7 +669,7 @@ func _row_of(id: int) -> int:
 	var on_tank := look & Net.LOOK_TANK != 0
 	look &= Net.LOOK_TANK - 1            # (and not the woman's bit: v87)
 	if colour >= CrewArt.TINTS.size():
-		return colour * Net.LOOKS + look               # the machines and heavy boarders: the old pictures
+		return colour * Net.LOOKS + look               # the machines: the old pictures; (v89) the heavy boarder's one row
 	var now := Time.get_ticks_msec() / 1000.0
 	var was: Array = _visor.get(id, [])
 	if was.is_empty() or bool(was[0]) != on_tank:
@@ -1074,8 +1081,11 @@ func _update_hover() -> void:
 		var target := client.target_cell()
 		if target >= 0:
 			on = Vector2i(target, 1)
-	if on != _hover_on:
+	# (v89, the author's note: things taken off a pile one by one stayed drawn until the last went)
+	# the outline draws the pile's things again, so it is redrawn when they change too
+	if on != _hover_on or client.floor_changes != _hover_floor:
 		_hover_on = on
+		_hover_floor = client.floor_changes
 		_hover_pen.queue_redraw()
 		_hover_ink.queue_redraw()
 	_hover_body()
@@ -1721,6 +1731,10 @@ func _on_heard(kind: int, x: int, y: int) -> void:
 	if map.deck_of(y) == client.my_deck():
 		_audio.play(kind, _feet(Vector2(x, map.local_y(y))), Net.SOUND_RANGE[kind], not seen or _thin_air_here(),
 			(-8.0 + Options.db_of(Options.steps_volume)) if kind == Net.SOUND_STEP else 0.0)
+	if kind == Net.SOUND_TELEPORT:
+		# (v89, his note) where a teleported boarder will appear: a shimmer there, seen or not, for the warning's seconds
+		_sounds.append([kind, _feet(Vector2(x, map.local_y(y))) + Vector2(0, -14), map.deck_of(y), TELEPORT_MARK])
+		return
 	if seen or (kind != Net.SOUND_HISS and kind != Net.SOUND_CRY):
 		return
 	var far := Vector2(x, y).distance_to(Vector2(client.pred.x, client.pred.y))
@@ -1934,16 +1948,26 @@ func _draw_sounds() -> void:
 		if int(snd[2]) != _deck_shown:
 			continue
 		var kind: int = snd[0]
-		var age := 1.0 - float(snd[3]) / SOUND_SECONDS
-		var colour := SOUND_COLOUR[kind]
+		var age := 1.0 - float(snd[3]) / (TELEPORT_MARK if kind == Net.SOUND_TELEPORT else SOUND_SECONDS)
+		var colour := TELEPORT_COLOUR if kind == Net.SOUND_TELEPORT else SOUND_COLOUR[mini(kind, SOUND_COLOUR.size() - 1)]
 		var spot: Vector2 = (snd[1] - _camera.position) * zoom + screen * 0.5
 		var margin := 34.0
 		var inside := Rect2(Vector2(margin, margin + 40), screen - Vector2(2 * margin, 2 * margin + 140))
 		var edge := spot.clamp(inside.position, inside.end)
 		var off := not edge.is_equal_approx(spot)
 		var fade := 1.0 - age
+		var pace := 1.6
+		if kind == Net.SOUND_TELEPORT:
+			# (v89) the shimmer grows stronger and quicker till they appear, a column of light over the spot
+			fade = 0.45 + 0.55 * age
+			pace = 4.0 + 8.0 * age
+			if not off:
+				var flick := 0.5 + 0.5 * sin(age * 60.0)
+				var tall := 26.0 * zoom
+				_sound_pen.draw_rect(Rect2(edge + Vector2(-6.0 * zoom, -tall), Vector2(12.0 * zoom, tall + 10.0 * zoom)),
+					Color(colour, (0.15 + 0.25 * flick) * fade))
 		for r in 2:
-			var grow := fposmod(age * 1.6 + r * 0.5, 1.0)
+			var grow := fposmod(age * pace + r * 0.5, 1.0)
 			_sound_pen.draw_arc(edge, 6.0 + grow * 22.0, 0.0, TAU, 28, Color(colour, (1.0 - grow) * 0.8 * fade), 2.0)
 		if off:
 			var way := (spot - edge).normalized()
@@ -2250,8 +2274,9 @@ func _process(delta: float) -> void:
 		var was_t: float = _lie.get(id, 1.0 if lies else 0.0)
 		var t := move_toward(was_t, 1.0 if lies else 0.0, delta / LIE_TURN)
 		_lie[id] = t
-		# (v88) machines and heavy boarders keep the shadow drawn in their old pictures
-		_put_shadow(sprite, t, client.player_colour(id) < CrewArt.TINTS.size())
+		# (v88) machines keep the shadow drawn in their old pictures; (v89) the heavy boarder is drawn anew
+		var colour := client.player_colour(id)
+		_put_shadow(sprite, t, colour < CrewArt.TINTS.size() or colour == Net.ARMOUR_COLOUR)
 		var stand_at := sprite.position
 		_stand[id] = stand_at
 		if cond == Net.COND_OK and (client.prone_of(id) or t > 0.0):
@@ -2316,6 +2341,9 @@ func _process(delta: float) -> void:
 		_me_over.region_rect = me.region_rect
 		_me_over.modulate = me.modulate * Color(0.8, 0.8, 0.85)
 	var focus := _my_spot(me) - Vector2(0, 14) if me != null else Vector2.ZERO
+	# (v89, the author's note: "in the nose part of the ship we don't hear sound") at the grid's edge the
+	# camera stops short of our character, and sounds were heard from the middle of the screen, out of reach
+	_ears.position = _my_spot(me) if me != null else focus
 	# (v79, the author's V1) with the view following the mouse the camera leans toward it, by how far
 	# the mouse is from the middle of the screen, at most Options.lean tiles; it eases there and back
 	var lean_to := Vector2.ZERO

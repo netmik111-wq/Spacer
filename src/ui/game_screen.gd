@@ -192,6 +192,7 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	client = p_client
 	hosting = p_hosting
 	host_port = p_port
+	_set_sight_cursor()
 	client.chat.connect(_on_chat)
 	client.notice.connect(_on_notice)
 	client.hit.connect(func(_blood: int, id: int, _x: int, _y: int) -> void:
@@ -1090,6 +1091,8 @@ func _on_chart_input(event: InputEvent) -> void:
 		return
 	if _console_kind == 4:
 		_bridge.helm_clicked(click)
+	elif _console_kind == 3:
+		_bridge.chart_clicked(click)       # (v89) a click on a system next to ours jumps there
 
 
 func _draw_chart() -> void:
@@ -1603,6 +1606,35 @@ func click_at(at: Vector2) -> void:
 	_click_until = Time.get_ticks_msec() / 1000.0 + 0.6
 
 
+static func _set_sight_cursor() -> void:
+	## (v89, the author's notes: "some players don't have a target when they take a gun", "impossible to
+	## fight in space with ranged guns") The system's cross cursor is thin and black on some Windows
+	## PCs, lost against the dark of space. Ours is light with a dark rim, the same everywhere;
+	## `sprites/cursor_sight.png` replaces it (its middle is where the shot goes).
+	var im := Sprites.own_image("cursor_sight.png")
+	if im == null:
+		im = Image.create(SIGHT_SIZE, SIGHT_SIZE, false, Image.FORMAT_RGBA8)
+		var mid := SIGHT_SIZE / 2
+		var rim := Color(0.02, 0.03, 0.05, 0.9)
+		var light := Color(0.95, 1.0, 0.85)
+		for pass_ in 2:
+			var c := rim if pass_ == 0 else light
+			var grow := 1 if pass_ == 0 else 0
+			for y in SIGHT_SIZE:
+				for x in SIGHT_SIZE:
+					var d := Vector2(x - mid, y - mid)
+					var ring := absf(d.length() - 8.0) <= 0.7 + grow
+					var tick := (absi(x - mid) <= grow and absi(y - mid) >= 4 - grow and absi(y - mid) <= 13 + grow) \
+						or (absi(y - mid) <= grow and absi(x - mid) >= 4 - grow and absi(x - mid) <= 13 + grow)
+					var dot := d.length() <= 0.8 + grow
+					if ring or tick or dot:
+						im.set_pixel(x, y, c)
+	Input.set_custom_mouse_cursor(ImageTexture.create_from_image(im), Input.CURSOR_CROSS, Vector2(im.get_width() / 2, im.get_height() / 2))
+
+
+const SIGHT_SIZE := 32               # (v89) the drawn sight cursor, in pixels
+
+
 static func _badges(text: String) -> String:
 	## (v73, I4) A hint written with the default keys, with each key and what it
 	## does drawn as a badge: "Держите E, чтобы починить" -> [держать E] починить.
@@ -1798,12 +1830,17 @@ func _open_menu(at: Vector2) -> void:
 		if client.is_bot(e.id) and e.cond == Net.COND_OK:
 			var id := e.id
 			var now := -1
+			var arms := false
 			for b: Array in client.crew_bots:
 				if int(b[0]) == id:
 					now = int(b[1])
+					arms = b.size() > 4 and bool(b[4])
 			for post in Net.POST_NAMES.size():
 				var p := post
 				add.call("Приказ: %s%s" % [Net.POST_NAMES[post], "  ✓" if post == now else ""], func() -> void: client.send_order(id, p))
+			# (v89, the author's note) a bot told to fight boarders, or to run from them again
+			add.call("Приказ: %s" % ("не воевать (укрываться от абордажников)" if arms else "к оружию (отбивать абордаж)"),
+				func() -> void: client.send_order(id, Net.POST_NO_ARMS if arms else Net.POST_ARMS))
 	if client.floor_things.has(cell) and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 1:
 		# (v80, the author's note: "and what items to take from the floor") each thing in the pile
 		var pile: PackedByteArray = client.floor_things[cell]

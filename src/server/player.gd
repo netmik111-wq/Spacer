@@ -81,6 +81,7 @@ var chat_times: Array[int] = []
 var said: Array = []                 # [channel, from, text] this one heard, kept only for tests (see GameServer.keep_heard)
 var bot_until := 0
 var order := 0                       # (v55) a bot's standing order from the captain (Net.POST_*)
+var defends := false                 # (v89, the author's note) a bot told to fight boarders as the guard does
 var order_by := -1                   # the slot of whoever gave it (a bot told to follow goes after them)
 var doing := 0                       # what the bot does about it now (Net.DOING_*)
 var bot_goal := -1                   # the cell it is making for (-1 = none)

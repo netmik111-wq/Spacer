@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 63
+const PROTOCOL := 64
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -364,6 +364,9 @@ const POST_FOLLOW := 6              # after the one who gave the order
 const POST_MOUNTS := 7              # (v60) at a gun mount in a gun bay (its gun charges faster)
 const POSTS := 8
 const POST_ALL := 255               # (with NOBODY) every bot to a post nobody mans
+const POST_ARMS := 254              # (v89) the bot (with NOBODY: every bot) fights boarders as the guard does
+const POST_NO_ARMS := 253           # (v89) ... or runs from them again (the guard's job always fights)
+const ORDER_ARMS := 128             # (v89) in S_STATIONS a bot's order byte has this bit while it fights boarders
 const POST_NAMES: Array[String] = ["Свободен", "Штурвал", "Пульт орудий", "Двигатель", "Щиты", "Работы", "За мной", "У орудия"]
 const STATION_HELM := 1
 const STATION_GUNS := 2
@@ -652,7 +655,8 @@ const SOUND_CLICK := 16              # (v82) a gun clicking empty
 const SOUND_RELOAD := 17             # (v82) a magazine pushed home
 const SOUND_PICKUP := 18             # (v82) a thing picked up
 const SOUND_SWING := 19              # (v84, the author's S1) a blow that met nothing: a whoosh
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4, 4]
+const SOUND_TELEPORT := 20           # (v89, his note) a pirate teleport charging: a hum and a shimmer where one will appear
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4, 4, 30]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 
