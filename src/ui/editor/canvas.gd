@@ -142,10 +142,12 @@ func _cell_tile(d: int, x: int, y: int) -> int:
 		return -1
 	var id := int((_built["cells"] as Array)[(d * int(_built["deck_stride"]) + y) * w + x])
 	var s := drawing.at(d, Vector2i(x, y)) if show_objects else drawing.base_at(d, Vector2i(x, y))
-	if s == "D":
-		return _tile_id("door")
-	if s == "A":
-		return _tile_id("airlock_closed")
+	if s == "D" or s == "A":
+		# (v91) in the kind its mark gives it, the plain one else
+		var m := drawing.mark_at(d, Vector2i(x, y), "&")
+		var look := "base" if m < 0 else str(drawing.marks[m]["what"])
+		var door := _tile_id("door_%s_%s_green" % [look, "h" if s == "D" else "v"])
+		return door if door >= 0 else _tile_id("door" if s == "D" else "airlock_closed")
 	return id
 
 
@@ -218,6 +220,13 @@ func _draw_marks(cs: float) -> void:
 		if int(m["deck"]) != deck:
 			continue
 		var what := str(m["what"])
+		if str(m["type"]) == "&":
+			# (v91) a door's kind: a word on the door (its picture is drawn in that kind)
+			var spot := view + (Vector2(int(m["x"]), int(m["y"])) + Vector2(0.05, 0.3)) * cs
+			var word := MapBuilder._mark_name(what)
+			draw_string_outline(font, spot, word, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(10 * zoom), 8), 3, Color(0, 0, 0, 0.8))
+			draw_string(font, spot, word, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(10 * zoom), 8), Color(1.0, 0.85, 0.4))
+			continue
 		var col: Color = SYSTEM_COLOUR if str(m["type"]) == "%" else MARK_COLOURS.get(what, Color.WHITE)
 		var cells := drawing.room_cells(deck, Vector2i(int(m["x"]), int(m["y"])))
 		for c: Vector2i in cells:
@@ -284,7 +293,8 @@ static func icon_tile(s: String) -> String:
 		"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 		"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 		"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-		"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
+		"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock", "E": "med_box", "J": "tech_box",
+		"N": "fire_box", "L": "wall_light", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
 
 
 # ---------------------------------------------------------------- the mouse

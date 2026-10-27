@@ -312,6 +312,45 @@ func store_asked(p: Player, action: int, item: int) -> void:
 	tell_store()
 
 
+func box_kinds(cell: int) -> Array:
+	## (v91, the author's M7) What a box on the wall hands out: the first-aid box a whole first-aid kit, the
+	## spare parts box spare parts and circuit boards. [] = no box there.
+	if server.map.med_box.has(cell):
+		return [Net.ITEM_MEDKIT + Net.MEDKIT_USES]
+	if server.map.tech_box.has(cell):
+		return [Net.ITEM_PART, Net.ITEM_BOARD]
+	return []
+
+
+func box(p: Player, cell: int) -> void:
+	## (v91) E at a box on the wall: what it holds in hand goes back into the locker's stock; else one of
+	## them from that stock into the hand, the kind one carries fewer of first. The box keeps nothing of
+	## its own: it is the locker's stock within reach (so nothing new comes aboard).
+	var kinds := box_kinds(cell)
+	if kinds.is_empty():
+		return
+	var held := p.in_hand()
+	if held != Net.ITEM_NONE and Items.kind_of(held) in kinds and Items.whole(held):
+		_put_back(p, p.hand)
+		server.chat.tell(p, "%s убрано в ящик." % Items.name_of(held))
+		tell_store()
+		return
+	var best := Net.ITEM_NONE
+	for k: int in kinds:
+		if int(server.ship.store.get(k, 0)) > 0 and (best == Net.ITEM_NONE or p.count(k) < p.count(best)):
+			best = k
+	if best == Net.ITEM_NONE:
+		server.chat.tell(p, "Ящик пуст: в шкафу снабжения нет %s." % ("аптечек" if server.map.med_box.has(cell) else "запчастей"))
+		return
+	if not p.add(best, true):
+		server.chat.tell(p, "Руки и карманы заняты.")
+		return
+	server.ship.store[best] -= 1
+	server.usage.note(p, "box")
+	server.chat.tell(p, "%s из ящика. В шкафу снабжения осталось: %d." % [Items.name_of(best), int(server.ship.store[best])])
+	tell_store()
+
+
 func _gone(item: int) -> void:
 	var gone: Array = bought.get(_key(), [])
 	gone.append(item)

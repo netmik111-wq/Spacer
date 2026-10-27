@@ -24,6 +24,15 @@ static func thing_name(client: GameClient, cell: int) -> String:
 		return "шкаф снабжения"
 	if map.intercom.has(cell):
 		return "интерком"
+	if map.med_box.has(cell):
+		return "ящик первой помощи"
+	if map.tech_box.has(cell):
+		return "ящик запчастей"
+	var tile := map.tile_names[map.cells[cell]].trim_prefix("pirate_") if map.cells[cell] >= 0 else ""
+	if tile == "fire_box":
+		return "пожарный ящик"
+	if tile == "wall_light":
+		return "светильник"
 	if map.bench.has(cell):
 		return "верстак"
 	if map.stove.has(cell):
@@ -55,8 +64,12 @@ static func name_at(client: GameClient, cell: int, seen: bool) -> String:
 	var door := map.door_of[cell]
 	if door >= 0:
 		lines.append(_door(client, door))
-	if client.holes.has(cell):
+	if client.holes.has(cell) and client.shut_panes.has(cell):
+		lines.append("Разбитое окно за ставнем: воздух держится, пробоину надо заделать")
+	elif client.holes.has(cell):
 		lines.append("Пробоина в обшивке: воздух уходит")
+	elif client.shut_panes.has(cell):
+		lines.append("Окно: ставень опущен")      # (v91, the author's W1)
 	if seen and client.floor_things.has(cell):
 		var here := PackedByteArray()
 		for v in client.floor_things[cell]:

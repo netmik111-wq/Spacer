@@ -208,6 +208,29 @@ for _i in range(4):
     FLOOR_LOOKS.append(("console_1_fl_t_%d" % _i, None, "wall"))
 TILES += FLOOR_LOOKS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in FLOOR_LOOKS]
+# (v91, the author's D2 and F2) a locked door's lamp blinks: the door with its lamp dark; lamps on the floor
+# by a door (green opens, yellow only for some jobs, orange broken, red blocked), the danger line inside an
+# airlock's outer door and a room's air vent, each alone on a clear tile, laid over the floor by the client
+MARKS = [("door_%s_%s_off" % (_type, _o), None, "door") for _type in DOOR_TYPES for _o in ("h", "v")]
+MARKS += [("lamp_" + _c, None, "floor") for _c in ("green", "yellow", "orange", "red")]
+MARKS += [("danger_line", None, "floor"), ("vent", None, "floor")]
+TILES += MARKS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MARKS]
+# (v91, his W2) a window onto open space is his "v1" pane (the rest, between rooms, his "v2"); laid by the
+# client in place of the map's window, by what is on its other side. While its shutter comes down it is
+# drawn in the v2 stages (his set has no v1 stages for a horizontal window)
+OUTER_PANES = [("window_o" + _piece, None, "wall") for _piece in WINDOW_PIECES]
+TILES += OUTER_PANES
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in OUTER_PANES]
+# (v91, his M7) things on a wall: the first-aid box and the spare parts box (each hands out what the supply
+# locker keeps of them), the fire box (only a picture until there is fire) and a wall light
+WALL_BOX_ART = {"med_box": "med_box", "tech_box": "tex_box", "fire_box": "fire_box", "wall_light": "wall_light_horizontal"}
+TILES += [(_name, None, "wall") for _name in WALL_BOX_ART]
+TILES += [(PIRATE + _name, None, "wall") for _name in WALL_BOX_ART]
+# (v91, his M5) his five ship pictures for the star chart, white (the chart tints them; ours in his colour)
+MAP_SHIPS = [("map_ship_%d" % _i, None, "floor") for _i in range(1, 6)]
+TILES += MAP_SHIPS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MAP_SHIPS]
 ATLAS_COLS = 8
 
 
@@ -395,12 +418,50 @@ def art_standing(art, name):
     return one
 
 
+def art_alone(picture, bare):
+    """What a picture of his has that the bare one has not, on a clear tile (a lamp off its floor plate)."""
+    out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    for y in range(T):
+        for x in range(T):
+            if picture.getpixel((x, y)) != bare.getpixel((x, y)):
+                out.putpixel((x, y), picture.getpixel((x, y)))
+    return out
+
+
 def art_tile(art, mock, images, name):
     """The picture for a tile of the sheet from the author's set, or None (drawn as before)."""
     floor = art["floor_m"]
     standing = art_standing(art, name)
     if standing is not None:
         return standing
+    if name.startswith("lamp_"):
+        return art_alone(art["floor_door_lamp_" + name[5:]], floor)
+    if name.startswith("map_ship_"):
+        out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+        for y in range(T):
+            for x in range(T):
+                if art[name].getpixel((x, y))[3] > 0:
+                    out.putpixel((x, y), (255, 255, 255, 255))
+        return out
+    if name in WALL_BOX_ART:
+        return art_on(art["horizontal_wall"], art[WALL_BOX_ART[name]])
+    if name == "lock_pump":
+        return art_on(art["horizontal_wall"], art["button"])    # (v91, his M7) the airlock pump is his button
+    if name == "danger_line":
+        return art["floor_danger_line_decal"]
+    if name == "vent":
+        return art["vent_floor"]
+    if name.startswith("door_") and name.endswith("_off"):
+        _, kind, o, _ = name.split("_")
+        way = "horizontal" if o == "h" else "vertical"
+        lit, green = art["Door_%s_%s_lock_1" % (way, kind)], art["Door_%s_%s_unlock" % (way, kind)]
+        out = lit.copy()
+        for y in range(T):
+            for x in range(T):
+                if lit.getpixel((x, y)) != green.getpixel((x, y)):
+                    r, g, b, a = lit.getpixel((x, y))
+                    out.putpixel((x, y), (r * 30 // 100, g * 26 // 100, b * 22 // 100, a))
+        return out
     if name in NEW_ART:
         return art[NEW_ART[name]]
     if name == "door_half":
@@ -415,6 +476,8 @@ def art_tile(art, mock, images, name):
                 return art_floor(art, family, spot)
     if name == "window_v":
         return art["glass_wall_v1_vertical_single_stage_1"]
+    if name.startswith("window_o"):
+        return art["glass_wall_v1_horizontal_%s" % WINDOW_SPOTS[name[len("window_o"):]]]
     if name.startswith("window") and name != "window_field":
         if name.startswith("window_v_"):
             piece, stage = name[len("window_v_"):].rsplit("_s", 1)
@@ -949,6 +1012,9 @@ def build_tiles():
 #   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
 #   'F'  (v86) a force field in the hull: air stays in, light and sight pass; the shuttle parks outside it
 #   'V'  (v86) wall with the shuttle's dock console: board the shuttle here or call it (a fleet's ships)
+#   'E'  (v91) wall with a first-aid box: E takes a first-aid kit the supply locker keeps (or puts one back)
+#   'J'  (v91) wall with a spare parts box: the same with spare parts (and circuit boards)
+#   'N'  (v91) wall with a fire box (a picture until there is fire)   'L'  (v91) a wall light
 #   'R'  (v81) an asteroid's rock      'O'  (v81) a vein of ore in the rock      ','  (v81) bare rock ground
 #        (rock and ground follow no room rule: draw them any shape)
 #
@@ -960,6 +1026,12 @@ def build_tiles():
 # x, y is any floor cell of the room (counted in the deck's drawing, first row 0). Every door of
 # that room then opens only for those whose job gives that access (see Net.ACCESS_*).
 # (v75) The access "brig" is no lock: it marks a brig cell, where a prisoner never slips the cuffs.
+#
+# (v91, the author's D1) A door is drawn by its room's kind (hermetic at an airlock or into space, technical
+# where only some jobs pass, cargo into a room with the supply locker or the module bay, else the plain one);
+# a line of its own gives one door the look of another kind:
+#   & <deck number, from 1> <x> <y> <base|tech|cargo|herm>
+# where x, y is the door's cell (the ship editor's door marks).
 #
 # A ship others fight (the pirate ship) names the rooms its systems stand in, the same way:
 #   % <deck number, from 1> <x> <y> <system>
@@ -975,7 +1047,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFV")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFVEJNL")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH")
@@ -989,7 +1061,8 @@ ROCK_CHARS = set("RO,")
 
 MACHINE_OF = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
               "1": "console_1", "2": "console_2", "3": "console_3",
-              "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
+              "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
+              "E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}
 
 
 class MapError(Exception):
@@ -1150,7 +1223,7 @@ def read_decks(name, lines):
     """Splits a drawing into decks: [(deck name, lines)], top deck first."""
     decks = []
     for l in lines:
-        if l.startswith("@") or l.startswith("%"):
+        if l.startswith("@") or l.startswith("%") or l.startswith("&"):
             continue
         if l.startswith("="):
             decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
@@ -1241,10 +1314,21 @@ def resolve_ship(name, lines, ids):
                     seen.add((x + dx, y + dy))
                     todo.append((x + dx, y + dy))
         zones.append([SYSTEMS.index(parts[3]), sorted((y + d * stride) * w + x for x, y in seen)])
+    door_looks = []                      # (v91, the author's D1) "& deck x y kind": that door drawn as base, tech, cargo or herm
+    for l in lines:
+        if not l.startswith("&"):
+            continue
+        parts = l[1:].split()
+        if len(parts) != 4 or parts[3] not in DOOR_TYPES:
+            raise MapError(f"{name}: bad door line '{l}'")
+        d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        if not any(dx == x0 and dy == y0 + d * stride for dx, dy, _ in doors):
+            raise MapError(f"{name}: door line '{l}' does not point at a door")
+        door_looks.append([x0, y0 + d * stride, parts[3]])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
             "door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
-            "things": under}
+            "things": under, "door_looks": door_looks}
 
 
 def build_maps(images, ids):

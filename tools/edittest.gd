@@ -76,11 +76,11 @@ func _tile_set() -> void:
 	for t: Dictionary in meta["tiles"]:
 		names[str(t["name"])] = true
 	var missing: Array = []
-	var want: Array = ["window_m"]
+	var want: Array = ["window_m", "lamp_green", "lamp_yellow", "lamp_orange", "lamp_red", "danger_line", "vent"]
 	for kind in ["base", "tech", "cargo", "herm"]:
 		for o: int in 2:
 			var head := "door_%s_%s_" % [kind, "hv"[o]]
-			for lamp in ["green", "yellow", "red"]:
+			for lamp in ["green", "yellow", "red", "off"]:      # (v91) "off": a locked door's lamp blinking
 				want.append(head + lamp)
 			for i in range(1, int(WorldView.DOOR_STAGES[o]) + 1):
 				want.append(head + "open%d" % i)

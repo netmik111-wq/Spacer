@@ -3506,6 +3506,276 @@
    "id": 700,
    "name": "pirate_console_1_fl_t_3",
    "kind": "wall"
+  },
+  {
+   "id": 701,
+   "name": "door_base_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 702,
+   "name": "door_base_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 703,
+   "name": "door_tech_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 704,
+   "name": "door_tech_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 705,
+   "name": "door_cargo_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 706,
+   "name": "door_cargo_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 707,
+   "name": "door_herm_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 708,
+   "name": "door_herm_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 709,
+   "name": "lamp_green",
+   "kind": "floor"
+  },
+  {
+   "id": 710,
+   "name": "lamp_yellow",
+   "kind": "floor"
+  },
+  {
+   "id": 711,
+   "name": "lamp_orange",
+   "kind": "floor"
+  },
+  {
+   "id": 712,
+   "name": "lamp_red",
+   "kind": "floor"
+  },
+  {
+   "id": 713,
+   "name": "danger_line",
+   "kind": "floor"
+  },
+  {
+   "id": 714,
+   "name": "vent",
+   "kind": "floor"
+  },
+  {
+   "id": 715,
+   "name": "pirate_door_base_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 716,
+   "name": "pirate_door_base_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 717,
+   "name": "pirate_door_tech_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 718,
+   "name": "pirate_door_tech_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 719,
+   "name": "pirate_door_cargo_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 720,
+   "name": "pirate_door_cargo_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 721,
+   "name": "pirate_door_herm_h_off",
+   "kind": "door"
+  },
+  {
+   "id": 722,
+   "name": "pirate_door_herm_v_off",
+   "kind": "door"
+  },
+  {
+   "id": 723,
+   "name": "pirate_lamp_green",
+   "kind": "floor"
+  },
+  {
+   "id": 724,
+   "name": "pirate_lamp_yellow",
+   "kind": "floor"
+  },
+  {
+   "id": 725,
+   "name": "pirate_lamp_orange",
+   "kind": "floor"
+  },
+  {
+   "id": 726,
+   "name": "pirate_lamp_red",
+   "kind": "floor"
+  },
+  {
+   "id": 727,
+   "name": "pirate_danger_line",
+   "kind": "floor"
+  },
+  {
+   "id": 728,
+   "name": "pirate_vent",
+   "kind": "floor"
+  },
+  {
+   "id": 729,
+   "name": "window_o",
+   "kind": "wall"
+  },
+  {
+   "id": 730,
+   "name": "window_o_l",
+   "kind": "wall"
+  },
+  {
+   "id": 731,
+   "name": "window_o_m",
+   "kind": "wall"
+  },
+  {
+   "id": 732,
+   "name": "window_o_r",
+   "kind": "wall"
+  },
+  {
+   "id": 733,
+   "name": "pirate_window_o",
+   "kind": "wall"
+  },
+  {
+   "id": 734,
+   "name": "pirate_window_o_l",
+   "kind": "wall"
+  },
+  {
+   "id": 735,
+   "name": "pirate_window_o_m",
+   "kind": "wall"
+  },
+  {
+   "id": 736,
+   "name": "pirate_window_o_r",
+   "kind": "wall"
+  },
+  {
+   "id": 737,
+   "name": "med_box",
+   "kind": "wall"
+  },
+  {
+   "id": 738,
+   "name": "tech_box",
+   "kind": "wall"
+  },
+  {
+   "id": 739,
+   "name": "fire_box",
+   "kind": "wall"
+  },
+  {
+   "id": 740,
+   "name": "wall_light",
+   "kind": "wall"
+  },
+  {
+   "id": 741,
+   "name": "pirate_med_box",
+   "kind": "wall"
+  },
+  {
+   "id": 742,
+   "name": "pirate_tech_box",
+   "kind": "wall"
+  },
+  {
+   "id": 743,
+   "name": "pirate_fire_box",
+   "kind": "wall"
+  },
+  {
+   "id": 744,
+   "name": "pirate_wall_light",
+   "kind": "wall"
+  },
+  {
+   "id": 745,
+   "name": "map_ship_1",
+   "kind": "floor"
+  },
+  {
+   "id": 746,
+   "name": "map_ship_2",
+   "kind": "floor"
+  },
+  {
+   "id": 747,
+   "name": "map_ship_3",
+   "kind": "floor"
+  },
+  {
+   "id": 748,
+   "name": "map_ship_4",
+   "kind": "floor"
+  },
+  {
+   "id": 749,
+   "name": "map_ship_5",
+   "kind": "floor"
+  },
+  {
+   "id": 750,
+   "name": "pirate_map_ship_1",
+   "kind": "floor"
+  },
+  {
+   "id": 751,
+   "name": "pirate_map_ship_2",
+   "kind": "floor"
+  },
+  {
+   "id": 752,
+   "name": "pirate_map_ship_3",
+   "kind": "floor"
+  },
+  {
+   "id": 753,
+   "name": "pirate_map_ship_4",
+   "kind": "floor"
+  },
+  {
+   "id": 754,
+   "name": "pirate_map_ship_5",
+   "kind": "floor"
   }
  ]
 }

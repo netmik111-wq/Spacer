@@ -13,7 +13,7 @@ extends RefCounted
 
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
-const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFV"
+const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFVEJNL"
 const FLOOR_CHARS := ".sgcH"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
@@ -21,13 +21,15 @@ const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window
 	"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 	"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 	"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
+	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
+	"E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}       # (v91) the author's wall boxes
 const KINDS := ["ship", "pirate", "derelict", "asteroid"]
 ## (v91, the author: "it's not walls, it's on the ground") Machines stand on the floor. A machine sign is in the
 ## wall only in a row of machines between two pieces of wall with nothing solid above or below it (the old way);
 ## anywhere else it is a thing on the floor, the floor going on under it. Old drawings move their machines out
 ## of the wall onto the floor in front of them (to_floor), where there is room.
 const MACHINE_SIGNS := "1345678MZBUYXSQKGCP"
+const DOOR_LOOKS := ["base", "tech", "cargo", "herm"]   # (v91, the author's D1) the kinds of door a "&" line gives
 
 static var _tiles := {}              # tile name -> id (from assets/tiles.json)
 static var _kinds := PackedStringArray()
@@ -72,7 +74,7 @@ static func read(text: String) -> Dictionary:
 		var l: String = raw
 		if l.begins_with(";"):
 			continue
-		if l.begins_with("@") or l.begins_with("%"):
+		if l.begins_with("@") or l.begins_with("%") or l.begins_with("&"):
 			marks.append(l)
 			continue
 		if l.begins_with("="):
@@ -210,8 +212,24 @@ static func build(name: String, text: String) -> Dictionary:
 	var access_rooms := []
 	var brig_rooms := []
 	var zones := []
+	var door_looks := []
 	for l: String in parts["marks"]:
 		var bits := l.substr(1).split(" ", false)
+		if l.begins_with("&"):
+			# (v91, the author's D1) a door of another kind's look
+			var right := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
+				and DOOR_LOOKS.has(bits[3])
+			var on := -1
+			for k in doors.size():
+				if right and int(doors[k][0]) == int(bits[1]) and int(doors[k][1]) == int(bits[2]) + (int(bits[0]) - 1) * stride:
+					on = k
+			if not right:
+				problems.append(_problem(-1, 0, 0, "Неверная строка «%s»." % l))
+			elif on < 0:
+				problems.append(_problem(int(bits[0]) - 1, int(bits[1]), int(bits[2]), "Метка вида двери стоит не на двери."))
+			else:
+				door_looks.append([int(bits[1]), int(bits[2]) + (int(bits[0]) - 1) * stride, bits[3]])
+			continue
 		var system := l.begins_with("%")
 		var what := bits[3] if bits.size() == 4 else ""
 		var ok := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
@@ -258,14 +276,14 @@ static func build(name: String, text: String) -> Dictionary:
 	var data := {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
 		"decks": names, "cells": Array(cells), "spawns": spawns, "doors": doors,
 		"door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
-		"things": things}
+		"things": things, "door_looks": door_looks}
 	return {"data": data, "problems": problems, "kind": kind}
 
 
 static func _mark_name(what: String) -> String:
 	return {"bridge": "мостик", "engine": "машинное", "medbay": "медотсек", "armory": "оружейная", "guns": "орудия",
 		"brig": "камера", "weapons": "оружие", "helm": "управление", "crew": "каюты", "jump": "прыжковый двигатель",
-		"shields": "щиты"}.get(what, what)
+		"shields": "щиты", "base": "обычная", "tech": "техн.", "cargo": "грузовая", "herm": "герм."}.get(what, what)
 
 
 static func _problem(deck: int, x: int, y: int, text: String) -> Dictionary:

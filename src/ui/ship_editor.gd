@@ -41,6 +41,10 @@ const PALETTE := [
 	["V", "Пульт челнока", 3, "Рядом с силовым полем: сесть в челнок или вызвать его (флотилия из двух кораблей)."],
 	["M", "Голокарта", 3, "Весь корабль: воздух, пробоины, поломки."],
 	["I", "Интерком", 3, "Связь по кораблю."],
+	["E", "Ящик первой помощи", 3, "На стене: E берёт аптечку из запасов шкафа снабжения."],
+	["J", "Ящик запчастей", 3, "На стене: E берёт запчасть из запасов шкафа снабжения."],
+	["N", "Пожарный ящик", 3, "На стене. Пока только картинка: огня в игре ещё нет."],
+	["L", "Светильник", 3, "На стене, для вида."],
 	["2", "Кислородная станция", 4, "Заправка баллонов скафандров."],
 	["6", "Двигатель", 4, "Обязателен на нашем корабле: полёт и энергия."],
 	["S", "Накопитель энергии", 4, "Держит корабль, когда двигатель стоит."],
@@ -65,6 +69,9 @@ const KIND_NAMES := {"ship": "Наш корабль", "pirate": "Пиратск�
 const KIND_SIZE := {"ship": [40, 20, 2], "pirate": [30, 8, 1], "derelict": [16, 8, 1], "asteroid": [18, 8, 1]}
 const LOCKS := [["bridge", "Мостик (замок)"], ["engine", "Машинное (замок)"], ["medbay", "Медотсек (замок)"],
 	["armory", "Оружейная (замок)"], ["guns", "Орудийная (замок)"], ["brig", "Камера (бриг)"]]
+# (v91, the author's D1) what a door may look like: the mark on a door cell
+const DOOR_KINDS := [["base", "Дверь: обычная"], ["tech", "Дверь: техническая"], ["cargo", "Дверь: грузовая"],
+	["herm", "Дверь: герметичная"]]
 const SYSTEMS := [["weapons", "Оружие"], ["helm", "Рубка"], ["engine", "Двигатель"], ["crew", "Кубрик"],
 	["jump", "Гипердвигатель"], ["shields", "Щиты"]]
 const TOOLS := [
@@ -76,7 +83,7 @@ const TOOLS := [
 	[Canvas.Tool.ERASE, "Ластик", "E", "Стирает в пустоту. Правая кнопка стирает любым инструментом."],
 	[Canvas.Tool.PICK, "Пипетка", "I", "Берёт знак с рисунка. То же: Alt + щелчок."],
 	[Canvas.Tool.SELECT, "Выделение", "S", "Ctrl+C, Ctrl+X, Ctrl+V, Delete; тащите выделенное, чтобы передвинуть."],
-	[Canvas.Tool.MARK, "Метки комнат", "K", "Щёлкните по полу комнаты: замок, камера брига, система пиратов."],
+	[Canvas.Tool.MARK, "Метки комнат", "K", "Щёлкните по полу комнаты: замок, камера брига, система пиратов. По двери: её вид."],
 ]
 
 var drawing := Drawing.new()
@@ -571,11 +578,20 @@ func _move_deck(by: int) -> void:
 # ---------------------------------------------------------------- marks
 
 func _on_mark_asked(c: Vector2i) -> void:
-	if drawing.room_cells(_canvas.deck, c).is_empty():
-		_note("Метки ставятся на пол комнаты.")
+	var on_door := drawing.at(_canvas.deck, c) in ["D", "A"]
+	if drawing.room_cells(_canvas.deck, c).is_empty() and not on_door:
+		_note("Метки ставятся на пол комнаты или на дверь.")
 		return
 	_mark_cell = c
 	_mark_menu.clear()
+	if on_door:
+		for i in DOOR_KINDS.size():
+			_mark_menu.add_item(str(DOOR_KINDS[i][1]), 200 + i)
+		_mark_menu.add_separator()
+		_mark_menu.add_item("Дверь: по комнатам (сама)", 299)
+		_mark_menu.position = Vector2i(get_global_mouse_position()) + get_window().position
+		_mark_menu.popup()
+		return
 	if drawing.kind == "pirate":
 		for i in SYSTEMS.size():
 			_mark_menu.add_item("Система: " + str(SYSTEMS[i][1]), 100 + i)
@@ -589,6 +605,11 @@ func _on_mark_asked(c: Vector2i) -> void:
 
 
 func _on_mark_chosen(id: int) -> void:
+	if id >= 200:
+		drawing.set_mark(_canvas.deck, _mark_cell, "&", str(DOOR_KINDS[id - 200][0]) if id < 200 + DOOR_KINDS.size() else "")
+		drawing.commit()
+		_canvas.queue_redraw()
+		return
 	var cells := drawing.room_cells(_canvas.deck, _mark_cell)
 	var type := "%" if drawing.kind == "pirate" else "@"
 	drawing.remove_marks_in(_canvas.deck, cells, type)

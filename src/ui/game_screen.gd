@@ -2130,6 +2130,17 @@ func _process(delta: float) -> void:
 		_hint.text = "Голокарта обесточена: %s" % why if no_power else "E: голокарта корабля (воздух, пробоины, поломки)"
 	elif target == 19:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
+	elif target == 47 or target == 48:
+		# (v91, the author's M7) the boxes on the wall hand out the supply locker's stock
+		var kit := Net.ITEM_MEDKIT + Net.MEDKIT_USES if target == 47 else Net.ITEM_PART
+		var left := int(client.store.get(kit, 0)) + (int(client.store.get(Net.ITEM_BOARD, 0)) if target == 48 else 0)
+		var held := client.slots[client.hand] if client.hand < client.slots.size() else Net.ITEM_NONE
+		if held != Net.ITEM_NONE and (Items.kind_of(held) == kit or (target == 48 and held == Net.ITEM_BOARD)) and Items.whole(held):
+			_hint.text = "E: убрать в ящик (%s)" % Items.name_of(held).to_lower()
+		elif target == 47:
+			_hint.text = "Ящик первой помощи: E взять аптечку (в шкафу снабжения: %d)" % left
+		else:
+			_hint.text = "Ящик запчастей: E взять запчасть (в шкафу снабжения: %d)" % left
 	elif target == 41:
 		_hint.text = "Обезвреживаю бомбу…" if (_use_held and client.work > 0) else \
 			"Пиратская бомба! Держите E, чтобы обезвредить (%d с, инженеру вдвое быстрее)" % 5

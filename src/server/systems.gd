@@ -19,6 +19,10 @@ var server: GameServer
 var pump_goal := {}                    # (v73) pump cell -> the chamber air it stops at (0..1)
 var cycles := {}                     # (v69) airlock pump cell -> [the door pressed, the tick it was pressed] (see call_lock)
 var vents_on := true                 # (v69) the room vents (tests switch them off)
+var panes_down := {}                 # (v91) window cell -> true: its shutter is down (see update_panes)
+var _pane_torn := {}                 # (v91) window cell -> the tick a hole was torn in it
+var _pane_sent := {}                 # (v91) window cell -> the hull state clients were last told (see pane_state)
+const PANE_SHUT_TICKS := 20          # (v91, the author's W1b) a broken window's shutter shuts 1 s after the hole
 const CYCLE_SECONDS := 40            # a press gives up after this long
 const CYCLE_OPEN_TICKS := 60         # the door it opens stays open at least this long (3 s)
 const VENT_PER_STEP := 0.012         # (v69) air a room's vent blows into it per air step: as an air plant does
@@ -437,7 +441,9 @@ func breach(cell: int) -> bool:
 	## Tears a hole in a hull cell. Returns false if there already is one.
 	if not server.air.set_hole(cell, true):
 		return false
-	server.replication.hull_record(cell, 1)
+	if panes_down.has(cell):
+		server.air.seal(cell, true)          # (v91) the window's shutter was down already: no air is lost
+	server.replication.hull_record(cell, pane_state(cell))
 	server.chat.alarm("Разгерметизация! Пробоина в обшивке.")
 	if server.map.hull.has(cell):
 		server.crew.hull_hit(Net.HULL_PER_HOLE)
@@ -475,8 +481,57 @@ func seal_all() -> void:
 		return
 	for cell: int in server.air.holes.keys():
 		server.air.set_hole(cell, false)
-		server.replication.hull_record(cell, 0)
+		server.replication.hull_record(cell, pane_state(cell))
 	server.chat.say("Пробоины заделаны.")
+
+
+func update_panes() -> void:
+	## (v91, the author's W1) Window shutters: every window of ours has one. At red alert they all come
+	## down; a hole torn in a window lets the air out for a moment, then its shutter shuts over it
+	## (PANE_SHUT_TICKS) and the room keeps its air until the hole is mended, when it lifts again. A
+	## shutter down stops sight and light as a wall does. They need power, as the doors' shutters do:
+	## without it nothing drops and nothing lifts.
+	var red := server.stations.alert == Net.ALERT_RED
+	var powered := server.powered()
+	var changed := false
+	for c: int in server.map.panes:
+		if not server.fleet.mine(c):
+			continue                         # (another ship of the fleet's, by its own alert and power)
+		var hole := server.air.holes.has(c)
+		if not hole:
+			_pane_torn.erase(c)
+		elif not _pane_torn.has(c):
+			_pane_torn[c] = server.tick
+		var down := panes_down.has(c)
+		if powered:
+			down = red or (hole and server.tick - int(_pane_torn[c]) >= PANE_SHUT_TICKS)
+		if down != panes_down.has(c):
+			changed = true
+			if down:
+				panes_down[c] = true
+			else:
+				panes_down.erase(c)
+			server.map.set_pane(c, down)
+			if down and hole and not red:
+				server.chat.say("Ставень закрыл разбитое окно: отсек держит воздух.")
+		if hole:
+			server.air.seal(c, down)
+		var state := pane_state(c)
+		if state != int(_pane_sent.get(c, 0)):
+			_pane_sent[c] = state
+			server.replication.hull_record(c, state)
+	if changed:
+		server.replication.lines.clear()     # (the lines of sight remember walls: a shutter is one now)
+		server.replication.sight_changed()
+
+
+func pane_state(cell: int) -> int:
+	## A hull cell as clients are told it: 0 whole, 1 a hole, (v91) 2 a hole behind a window's shutter,
+	## 3 a window's shutter down.
+	var down := panes_down.has(cell)
+	if server.air.holes.has(cell):
+		return 2 if down else 1
+	return 3 if down else 0
 
 
 func update_shutters() -> void:

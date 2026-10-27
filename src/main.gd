@@ -36,7 +36,8 @@ extends Node
 ## split by ";"; Y counts through all decks, so the second deck starts at 16),
 ## climb_at=N (press "use" once on reaching the N-th goto cell, counted from 1:
 ## that takes a ladder), jump_after=SECONDS (ask
-## for a jump to the first sector in reach), event_after=SECONDS with event=ID
+## for a jump to the first sector in reach), alert_after=SECONDS (v91: ask for red alert, or alert=LEVEL;
+## only at the ship's controls), event_after=SECONDS with event=ID
 ## (the host fires a director event), console_after=SECONDS (open the console
 ## the character faces), panel=inventory|crew|help|admin|options|pause|trade with panel_after=SECONDS (open that
 ## window), --no-events (dedicated server: the director stays quiet),
@@ -143,6 +144,7 @@ var _sealed := false
 var _suited := false
 var _jumped := false
 var _evented := false
+var _alerted := false
 var _consoled := false
 var _paneled := false
 var _helmed := false
@@ -628,6 +630,9 @@ func _process(_delta: float) -> void:
 		var reach := _client.sectors.neighbours(_client.sector)
 		if not reach.is_empty():
 			_client.send_jump(reach[0])
+	if _opt.has("alert_after") and not _alerted and _screen != null and t >= float(_opt["alert_after"]):
+		_alerted = true
+		_client.send_alert(int(_opt.get("alert", Net.ALERT_RED)))
 	if _opt.has("event_after") and not _evented and _screen != null and t >= float(_opt["event_after"]):
 		_evented = true
 		_client.send_admin(Net.ADMIN_EVENT, int(_opt.get("event", 1)))

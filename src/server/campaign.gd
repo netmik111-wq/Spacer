@@ -105,7 +105,7 @@ static func snapshot(server: Node) -> Dictionary:
 		if not here.has(c["name"]):
 			crew.append(c)                   # left this evening, or not back yet since the last
 	return {
-		"version": VERSION, "map": map.map_name, "fleet_rows": Array(map.fleet_rows),
+		"version": VERSION, "map": map.map_name, "fleet_rows": Array(map.fleet_rows), "layout": map.crc,
 		"seed": server.space_seed, "been": been,
 		"at": [server.sectors.cell[server.ship.sector].x, server.sectors.cell[server.ship.sector].y],
 		"pos": [server.ship.pos.x, server.ship.pos.y],
@@ -159,7 +159,7 @@ static func _fleet_of(server: Node) -> Array:
 	return out
 
 
-static func _fleet_back(server: Node, saved: Array) -> void:
+static func _fleet_back(server: Node, saved: Array, redrawn: bool = false) -> void:
 	## (v85) The other ships of our fleet as they were saved (the first is put back by restore itself).
 	for i in range(1, mini(server.fleet.size(), saved.size() + 1)):
 		var d: Dictionary = saved[i - 1]
@@ -202,7 +202,7 @@ static func _fleet_back(server: Node, saved: Array) -> void:
 		server.garden.load_from(d["garden"])
 		server.power.load_from(d["smes"])
 		s.broken.clear()
-		for cell in d["broken"]:
+		for cell in (d["broken"] if not redrawn else []):
 			s.broken[int(cell)] = true
 	server.fleet.use(0)
 
@@ -343,30 +343,43 @@ static func restore(server: Node, data: Dictionary) -> String:
 		if d is Array and (d as Array).size() == 2:
 			server.deaths.append([str(d[0]), str(d[1])])
 	server.ship.earned = int(data.get("earned", 0))
+	# (v91) a ship drawn anew since the save (v91 put the machines on the floor and redrew ours): what lay in
+	# its cells would land in the wrong ones. The air is fresh, holes and breakdowns gone, the things on the
+	# floor in the locker, everybody at the places one comes aboard.
+	var redrawn: bool = int(data.get("layout", -1)) != int(map.crc)
 	var air_saved := Marshalls.base64_to_raw(str(data["air"])).to_float32_array()
-	if air_saved.size() == server.air.air.size():
+	if air_saved.size() == server.air.air.size() and not redrawn:
 		server.air.air = air_saved
-	for cell in data["holes"]:
+	for cell in (data["holes"] if not redrawn else []):
 		server.air.set_hole(int(cell), true)
 	server.air.wake()
-	for cell in data["broken"]:
+	for cell in (data["broken"] if not redrawn else []):
 		server.ship.broken[int(cell)] = true
-	_fleet_back(server, data.get("fleet", []))
-	var jammed := Marshalls.base64_to_raw(str(data["jammed"]))
+	_fleet_back(server, data.get("fleet", []), redrawn)
+	var jammed := Marshalls.base64_to_raw(str(data["jammed"])) if not redrawn else PackedByteArray()
 	var faulty := Marshalls.base64_to_raw(str(data["faulty"]))
 	for d in mini(jammed.size(), server.doors.jammed.size()):
 		server.doors.jammed[d] = jammed[d]
 		server.doors.faulty[d] = faulty[d] if d < faulty.size() else 0
 		if jammed[d] == 1:
 			server.doors.ready[d] = 0                # stuck open
-	var picked := Marshalls.base64_to_raw(str(data.get("picked", "")))    # (v69)
+	var picked := Marshalls.base64_to_raw(str(data.get("picked", ""))) if not redrawn else PackedByteArray()    # (v69)
 	for d in mini(picked.size(), server.doors.picked.size()):
 		server.doors.picked[d] = picked[d]
 	server.floor_things.clear()
 	for cell: String in data["floor"]:
-		server.floor_things[int(cell)] = PackedByteArray(data["floor"][cell])
+		if not redrawn:
+			server.floor_things[int(cell)] = PackedByteArray(data["floor"][cell])
+			continue
+		for item: int in PackedByteArray(data["floor"][cell]):
+			if item != Net.ITEM_NONE:
+				server.ship.store[item] = int(server.ship.store.get(item, 0)) + 1
 	server.saved_crew.clear()
 	for c: Dictionary in data["crew"]:
+		if redrawn:
+			var spot: Vector2i = server.crew.spawn_point()
+			c["x"] = spot.x
+			c["y"] = spot.y
 		if not bool(c["corpse"]):
 			server.saved_crew[str(c["name"])] = c
 	for c: Dictionary in data["crew"]:

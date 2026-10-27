@@ -773,11 +773,13 @@ func _tick() -> void:
 		fleet.each(_ship_air)
 		air.step(doors, tick)
 		fleet.each(systems.update_shutters)
+		fleet.each(systems.update_panes)    # (v91) the windows' shutters
 	if tick % Net.AIR_SEND_EVERY == 0:
 		replication.collect_air()
 	if tick % Net.TICK_HZ == 0:
 		for cell: int in air.holes.keys():
-			chat.sound(Net.SOUND_HISS, cell % map.width, cell / map.width)
+			if not air.sealed.has(cell):     # (v91) a window's shutter over it: no air goes out
+				chat.sound(Net.SOUND_HISS, cell % map.width, cell / map.width)
 	_lap("air")
 	crew.tell_looks()
 	_tell_ships()

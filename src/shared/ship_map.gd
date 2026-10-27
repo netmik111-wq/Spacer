@@ -25,7 +25,7 @@ const FLEET_JOIN := "|"              # (v85, the author's FS1) "ship02|ship01": 
 const FLEET_GAP := 4                 # rows of open space between two ships of the fleet
 # (v85) what each ship of the fleet has of its own: set in place by use_ship (the server's and the client's
 # code ask `helm`, `guns`, `smes`... of the ship they work for; a gun or a tray is numbered within its ship)
-const FLEET_FITS := ["oxygen", "helm", "chart", "engine", "air_plant", "locker", "intercom", "holo", "shield", "bench",
+const FLEET_FITS := ["oxygen", "helm", "chart", "engine", "air_plant", "locker", "intercom", "med_box", "tech_box", "holo", "shield", "bench",
 	"bay", "autodoc", "scanner", "smes", "smes_small", "comms", "trays", "cryo", "stove", "backup_rooms", "guns",
 	"gun_console", "drone_console", "lock_pump", "vents", "spawns"]
 
@@ -53,6 +53,7 @@ var door_of := PackedInt32Array()    # door number per cell, -1 = no door there
 var door_sides := PackedInt32Array() # per door, two cells: the floor on either side of it (-1 = none).
                                      # The first is above or to the left, the second below or to the right.
 var hull := PackedInt32Array()       # cells of the outer shell that can be breached: wall or window
+var panes := PackedInt32Array()      # (v91) our ships' window cells: each has a shutter (Systems.update_panes)
                                      # with a walkable cell on one side and space on another
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
 var helm := {}                       # wall cells with the ship's controls (the panel with orange lights)
@@ -61,6 +62,8 @@ var engine := {}                     # wall cells with the engine: it drives the
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var locker := {}                     # wall cells with the supply locker
 var intercom := {}                   # wall cells with an intercom panel
+var med_box := {}                    # (v91, the author's M7) wall cells with a first-aid box (see Supplies.box)
+var tech_box := {}                   # (v91) wall cells with a spare parts box
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var drone_console := {}              # (v54) wall cells with the drone monitor (the fifth console of the mockup)
@@ -90,6 +93,7 @@ var door_partner := PackedInt32Array() # per door: the other door of its airlock
                                      # Only one of the two may be open at a time (see Doors.bump)
 var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
 var door_access := PackedByteArray() # per door: the access it asks for (Net.ACCESS_* bits), 0 = anybody
+var door_look := PackedStringArray() # (v91, the author's D1) per door: the kind it is drawn as ("" = by its rooms)
 var vents := PackedInt32Array()     # (v69) floor cells with a room's air vent, one per room (see _place_vents)
 var access_in := PackedByteArray()   # (v69) per cell: the access of the restricted room it lies in (0 = none):
                                      # its doors open for anybody leaving it (see leaving)
@@ -142,7 +146,7 @@ const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo", "stove", "dock"]
+	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -405,6 +409,12 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		door_access.append(int(access[d]) if d < access.size() else 0)
 		h = (h * 31 + door_access[d]) & 0x7FFFFFFF
 	crc = ((h * 31 + width) * 31 + deck_stride * 7 + deck_count) & 0x7FFFFFFF
+	door_look = PackedStringArray()
+	door_look.resize(doors.size())
+	for l: Array in data.get("door_looks", []):
+		var d := door_of[int(l[1]) * width + int(l[0])]
+		if d >= 0:
+			door_look[d] = str(l[2])
 	door_sides = PackedInt32Array()
 	for d in doors.size():
 		var at: Vector2i = doors[d]
@@ -419,6 +429,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	air_plant = {}
 	locker = {}
 	intercom = {}
+	med_box = {}
+	tech_box = {}
 	holo = {}
 	shield = {}
 	bench = {}
@@ -474,6 +486,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			locker[i] = true
 		if cells[i] == tile_ids.get("intercom", -1):
 			intercom[i] = true
+		if cells[i] == tile_ids.get("med_box", -1):
+			med_box[i] = true
+		if cells[i] == tile_ids.get("tech_box", -1):
+			tech_box[i] = true
 		if cells[i] == tile_ids.get("holo", -1):
 			holo[i] = true
 		if cells[i] == tile_ids.get("shield", -1):
@@ -567,6 +583,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			var outside := is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 			if inside and outside:
 				hull.append(y * width + x)
+	panes = PackedInt32Array()
+	for i in cells.size():
+		if cells[i] >= 0 and windows.has(cells[i]) and not tile_names[cells[i]].ends_with("window_field"):
+			panes.append(i)
 	_place_vents()
 	return ""
 
@@ -845,6 +865,7 @@ func add_other(name: String) -> int:
 		door_partner.append(-1)
 		door_vent.append(0)
 		door_access.append(0)              # another ship's doors ask for no access
+		door_look.append("")
 	return others.size() - 1
 
 
@@ -890,6 +911,7 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 	var o = other
 	for d in o.doors.size():
 		door_kind[other_first_door + d] = o.door_kind[d]
+		door_look[other_first_door + d] = o.door_look[d]
 	if at != NO_OTHER:
 		for y in o.height:
 			for x in o.width:
@@ -1235,6 +1257,13 @@ func deck_of(y: int) -> int:
 
 func deck_of_cell(cell: int) -> int:
 	return (cell / width) / deck_stride
+
+
+func set_pane(cell: int, down: bool) -> void:
+	## (v91, the author's W1) A window's shutter down stops light and sight as a wall does; up, the
+	## window lets them through again. The server and the client both call it (Systems.update_panes,
+	## GameClient's hull records), so they see alike.
+	opaque[cell] = 1 if down else 0
 
 
 func local_y(y: int) -> int:
