@@ -2146,6 +2146,16 @@
    "id": 428,
    "name": "pirate_door_herm_v_open2",
    "kind": "door"
+  },
+  {
+   "id": 429,
+   "name": "wall_tup",
+   "kind": "wall"
+  },
+  {
+   "id": 430,
+   "name": "pirate_wall_tup",
+   "kind": "wall"
   }
  ]
 }

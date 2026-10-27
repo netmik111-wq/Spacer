@@ -1799,3 +1799,12 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   table and sphere, ship icons, the brown and red lockers, the med/tech/fire boxes, button and wall light, soil floor, floor lamps,
   danger line, vent, stairs. The stairs are 48 and 64 px tall, so they cannot go in the 32-px sheet as they are.
 
+
+## v90.1: wall crossings (the author: "Wall dont have cross connection")
+
+- **His set has the T joint only one way**: a vertical wall going down from a horizontal one (`T-shaped_corner`). Where a
+  vertical wall meets the band from above, the band was drawn plain (`horizontal_wall`) and his
+  `vertical_wall_down_to_T-shaped_corner` crossing has no arms, so the walls looked cut. Mine: both joints are made from his T
+  turned upside down (`WALL_JOINS` in `make_assets.py`): the crossing is the T with the turned T's top 16 rows over it, and
+  a new `wall_tup` (a wall from above only) is the horizontal wall with the turned T's top 20 rows. `wall_tup` is new, so it
+  goes at the end of the sheet (with its pirate copy) and the maps are rebuilt (`MapBuilder` picks it the same way).

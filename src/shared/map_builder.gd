@@ -371,7 +371,7 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 					if c == "D":
 						doors.append([x, y, "D"])
 				elif e and wst:
-					piece = "wall_cross" if (n and s) else ("wall_tdown" if s else "wall_h")
+					piece = "wall_cross" if (n and s) else ("wall_tdown" if s else ("wall_tup" if n else "wall_h"))
 				elif e and not wst:
 					if n == s:
 						problems.append(_problem(deck, x, y, "Конец стены без угла."))
