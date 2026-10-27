@@ -205,6 +205,12 @@ Open problems:
 - Client only, protocol unchanged; `edittest` checks every look tile is in the sheet (44 scripts). Version 0.83, build in
   `/mnt/project-files/builds/v90/`.
 
+
+### v90.1 (his note on the preview: "Wall dont have cross connection")
+
+- Where a vertical wall meets a horizontal one from above, the joint is drawn now: the crossing and a new turned-T piece
+  (`wall_tup`, at the end of the sheet) made from his T. Maps rebuilt. Version 0.83.1, build in `/mnt/project-files/builds/v90.1/`.
+
 ### v89 (his 18 Notebook notes; questions on "Spacer v89 Notes")
 
 - Fixed: guns switched off by a power shortage (ion storm) now come back on by themselves; teleported pirates arrive
