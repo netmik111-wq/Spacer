@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v89 (version 0.82: his 18 Notebook notes: guns back on after a power shortage, the teleport warned and rarer, «К оружию» for bots, rarer events, clicks on the chart) is the latest. Plans one to four are done except the darkness front (the
+Build v90 (version 0.83: the author's own tile set for walls, floors, doors, windows and machines) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -117,6 +117,9 @@ v89 (his 18 Notebook notes, answers on `https://claude.ai/artifact/FryDUDpk8c5nb
 back by itself, the teleport 5x rarer with a 5 s warning and boarders spread over rooms in suits, the heavy boarder in the
 suit, wrecks and bodies kept, bots climb ladders whatever is in front, «К оружию» per bot, meteors 3x / pirates 1.75x rarer,
 hunters 1.25x fewer, click a system to jump, a drawn gun sight, sounds heard from the feet.
+v90 (his Aseprite tile set, `art_src/tileset/`; questions on `https://claude.ai/artifact/FkyjH7eBxzYEQhCXbPkNFG`): every wall,
+floor, window and door from his set, doors in four kinds with lamps and open stages, ten machines (wide over a row of signs, from
+behind when facing up); the rest of his set (stairs, holo table, soil, floor lamps, window stages, lockers, boxes) waits for his answers.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -532,6 +535,11 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `Movement.climb(p, true)`; the plain call is the "use" key's. Director events by chance pass through `Director.RARER`.
   A bot's «К оружию» is `Player.defends`, sent as `Net.ORDER_ARMS` in the order byte (mask it off for the post). Sounds are
   heard at `WorldView._ears` (our feet), not the camera. `S_SOUND` kind 20 is the teleport (protocol 64).
+- (v90) The tile sheet comes from the author's set (`tools/make_assets.py` `load_tileset`, `NEW_ART`, `art_tile`); new pieces
+  go at the end. The client lays some cells in another tile than the map's (`WorldView._laid`: windows in a row, machines facing
+  up, wide machines; `_door_look`: door kind, lamp, open stage): whatever reads a cell's look from the layer rather than
+  `map.cells` gets that piece. A new machine picture goes into `MACHINE_ART` (make_assets) and `WorldView.MACHINE_WIDE` together;
+  `edittest` checks the sheet has every piece.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -544,7 +552,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
 
 - The archive's first part carries `dist_files/sounds/README.txt` as `sounds/README.txt` (v56: the names of
   the sounds the author may replace), and (v74) `dist_files/sprites/README.txt` as `sprites/README.txt` with the six
-  sheets copied from `assets/` into `sprites/original/` (not into `sprites/` itself, or they'd be used as replacements).
+  sheets copied from `assets/` into `sprites/original/` (not into `sprites/` itself, or they'd be used as replacements);
+  (v90) and `art_src/old/tiles_v89.png` as `sprites/old/tiles.png`, the author's "folders for old sprites".
 - A file up to 30 MB goes through chat, and the Windows game weighs 36 MB archived. So it
   is split into `game.001` and `game.002` in two archives; `play.bat` joins them and checks
   the size. The size in `play.bat` is updated with every build.
@@ -567,7 +576,9 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
 
 ## Graphics
 
-- `art_src/` holds the author's references. `map_mockup.png` is scaled 2×; the 32-pixel grid
+- (v90) `art_src/tileset/Tile_set_1.png` + `.json` is the author's tile set (Aseprite slices), the source of `assets/tiles.png`.
+  `art_src/old/` keeps the v89 mockup and sheet (the mockup still gives the oxygen console's picture).
+- `art_src/` holds the author's references. `art_src/old/map_mockup.png` is scaled 2×; the 32-pixel grid
   starts at an offset of 5.5. `chars_ref.png` has one angle and cropped legs, so the crew
   is drawn in code for now. `hud.dmi` has 20 unnamed states; which is which is recorded
   in `tools/make_assets.py` (`HUD_ALERTS`).

@@ -197,6 +197,14 @@ Open problems:
 - v88.1 (0.81.1), his answers and note: pirates' visors glow red (U2 B); the shadow is drawn by the game and lies along a
   body lying down. Build in `/mnt/project-files/builds/v88.1/`.
 
+### v90 (his tile set; questions on "Spacer v90 Tiles")
+
+- His Aseprite tile set draws the walls, floors, see-through floors, windows (a row is one pane), doors (four kinds, lamps by
+  state, open stages) and ten machines (wide ones over a row of their signs, seen from behind when facing up). The old mockup
+  and the v89 sheet moved to `art_src/old/`; the build carries the old sheet in «sprites/old».
+- Client only, protocol unchanged; `edittest` checks every look tile is in the sheet (44 scripts). Version 0.83, build in
+  `/mnt/project-files/builds/v90/`.
+
 ### v89 (his 18 Notebook notes; questions on "Spacer v89 Notes")
 
 - Fixed: guns switched off by a power shortage (ion storm) now come back on by themselves; teleported pirates arrive

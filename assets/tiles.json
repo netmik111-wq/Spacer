@@ -976,6 +976,1176 @@
    "id": 194,
    "name": "dock",
    "kind": "wall"
+  },
+  {
+   "id": 195,
+   "name": "window_m",
+   "kind": "wall"
+  },
+  {
+   "id": 196,
+   "name": "window_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 197,
+   "name": "window_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 198,
+   "name": "window_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 199,
+   "name": "window_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 200,
+   "name": "window_l_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 201,
+   "name": "window_l_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 202,
+   "name": "window_l_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 203,
+   "name": "window_l_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 204,
+   "name": "window_m_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 205,
+   "name": "window_m_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 206,
+   "name": "window_m_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 207,
+   "name": "window_m_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 208,
+   "name": "window_r_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 209,
+   "name": "window_r_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 210,
+   "name": "window_r_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 211,
+   "name": "window_r_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 212,
+   "name": "window_v_up_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 213,
+   "name": "window_v_up_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 214,
+   "name": "window_v_up_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 215,
+   "name": "window_v_up_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 216,
+   "name": "window_v_up_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 217,
+   "name": "window_v_m_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 218,
+   "name": "window_v_m_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 219,
+   "name": "window_v_m_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 220,
+   "name": "window_v_m_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 221,
+   "name": "window_v_m_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 222,
+   "name": "window_v_down_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 223,
+   "name": "window_v_down_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 224,
+   "name": "window_v_down_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 225,
+   "name": "window_v_down_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 226,
+   "name": "window_v_down_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 227,
+   "name": "window_v_single_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 228,
+   "name": "window_v_single_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 229,
+   "name": "window_v_single_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 230,
+   "name": "window_v_single_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 231,
+   "name": "window_v_single_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 232,
+   "name": "console_1_up",
+   "kind": "wall"
+  },
+  {
+   "id": 233,
+   "name": "console_1_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 234,
+   "name": "console_1_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 235,
+   "name": "console_1_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 236,
+   "name": "console_1_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 237,
+   "name": "console_3_up",
+   "kind": "wall"
+  },
+  {
+   "id": 238,
+   "name": "console_3_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 239,
+   "name": "console_3_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 240,
+   "name": "console_3_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 241,
+   "name": "console_3_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 242,
+   "name": "console_4_up",
+   "kind": "wall"
+  },
+  {
+   "id": 243,
+   "name": "console_4_w3_0",
+   "kind": "wall"
+  },
+  {
+   "id": 244,
+   "name": "console_4_w3_1",
+   "kind": "wall"
+  },
+  {
+   "id": 245,
+   "name": "console_4_w3_2",
+   "kind": "wall"
+  },
+  {
+   "id": 246,
+   "name": "console_4_up_w3_0",
+   "kind": "wall"
+  },
+  {
+   "id": 247,
+   "name": "console_4_up_w3_1",
+   "kind": "wall"
+  },
+  {
+   "id": 248,
+   "name": "console_4_up_w3_2",
+   "kind": "wall"
+  },
+  {
+   "id": 249,
+   "name": "console_5_up",
+   "kind": "wall"
+  },
+  {
+   "id": 250,
+   "name": "comms_up",
+   "kind": "wall"
+  },
+  {
+   "id": 251,
+   "name": "comms_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 252,
+   "name": "comms_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 253,
+   "name": "comms_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 254,
+   "name": "comms_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 255,
+   "name": "holo_up",
+   "kind": "wall"
+  },
+  {
+   "id": 256,
+   "name": "holo_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 257,
+   "name": "holo_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 258,
+   "name": "holo_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 259,
+   "name": "holo_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 260,
+   "name": "locker_up",
+   "kind": "wall"
+  },
+  {
+   "id": 261,
+   "name": "intercom_up",
+   "kind": "wall"
+  },
+  {
+   "id": 262,
+   "name": "smes_up",
+   "kind": "wall"
+  },
+  {
+   "id": 263,
+   "name": "smes_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 264,
+   "name": "smes_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 265,
+   "name": "smes_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 266,
+   "name": "smes_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 267,
+   "name": "smes_small_up",
+   "kind": "wall"
+  },
+  {
+   "id": 268,
+   "name": "door_base_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 269,
+   "name": "door_base_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 270,
+   "name": "door_base_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 271,
+   "name": "door_base_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 272,
+   "name": "door_base_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 273,
+   "name": "door_base_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 274,
+   "name": "door_base_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 275,
+   "name": "door_base_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 276,
+   "name": "door_base_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 277,
+   "name": "door_base_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 278,
+   "name": "door_base_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 279,
+   "name": "door_tech_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 280,
+   "name": "door_tech_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 281,
+   "name": "door_tech_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 282,
+   "name": "door_tech_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 283,
+   "name": "door_tech_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 284,
+   "name": "door_tech_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 285,
+   "name": "door_tech_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 286,
+   "name": "door_tech_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 287,
+   "name": "door_tech_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 288,
+   "name": "door_tech_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 289,
+   "name": "door_tech_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 290,
+   "name": "door_cargo_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 291,
+   "name": "door_cargo_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 292,
+   "name": "door_cargo_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 293,
+   "name": "door_cargo_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 294,
+   "name": "door_cargo_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 295,
+   "name": "door_cargo_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 296,
+   "name": "door_cargo_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 297,
+   "name": "door_cargo_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 298,
+   "name": "door_cargo_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 299,
+   "name": "door_cargo_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 300,
+   "name": "door_cargo_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 301,
+   "name": "door_herm_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 302,
+   "name": "door_herm_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 303,
+   "name": "door_herm_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 304,
+   "name": "door_herm_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 305,
+   "name": "door_herm_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 306,
+   "name": "door_herm_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 307,
+   "name": "door_herm_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 308,
+   "name": "door_herm_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 309,
+   "name": "door_herm_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 310,
+   "name": "door_herm_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 311,
+   "name": "door_herm_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 312,
+   "name": "pirate_window_m",
+   "kind": "wall"
+  },
+  {
+   "id": 313,
+   "name": "pirate_window_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 314,
+   "name": "pirate_window_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 315,
+   "name": "pirate_window_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 316,
+   "name": "pirate_window_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 317,
+   "name": "pirate_window_l_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 318,
+   "name": "pirate_window_l_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 319,
+   "name": "pirate_window_l_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 320,
+   "name": "pirate_window_l_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 321,
+   "name": "pirate_window_m_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 322,
+   "name": "pirate_window_m_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 323,
+   "name": "pirate_window_m_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 324,
+   "name": "pirate_window_m_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 325,
+   "name": "pirate_window_r_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 326,
+   "name": "pirate_window_r_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 327,
+   "name": "pirate_window_r_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 328,
+   "name": "pirate_window_r_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 329,
+   "name": "pirate_window_v_up_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 330,
+   "name": "pirate_window_v_up_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 331,
+   "name": "pirate_window_v_up_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 332,
+   "name": "pirate_window_v_up_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 333,
+   "name": "pirate_window_v_up_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 334,
+   "name": "pirate_window_v_m_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 335,
+   "name": "pirate_window_v_m_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 336,
+   "name": "pirate_window_v_m_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 337,
+   "name": "pirate_window_v_m_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 338,
+   "name": "pirate_window_v_m_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 339,
+   "name": "pirate_window_v_down_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 340,
+   "name": "pirate_window_v_down_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 341,
+   "name": "pirate_window_v_down_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 342,
+   "name": "pirate_window_v_down_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 343,
+   "name": "pirate_window_v_down_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 344,
+   "name": "pirate_window_v_single_s1",
+   "kind": "wall"
+  },
+  {
+   "id": 345,
+   "name": "pirate_window_v_single_s2",
+   "kind": "wall"
+  },
+  {
+   "id": 346,
+   "name": "pirate_window_v_single_s3",
+   "kind": "wall"
+  },
+  {
+   "id": 347,
+   "name": "pirate_window_v_single_s4",
+   "kind": "wall"
+  },
+  {
+   "id": 348,
+   "name": "pirate_window_v_single_s5",
+   "kind": "wall"
+  },
+  {
+   "id": 349,
+   "name": "pirate_console_1_up",
+   "kind": "wall"
+  },
+  {
+   "id": 350,
+   "name": "pirate_console_1_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 351,
+   "name": "pirate_console_1_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 352,
+   "name": "pirate_console_1_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 353,
+   "name": "pirate_console_1_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 354,
+   "name": "pirate_console_3_up",
+   "kind": "wall"
+  },
+  {
+   "id": 355,
+   "name": "pirate_console_3_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 356,
+   "name": "pirate_console_3_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 357,
+   "name": "pirate_console_3_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 358,
+   "name": "pirate_console_3_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 359,
+   "name": "pirate_console_4_up",
+   "kind": "wall"
+  },
+  {
+   "id": 360,
+   "name": "pirate_console_4_w3_0",
+   "kind": "wall"
+  },
+  {
+   "id": 361,
+   "name": "pirate_console_4_w3_1",
+   "kind": "wall"
+  },
+  {
+   "id": 362,
+   "name": "pirate_console_4_w3_2",
+   "kind": "wall"
+  },
+  {
+   "id": 363,
+   "name": "pirate_console_4_up_w3_0",
+   "kind": "wall"
+  },
+  {
+   "id": 364,
+   "name": "pirate_console_4_up_w3_1",
+   "kind": "wall"
+  },
+  {
+   "id": 365,
+   "name": "pirate_console_4_up_w3_2",
+   "kind": "wall"
+  },
+  {
+   "id": 366,
+   "name": "pirate_console_5_up",
+   "kind": "wall"
+  },
+  {
+   "id": 367,
+   "name": "pirate_comms_up",
+   "kind": "wall"
+  },
+  {
+   "id": 368,
+   "name": "pirate_comms_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 369,
+   "name": "pirate_comms_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 370,
+   "name": "pirate_comms_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 371,
+   "name": "pirate_comms_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 372,
+   "name": "pirate_holo_up",
+   "kind": "wall"
+  },
+  {
+   "id": 373,
+   "name": "pirate_holo_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 374,
+   "name": "pirate_holo_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 375,
+   "name": "pirate_holo_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 376,
+   "name": "pirate_holo_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 377,
+   "name": "pirate_locker_up",
+   "kind": "wall"
+  },
+  {
+   "id": 378,
+   "name": "pirate_intercom_up",
+   "kind": "wall"
+  },
+  {
+   "id": 379,
+   "name": "pirate_smes_up",
+   "kind": "wall"
+  },
+  {
+   "id": 380,
+   "name": "pirate_smes_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 381,
+   "name": "pirate_smes_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 382,
+   "name": "pirate_smes_up_w2_0",
+   "kind": "wall"
+  },
+  {
+   "id": 383,
+   "name": "pirate_smes_up_w2_1",
+   "kind": "wall"
+  },
+  {
+   "id": 384,
+   "name": "pirate_smes_small_up",
+   "kind": "wall"
+  },
+  {
+   "id": 385,
+   "name": "pirate_door_base_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 386,
+   "name": "pirate_door_base_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 387,
+   "name": "pirate_door_base_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 388,
+   "name": "pirate_door_base_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 389,
+   "name": "pirate_door_base_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 390,
+   "name": "pirate_door_base_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 391,
+   "name": "pirate_door_base_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 392,
+   "name": "pirate_door_base_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 393,
+   "name": "pirate_door_base_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 394,
+   "name": "pirate_door_base_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 395,
+   "name": "pirate_door_base_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 396,
+   "name": "pirate_door_tech_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 397,
+   "name": "pirate_door_tech_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 398,
+   "name": "pirate_door_tech_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 399,
+   "name": "pirate_door_tech_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 400,
+   "name": "pirate_door_tech_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 401,
+   "name": "pirate_door_tech_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 402,
+   "name": "pirate_door_tech_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 403,
+   "name": "pirate_door_tech_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 404,
+   "name": "pirate_door_tech_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 405,
+   "name": "pirate_door_tech_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 406,
+   "name": "pirate_door_tech_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 407,
+   "name": "pirate_door_cargo_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 408,
+   "name": "pirate_door_cargo_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 409,
+   "name": "pirate_door_cargo_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 410,
+   "name": "pirate_door_cargo_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 411,
+   "name": "pirate_door_cargo_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 412,
+   "name": "pirate_door_cargo_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 413,
+   "name": "pirate_door_cargo_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 414,
+   "name": "pirate_door_cargo_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 415,
+   "name": "pirate_door_cargo_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 416,
+   "name": "pirate_door_cargo_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 417,
+   "name": "pirate_door_cargo_v_open2",
+   "kind": "door"
+  },
+  {
+   "id": 418,
+   "name": "pirate_door_herm_h_green",
+   "kind": "door"
+  },
+  {
+   "id": 419,
+   "name": "pirate_door_herm_h_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 420,
+   "name": "pirate_door_herm_h_red",
+   "kind": "door"
+  },
+  {
+   "id": 421,
+   "name": "pirate_door_herm_h_open1",
+   "kind": "door"
+  },
+  {
+   "id": 422,
+   "name": "pirate_door_herm_h_open2",
+   "kind": "door"
+  },
+  {
+   "id": 423,
+   "name": "pirate_door_herm_h_open3",
+   "kind": "door"
+  },
+  {
+   "id": 424,
+   "name": "pirate_door_herm_v_green",
+   "kind": "door"
+  },
+  {
+   "id": 425,
+   "name": "pirate_door_herm_v_yellow",
+   "kind": "door"
+  },
+  {
+   "id": 426,
+   "name": "pirate_door_herm_v_red",
+   "kind": "door"
+  },
+  {
+   "id": 427,
+   "name": "pirate_door_herm_v_open1",
+   "kind": "door"
+  },
+  {
+   "id": 428,
+   "name": "pirate_door_herm_v_open2",
+   "kind": "door"
   }
  ]
 }

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Builds the game's art and map files from the reference images in art_src/.
 
-  art_src/map_mockup.png  -> assets/tiles.png + assets/tiles.json   (32x32 tiles cut from the mockup, plus
-                                                                     see-through floors drawn in code)
+  art_src/tileset/Tile_set_1.png + .json -> assets/tiles.png + assets/tiles.json   (v90: the author's tile set, an
+                                                                     Aseprite sheet with named slices; machines it has
+                                                                     no picture for are still drawn in code on its wall.
+                                                                     art_src/old/ keeps the v89 mockup and sheet)
   maps/*.txt (ASCII)      -> maps/*.json                            (wall pieces picked automatically;
                                                                      one drawing per deck)
   (generated in code)     -> assets/chars.png                       (robots, heavy boarders; the old drawn crew)
@@ -127,6 +129,54 @@ for _name, _src, _kind in list(TILES[-len(MIDDLES) * (len(COVERS) + 1):]):
 # light through (a window to the game), and the shuttle's dock console beside it; last, as above
 TILES.append(("window_field", None, "wall"))
 TILES.append(("dock", None, "wall"))
+# (v90, the author's tile set) Pictures the client puts in place of a cell's own tile when it lays the
+# map (WorldView._look): nothing in the maps changes. Each block goes last, as above.
+#   window_m             a window between two others (a row of windows, "WWW", is one long pane)
+#   window*_s2..s5       a window's shutter closing (s1 is the plain window); window_v* the same in a
+#                        vertical wall (not used yet: kept for the author's answer)
+#   <machine>_up         a machine whose front is the room above it (seen from behind)
+#   <machine>_wK_I       piece I of a machine drawn K tiles wide, for a row of K of them ("33" = one wide helm)
+#   door_<type>_<h|v>_<lamp>, _open1.._open3   doors by type (base, tech, cargo, herm), in a horizontal
+#                        (h, "D") or vertical (v, "A") wall, shut with a green, yellow or red lamp, or opening
+DOOR_TYPES = ["base", "tech", "cargo", "herm"]
+DOOR_LAMPS = ["green", "yellow", "red"]
+DOOR_OPEN = {"h": 3, "v": 2}
+WINDOW_PIECES = ["", "_l", "_m", "_r"]
+WINDOW_V_PIECES = ["up", "m", "down", "single"]
+# machine -> (picture facing down, picture facing up or None, width in tiles)
+MACHINE_ART = {
+    "console_1": ("holo_map_small", None, 2),
+    "console_3": ("pilot_terminal_down", "pilot_terminal_up", 2),
+    "console_4": ("gun_terminal_down", "gun_terminal_up", 3),
+    "console_5": ("drone_terminal_down", "drone_terminal_up", 1),
+    "comms": ("communications_terminal_down", "communications_terminal_up", 2),
+    "holo": ("ship_map", None, 2),
+    "locker": ("Locker_down", "Locker_up", 1),
+    "intercom": ("intercom", None, 1),
+    "smes": ("SMES_big", None, 2),
+    "smes_small": ("SMES", None, 1),
+}
+LOOKS = [("window_m", None, "wall")]
+for _piece in WINDOW_PIECES:
+    for _stage in range(2, 6):
+        LOOKS.append(("window%s_s%d" % (_piece, _stage), None, "wall"))
+for _piece in WINDOW_V_PIECES:
+    for _stage in range(1, 6):
+        LOOKS.append(("window_v_%s_s%d" % (_piece, _stage), None, "wall"))
+for _m, (_down, _up, _k) in MACHINE_ART.items():
+    LOOKS.append((_m + "_up", None, "wall"))
+    if _k > 1:
+        for _side in ("", "_up"):
+            for _i in range(_k):
+                LOOKS.append(("%s%s_w%d_%d" % (_m, _side, _k, _i), None, "wall"))
+for _type in DOOR_TYPES:
+    for _o in ("h", "v"):
+        for _lamp in DOOR_LAMPS:
+            LOOKS.append(("door_%s_%s_%s" % (_type, _o, _lamp), None, "door"))
+        for _i in range(1, DOOR_OPEN[_o] + 1):
+            LOOKS.append(("door_%s_%s_open%d" % (_type, _o, _i), None, "door"))
+TILES += LOOKS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in LOOKS]
 ATLAS_COLS = 8
 
 
@@ -150,13 +200,157 @@ def pirate_tint(im):
 
 
 def load_mockup():
-    im = Image.open(os.path.join(SRC, "map_mockup.png")).convert("RGBA")
+    im = Image.open(os.path.join(SRC, "old", "map_mockup.png")).convert("RGBA")
     return im.resize((im.width // MOCK_SCALE, im.height // MOCK_SCALE), Image.NEAREST)
 
 
 def cut(mock, col, row):
     x, y = MOCK_OX + col * T, MOCK_OY + row * T
     return mock.crop((x, y, x + T, y + T))
+
+
+# ------------------------------------------------------- (v90) the author's tile set
+TILESET = os.path.join(SRC, "tileset", "Tile_set_1")
+
+
+def load_tileset():
+    """The author's Aseprite sheet cut by its named slices: name -> picture. The export is read
+    leniently, as Aseprite wrote it: a name with stray line breaks is trimmed, a one-tile slice a
+    pixel off the 32-pixel grid is put back on it, and a name given twice (a right piece whose
+    name was copied for the left one) is told apart by place: the one further left is the "_l"."""
+    with open(TILESET + ".json", encoding="utf-8") as f:
+        meta = json.loads(f.read(), strict=False)["meta"]
+    sheet = Image.open(TILESET + ".png").convert("RGBA")
+    found = {}
+    for sl in meta["slices"]:
+        b = sl["keys"][0]["bounds"]
+        x, y, w, h = b["x"], b["y"], b["w"], b["h"]
+        if w == T and h == T:
+            x, y = round(x / T) * T, round(y / T) * T
+        found.setdefault(sl["name"].strip(), []).append((x, y, w, h))
+    places = {}
+    for name, at in found.items():
+        at.sort()
+        if len(at) == 2 and name.endswith("_r") and name[:-2] + "_l" not in found:
+            places[name[:-2] + "_l"] = at[0]
+            places[name] = at[1]
+        else:
+            places[name] = at[0]
+    return {name: sheet.crop((x, y, x + w, y + h)) for name, (x, y, w, h) in places.items()}
+
+
+# old tile -> the author's piece. Walls and floors as they look, checked on the ship previews
+# (tools/preview); a horizontal piece he named "_r" is the left end of a row and the other way
+# round (its frame is on that side), so windows take them crosswise.
+NEW_ART = {
+    "wall_h": "horizontal_wall",
+    "wall_tl": "horizontal_corner_l",
+    "wall_tr": "horizontal_corner_r",
+    "wall_bl": "external_corner_l",
+    "wall_br": "external_corner_r",
+    "wall_tdown": "T-shaped_corner",
+    "wall_cross": "vertical_wall_down_to_T-shaped_corner",
+    "wall_v": "vertical_wall",
+    "wall_v_end": "vertical_wall_to_T-shaped_corner",
+    "wall_v_end_l": "vertical_wall_to_internal_corner_r",
+    "wall_v_end_r": "vertical_wall_to_internal_corner_l",
+    "wall_v_end_a": "vertical_wall_door_up",
+    "door": "Door_horizontal_base_unlock",
+    "airlock_closed": "Door_vertical_base_unlock",
+    "airlock_half": "Door_vertical_base_open_stage_1",
+    "airlock": "Door_vertical_base_open_stage_2",
+}
+FLOOR_SETS = {"floor": "floor", "glass": "glass_floor", "grate": "grated_floor", "hatch": "ladder_floor_down",
+              "ladder": "ladder_floor_up"}
+FLOOR_SPOTS = {"l_t": "internal_corner_l", "m_t": "up", "r_t": "internal_corner_r", "l_m": "l", "m_m": "m",
+               "r_m": "r", "l_b": "external_corner_l", "m_b": "down", "r_b": "external_corner_r"}
+WINDOW_SPOTS = {"": "single", "_l": "r", "_m": "m", "_r": "l"}
+
+
+def art_floor(art, family, spot):
+    """A floor piece of the tile set: one of nine by its place in the room, or (n) a column one tile wide."""
+    base = FLOOR_SETS[family]
+    if spot == "n":
+        left, right = art[base + "_l"], art[base + "_r"]
+        out = left.copy()
+        out.paste(right.crop((T // 2, 0, T, T)), (T // 2, 0))
+        return out
+    name = base + "_" + FLOOR_SPOTS[spot]
+    return art[name] if name in art else art[base + "_5"]      # his glass floor's middle is "_5"
+
+
+def art_on(under, top):
+    out = under.copy()
+    out.alpha_composite(top)
+    return out
+
+
+def art_machine(art, wall, picture, k, i=-1):
+    """A machine's picture on the plain wall: piece i of one k tiles wide, or (i = -1) the whole of it
+    in one tile (a wide one keeps its two ends)."""
+    if k == 1:
+        return art_on(wall, art[picture])
+    full = art[picture]
+    if i >= 0:
+        return art_on(wall, full.crop((i * T, 0, i * T + T, T)))
+    one = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    one.paste(full.crop((0, 0, T // 2, T)), (0, 0))
+    one.paste(full.crop((full.width - T // 2, 0, full.width, T)), (T // 2, 0))
+    return art_on(wall, one)
+
+
+def art_transplant(old, old_wall, wall):
+    """What the old sheet drew on its wall (a console the tile set has no picture for), put on the new wall."""
+    out = wall.copy()
+    for y in range(T):
+        for x in range(T):
+            p = old.getpixel((x, y))
+            if p != old_wall.getpixel((x, y)):
+                out.putpixel((x, y), p)
+    return out
+
+
+def art_tile(art, mock, images, name):
+    """The picture for a tile of the sheet from the author's set, or None (drawn as before)."""
+    floor = art["floor_m"]
+    if name in NEW_ART:
+        return art[NEW_ART[name]]
+    if name == "door_half":
+        return art_on(floor, art["Door_horizontal_base_open_stage_2"])
+    if name == "door_open":
+        return art_on(floor, art["Door_horizontal_base_open_stage_3"])
+    if name == "console_2":
+        return art_transplant(cut(mock, 4, 0), cut(mock, 1, 0), art["horizontal_wall"])
+    for family in FLOOR_SETS:
+        for spot in list(FLOOR_SPOTS) + ["n"]:
+            if name == family + "_" + spot:
+                return art_floor(art, family, spot)
+    if name.startswith("window") and name != "window_field":
+        if name.startswith("window_v_"):
+            piece, stage = name[len("window_v_"):].rsplit("_s", 1)
+            return art["glass_wall_v1_vertical_%s_stage_%s" % (piece, stage)]
+        stage = "1"
+        if "_s" in name:
+            name, stage = name.rsplit("_s", 1)
+        return art["glass_wall_v2_horizontal_%s_stage_%s" % (WINDOW_SPOTS[name[len("window"):]], stage)]
+    if name.startswith("door_") and name.count("_") == 3:
+        _, kind, o, state = name.split("_")
+        way = "horizontal" if o == "h" else "vertical"
+        if state in DOOR_LAMPS:
+            return art["Door_%s_%s_%s" % (way, kind, {"green": "unlock", "yellow": "lock_1", "red": "lock_2"}[state])]
+        stage = int(state[4:])
+        if o == "v" and stage == 2:
+            return art["Door_vertical_base_open_stage_2"]     # one open frame for every type
+        return art_on(floor, art["Door_%s_%s_open_stage_%d" % (way, kind, stage)])
+    for m, (down, up, k) in MACHINE_ART.items():
+        if name == m:
+            return art_machine(art, art["horizontal_wall"], down, k)
+        if name == m + "_up":
+            return art_machine(art, art["horizontal_wall"], up or down, k)
+        if name.startswith(m + "_") and "_w" in name[len(m):]:
+            side = up or down if name.startswith(m + "_up_") else down
+            return art_machine(art, art["horizontal_wall"], side, k, int(name.rsplit("_", 1)[1]))
+    return None
 
 
 def make_door_open(mock, gap=1.0):
@@ -616,9 +810,12 @@ def build_tiles():
         "rock_ore": lambda: make_rock(4, ore=True),
         "rock_ground": lambda: make_rock(5, ground=True),
     }
+    art = load_tileset()
     for i, (name, src, kind) in enumerate(TILES):
         if name.startswith(PIRATE):
             im = pirate_tint(images[name[len(PIRATE):]])
+        elif art_tile(art, mock, images, name) is not None:
+            im = art_tile(art, mock, images, name)
         elif kind in COVERS:
             im = make_cover(images["floor" + name[len(kind):]], kind)
         else:
