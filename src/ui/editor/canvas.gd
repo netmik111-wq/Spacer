@@ -13,6 +13,7 @@ signal mark_asked(cell: Vector2i)    # the room-mark tool was clicked on a cell
 signal changed                       # something was drawn (a stroke ended)
 
 const MapBuilder := preload("res://src/shared/map_builder.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 const Sprites := preload("res://src/client/sprites.gd")
 const Drawing := preload("res://src/ui/editor/drawing.gd")
 
@@ -39,6 +40,7 @@ var view := Vector2(40, 40)          # where the canvas's corner is on the scree
 var _tex: Texture2D
 var _built := {}                     # MapBuilder's layout of the drawing as it was last drawn
 var _built_at := -1                  # Drawing.changes then
+var _standing := {}                  # (v91) cell of the built layout -> [the floor's tile under a machine standing there, its picture]
 var _ids := {}
 var _hover := Vector2i(-1, -1)
 var _down := -1                      # the mouse button held (MOUSE_BUTTON_*), -1 = none
@@ -97,6 +99,7 @@ func _process(_delta: float) -> void:
 	if drawing != null and key != _built_at:
 		_built_at = key
 		_built = MapBuilder.build("ships:edit", drawing.to_text() if show_objects else drawing.base_text())["data"]
+		_standing = _machines_standing()
 		queue_redraw()
 
 
@@ -106,6 +109,24 @@ func _tile_id(name: String) -> int:
 	if drawing != null and drawing.kind == "pirate" and _ids.has("pirate_" + name):
 		return int(_ids["pirate_" + name])
 	return int(_ids.get(name, -1))
+
+
+func _machines_standing() -> Dictionary:
+	## (v91) The machines standing on the floor as the game draws them: turned the way they face, wide ones in pieces.
+	var out := {}
+	if _built.is_empty() or (_built.get("things", []) as Array).is_empty():
+		return out
+	var map := ShipMap.new()
+	var ok := map.load_data("ships:edit", FileAccess.get_file_as_string("res://assets/tiles.json"), _built, false) == ""
+	var names := {}
+	for n: String in _ids.keys():
+		names[int(_ids[n])] = n
+	var w := int(_built["width"])
+	for th: Array in _built["things"]:
+		var c := int(th[1]) * w + int(th[0])
+		var look := map.standing_look(c) if ok else str(names.get(int((_built["cells"] as Array)[c]), "")).trim_prefix("pirate_") + "_fl"
+		out[c] = [int(th[2]), _tile_id(look)]
+	return out
 
 
 func tile_region(id: int) -> Rect2:
@@ -150,6 +171,12 @@ func _draw() -> void:
 			if id < 0:
 				continue
 			var r := Rect2(view + Vector2(x, y) * cs, Vector2(cs, cs))
+			var standing: Array = _standing.get((deck * int(_built["deck_stride"]) + y) * int(_built["width"]) + x, [])
+			if not standing.is_empty():
+				draw_texture_rect_region(_tex, r, tile_region(int(standing[0])))
+				if int(standing[1]) >= 0:
+					draw_texture_rect_region(_tex, r, tile_region(int(standing[1])))
+				continue
 			var kind := MapBuilder.tile_kind(id)
 			if kind == "glass" or kind == "grate" or kind == "hatch":
 				var under := _cell_tile(deck + 1, x, y)

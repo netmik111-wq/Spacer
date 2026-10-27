@@ -1,7 +1,7 @@
 ; Derelict ship: one deck. The outer door at the bottom docks with the ship's airlock.
 = Брошенный корабль
- ###W##4#W###
- #....#.....#
+ ###W####W###
+ #....#4....#
  #....#.....#
 ###D#####D####
 #............#

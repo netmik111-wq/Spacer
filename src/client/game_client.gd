@@ -1244,6 +1244,7 @@ func usable_at(cell: int) -> bool:
 	## lying, a ladder? For the outline under the mouse (WorldView._draw_hover).
 	if cell < 0 or cell >= map.cells.size():
 		return false
+	cell = map.machine_of(cell)              # (v91) any piece of a wide machine
 	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell) \
 			or gear_here(cell) != "-":
 		return true
@@ -1270,7 +1271,7 @@ func click_facing(c: Vector2i) -> int:
 		return -1
 	if c.x < 0 or c.y < 0 or c.x >= map.width or c.y >= map.height:
 		return -1
-	var cell := c.y * map.width + c.x
+	var cell := map.machine_of(c.y * map.width + c.x)
 	var here := pred.y * map.width + pred.x
 	var order: Array[int] = [pred.facing]
 	for f in range(1, Net.DIRS + 1):     # (v74) the slants too

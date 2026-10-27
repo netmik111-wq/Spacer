@@ -152,6 +152,7 @@ const TELEPORT_COLOUR := Color(0.55, 0.75, 1.0)
 class DeckView:
 	var group: Node2D                # everything of this deck
 	var layer: TileMapLayer          # its tiles
+	var objects: TileMapLayer        # (v91) the machines standing on its floor, over the floor under them
 	var holes: Node2D                # breaches in its hull
 	var fx: Node2D                   # air streaming out, sparks
 	var things: Node2D               # things lying on the floor
@@ -224,9 +225,6 @@ void fragment() {
 """
 const STAR_PIXELS_PER_UNIT := 9.0
 const DOOR_STAGES := [3, 2]            # (v90) open frames of a door in a horizontal wall and in a vertical one
-# (v90) machines the author's tile set draws, and how many tiles wide (see _laid and tools/make_assets.py MACHINE_ART)
-const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_5": 1, "comms": 2, "holo": 2,
-	"locker": 1, "intercom": 1, "smes": 2, "smes_small": 1}
 var _tile_names := PackedStringArray()   # (v90) tile id -> its name in the sheet
 var _source_id := 0
 var _door_shown := PackedStringArray()  # per door: the name of the tile on screen ("" = none yet)
@@ -326,6 +324,9 @@ func setup(p_client: GameClient) -> void:
 		deck.layer = TileMapLayer.new()
 		deck.layer.tile_set = tiles
 		deck.group.add_child(deck.layer)
+		deck.objects = TileMapLayer.new()
+		deck.objects.tile_set = tiles
+		deck.group.add_child(deck.objects)
 		deck.ceiling = TileMapLayer.new()
 		deck.ceiling.tile_set = tiles
 		deck.ceiling.modulate = CEILING_TINT
@@ -529,6 +530,7 @@ func _arrange(shown: int) -> void:
 		deck.group.z_index = _decks.size() + 1 if above else _decks.size() - 1 - d
 		deck.group.modulate = BELOW_TINT if d > shown else Color.WHITE
 		deck.layer.visible = not above
+		deck.objects.visible = not above
 		deck.holes.visible = not above
 		deck.fx.visible = not above
 		deck.things.visible = not above
@@ -1015,6 +1017,7 @@ func _paint_decks() -> void:
 	for d in _decks.size():
 		var deck: DeckView = _decks[d]
 		deck.layer.clear()
+		deck.objects.clear()
 		deck.ceiling.clear()
 		for y in map.deck_height:
 			for x in map.width:
@@ -1025,8 +1028,15 @@ func _paint_decks() -> void:
 				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
 				if map.see_through[cell] == 1:
 					deck.ceiling.set_cell(Vector2i(x, y), _source_id, in_atlas)
-				id = _laid(cell, id)
-				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+				var look := _laid(cell, id)
+				if map.on_floor.has(cell):
+					# (v91) a machine standing on the floor: the floor under it, the machine over it
+					var under: int = map.on_floor[cell]
+					deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(under % map.atlas_columns, under / map.atlas_columns))
+					if look != id:
+						deck.objects.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
+					continue
+				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
 	_door_shown.fill("")
 	_door_types()
 	_other_seen = client.other_changes
@@ -1045,6 +1055,8 @@ func _laid(cell: int, id: int) -> int:
 	## where it stands. A window between windows is one long pane; a machine whose front is the room
 	## above is seen from behind; a row of as many of one machine as its picture is wide ("33" for the
 	## helm, "444" for the gun console) is drawn as one wide machine. The map itself is not changed.
+	## (v91) A machine standing on the floor gets its picture alone (drawn over the floor), turned the way
+	## it faces: from the front, from behind, or from the side by a side wall.
 	var map := client.map
 	var full := _tile_name(id)
 	var tint := "pirate_" if full.begins_with("pirate_") else ""
@@ -1055,17 +1067,18 @@ func _laid(cell: int, id: int) -> int:
 		var left := x > 0 and _tile_name(map.cells[cell - 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
 		var right := x + 1 < map.width and _tile_name(map.cells[cell + 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
 		look = "window_m" if left and right else ("window_r" if left else ("window_l" if right else "window"))
-	elif MACHINE_WIDE.has(name):
+	elif name == "window_v":
+		var up := cell >= map.width and map.cells[cell - map.width] == id
+		var down := cell + map.width < map.cells.size() and map.cells[cell + map.width] == id
+		look = "window_v_%s_s1" % ("m" if up and down else ("down" if up else ("up" if down else "single")))
+	elif map.on_floor.has(cell):
+		look = map.standing_look(cell)
+	elif ShipMap.MACHINE_WIDE.has(name):
 		var up := map.fitting_front(cell) == cell - map.width
-		var k: int = MACHINE_WIDE[name]
-		var pos := 0
-		while x - pos > 0 and map.cells[cell - pos - 1] == id:
-			pos += 1
-		var run := pos + 1
-		while x + run - pos < map.width and map.cells[cell + run - pos] == id:
-			run += 1
-		if k > 1 and run % k == 0:
-			look = "%s%s_w%d_%d" % [name, "_up" if up else "", k, pos % k]
+		var root := map.machine_of(cell)
+		if map.pieces.has(root):
+			var all: PackedInt32Array = map.pieces[root]
+			look = "%s%s_w%d_%d" % [name, "_up" if up else "", all.size(), all.find(cell)]
 		elif up:
 			look = name + "_up"
 	if look == "" or look == name:
@@ -1339,7 +1352,13 @@ func _draw_hover() -> void:
 	var corner := _on_deck(_hover_on.x) * _tile
 	match _hover_kind():
 		1:
-			_hover_pen.draw_texture(_tile_line(client.map.cells[_hover_on.x], _hover_on.x), corner, _hover_colour())
+			# (v91) every piece of a wide machine
+			var map := client.map
+			var root := map.machine_of(_hover_on.x)
+			for c: int in (map.pieces[root] if map.pieces.has(root) else PackedInt32Array([_hover_on.x])):
+				var line := _tile_line(map.cells[c], c)
+				if line != null:
+					_hover_pen.draw_texture(line, _on_deck(c) * _tile, _hover_colour())
 		2:
 			_floor_things_at(_hover_pen, _hover_on.x, corner)    # the things again, over their silhouettes
 		3:
@@ -1380,7 +1399,9 @@ func _tile_line(own: int, cell: int) -> Texture2D:
 			if int(map.tile_ids[n]) == id:
 				name = n
 		var wall: int = map.tile_ids.get("pirate_wall_h" if name.begins_with("pirate_") else "wall_h", -1)
-		if wall >= 0:
+		if map.on_floor.has(cell) and id != own:
+			wall = -1                        # (v91) a machine on the floor: its picture alone, on a clear tile
+		if wall >= 0 or id != own:
 			line = _outline_of(id, wall)
 	_tile_lines[id] = line
 	return line
@@ -1396,7 +1417,7 @@ func _outline_of(id: int, wall: int) -> Texture2D:
 	for y in t:
 		for x in t:
 			var a := _tiles_image.get_pixel(at.x + x, at.y + y)
-			var b := _tiles_image.get_pixel(bare.x + x, bare.y + y)
+			var b := _tiles_image.get_pixel(bare.x + x, bare.y + y) if wall >= 0 else Color(0, 0, 0, 0)
 			if absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) + absf(a.a - b.a) > 0.1:
 				inside[y * t + x] = 1
 	# close one-pixel gaps (a pixel of the thing the colour of the wall), then

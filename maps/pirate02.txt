@@ -2,10 +2,10 @@
 ; with the ship's airlock by force. Which room holds which system is rolled anew for every
 ; ship (see Shipyard); its rooms are all the floor between walls and doors.
 = Пиратский катер
- ##T#W##3#
- #..A..#.#
+ ##T#W####
+ #..A..#3#
  #..#..#.#
 ###D##D#D##
 #...A..A..#
-#...#..#..#
-#D####6####
+#...#.6#..#
+#D#########

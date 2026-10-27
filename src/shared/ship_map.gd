@@ -126,7 +126,17 @@ var tile_size := 32
 var atlas_columns := 8
 var tile_kinds := PackedStringArray()
 var tile_ids := {}                   # tile name -> id
+var tile_names := PackedStringArray() # (v91) tile id -> name
 var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wall, used from the room it faces
+var on_floor := {}                   # (v91, the author) cell -> the floor's tile under a machine standing on the floor:
+                                     # nobody walks there, but one sees over it
+var root := PackedInt32Array()       # (v91) per cell: the cell that stands for the machine it is a piece of (see MACHINE_WIDE)
+var pieces := {}                     # (v91) such a cell -> every cell of its machine, for a machine of more than one
+# (v90, the author's tile set) how many tiles wide a machine's picture is: a row of as many of one machine
+# ("33" for the helm, "444" for the gun console) is one machine drawn wide, used from any of its cells.
+# (v91) The star chart's big holo table is two by two ("11" over "11").
+const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_5": 1, "comms": 2, "holo": 2,
+	"locker": 1, "intercom": 1, "smes": 2, "smes_small": 1}
 
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
@@ -323,9 +333,11 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	atlas_columns = int(tiles["columns"])
 	tile_kinds = PackedStringArray()
 	tile_ids = {}
+	tile_names = PackedStringArray()
 	for t: Dictionary in tiles["tiles"]:
 		tile_ids[str(t["name"])] = tile_kinds.size()
 		tile_kinds.append(str(t["kind"]))
+		tile_names.append(str(t["name"]))
 	map_name = name
 	width = int(data["width"])
 	height = int(data["height"])
@@ -362,6 +374,12 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		walk[i] = 1 if ok else 0
 		opaque[i] = 1 if id >= 0 and not ok and not windows.has(id) else 0
 		h = (h * 31 + id + 2) & 0x7FFFFFFF
+	on_floor = {}
+	for t: Array in data.get("things", []):
+		var at := int(t[1]) * width + int(t[0])
+		on_floor[at] = int(t[2])
+		opaque[at] = 0
+		h = (h * 31 + at + 3) & 0x7FFFFFFF
 	spawns = []
 	for s: Array in data["spawns"]:
 		spawns.append(Vector2i(int(s[0]), int(s[1])))
@@ -440,7 +458,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		if at >= 0 and at < room_of.size() and room_of[at] >= 0:
 			for c: int in rooms[room_of[at]]:
 				brig[c] = 1
+	_group_machines()
 	for i in cells.size():
+		if cells[i] >= 0 and cells[i] < fitting.size() and fitting[cells[i]] == 1 and root[i] != i:
+			continue                         # (v91) a piece of a wide machine: its first cell stands for it
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
 		if cells[i] >= 0 and cells[i] == tile_ids.get("console_4", -2):
@@ -487,13 +508,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
-			# it blows into the room it faces: the cell below it, or failing that the one above
-			var x := i % width
-			var y := i / width
-			if walkable(x, y + 1):
-				air_plant[i] = i + width
-			elif walkable(x, y - 1):
-				air_plant[i] = i - width
+			# it blows into the room it faces
+			var front := fitting_front(i)
+			if front >= 0:
+				air_plant[i] = front
 		if cells[i] == tile_ids.get("console_2", -1):
 			oxygen[i] = true
 		elif cells[i] == tile_ids.get("console_3", -1):
@@ -859,6 +877,9 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 		walk[c] = base_walk[c]
 		opaque[c] = base_opaque[c]
 		door_of[c] = -1
+		on_floor.erase(c)
+		root[c] = c
+		pieces.erase(c)
 	other_cells = PackedInt32Array()
 	other_at = at
 	for d in range(other_first_door, doors.size()):
@@ -880,6 +901,15 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 				cells[c] = o.cells[from]
 				walk[c] = o.walk[from]
 				opaque[c] = o.opaque[from]
+				if o.on_floor.has(from):
+					on_floor[c] = o.on_floor[from]
+				var r: int = o.root[from]
+				root[c] = (at.y + r / o.width) * width + at.x + r % o.width
+				if o.pieces.has(from):
+					var mine := PackedInt32Array()
+					for q: int in o.pieces[from]:
+						mine.append((at.y + q / o.width) * width + at.x + q % o.width)
+					pieces[c] = mine
 		for d in o.doors.size():
 			var p: Vector2i = o.doors[d] + at
 			doors[other_first_door + d] = p
@@ -1019,14 +1049,100 @@ func cell_ahead(x: int, y: int, facing: int) -> int:
 func fitting_front(cell: int) -> int:
 	## The floor cell a thing fitted into this wall cell faces: the one below it,
 	## failing that above, then to the right or left. -1 = no fitting here.
+	## (v91) A machine standing on the floor faces away from the wall it stands against.
 	if cell < 0 or cell >= cells.size() or cells[cell] < 0 or cells[cell] >= fitting.size() or fitting[cells[cell]] == 0:
 		return -1
 	var x := cell % width
 	var y := cell / width
+	if on_floor.has(cell):
+		for v: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+			if _wall(x + v.x, y + v.y) and walkable(x - v.x, y - v.y):
+				return (y - v.y) * width + x - v.x
 	for v: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
 		if walkable(x + v.x, y + v.y):
 			return (y + v.y) * width + x + v.x
 	return -1
+
+
+func _wall(x: int, y: int) -> bool:
+	## (v91) A wall here (a window, a fitting in it, an airlock's frame), not a machine on the floor nor open space?
+	if x < 0 or y < 0 or x >= width or y >= height:
+		return false
+	var c := y * width + x
+	return cells[c] >= 0 and walk[c] == 0 and not on_floor.has(c)
+
+
+func _group_machines() -> void:
+	## (v91) Which cells are pieces of one machine (MACHINE_WIDE): a row of as many of one as its picture is wide,
+	## along the wall it stands at (down a side wall for one facing sideways); the holo table two by two. Its first
+	## cell (top, then left) stands for it everywhere: in the lists of machines, for "use", breakdowns and mending.
+	root = PackedInt32Array()
+	root.resize(width * height)
+	for i in root.size():
+		root[i] = i
+	pieces = {}
+	for i in cells.size():
+		var id := cells[i]
+		if id < 0 or id >= fitting.size() or fitting[id] == 0 or root[i] != i or pieces.has(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var name := tile_names[id].trim_prefix("pirate_")
+		var k: int = MACHINE_WIDE.get(name, 1)
+		if k < 2:
+			continue
+		var group := PackedInt32Array()
+		if name == "console_1" and on_floor.has(i) and x + 1 < width and y + 1 < height \
+				and cells[i + 1] == id and cells[i + width] == id and cells[i + width + 1] == id:
+			group = PackedInt32Array([i, i + 1, i + width, i + width + 1])
+		else:
+			var front := fitting_front(i)
+			var step := width if front == i - 1 or front == i + 1 else 1
+			# the run of this machine this cell starts (cells before it are already grouped or on their own)
+			var run := 0
+			var c := i
+			while c < cells.size() and cells[c] == id and (step == width or c / width == y) and root[c] == c:
+				run += 1
+				c += step
+			var before := 0
+			c = i - step
+			while c >= 0 and cells[c] == id and (step == width or c / width == y):
+				before += 1
+				c -= step
+			if before > 0 or run % k != 0:
+				continue                     # not a whole number of machines: each cell is one on its own
+			for j in run:
+				group.append(i + j * step)
+			for g in range(0, run, k):
+				var one := group.slice(g, g + k)
+				for p in one:
+					root[p] = one[0]
+				pieces[one[0]] = one
+			continue
+		for p in group:
+			root[p] = group[0]
+		pieces[group[0]] = group
+
+
+func standing_look(cell: int) -> String:
+	## (v91) The picture a machine standing on the floor here is drawn in (tools/make_assets.py FLOOR_LOOKS),
+	## without the pirates' "pirate_": turned the way it faces, a piece of a wide one. "" = no machine on the floor.
+	if not on_floor.has(cell) or cells[cell] < 0:
+		return ""
+	var name := tile_names[cells[cell]].trim_prefix("pirate_")
+	var front := fitting_front(cell)
+	var side := "_up" if front == cell - width else ("_r" if front == cell - 1 else ("_l" if front == cell + 1 else ""))
+	var all: PackedInt32Array = pieces.get(root[cell], PackedInt32Array())
+	if all.is_empty():
+		return name + "_fl" + side
+	if name == "console_1" and all.size() == 4:
+		return "console_1_fl_t_%d" % all.find(cell)
+	return "%s_fl%s_w%d_%d" % [name, side, all.size(), all.find(cell)]
+
+
+func machine_of(cell: int) -> int:
+	## (v91) The cell that stands for the machine this cell is a piece of (itself for anything else).
+	return root[cell] if cell >= 0 and cell < root.size() else cell
 
 
 func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
@@ -1035,20 +1151,24 @@ func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
 	## from the room it faces (never through the wall), from the cell in front
 	## of it or either cell beside that one (facing the wall). Cells in `keep`
 	## (holes in the hull) are always the cell ahead. -1 = nothing.
+	## (v91) A machine standing on the floor is reached from any cell round it; a piece of
+	## a wide one gives the cell that stands for the whole machine (machine_of).
 	var ahead := cell_ahead(x, y, facing)
 	if ahead < 0 or keep.has(ahead):
 		return ahead
 	var here := y * width + x
+	if on_floor.has(ahead):
+		return root[ahead]
 	if Net.diagonal(facing):
 		# (v74) facing on a slant: a thing on the floor there or somebody there; failing that,
 		# a fitting right beside us on either side of the slant; never a doorway or a wall
 		for c: int in [y * width + x + Net.DX[facing], (y + Net.DY[facing]) * width + x]:
-			if fitting_front(c) == here:
-				return c
+			if fitting_front(c) == here or on_floor.has(c):
+				return root[c]
 		return ahead if walk[ahead] == 1 and door_of[ahead] < 0 else -1
 	var front := fitting_front(ahead)
 	if front >= 0:
-		return ahead if front == here else -1
+		return root[ahead] if front == here else -1
 	if walk[ahead] == 1 or cells[ahead] < 0:
 		return ahead
 	# a bare wall: a fitting beside this spot of it, facing the cell beside us
@@ -1056,7 +1176,7 @@ func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
 	for side: int in [-along, along]:
 		var c := ahead + side
 		if c >= 0 and c < cells.size() and absi(c % width - ahead % width) <= 1 and fitting_front(c) == here + side:
-			return c
+			return root[c]
 	return ahead
 
 

@@ -488,7 +488,8 @@ func to_text() -> String:
 
 func from_text(text: String, name: String = "") -> void:
 	## Opens a drawing (a ships/*.txt of one's own, or one of the game's maps/*.txt).
-	var parts := MapBuilder.read(text)
+	## (v91, the author's G3) Machines drawn into a wall before are opened standing on the floor in front of it.
+	var parts := MapBuilder.read(MapBuilder.to_floor(text))
 	kind = MapBuilder.kind_of(name, text)
 	var w := 4
 	var h := 3
@@ -510,10 +511,11 @@ func from_text(text: String, name: String = "") -> void:
 		var cells := _blank()
 		var base := _blank()
 		var rows: PackedStringArray = deck[1]
+		var standing := MapBuilder.things_of(MapBuilder._grid(rows, width, height), width, height)
 		for y in mini(rows.size(), height):
 			for x in mini(rows[y].length(), width):
 				cells[y * width + x] = rows[y][x]
-				base[y * width + x] = base_for(rows[y][x]) if is_object(rows[y][x]) else rows[y][x]
+				base[y * width + x] = ("." if standing.has(Vector2i(x, y)) else base_for(rows[y][x])) if is_object(rows[y][x]) else rows[y][x]
 		decks.append({"name": deck[0], "cells": cells, "base": base})
 	if decks.is_empty():
 		decks.append({"name": _deck_name(0), "cells": _blank(), "base": _blank()})

@@ -84,9 +84,9 @@ func _tile_set() -> void:
 				want.append(head + lamp)
 			for i in range(1, int(WorldView.DOOR_STAGES[o]) + 1):
 				want.append(head + "open%d" % i)
-	for m: String in WorldView.MACHINE_WIDE.keys():
+	for m: String in ShipMap.MACHINE_WIDE.keys():
 		want.append(m + "_up")
-		var k: int = WorldView.MACHINE_WIDE[m]
+		var k: int = ShipMap.MACHINE_WIDE[m]
 		if k > 1:
 			for i in k:
 				want.append("%s_w%d_%d" % [m, k, i])
@@ -96,6 +96,20 @@ func _tile_set() -> void:
 			if not names.has(tint + n):
 				missing.append(tint + n)
 	_expect(missing.is_empty(), "every look tile is in the sheet %s" % str(missing.slice(0, 5)))
+	# (v91) every machine standing on the floor of the game's maps has its picture, turned and in pieces
+	var lost: Array = []
+	var standing := 0
+	for f: String in DirAccess.get_files_at("res://maps"):
+		if not f.ends_with(".txt"):
+			continue
+		var m := ShipMap.new()
+		m.load_from(f.get_basename(), false)
+		for c: int in m.on_floor.keys():
+			standing += 1
+			var tint := "pirate_" if m.tile_names[m.cells[c]].begins_with("pirate_") else ""
+			if not m.tile_ids.has(tint + m.standing_look(c)):
+				lost.append("%s %s" % [f, tint + m.standing_look(c)])
+	_expect(standing > 20 and lost.is_empty(), "every machine on the floor has its picture (%d machines) %s" % [standing, str(lost.slice(0, 4))])
 	var sheet: Texture2D = load("res://assets/tiles.png")
 	var cols := int(meta["columns"])
 	_expect(int(sheet.get_height()) >= ceili(float(names.size()) / cols) * int(meta["tile_size"]),
