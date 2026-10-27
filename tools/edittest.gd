@@ -17,6 +17,7 @@ const Checks := preload("res://src/ui/editor/checks.gd")
 const Net := preload("res://src/shared/net.gd")
 const Mover := preload("res://src/shared/mover.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
+const WorldView := preload("res://src/client/world_view.gd")
 
 var failed := 0
 var dir := ""
@@ -27,6 +28,7 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(dir)
 	ShipMap.ships_override = dir
 	_same_as_script()
+	_tile_set()
 	_mistakes_listed()
 	_drawing_tools()
 	_layers()
@@ -64,6 +66,40 @@ func _same_as_script() -> void:
 				same = false
 				print("     %s differs in %s" % [name, k])
 		_expect(same and (built["problems"] as Array).is_empty(), "%s: the game's builder makes what the script made" % name)
+
+
+func _tile_set() -> void:
+	## (v90) Every piece the client lays in place of a map's own tile (WorldView._laid, _door_look) is in
+	## the sheet, ours and the pirates', and the sheet's picture holds every tile its list names.
+	var meta: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/tiles.json"))
+	var names := {}
+	for t: Dictionary in meta["tiles"]:
+		names[str(t["name"])] = true
+	var missing: Array = []
+	var want: Array = ["window_m"]
+	for kind in ["base", "tech", "cargo", "herm"]:
+		for o: int in 2:
+			var head := "door_%s_%s_" % [kind, "hv"[o]]
+			for lamp in ["green", "yellow", "red"]:
+				want.append(head + lamp)
+			for i in range(1, int(WorldView.DOOR_STAGES[o]) + 1):
+				want.append(head + "open%d" % i)
+	for m: String in WorldView.MACHINE_WIDE.keys():
+		want.append(m + "_up")
+		var k: int = WorldView.MACHINE_WIDE[m]
+		if k > 1:
+			for i in k:
+				want.append("%s_w%d_%d" % [m, k, i])
+				want.append("%s_up_w%d_%d" % [m, k, i])
+	for n: String in want:
+		for tint in ["", "pirate_"]:
+			if not names.has(tint + n):
+				missing.append(tint + n)
+	_expect(missing.is_empty(), "every look tile is in the sheet %s" % str(missing.slice(0, 5)))
+	var sheet: Texture2D = load("res://assets/tiles.png")
+	var cols := int(meta["columns"])
+	_expect(int(sheet.get_height()) >= ceili(float(names.size()) / cols) * int(meta["tile_size"]),
+		"the sheet holds all %d tiles" % names.size())
 
 
 func _mistakes_listed() -> void:

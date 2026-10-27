@@ -1,0 +1,981 @@
+{
+ "tile_size": 32,
+ "columns": 8,
+ "tiles": [
+  {
+   "id": 0,
+   "name": "wall_h",
+   "kind": "wall"
+  },
+  {
+   "id": 1,
+   "name": "wall_tl",
+   "kind": "wall"
+  },
+  {
+   "id": 2,
+   "name": "wall_tr",
+   "kind": "wall"
+  },
+  {
+   "id": 3,
+   "name": "wall_bl",
+   "kind": "wall"
+  },
+  {
+   "id": 4,
+   "name": "wall_br",
+   "kind": "wall"
+  },
+  {
+   "id": 5,
+   "name": "wall_tdown",
+   "kind": "wall"
+  },
+  {
+   "id": 6,
+   "name": "wall_cross",
+   "kind": "wall"
+  },
+  {
+   "id": 7,
+   "name": "wall_v",
+   "kind": "wall"
+  },
+  {
+   "id": 8,
+   "name": "wall_v_end",
+   "kind": "wall"
+  },
+  {
+   "id": 9,
+   "name": "wall_v_end_l",
+   "kind": "wall"
+  },
+  {
+   "id": 10,
+   "name": "wall_v_end_r",
+   "kind": "wall"
+  },
+  {
+   "id": 11,
+   "name": "wall_v_end_a",
+   "kind": "wall"
+  },
+  {
+   "id": 12,
+   "name": "airlock",
+   "kind": "door"
+  },
+  {
+   "id": 13,
+   "name": "door",
+   "kind": "wall"
+  },
+  {
+   "id": 14,
+   "name": "door_open",
+   "kind": "door"
+  },
+  {
+   "id": 15,
+   "name": "window",
+   "kind": "wall"
+  },
+  {
+   "id": 16,
+   "name": "window_l",
+   "kind": "wall"
+  },
+  {
+   "id": 17,
+   "name": "window_r",
+   "kind": "wall"
+  },
+  {
+   "id": 18,
+   "name": "console_1",
+   "kind": "wall"
+  },
+  {
+   "id": 19,
+   "name": "console_2",
+   "kind": "wall"
+  },
+  {
+   "id": 20,
+   "name": "console_3",
+   "kind": "wall"
+  },
+  {
+   "id": 21,
+   "name": "console_4",
+   "kind": "wall"
+  },
+  {
+   "id": 22,
+   "name": "console_5",
+   "kind": "wall"
+  },
+  {
+   "id": 23,
+   "name": "floor_l_t",
+   "kind": "floor"
+  },
+  {
+   "id": 24,
+   "name": "floor_m_t",
+   "kind": "floor"
+  },
+  {
+   "id": 25,
+   "name": "floor_r_t",
+   "kind": "floor"
+  },
+  {
+   "id": 26,
+   "name": "floor_l_b",
+   "kind": "floor"
+  },
+  {
+   "id": 27,
+   "name": "floor_m_b",
+   "kind": "floor"
+  },
+  {
+   "id": 28,
+   "name": "floor_r_b",
+   "kind": "floor"
+  },
+  {
+   "id": 29,
+   "name": "floor_n",
+   "kind": "floor"
+  },
+  {
+   "id": 30,
+   "name": "door_half",
+   "kind": "door"
+  },
+  {
+   "id": 31,
+   "name": "airlock_closed",
+   "kind": "door"
+  },
+  {
+   "id": 32,
+   "name": "airlock_half",
+   "kind": "door"
+  },
+  {
+   "id": 33,
+   "name": "glass_l_t",
+   "kind": "glass"
+  },
+  {
+   "id": 34,
+   "name": "glass_m_t",
+   "kind": "glass"
+  },
+  {
+   "id": 35,
+   "name": "glass_r_t",
+   "kind": "glass"
+  },
+  {
+   "id": 36,
+   "name": "glass_l_b",
+   "kind": "glass"
+  },
+  {
+   "id": 37,
+   "name": "glass_m_b",
+   "kind": "glass"
+  },
+  {
+   "id": 38,
+   "name": "glass_r_b",
+   "kind": "glass"
+  },
+  {
+   "id": 39,
+   "name": "glass_n",
+   "kind": "glass"
+  },
+  {
+   "id": 40,
+   "name": "grate_l_t",
+   "kind": "grate"
+  },
+  {
+   "id": 41,
+   "name": "grate_m_t",
+   "kind": "grate"
+  },
+  {
+   "id": 42,
+   "name": "grate_r_t",
+   "kind": "grate"
+  },
+  {
+   "id": 43,
+   "name": "grate_l_b",
+   "kind": "grate"
+  },
+  {
+   "id": 44,
+   "name": "grate_m_b",
+   "kind": "grate"
+  },
+  {
+   "id": 45,
+   "name": "grate_r_b",
+   "kind": "grate"
+  },
+  {
+   "id": 46,
+   "name": "grate_n",
+   "kind": "grate"
+  },
+  {
+   "id": 47,
+   "name": "hatch_l_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 48,
+   "name": "hatch_m_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 49,
+   "name": "hatch_r_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 50,
+   "name": "hatch_l_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 51,
+   "name": "hatch_m_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 52,
+   "name": "hatch_r_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 53,
+   "name": "hatch_n",
+   "kind": "hatch"
+  },
+  {
+   "id": 54,
+   "name": "ladder_l_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 55,
+   "name": "ladder_m_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 56,
+   "name": "ladder_r_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 57,
+   "name": "ladder_l_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 58,
+   "name": "ladder_m_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 59,
+   "name": "ladder_r_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 60,
+   "name": "ladder_n",
+   "kind": "ladder"
+  },
+  {
+   "id": 61,
+   "name": "engine",
+   "kind": "wall"
+  },
+  {
+   "id": 62,
+   "name": "air_plant",
+   "kind": "wall"
+  },
+  {
+   "id": 63,
+   "name": "locker",
+   "kind": "wall"
+  },
+  {
+   "id": 64,
+   "name": "lock_pump",
+   "kind": "wall"
+  },
+  {
+   "id": 65,
+   "name": "gun",
+   "kind": "wall"
+  },
+  {
+   "id": 66,
+   "name": "intercom",
+   "kind": "wall"
+  },
+  {
+   "id": 67,
+   "name": "holo",
+   "kind": "wall"
+  },
+  {
+   "id": 68,
+   "name": "shield",
+   "kind": "wall"
+  },
+  {
+   "id": 69,
+   "name": "bench",
+   "kind": "wall"
+  },
+  {
+   "id": 70,
+   "name": "bay",
+   "kind": "wall"
+  },
+  {
+   "id": 71,
+   "name": "autodoc",
+   "kind": "wall"
+  },
+  {
+   "id": 72,
+   "name": "scanner",
+   "kind": "wall"
+  },
+  {
+   "id": 73,
+   "name": "smes",
+   "kind": "wall"
+  },
+  {
+   "id": 74,
+   "name": "smes_small",
+   "kind": "wall"
+  },
+  {
+   "id": 75,
+   "name": "comms",
+   "kind": "wall"
+  },
+  {
+   "id": 76,
+   "name": "tray",
+   "kind": "wall"
+  },
+  {
+   "id": 77,
+   "name": "cryo",
+   "kind": "wall"
+  },
+  {
+   "id": 78,
+   "name": "stove",
+   "kind": "wall"
+  },
+  {
+   "id": 79,
+   "name": "pirate_wall_h",
+   "kind": "wall"
+  },
+  {
+   "id": 80,
+   "name": "pirate_wall_tl",
+   "kind": "wall"
+  },
+  {
+   "id": 81,
+   "name": "pirate_wall_tr",
+   "kind": "wall"
+  },
+  {
+   "id": 82,
+   "name": "pirate_wall_bl",
+   "kind": "wall"
+  },
+  {
+   "id": 83,
+   "name": "pirate_wall_br",
+   "kind": "wall"
+  },
+  {
+   "id": 84,
+   "name": "pirate_wall_tdown",
+   "kind": "wall"
+  },
+  {
+   "id": 85,
+   "name": "pirate_wall_cross",
+   "kind": "wall"
+  },
+  {
+   "id": 86,
+   "name": "pirate_wall_v",
+   "kind": "wall"
+  },
+  {
+   "id": 87,
+   "name": "pirate_wall_v_end",
+   "kind": "wall"
+  },
+  {
+   "id": 88,
+   "name": "pirate_wall_v_end_l",
+   "kind": "wall"
+  },
+  {
+   "id": 89,
+   "name": "pirate_wall_v_end_r",
+   "kind": "wall"
+  },
+  {
+   "id": 90,
+   "name": "pirate_wall_v_end_a",
+   "kind": "wall"
+  },
+  {
+   "id": 91,
+   "name": "pirate_airlock",
+   "kind": "door"
+  },
+  {
+   "id": 92,
+   "name": "pirate_door",
+   "kind": "wall"
+  },
+  {
+   "id": 93,
+   "name": "pirate_door_open",
+   "kind": "door"
+  },
+  {
+   "id": 94,
+   "name": "pirate_window",
+   "kind": "wall"
+  },
+  {
+   "id": 95,
+   "name": "pirate_window_l",
+   "kind": "wall"
+  },
+  {
+   "id": 96,
+   "name": "pirate_window_r",
+   "kind": "wall"
+  },
+  {
+   "id": 97,
+   "name": "pirate_console_1",
+   "kind": "wall"
+  },
+  {
+   "id": 98,
+   "name": "pirate_console_2",
+   "kind": "wall"
+  },
+  {
+   "id": 99,
+   "name": "pirate_console_3",
+   "kind": "wall"
+  },
+  {
+   "id": 100,
+   "name": "pirate_console_4",
+   "kind": "wall"
+  },
+  {
+   "id": 101,
+   "name": "pirate_console_5",
+   "kind": "wall"
+  },
+  {
+   "id": 102,
+   "name": "pirate_floor_l_t",
+   "kind": "floor"
+  },
+  {
+   "id": 103,
+   "name": "pirate_floor_m_t",
+   "kind": "floor"
+  },
+  {
+   "id": 104,
+   "name": "pirate_floor_r_t",
+   "kind": "floor"
+  },
+  {
+   "id": 105,
+   "name": "pirate_floor_l_b",
+   "kind": "floor"
+  },
+  {
+   "id": 106,
+   "name": "pirate_floor_m_b",
+   "kind": "floor"
+  },
+  {
+   "id": 107,
+   "name": "pirate_floor_r_b",
+   "kind": "floor"
+  },
+  {
+   "id": 108,
+   "name": "pirate_floor_n",
+   "kind": "floor"
+  },
+  {
+   "id": 109,
+   "name": "pirate_door_half",
+   "kind": "door"
+  },
+  {
+   "id": 110,
+   "name": "pirate_airlock_closed",
+   "kind": "door"
+  },
+  {
+   "id": 111,
+   "name": "pirate_airlock_half",
+   "kind": "door"
+  },
+  {
+   "id": 112,
+   "name": "pirate_glass_l_t",
+   "kind": "glass"
+  },
+  {
+   "id": 113,
+   "name": "pirate_glass_m_t",
+   "kind": "glass"
+  },
+  {
+   "id": 114,
+   "name": "pirate_glass_r_t",
+   "kind": "glass"
+  },
+  {
+   "id": 115,
+   "name": "pirate_glass_l_b",
+   "kind": "glass"
+  },
+  {
+   "id": 116,
+   "name": "pirate_glass_m_b",
+   "kind": "glass"
+  },
+  {
+   "id": 117,
+   "name": "pirate_glass_r_b",
+   "kind": "glass"
+  },
+  {
+   "id": 118,
+   "name": "pirate_glass_n",
+   "kind": "glass"
+  },
+  {
+   "id": 119,
+   "name": "pirate_grate_l_t",
+   "kind": "grate"
+  },
+  {
+   "id": 120,
+   "name": "pirate_grate_m_t",
+   "kind": "grate"
+  },
+  {
+   "id": 121,
+   "name": "pirate_grate_r_t",
+   "kind": "grate"
+  },
+  {
+   "id": 122,
+   "name": "pirate_grate_l_b",
+   "kind": "grate"
+  },
+  {
+   "id": 123,
+   "name": "pirate_grate_m_b",
+   "kind": "grate"
+  },
+  {
+   "id": 124,
+   "name": "pirate_grate_r_b",
+   "kind": "grate"
+  },
+  {
+   "id": 125,
+   "name": "pirate_grate_n",
+   "kind": "grate"
+  },
+  {
+   "id": 126,
+   "name": "pirate_hatch_l_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 127,
+   "name": "pirate_hatch_m_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 128,
+   "name": "pirate_hatch_r_t",
+   "kind": "hatch"
+  },
+  {
+   "id": 129,
+   "name": "pirate_hatch_l_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 130,
+   "name": "pirate_hatch_m_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 131,
+   "name": "pirate_hatch_r_b",
+   "kind": "hatch"
+  },
+  {
+   "id": 132,
+   "name": "pirate_hatch_n",
+   "kind": "hatch"
+  },
+  {
+   "id": 133,
+   "name": "pirate_ladder_l_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 134,
+   "name": "pirate_ladder_m_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 135,
+   "name": "pirate_ladder_r_t",
+   "kind": "ladder"
+  },
+  {
+   "id": 136,
+   "name": "pirate_ladder_l_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 137,
+   "name": "pirate_ladder_m_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 138,
+   "name": "pirate_ladder_r_b",
+   "kind": "ladder"
+  },
+  {
+   "id": 139,
+   "name": "pirate_ladder_n",
+   "kind": "ladder"
+  },
+  {
+   "id": 140,
+   "name": "pirate_engine",
+   "kind": "wall"
+  },
+  {
+   "id": 141,
+   "name": "pirate_air_plant",
+   "kind": "wall"
+  },
+  {
+   "id": 142,
+   "name": "pirate_locker",
+   "kind": "wall"
+  },
+  {
+   "id": 143,
+   "name": "pirate_lock_pump",
+   "kind": "wall"
+  },
+  {
+   "id": 144,
+   "name": "pirate_gun",
+   "kind": "wall"
+  },
+  {
+   "id": 145,
+   "name": "pirate_intercom",
+   "kind": "wall"
+  },
+  {
+   "id": 146,
+   "name": "pirate_holo",
+   "kind": "wall"
+  },
+  {
+   "id": 147,
+   "name": "pirate_shield",
+   "kind": "wall"
+  },
+  {
+   "id": 148,
+   "name": "pirate_bench",
+   "kind": "wall"
+  },
+  {
+   "id": 149,
+   "name": "pirate_bay",
+   "kind": "wall"
+  },
+  {
+   "id": 150,
+   "name": "pirate_autodoc",
+   "kind": "wall"
+  },
+  {
+   "id": 151,
+   "name": "pirate_scanner",
+   "kind": "wall"
+  },
+  {
+   "id": 152,
+   "name": "pirate_smes",
+   "kind": "wall"
+  },
+  {
+   "id": 153,
+   "name": "pirate_smes_small",
+   "kind": "wall"
+  },
+  {
+   "id": 154,
+   "name": "pirate_comms",
+   "kind": "wall"
+  },
+  {
+   "id": 155,
+   "name": "pirate_tray",
+   "kind": "wall"
+  },
+  {
+   "id": 156,
+   "name": "pirate_cryo",
+   "kind": "wall"
+  },
+  {
+   "id": 157,
+   "name": "pirate_stove",
+   "kind": "wall"
+  },
+  {
+   "id": 158,
+   "name": "rock_1",
+   "kind": "wall"
+  },
+  {
+   "id": 159,
+   "name": "rock_2",
+   "kind": "wall"
+  },
+  {
+   "id": 160,
+   "name": "rock_3",
+   "kind": "wall"
+  },
+  {
+   "id": 161,
+   "name": "rock_ore",
+   "kind": "wall"
+  },
+  {
+   "id": 162,
+   "name": "rock_ground",
+   "kind": "floor"
+  },
+  {
+   "id": 163,
+   "name": "floor_l_m",
+   "kind": "floor"
+  },
+  {
+   "id": 164,
+   "name": "floor_m_m",
+   "kind": "floor"
+  },
+  {
+   "id": 165,
+   "name": "floor_r_m",
+   "kind": "floor"
+  },
+  {
+   "id": 166,
+   "name": "glass_l_m",
+   "kind": "glass"
+  },
+  {
+   "id": 167,
+   "name": "glass_m_m",
+   "kind": "glass"
+  },
+  {
+   "id": 168,
+   "name": "glass_r_m",
+   "kind": "glass"
+  },
+  {
+   "id": 169,
+   "name": "grate_l_m",
+   "kind": "grate"
+  },
+  {
+   "id": 170,
+   "name": "grate_m_m",
+   "kind": "grate"
+  },
+  {
+   "id": 171,
+   "name": "grate_r_m",
+   "kind": "grate"
+  },
+  {
+   "id": 172,
+   "name": "hatch_l_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 173,
+   "name": "hatch_m_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 174,
+   "name": "hatch_r_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 175,
+   "name": "ladder_l_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 176,
+   "name": "ladder_m_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 177,
+   "name": "ladder_r_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 178,
+   "name": "pirate_floor_l_m",
+   "kind": "floor"
+  },
+  {
+   "id": 179,
+   "name": "pirate_floor_m_m",
+   "kind": "floor"
+  },
+  {
+   "id": 180,
+   "name": "pirate_floor_r_m",
+   "kind": "floor"
+  },
+  {
+   "id": 181,
+   "name": "pirate_glass_l_m",
+   "kind": "glass"
+  },
+  {
+   "id": 182,
+   "name": "pirate_glass_m_m",
+   "kind": "glass"
+  },
+  {
+   "id": 183,
+   "name": "pirate_glass_r_m",
+   "kind": "glass"
+  },
+  {
+   "id": 184,
+   "name": "pirate_grate_l_m",
+   "kind": "grate"
+  },
+  {
+   "id": 185,
+   "name": "pirate_grate_m_m",
+   "kind": "grate"
+  },
+  {
+   "id": 186,
+   "name": "pirate_grate_r_m",
+   "kind": "grate"
+  },
+  {
+   "id": 187,
+   "name": "pirate_hatch_l_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 188,
+   "name": "pirate_hatch_m_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 189,
+   "name": "pirate_hatch_r_m",
+   "kind": "hatch"
+  },
+  {
+   "id": 190,
+   "name": "pirate_ladder_l_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 191,
+   "name": "pirate_ladder_m_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 192,
+   "name": "pirate_ladder_r_m",
+   "kind": "ladder"
+  },
+  {
+   "id": 193,
+   "name": "window_field",
+   "kind": "wall"
+  },
+  {
+   "id": 194,
+   "name": "dock",
+   "kind": "wall"
+  }
+ ]
+}

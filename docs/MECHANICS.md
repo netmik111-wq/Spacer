@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v89 (version 0.82).
+Last updated: build v90 (version 0.83).
 
 Contents:
 
@@ -2354,4 +2354,30 @@ All 18 open notes from his Notebook; questions on the page "Spacer v89 Notes"
 - **Things taken off a pile disappear one by one** (the outline under the mouse drew the old pile again on top).
 - **Sounds are heard from where you stand**: at the edge of the map (the ship's nose) the camera stops short of the
   character, and sounds used to be heard from the middle of the screen, out of their reach.
+
+
+## 44. The author's tile set (v90)
+
+He sent his own tile set (an Aseprite sheet with named slices); questions on the page "Spacer v90 Tiles"
+(https://claude.ai/artifact/FkyjH7eBxzYEQhCXbPkNFG), built on my picks. Nothing about play changed except what the doors show.
+
+- **Walls, floors, glass, grating, the hatch and the ladder's foot** are drawn from his set. See-through floors stay
+  see-through (glass and grating show the deck below, the hatch shows the shaft), as before.
+- **Windows**: his glass. A row of windows side by side is drawn as one long pane (left end, middles, right end).
+- **Doors** come in four kinds, chosen from the map:
+  - **hermetic** (red): an airlock chamber's doors and any door that opens into space;
+  - **technical** (orange): a door only some jobs open;
+  - **cargo** (brown): a door of the room with the supply locker or the module bay;
+  - **plain** (grey): every other door.
+  Pirate ships use the same kinds in their colours.
+- **The lamp on a shut door**: green, it opens; yellow, it opens only for some jobs (until its lock is broken); red, it
+  is welded, locked against boarders from the holomap, or its emergency shutter is down. The lamp is the same for everyone.
+- **Doors open in stages**: three frames in a horizontal wall, two in a vertical one (the same opening time as before).
+- **Machines from his set**: the helm, the gun console, the drone console, the comms console, the star chart, the holomap,
+  the SMES and the bridge's backup SMES, the supply locker, the intercom. A machine whose room is above it is drawn from
+  behind. A row of the same console as wide as his picture (two helm signs, three gun console signs, two comms, two chart,
+  two holomap, two SMES) is drawn as one wide machine; a single sign shows a narrowed picture (its two ends). Every other
+  machine (engine, air plant, autodoc, trays...) is still drawn by the game, on his wall.
+- **Replacing pictures**: «sprites/original/tiles.png» in the build is the new sheet; «sprites/old/tiles.png» keeps the
+  v89 sheet (the game does not read the old folder).
 

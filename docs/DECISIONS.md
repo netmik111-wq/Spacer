@@ -1771,3 +1771,31 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   `_wrecked` then hit a null ship. The test keeps the ship whole and calls another if it went; `becomes_wreck` returns when
   nothing is alongside.
 
+
+## v90: the author's tile set
+
+- **The sheet is still built by `tools/make_assets.py`**, now from `art_src/tileset/Tile_set_1.png` + `.json` (his Aseprite
+  export, kept as he sent it). Tile numbers and the maps are unchanged: every old tile name gets his picture
+  (`NEW_ART`, `art_tile`), new pieces go at the end of the sheet. Mine: the maps and saves keep working, and a «sprites/tiles.png»
+  drawn for an older build still lays over the top.
+- **His export is read leniently** (`load_tileset`): names trimmed, one-tile slices snapped to the 32-pixel grid (three were one
+  pixel off), a name given twice is told apart by place (`ladder_floor_down_internal_corner_r` twice: the left one is `_l`).
+  His horizontal glass `_l`/`_r` are crosswise to their pictures (the frame is on the other side), so windows take them by
+  picture (`WINDOW_SPOTS`).
+- **Wall pieces were chosen by eye on the ship previews**: `horizontal_corner_l/r` are the top corners (his `internal_corner`
+  pieces looked thicker there), `external_corner` the bottom ones, `vertical_wall_to_internal_corner_r/l` the vertical wall's
+  foot at a corner (crosswise again), `vertical_wall_down_to_T-shaped_corner` the crossing. His loose wall ends, column and
+  `top_wall_junction` are not used (the maps refuse loose ends).
+- **Looks the client lays, not the map** (`WorldView._laid`, `_door_look`): a window's place in a row, a machine facing the room
+  above, a wide machine's pieces, a door's kind and lamp and its opening frame. Mine: no map, save or protocol change, and the
+  ship editor still draws its single tiles. The look is worked out when the decks are laid; doors every frame by name.
+- **Door kinds from the map** (my pick until his D1 answer): hermetic for an airlock's doors and doors into space, technical where
+  only some jobs pass, cargo by the supply locker or the module bay, plain elsewhere. **Lamps** the same for everyone (D2 A):
+  per-viewer lamps would make two players see one door differently.
+- **Wide terminals** (his helm 64 px, gun console 96, comms 64): a row of as many same signs is one wide machine; a single sign
+  shows the picture's two ends squeezed together (`art_machine`). Our ships' maps are not widened until his M1 answer: the bridge
+  has windows beside each console.
+- **Not used yet, asked first**: the window stages (I read them as a shutter, W1), vertical glass, side-wall terminals, the big holo
+  table and sphere, ship icons, the brown and red lockers, the med/tech/fire boxes, button and wall light, soil floor, floor lamps,
+  danger line, vent, stairs. The stairs are 48 and 64 px tall, so they cannot go in the 32-px sheet as they are.
+

@@ -223,9 +223,14 @@ void fragment() {
 }
 """
 const STAR_PIXELS_PER_UNIT := 9.0
+const DOOR_STAGES := [3, 2]            # (v90) open frames of a door in a horizontal wall and in a vertical one
+# (v90) machines the author's tile set draws, and how many tiles wide (see _laid and tools/make_assets.py MACHINE_ART)
+const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_5": 1, "comms": 2, "holo": 2,
+	"locker": 1, "intercom": 1, "smes": 2, "smes_small": 1}
+var _tile_names := PackedStringArray()   # (v90) tile id -> its name in the sheet
 var _source_id := 0
-var _door_tiles: Array = []          # per door kind: tile ids for [shut, half open, open]
-var _door_shown := PackedInt32Array()  # per door: which of those is on screen
+var _door_shown := PackedStringArray()  # per door: the name of the tile on screen ("" = none yet)
+var _door_type := PackedStringArray()   # (v90) per door: base, tech, cargo or herm (see _door_types)
 var _door_was_open := PackedByteArray()
 var _door_closing := PackedFloat32Array()   # per door: seconds left of the closing frame
 var _hole_views := {}                # hull cell -> Sprite2D
@@ -349,12 +354,8 @@ func setup(p_client: GameClient) -> void:
 	last.ceiling.visible = false
 
 	# doors are redrawn as they open and close
-	_door_tiles = [
-		["door", "door_half", "door_open"],
-		["airlock_closed", "airlock_half", "airlock"],
-	]
 	_door_shown.resize(map.doors.size())
-	_door_shown.fill(-1)
+	_door_shown.fill("")
 	_door_was_open.resize(map.doors.size())
 	_door_closing.resize(map.doors.size())
 
@@ -694,17 +695,23 @@ func _update_ship(delta: float) -> void:
 		if not map.door_here(d):
 			continue
 		var amount := client.door_open_amount(d)
-		var frame := 0 if amount <= 0.0 else (2 if amount >= 1.0 else 1)
+		# (v90) the author's doors open in stages: three in a horizontal wall, two in a vertical one
+		var stages: int = DOOR_STAGES[map.door_kind[d]]
+		var frame := 0 if amount <= 0.0 else clampi(ceili(amount * stages), 1, stages)
 		if frame == 0 and _door_was_open[d] == 1:
-			_door_closing[d] = 0.12          # show the half-open frame for a moment on the way shut
-		_door_was_open[d] = 1 if frame == 2 else 0
+			_door_closing[d] = 0.12          # show the first open frame for a moment on the way shut
+		_door_was_open[d] = 1 if frame == stages else 0
 		if _door_closing[d] > 0.0:
 			_door_closing[d] -= delta
 			if frame == 0:
 				frame = 1
-		if frame != _door_shown[d]:
-			_door_shown[d] = frame
-			var id: int = map.tile_ids[map.door_tint(d) + str(_door_tiles[map.door_kind[d]][frame])]
+		var look := _door_look(d, frame)
+		if look != _door_shown[d]:
+			_door_shown[d] = look
+			var id: int = map.tile_ids.get(look, -1)
+			if id < 0:                       # a sheet of one's own from before v90: the old three frames
+				id = map.tile_ids[map.door_tint(d) + str([["door", "door_half", "door_half", "door_open"],
+					["airlock_closed", "airlock_half", "airlock"]][map.door_kind[d]][frame])]
 			var at: Vector2i = map.doors[d]
 			_decks[map.deck_of(at.y)].layer.set_cell(Vector2i(at.x, map.local_y(at.y)), _source_id,
 				Vector2i(id % map.atlas_columns, id / map.atlas_columns))
@@ -1016,11 +1023,97 @@ func _paint_decks() -> void:
 				if id < 0:
 					continue
 				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
-				deck.layer.set_cell(Vector2i(x, y), _source_id, in_atlas)
 				if map.see_through[cell] == 1:
 					deck.ceiling.set_cell(Vector2i(x, y), _source_id, in_atlas)
-	_door_shown.fill(-1)
+				id = _laid(cell, id)
+				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+	_door_shown.fill("")
+	_door_types()
 	_other_seen = client.other_changes
+
+
+func _tile_name(id: int) -> String:
+	if _tile_names.is_empty():
+		_tile_names.resize(client.map.tile_kinds.size())
+		for n: String in client.map.tile_ids.keys():
+			_tile_names[int(client.map.tile_ids[n])] = n
+	return _tile_names[id] if id >= 0 and id < _tile_names.size() else ""
+
+
+func _laid(cell: int, id: int) -> int:
+	## (v90, the author's tile set) The tile a wall cell is laid in: its own, or the set's piece for
+	## where it stands. A window between windows is one long pane; a machine whose front is the room
+	## above is seen from behind; a row of as many of one machine as its picture is wide ("33" for the
+	## helm, "444" for the gun console) is drawn as one wide machine. The map itself is not changed.
+	var map := client.map
+	var full := _tile_name(id)
+	var tint := "pirate_" if full.begins_with("pirate_") else ""
+	var name := full.trim_prefix(tint)
+	var x := cell % map.width
+	var look := ""
+	if name in ["window", "window_l", "window_r"]:
+		var left := x > 0 and _tile_name(map.cells[cell - 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
+		var right := x + 1 < map.width and _tile_name(map.cells[cell + 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
+		look = "window_m" if left and right else ("window_r" if left else ("window_l" if right else "window"))
+	elif MACHINE_WIDE.has(name):
+		var up := map.fitting_front(cell) == cell - map.width
+		var k: int = MACHINE_WIDE[name]
+		var pos := 0
+		while x - pos > 0 and map.cells[cell - pos - 1] == id:
+			pos += 1
+		var run := pos + 1
+		while x + run - pos < map.width and map.cells[cell + run - pos] == id:
+			run += 1
+		if k > 1 and run % k == 0:
+			look = "%s%s_w%d_%d" % [name, "_up" if up else "", k, pos % k]
+		elif up:
+			look = name + "_up"
+	if look == "" or look == name:
+		return id
+	return int(map.tile_ids.get(tint + look, id))
+
+
+func _door_types() -> void:
+	## (v90) The look of every door, from the map: hermetic where it leads into space or is an airlock
+	## chamber's, a technical one where only some jobs may pass, a cargo door into a room with the
+	## supply locker or the module bay, the plain one elsewhere.
+	var map := client.map
+	var stores := {}
+	for c: int in map.locker.keys() + map.bay.keys():
+		var front := map.fitting_front(c)
+		if front >= 0 and map.room_of[front] >= 0:
+			stores[map.room_of[front]] = true
+	_door_type.resize(map.doors.size())
+	for d in map.doors.size():
+		var a := map.door_sides[d * 2]
+		var b := map.door_sides[d * 2 + 1]
+		var t := "base"
+		if not map.door_here(d):
+			pass
+		elif map.door_partner[d] >= 0 or a < 0 or b < 0:
+			t = "herm"
+		elif map.door_access[d] != 0:
+			t = "tech"
+		elif (map.room_of[a] >= 0 and stores.has(map.room_of[a])) or (map.room_of[b] >= 0 and stores.has(map.room_of[b])):
+			t = "cargo"
+		_door_type[d] = t
+
+
+func _door_look(d: int, frame: int) -> String:
+	## (v90) The tile a door is drawn in: shut with its lamp (green: opens; yellow: only for some jobs;
+	## red: welded, locked against boarders or its shutter down), or opening, frame 1.. of its stages.
+	var map := client.map
+	var doors := client.doors
+	var o := "h" if map.door_kind[d] == ShipMap.DOOR_BAND else "v"
+	var t := _door_type[d] if d < _door_type.size() else "base"
+	var head := "%sdoor_%s_%s_" % [map.door_tint(d), t, o]
+	if frame > 0:
+		return head + "open%d" % frame
+	if doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1:
+		return head + "red"
+	if map.door_access[d] != 0 and doors.picked[d] == 0:
+		return head + "yellow"
+	return head + "green"
 
 
 func _leave_afterimage(id: int, sprite: Sprite2D, _at: Vector2i) -> void:
@@ -1204,7 +1297,7 @@ func _hover_body() -> void:
 	## A body lying under the mouse (with nothing on the wall there) is outlined
 	## by a copy of its figure that draws only the rim round it.
 	var sprite: Sprite2D = null
-	if _hover_on.x >= 0 and _tile_line(client.map.cells[_hover_on.x]) == null:
+	if _hover_on.x >= 0 and _tile_line(client.map.cells[_hover_on.x], _hover_on.x) == null:
 		for e: GameClient.Ent in client.ents.values():
 			if e.id != client.my_id and e.cond != Net.COND_OK and e.y * client.map.width + e.x == _hover_on.x and _views.has(e.id):
 				sprite = _views[e.id]
@@ -1231,7 +1324,7 @@ func _hover_kind() -> int:
 	## into the wall, 2 things on the floor, 3 a body.
 	if _hover_on.x < 0:
 		return 0
-	if _tile_line(client.map.cells[_hover_on.x]) != null:
+	if _tile_line(client.map.cells[_hover_on.x], _hover_on.x) != null:
 		return 1
 	if _body_ink.get_parent() != null:
 		return 3
@@ -1246,7 +1339,7 @@ func _draw_hover() -> void:
 	var corner := _on_deck(_hover_on.x) * _tile
 	match _hover_kind():
 		1:
-			_hover_pen.draw_texture(_tile_line(client.map.cells[_hover_on.x]), corner, _hover_colour())
+			_hover_pen.draw_texture(_tile_line(client.map.cells[_hover_on.x], _hover_on.x), corner, _hover_colour())
 		2:
 			_floor_things_at(_hover_pen, _hover_on.x, corner)    # the things again, over their silhouettes
 		3:
@@ -1266,17 +1359,18 @@ func _draw_hover_ink() -> void:
 		_floor_things_at(_hover_ink, _hover_on.x, corner + d)
 
 
-func _tile_line(id: int) -> Texture2D:
+func _tile_line(own: int, cell: int) -> Texture2D:
 	## The outline of what is fitted into a wall tile (a console, a machine, a
 	## locker...): the pixels round those that differ from the bare wall. Null
-	## for every other tile. Worked out once per tile.
-	if id < 0:
+	## for every other tile. Worked out once per tile, (v90) of the piece the cell is laid in.
+	if own < 0:
 		return null
+	var id := _laid(cell, own)
 	if _tile_lines.has(id):
 		return _tile_lines[id]
 	var map := client.map
 	var line: Texture2D = null
-	if id < map.fitting.size() and map.fitting[id] == 1:
+	if own < map.fitting.size() and map.fitting[own] == 1:
 		if _tiles_image == null:
 			_tiles_image = Sprites.sheet("tiles").get_image()
 			if _tiles_image.is_compressed():
