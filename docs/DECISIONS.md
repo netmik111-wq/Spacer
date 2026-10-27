@@ -1808,3 +1808,13 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   turned upside down (`WALL_JOINS` in `make_assets.py`): the crossing is the T with the turned T's top 16 rows over it, and
   a new `wall_tup` (a wall from above only) is the horizontal wall with the turned T's top 20 rows. `wall_tup` is new, so it
   goes at the end of the sheet (with its pirate copy) and the maps are rebuilt (`MapBuilder` picks it the same way).
+
+## v90.2: wall crossings as he drew them
+
+- **He drew which pieces join** (a picture of his set with lines) and asked to read the slice names again. His
+  `vertical_wall_down_to_T-shaped_corner` is the same picture as `vertical_wall_to_T-shaped_corner` (a vertical wall whose foot
+  opens into the band's top), not a crossing: v90 used it as the crossing, so the crossing had no arms. Now the vertical wall
+  above a band ends in that piece (as before), the crossing is his `T-shaped_corner`, and the turned T (`wall_tup`) is the plain
+  `horizontal_wall`, whose top face the foot opens into. v90.1's made-up flipped-T pieces are gone. His
+  `internal_corner_l/r` (with `vertical_wall_to_internal_corner_l/r` above) join a vertical wall that goes on down past a band
+  turning one way; our maps refuse such a wall (├, ┤), so they stay unused until a map allows them.

@@ -211,6 +211,11 @@ Open problems:
 - Where a vertical wall meets a horizontal one from above, the joint is drawn now: the crossing and a new turned-T piece
   (`wall_tup`, at the end of the sheet) made from his T. Maps rebuilt. Version 0.83.1, build in `/mnt/project-files/builds/v90.1/`.
 
+### v90.2 (his drawing of which wall pieces join)
+
+- The crossing is his T under the wall that ends in `vertical_wall_to_T-shaped_corner`, the turned T his plain horizontal wall
+  (v90.1's flipped T removed). Pictures only, maps unchanged. Version 0.83.2, build in `/mnt/project-files/builds/v90.2/`.
+
 ### v89 (his 18 Notebook notes; questions on "Spacer v89 Notes")
 
 - Fixed: guns switched off by a power shortage (ion storm) now come back on by themselves; teleported pirates arrive
