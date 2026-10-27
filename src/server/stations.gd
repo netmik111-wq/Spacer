@@ -357,6 +357,8 @@ func evade_asked(p: Player) -> void:
 	evade_until = server.tick + roundi((EVADE_SECONDS + EVADE_SKILL * p.skill(Net.SKILL_PILOT)) * Net.TICK_HZ)
 	evade_ready = server.tick + roundi(EVADE_REST * Net.TICK_HZ)
 	p.train(Net.SKILL_PILOT)
+	if server.arena.on():
+		server.arena.dash(server.fleet.on, 0.0)   # (v92) in the fight's space the ship really jumps aside
 	server.chat.say_bridge("%s бросает корабль в сторону: уклонение на %.1f с." % [p.name, float(evade_until - server.tick) / Net.TICK_HZ])
 
 

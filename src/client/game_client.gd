@@ -33,6 +33,7 @@ const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Sight := preload("res://src/shared/sight.gd")
+const ArenaSeen := preload("res://src/client/arena_seen.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
@@ -176,6 +177,9 @@ var meteor_tried := false            # the pilot has steered for it already
 var alert_changes := 0               # goes up whenever the alert changes (sounds, the HUD)
 var goal := Net.GOAL_NONE            # (v68) what this fight is for (Net.S_GUNS)
 var foe := 0                         # (v86) the enemy our guns aim at: 0 the ship alongside, 1 its wingman (Net.S_GUNS)
+var arena := ArenaSeen.new()         # (v92) the fight in real time: ships and shots in space (Net.S_ARENA, S_ARENA_SHOT)
+var _pilot_sent := -1                # (v92) the pilot's keys last sent, and when
+var _pilot_ms := 0
 # (v86, the author's N1) the fleet's shuttle (Net.S_SHUTTLE)
 var shuttle_docks: Array = []        # per ship of our fleet: ShipMap.shuttle_docks()
 var shuttle_at := -1                 # the dock it stands at or left (-1: no shuttle in this game)
@@ -705,6 +709,32 @@ func send_order(id: int, post: int) -> void:
 		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+func arena_on() -> bool:
+	## (v92) Is a fight going on in real time (the ships flying in space)?
+	return arena.on()
+
+
+func send_pilot(keys: int) -> void:
+	## (v92) The pilot's keys at the ship's controls in the fight (Arena.KEY_* bits): sent when they
+	## change, and again now and then while held (the server lets go of them after 2 s).
+	var now := Time.get_ticks_msec()
+	if _peer == null or (keys == _pilot_sent and now - _pilot_ms < 500):
+		return
+	_pilot_sent = keys
+	_pilot_ms = now
+	_peer.send(0, PackedByteArray([Net.C_PILOT, keys]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_turret(gun: int, aim: Vector2, fire: bool) -> void:
+	## (v92) Aims the gun of the mount we stand at on that point of the fight's space (and holds its trigger).
+	if _peer == null:
+		return
+	var msg := PackedByteArray([Net.C_TURRET, gun, 0, 0, 0, 0, 1 if fire else 0])
+	msg.encode_s16(2, clampi(roundi(aim.x * 8.0), -32768, 32767))
+	msg.encode_s16(4, clampi(roundi(aim.y * 8.0), -32768, 32767))
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_evade() -> void:
 	## (v68) The pilot's evade; only from the ship's controls in a fight.
 	if _peer != null:
@@ -1071,7 +1101,8 @@ func use_target(facing: int = -1) -> int:
 	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
 	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove,
 	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console,
-	## 47 = (v91) a first-aid box, 48 = a spare parts box.
+	## 47 = (v91) a first-aid box, 48 = a spare parts box, 49 = (v92) a gun mount in a fight in real time
+	## (no gun or round for it in hand): its controls (aim with the mouse, fire with the button).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1113,6 +1144,8 @@ func use_target(facing: int = -1) -> int:
 			return 15
 		if map.gun_console.has(cell):
 			return 17
+		if turret_here(cell) >= 0:
+			return 49                        # (v92) in a fight, empty hands at a mount with a gun take its controls
 		if mount_here(cell) != "-":
 			return 25
 		if map.guns.has(cell):
@@ -1233,9 +1266,22 @@ func mount_here(cell: int) -> String:
 		if Weapons.damaged(item):
 			return "Орудие повреждено: сначала его чинят на верстаке."
 		return "-" if broken.has(cell) else ""
-	if item == Net.ITEM_NONE and on != Weapons.NONE and not broken.has(cell):
-		return ""
+	if item == Net.ITEM_NONE and on != Weapons.NONE and not broken.has(cell) and not arena_on():
+		return ""                            # (v92: in a fight, empty hands take the gun's controls instead)
 	return "-"
+
+
+func turret_here(cell: int) -> int:
+	## (v92) The number of the gun at that mount, if "use" there takes its controls in a fight (anything
+	## in hand but a gun or a round for it; Mounts.can refuses to take the gun down then), else -1.
+	var i := map.guns.find(cell)
+	if i < 0 or not arena_on() or broken.has(cell):
+		return -1
+	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
+	var on: int = gun_weapon[i] if i < gun_weapon.size() else Weapons.NONE
+	if on == Weapons.NONE or (item != Net.ITEM_NONE and (Weapons.of_item(item) != Weapons.NONE or item == Weapons.ammo(on))):
+		return -1                            # (a gun in hand goes up, a round goes into the breech, as before)
+	return i
 
 
 func target_cell() -> int:
@@ -2054,6 +2100,12 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				_holo_cells()
 				board_changes += 1
 				ship_changes += 1
+		Net.S_ARENA:
+			if pkt.size() >= 6:
+				arena.read(pkt)
+		Net.S_ARENA_SHOT:
+			if pkt.size() >= 2:
+				arena.shot(pkt, Time.get_ticks_msec())
 		Net.S_SHUTTLE:
 			if pkt.size() >= 5 and pkt.size() >= 5 + pkt[4] * 2:
 				shuttle_at = -1 if pkt[1] == 255 else pkt[1]
@@ -2225,6 +2277,8 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 		if problem == "" and map.add_other(other_map) < 0:
 			problem = "Не найдена карта «%s»." % other_map
 	_holo_cells()
+	arena.reset()
+	arena.map = map
 	shuttle_docks = map.shuttle_docks()
 	shuttle_at = -1
 	shuttle_to = -1

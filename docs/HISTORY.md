@@ -746,3 +746,21 @@ Open problems:
   in 5 s, does not work without power) and repair, medicine and shooting skills.
 - Speech out loud (7 cells, through air), radio («;»), intercoms («!», 4 panels), dead chat.
 - Sounds are audible: made in code (`src/client/sounds.gd`), with direction and muffling, engine hum.
+
+## v92: the fight in real time (the author's roadmap, item 0)
+
+He wrote a long roadmap (2026-10-27): 0 a real-time fight like Starsector where every gun is worked by a person and
+the pilot steers, 0.2 armour, penetration and ricochet, 1 procedural derelicts, stations and asteroids, 2 races,
+3 more weapons and gear, 3.2 boarding pods and our teleporter, 4 breaching and entering. The plan is
+`/mnt/project-files/plans/roadmap-v92.md` (v92 arena, v93 armour, v94 docking and pods, v95 polish, v96-97 places,
+v98 arsenal, v99+ races); 28 questions on `https://claude.ai/artifact/V1AEJgkFnsjG9b8vk4DAmj`. Built on my picks
+while his answers are pending:
+- `src/server/arena.gd`: ships as bodies in space built from their drawings (`src/shared/arena_shape.gd`), flying
+  and turning by class; the pilot's keys (C_PILOT), bot pilots to the battle position, pirate pilots by temper,
+  drifting with nobody at the helm; guns as 180° turrets; shots that fly, lead their target and strike the cell
+  they meet (Gunnery's hit code kept: `arena_hit`, `arena_bubble`, `arena_guard`, `arena_miss`); shield bubbles,
+  point defence, beams in reach; collisions; the docking clock waiting while far; leaving past the edge.
+- The client: `ArenaSeen` (S_ARENA every other tick, S_ARENA_SHOT once per shot) and `SpaceView`: the helm shows the
+  fight in space in a fight, a gun mount can be taken by hand (use target 49, C_TURRET), V shows a small window.
+- `tools/arenatest.gd` (30/30 passes); guntest and derelicttest keep the old fight (`arena.enabled = false`).
+  Protocol 66. Nettest, lossy nettest and the soak test pass.

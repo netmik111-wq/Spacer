@@ -102,6 +102,7 @@ const Defence := preload("res://src/server/defence.gd")
 const Usage := preload("res://src/server/usage.gd")
 const Fleet := preload("res://src/server/fleet.gd")
 const Wing := preload("res://src/server/wing.gd")
+const Arena := preload("res://src/server/arena.gd")
 const Shuttle := preload("res://src/server/shuttle.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
@@ -201,6 +202,7 @@ var usage := Usage.new()               # (v82) what people used this run
 var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
 var wing := Wing.new()                 # (v86, the author's E1) a second pirate ship that joins a fight: see Wing
 var shuttle := Shuttle.new()           # (v86, the author's N1) the fleet's shuttle between the ships' hangars
+var arena := Arena.new()               # (v92, the author's plan item 0) the ship fight in real time: see Arena
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
                                        # (the hard mode sets it, the menu may too), kept in the campaign
@@ -298,6 +300,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	ship.in_reach = sectors.within_reach(ship.sector, ship.pos)
 	fleet.setup(self)
 	wing.setup(self)
+	arena.setup(self)
 	shuttle.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
@@ -517,6 +520,12 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_GUNS:
 		if pkt.size() > 1:
 			gunnery.fire(p, pkt[1])
+	elif kind == Net.C_PILOT:
+		if pkt.size() > 1:
+			arena.pilot_asked(p, pkt[1])
+	elif kind == Net.C_TURRET:
+		if pkt.size() > 6:
+			arena.turret_asked(p, pkt[1], Vector2(pkt.decode_s16(2), pkt.decode_s16(4)) / 8.0, pkt[6] != 0)
 	elif kind == Net.C_AIM:
 		if pkt.size() > 1:
 			gunnery.aim_asked(p, pkt[1])
@@ -759,6 +768,7 @@ func _tick() -> void:
 	fleet.each(_ship_crew)
 	gunnery.tick_enemy()
 	wing.tick()                   # (v86) the wingman, if one fights
+	arena.tick()                  # (v92) the fight's space: ships flying, shots on their way
 	shuttle.tick()                # (v86) the fleet's shuttle
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight

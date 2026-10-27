@@ -172,6 +172,8 @@ func can(p: Player, cell: int) -> String:
 			return NOT_HERE
 		if p.mended == cell:
 			return NOT_HERE                  # (v80) the same hold that mended it does not go on to take it down
+		if not p.bot and server.arena.on():
+			return NOT_HERE                  # (v92) in a fight "use" at a gun takes its controls (Arena), not the gun down
 		return ""
 	return NOT_HERE
 

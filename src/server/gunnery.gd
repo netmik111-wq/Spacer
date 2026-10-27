@@ -823,9 +823,10 @@ func tick_enemy() -> void:
 				* (PHASE2_PACE if phase2 and boss == 1 else 1.0) * (RUNNER_PACE if goal == Net.GOAL_RUNNER else 1.0)
 			for k in enemy_weapons.size():
 				enemy_charge[k] = minf(enemy_charge[k] + pace / Weapons.charge_ticks(enemy_weapons[k]), 1.0)
-				if enemy_charge[k] >= 1.0 and engaged():
+				if enemy_charge[k] >= 1.0 and engaged() and (not server.arena.on() or Weapons.bomb(enemy_weapons[k])
+						or server.arena.enemy_bears(server.wing.on, k)):   # (v92) its gun must bear on us
 					enemy_charge[k] = 0.0
-					_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE)
+					_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE, 0, k)
 		if engaged() and server.tick >= _mend_next:
 			_mend_tick()
 	server.fleet.use(0)
@@ -980,14 +981,25 @@ func fire(p, which: int) -> void:
 	server.wing.use(0)
 
 
-func _fire(p, which: int) -> void:
+func fire_mount(p, i: int) -> void:
+	## (v92) Gun i fired from its own mount: by the player who took its controls, or by a bot gunner there.
+	server.wing.use(foe if server.wing.here else 0)
+	_fire(p, i, true)
+	server.wing.use(0)
+
+
+func _fire(p, which: int, at_mount: bool = false) -> void:
 	var map = server.map
 	var ship = server.ship
-	if not server.systems.at_console(p, map.gun_console):
+	if not at_mount and not server.systems.at_console(p, map.gun_console):
 		return
 	if not engaged():
-		server.chat.say("Стрелять не по кому: целей нет.")
+		if not at_mount:
+			server.chat.say("Стрелять не по кому: целей нет.")
 		return
+	var arena = server.arena
+	var space: bool = arena.on()
+	var wide := 0                        # (v92) guns that would fire but do not bear on the target
 	var fired := 0
 	var focus := _focus(which)
 	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS) * server.stations.share(p)   # (v60) the one at the console aims better with skill (v70: a bot, half)
@@ -998,6 +1010,11 @@ func _fire(p, which: int) -> void:
 		var w: int = ship.mounts[i]
 		var fx: int = ship.mount_fx[i]
 		var ammo := Weapons.ammo(w)
+		if space and not at_mount and arena.manned_by_hand(server.fleet.on, i):
+			continue                         # (v92) a player aims that one himself
+		if space and not (arena.reaches(server.fleet.on, i, server.wing.on) if _instant(w) else arena.bears(server.fleet.on, i)):
+			wide += 1                        # (v92) the target is outside its arc (or out of a beam's reach)
+			continue
 		if not server.mounts.take_round(i):        # (v68) a round loaded by hand first, then the locker
 			server.chat.tell(p, "Орудие %d: нет %s в трюме (%s)." % [i + 1, "снарядов" if ammo == Net.ITEM_SHELL else "ракет",
 				Weapons.lower_name(w, fx)])
@@ -1023,6 +1040,8 @@ func _fire(p, which: int) -> void:
 		if not engaged() or _settle():
 			break
 	_aim_bonus = 0.0
+	if wide > 0 and fired == 0 and not at_mount and not p.bot:
+		server.chat.tell(p, "Цель вне сектора обстрела: орудия стреляют только в свою сторону. Пилоту нужно развернуть корабль бортом.")
 	if fired > 0:
 		p.train(Net.SKILL_GUNS)
 		if ransom > 0 and engaged():
@@ -1108,6 +1127,8 @@ func _tractor(i: int, w: int) -> void:
 		server.chat.say_bridge("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
 		return
 	_draw_beam(cell, Net.SHOT_TRACTOR, Net.LANDED, -1, w)
+	if server.arena.on():
+		server.arena.draw_beam(server.fleet.on, i, server.wing.on, -1, Net.SHOT_TRACTOR, false)
 	var hold := float(Weapons.info(w)["hold"]) if Weapons.info(w).has("hold") else Weapons.TRACTOR_HOLD
 	held_until = maxi(held_until, server.tick + roundi(hold * Net.TICK_HZ))
 	server.chat.say_bridge("Орудие %d (захватный луч): пиратский корабль схвачен на %d с: не уклоняется, не уходит прыжком и не подходит к шлюзу.%s" % [
@@ -1118,6 +1139,12 @@ const HOW_PLAIN := 0                 # (v58) what became of one of our shots on 
 const HOW_DOWN := 1                  # shot down by its point defence
 const HOW_RICOCHET := 2              # turned aside by its armour
 const HOW_SOFT := 3                  # a kinetic shell that went through its shield, one damage the less
+
+
+static func _instant(w: int) -> bool:
+	## (v92) Does that gun reach at once (a beam, a tractor, a siphon, a bomb) rather than fire a shot that flies?
+	var k := Weapons.klass(w)
+	return k == Weapons.CLASS_BEAM or k == Weapons.CLASS_SIPHON or k == Weapons.CLASS_TRACTOR or Weapons.bomb(w)
 
 
 func _our_volley(i: int, w: int, fx: int = Weapons.FX_NONE, start: int = 0, focus: float = 0.0) -> void:
@@ -1137,6 +1164,13 @@ func _our_volley(i: int, w: int, fx: int = Weapons.FX_NONE, start: int = 0, focu
 		"hits": PackedStringArray(), "said": PackedStringArray(), "focus": focus > 0.0, "ship": server.fleet.on}
 	var shield := enemy_shield              # as the shield will be when each shot meets it
 	var pierce := (Weapons.FX_PIERCE_BY if fx == Weapons.FX_PIERCE else 0.0) + focus
+	if flies and server.arena.on():
+		# (v92) each shot flies in the fight's space and finds what it finds (see arena_hit)
+		var miss := 1.0 - _hit_chance(w)
+		for s in shots:
+			server.arena.fire_ours(server.fleet.on, i, w, server.wing.on, _aimed_room(), miss, start + s * Weapons.BURST_GAP_TICKS,
+				{"log": log, "pierce": pierce, "ship": server.fleet.on, "foe": server.wing.on})
+		return
 	for s in shots:
 		var delay := start + s * Weapons.BURST_GAP_TICKS
 		var hit := _rng.randf() < _hit_chance(w)
@@ -1396,7 +1430,16 @@ func _beam_pulse(i: int) -> void:
 	var room := _aimed_room()
 	if room < 0:
 		room = _beam_room[i]
-	var r := _land_on_enemy(w, system_in(room), room, server.ship.mount_fx[i])
+	var space: bool = server.arena.on()
+	var r := ""
+	if space and not server.arena.reaches(server.fleet.on, i, server.wing.on):
+		r = "-"                              # (v92) the target has left its arc or its reach: this second burns nothing
+	else:
+		r = _land_on_enemy(w, system_in(room), room, server.ship.mount_fx[i])
+		if space:
+			server.arena.draw_beam(server.fleet.on, i, server.wing.on, room, _shot_kind(w), r == "")
+	if r == "-":
+		r = ""
 	_draw_beam(cell, _shot_kind(w), 0 if r == "" else Net.LANDED, room, w)
 	var log: Array = _beam_log[i]
 	if r == "":
@@ -1426,6 +1469,8 @@ func _siphon_pulse(i: int) -> void:
 	var ship = server.ship
 	var cell: int = map.guns[i]
 	_draw_beam(cell, Net.SHOT_SIPHON, 0 if enemy_shield > 0.0 else Net.LANDED, -1, ship.mounts[i])
+	if server.arena.on():
+		server.arena.draw_beam(server.fleet.on, i, server.wing.on, -1, Net.SHOT_SIPHON, false)
 	var log: Array = _beam_log[i]
 	var take := minf(enemy_shield, Weapons.SIPHON_DRAIN)
 	enemy_shield -= take
@@ -2076,7 +2121,7 @@ func parting_volley() -> void:
 		server.chat.say("Уходя прыжком, корабль попал под прощальный залп пиратов (%d орудий)." % fired)
 
 
-func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
+func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0, k: int = 0) -> void:
 	## A shot (or burst) of one of the pirate ship's guns. It goes for our guns
 	## while one of them works (and all the more while it runs, to cover its
 	## escape); otherwise it holes the hull, as near the crew as it can, or now
@@ -2086,6 +2131,9 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 	## takes a point off a kinetic shell; a tier 3 gun's effect adds its own.
 	if Weapons.bomb(w):
 		_enemy_bomb(w, fx)
+		return
+	if flies and server.arena.on():
+		_enemy_fires_arena(w, fx, start, k)
 		return
 	var map = server.map
 	var ship = server.ship
@@ -2158,6 +2206,220 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0) -> void:
 		_after(delay + Weapons.flight_ticks(w), _their_shot_lands.bind(log, Net.LANDED, target, cell, spot, soft))
 	if fx == Weapons.FX_TWICE and start == 0 and _rng.randf() < Weapons.FX_TWICE_CHANCE:
 		_enemy_fires(w, fx, shots * Weapons.BURST_GAP_TICKS + 6)
+
+
+func _enemy_fires_arena(w: int, fx: int, start: int, k: int) -> void:
+	## (v92) Its gun fires in the fight's space: each shot is aimed at what it means to hit (a gun, a
+	## console, the shield generator, the hull near our people) and flies; how far off it goes depends
+	## on how good the gun and its crew are, and whether it hits depends on where our ship is by then.
+	reveal(room_of_system(Net.ESYS_WEAPONS), "Вспышки выстрелов выдали отсек пиратов")
+	var shots: int = Weapons.info(w)["shots"]
+	var chance: float = float(Weapons.info(w)["hit"]) if enemy_hit_chance < 0.0 else enemy_hit_chance
+	if enemy_hit_chance < 0.0:
+		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus(), 0.05, 0.95)
+		if down(Net.ESYS_HELM):
+			chance *= BLIND_ENEMY_HIT
+	var log := {"w": w, "fx": fx, "left": shots, "misses": 0, "stopped": 0, "down": 0, "ricochet": 0, "said": PackedStringArray()}
+	for s in shots:
+		var target := _enemy_target()
+		var cell := target
+		if Weapons.klass(w) == Weapons.CLASS_NEURAL:
+			target = -1
+			cell = _crew_cell()
+		elif target < 0:
+			cell = _hull_near_crew()
+		server.arena.fire_theirs(server.wing.on, k, w, cell, 1.0 - chance, start + s * Weapons.BURST_GAP_TICKS,
+			{"log": log, "target": target, "cell": cell, "ship": server.fleet.on, "fx": fx})
+	if fx == Weapons.FX_TWICE and start == 0 and _rng.randf() < Weapons.FX_TWICE_CHANCE:
+		_enemy_fires_arena(w, fx, shots * Weapons.BURST_GAP_TICKS + 6, k)
+
+
+# ---------------------------------------------------------------- (v92) shots in the fight's space (Arena)
+
+func arena_bubble(p: Dictionary, body_id: int, at: Vector2) -> bool:
+	## A shot meets the shield's bubble of the ship `body_id`: true if the shield stops it there.
+	var meta: Dictionary = p["meta"]
+	var w: int = p["w"]
+	var kinetic := Weapons.klass(w) == Weapons.CLASS_KINETIC and not Weapons.passes_shield(w)
+	var stop := false
+	var pierce := float(meta.get("pierce", 0.0)) + (Weapons.FX_PIERCE_BY if int(meta.get("fx", 0)) == Weapons.FX_PIERCE else 0.0)
+	if int(p["side"]) == 0:
+		server.fleet.use(int(meta["ship"]))
+		server.wing.use(body_id - server.arena.LEAD)
+		if kinetic:
+			meta["soft"] = true              # (v58) a shell through the shield: a point the less
+			stop = int(Weapons.info(w)["damage"]) <= Weapons.KINETIC_SHIELD
+		elif _meets_shield(w, false) and _rng.randf() >= Weapons.through_chance(enemy_shield - pierce):
+			stop = true
+		if stop:
+			var room := _fx_room()
+			server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), 0, room, 0, 1)
+			_our_shot_lands(meta["log"], true, room, true, _room_spot(room), HOW_SOFT if meta.has("soft") else HOW_PLAIN)
+		server.wing.use(0)
+		server.fleet.use(0)
+		return stop
+	server.fleet.use(body_id)
+	server.wing.use(int(p["foe"]))
+	if kinetic:
+		meta["soft"] = true
+		stop = int(Weapons.info(w)["damage"]) <= Weapons.KINETIC_SHIELD
+	elif _meets_shield(w, server.outfit.hardened()) and _rng.randf() >= Weapons.through_chance(server.ship.shield - pierce):
+		stop = true
+	if stop:
+		_their_shot_lands(meta["log"], 0, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], server.arena.bodies[body_id].local(at)))
+	server.wing.use(0)
+	server.fleet.use(0)
+	return stop
+
+
+func arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Array, at: Vector2) -> int:
+	## A shot strikes the hull of the ship `body_id` at that point (`cells`: the drawing's cells there,
+	## one per deck). What it does is what a hit did before v92, at the place it struck. Returns how it
+	## ended (Net.LANDED, RICOCHET) for the drawing.
+	var meta: Dictionary = p["meta"]
+	var w: int = p["w"]
+	var arena = server.arena
+	var kinetic := Weapons.klass(w) == Weapons.CLASS_KINETIC
+	if int(p["side"]) == 0:
+		server.fleet.use(int(meta["ship"]))
+		server.wing.use(body_id - arena.LEAD)
+		var lay = server.map.others[arena.bodies[body_id].layout]
+		var cell: int = cells[_rng.randi_range(0, cells.size() - 1)] if not cells.is_empty() else -1
+		var room := _room_by(lay, cell)
+		var how := HOW_PLAIN
+		if kinetic and _rng.randf() < enemy_armour:
+			how = HOW_RICOCHET
+		elif meta.has("soft"):
+			how = HOW_SOFT
+		var spot := Vector2(-1, -1)
+		if not _wing() and cell >= 0 and server.map.other_at != server.map.NO_OTHER:
+			var c: int = server.derelict._cell(server.map.other_at, cell)
+			spot = Vector2(c % server.map.width + 0.5, c / server.map.width + 0.5)
+		server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), Net.RICOCHET if how == HOW_RICOCHET else Net.LANDED, room, 0, 1)
+		_our_shot_lands(meta["log"], true, room, false, spot, how)
+		server.wing.use(0)
+		server.fleet.use(0)
+		return Net.RICOCHET if how == HOW_RICOCHET else Net.LANDED
+	server.fleet.use(body_id)
+	server.wing.use(int(p["foe"]))
+	var map = server.map
+	var b = arena.bodies[body_id]
+	var struck: int = cells[_rng.randi_range(0, cells.size() - 1)] if not cells.is_empty() else -1
+	var hull := _hull_nearest(struck) if struck >= 0 else _hull_near_crew()
+	if hull >= 0 and struck >= 0 and Vector2(hull % map.width, hull / map.width).distance_to(Vector2(struck % map.width, struck / map.width)) > 3.0:
+		hull = struck if map.hull.has(struck) else hull
+	var spot: Vector2 = arena._grid_spot(b, local)
+	if hull >= 0:
+		spot = Vector2(hull % map.width + 0.5, hull / map.width + 0.5)
+	var target: int = meta["target"]
+	if target >= 0 and b.shape.local_of(target).distance_to(local) > arena.HIT_NEAR:
+		target = -1                          # it struck elsewhere than it aimed
+	var how := Net.LANDED
+	var log: Dictionary = meta["log"]
+	if Weapons.klass(w) == Weapons.CLASS_NEURAL:
+		var person: int = meta["cell"]
+		if person < 0 or b.shape.local_of(person).distance_to(local) > arena.HIT_NEAR * 2.0:
+			person = _crew_near(struck)
+		_their_shot_lands(log, Net.LANDED, -1, person, spot)
+	elif kinetic and server.ship.armour > 0.0 and _rng.randf() < server.ship.armour:
+		how = Net.RICOCHET                   # (v59) our armour plating turns the shell aside
+		_their_shot_lands(log, Net.RICOCHET, -1, -1, spot)
+	else:
+		var cell := hull
+		if Weapons.info(w).has("disable"):
+			cell = target if target >= 0 and (map.guns.has(target) or target == shield_cell()) else _jam_choice()
+		elif target >= 0:
+			cell = target
+		if cell < 0:
+			_their_shot_lands(log, Net.MISSED, -1, -1, spot)
+		else:
+			_their_shot_lands(log, Net.LANDED, target, cell, spot, meta.has("soft"))
+	server.wing.use(0)
+	server.fleet.use(0)
+	return how
+
+
+func arena_miss(p: Dictionary, at: Vector2) -> void:
+	## A shot flew its whole way and found nothing (or its ship left the fight first).
+	var meta: Dictionary = p["meta"]
+	if int(p["side"]) == 0:
+		server.fleet.use(int(meta.get("ship", 0)))
+		server.wing.use(int(meta.get("foe", 0)))
+		_our_shot_lands(meta["log"], false, -1, false, Vector2(-1, -1))
+	else:
+		server.fleet.use(int(meta.get("ship", 0)))
+		server.wing.use(int(p.get("foe", 0)))
+		_their_shot_lands(meta["log"], Net.MISSED, -1, -1, Vector2.ZERO)
+	server.wing.use(0)
+	server.fleet.use(0)
+
+
+func arena_guard(p: Dictionary, body_id: int, at: Vector2) -> bool:
+	## A rocket (or a slow shell) comes within reach of the point defence of the ship `body_id`:
+	## true if it is shot down.
+	var meta: Dictionary = p["meta"]
+	var w: int = p["w"]
+	var down_now := false
+	if int(p["side"]) == 1:
+		server.fleet.use(body_id)
+		server.wing.use(int(p["foe"]))
+		if guard_ready():
+			guard_charge = 0.0
+			if server.map.guns.size() > 0:
+				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(server.map.guns[0] % server.map.width, server.map.guns[0] / server.map.width))
+			if _rng.randf() < Weapons.guard_chance(w):
+				down_now = true
+				_their_shot_lands(meta["log"], Net.SHOT_DOWN, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], Vector2.ZERO))
+	else:
+		server.fleet.use(int(meta["ship"]))
+		server.wing.use(body_id - server.arena.LEAD)
+		if enemy_guard and not down(Net.ESYS_WEAPONS) and server.tick >= _enemy_guard_ready:
+			_enemy_guard_ready = server.tick + Weapons.charge_ticks(Weapons.GUARD)
+			if _rng.randf() < Weapons.guard_chance(w):
+				down_now = true
+				_our_shot_lands(meta["log"], false, -1, false, _room_spot(_fx_room()), HOW_DOWN)
+	server.wing.use(0)
+	server.fleet.use(0)
+	return down_now
+
+
+static func _room_by(lay: RefCounted, cell: int) -> int:
+	## The room of a pirate's drawing a hit at that cell of it falls in: its own, or (a wall) the nearest one beside.
+	if cell < 0:
+		return -1
+	if lay.room_of[cell] >= 0:
+		return lay.room_of[cell]
+	var x: int = cell % lay.width
+	var y: int = cell / lay.width
+	for r in range(1, 4):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				var nx := x + dx
+				var ny := y + dy
+				if nx < 0 or ny < 0 or nx >= lay.width or ny >= lay.height:
+					continue
+				var c: int = ny * lay.width + nx
+				if lay.room_of[c] >= 0:
+					return lay.room_of[c]
+	return -1
+
+
+func _crew_near(cell: int) -> int:
+	## (v92) The cell of one of our people nearest that cell (a neural shot that struck off its mark): -1, none aboard.
+	var map = server.map
+	var best := -1
+	var best_d := INF
+	for p in server.players:
+		if p == null or p.pirate or p.ally or p.corpse or p.cond == Net.COND_DEAD:
+			continue
+		var at: int = p.st.y * map.width + p.st.x
+		if not map.on_ship(at):
+			continue
+		var d := Vector2(p.st.x, p.st.y).distance_to(Vector2(cell % map.width, cell / map.width)) if cell >= 0 else 0.0
+		if d < best_d:
+			best_d = d
+			best = at
+	return best
 
 
 func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot: Vector2, soft: bool = false) -> void:

@@ -1888,3 +1888,33 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   cell under it (`air_down`). Our ship02 got one flight next to the stern ladder (the ladder stays: tests know it).
 - **Not in v91**: his brown and red lockers (M6 C: only looks) need a sign for a decor locker (and, by his card pick, may
   be walked through).
+
+## v92: the fight in real time (the author's roadmap, item 0)
+
+- **Two layers** (my pick R2 A on `https://claude.ai/artifact/V1AEJgkFnsjG9b8vk4DAmj`, answers pending): inside, the
+  ship stays the grid it always was and never turns; outside, `Arena` keeps each ship as a body built from its
+  drawing (`ArenaShape`, every deck laid over the others). Turning the grid itself would have broken walking,
+  prediction, sight, air and every test; this way the inside knows nothing of the fight's space. A hit point on a
+  body maps back to the drawing's cells there, one deck picked by lot (G2 A).
+- **Replace the old fight at once, keep everything inside it** (R1 A): the gun console, power panel, crew posts,
+  dodge, battle position, shields and ammo all stay. The old hit chance now sets how far off a bot or a pirate
+  aims (`BOT_SPREAD`, doubled at `FAR_SPREAD`), so every bonus that changed hit chances still counts.
+  `Gunnery.flies == false` (tests, the parting volley) still rolls the old dice; tests that are about the old
+  fight set `server.arena.enabled = false` (guntest, derelicttest).
+- **Heavy, slow ships** (R5 A): top speeds 4.5..9 cells/s, turn rates 0.22..0.6 rad/s, dampers lose 25% a second:
+  a fight of positioning, not of dogfighting. Our ship 6 / 1.6 / 0.35, a middle raider-gunship.
+- **WASD at the controls** (P1 A, P5 A), Q/E sideways, Space the old evade as a push. E does not close the controls in
+  a fight (it slides); Esc does. Nobody steering (P2 A): the ship drifts (no autopilot for players' ships), but a bot at
+  the controls flies the battle position, so a crew of bots still fights as before.
+- **Guns as 180° turrets** at their mounts (G1 A): `ArenaShape.outward` takes the side of the mount with the fewest
+  solid cells as "out". A gun fires only inside its arc, which is what makes the pilot matter.
+- **Aiming by hand at the mount** (G3 A): "use" at a mount with anything but a gun or its round in hand. Mounts.can
+  refuses to take a gun down in a fight then (taking a gun down mid-fight was the old empty-hand use).
+- **Shot speeds** are slow enough to dodge at range (lasers 45 cells/s: 1.5 s at 70 cells), railgun fast (110).
+- **Shields as bubbles** 1.6 cells off the hull (D3 A); point defence meets rockets 16 cells out.
+- **Docking clock waits while far** (B1 A): otherwise a boarding ship docks from 70 cells away.
+- **Leaving past the edge** (P3 A) replaces jumping away as the only way out of a fight in space: 170 cells, no
+  pirate within 60, for 3 s. The escape rule holds: the controls still jump as before.
+- **Collisions** (P4 A) hurt a little (1 hull) and push apart; ramming as a weapon waits for the boarding pods (v94).
+- Known gap: walking out in a suit to a far ship is still possible, because the grid placement of the ship
+  alongside is unchanged; v94 (docking and pods) settles crossing.

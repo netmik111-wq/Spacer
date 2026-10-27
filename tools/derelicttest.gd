@@ -28,6 +28,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.arena.enabled = false            # (v92) the fight as it was before it flew in space (arenatest has that)
 	var map := server.map
 	var d: Derelict = server.derelict
 	_expect(d.possible(), "the ship has room for a derelict over its airlock")

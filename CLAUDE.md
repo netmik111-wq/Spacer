@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v91 (version 0.84: machines stand on the floor, door kinds and lamps, window shutters, wall boxes) is the latest. Plans one to four are done except the darkness front (the
+Build v92 (version 0.85: the fight in real time, ships flying in space) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -126,6 +126,11 @@ tall machines block sight (`ShipMap.tall`), stairs between decks (`/`, his F3); 
 (opening)/red (blocked for you), floor lamps, danger line; outer/inner panes and window shutters (red alert, broken
 window after 1 s); first-aid and spare parts boxes (the locker's stock), fire box, wall light; his ship icons on the chart. Left for
 his answers: decor lockers (M6: walk-through, by his card), v1 shutter stages.
+v92 (his roadmap, plan `/mnt/project-files/plans/roadmap-v92.md`, questions `https://claude.ai/artifact/V1AEJgkFnsjG9b8vk4DAmj`,
+built on my picks while his answers are pending): item 0, the fight in real time: ships as bodies in space (`Arena`, `ArenaShape`),
+the pilot steers with WASD/QE at the controls, guns are 180° turrets fired from the console, by bots or by hand at the mount, shots
+fly and strike the cell they meet, shields are bubbles, the docking clock waits while far, leaving past the edge. Next on his
+roadmap: v93 armour and ricochet, v94 docking and boarding pods, then places, arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -156,7 +161,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 45 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 46 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -202,6 +207,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/wingtest.gd (since v86: the fleet notes' fixes, the pirates' wingman)
     godot --headless --path . --script res://tools/shuttletest.gd (since v86: hangars, the force field, boarding, flying, calling the shuttle)
     godot --headless --path . --script res://tools/windowtest.gd (since v91: machines on the floor, window shutters, wall boxes, stairs)
+    godot --headless --path . --script res://tools/arenatest.gd (since v92: shapes, the pilot, drift, arcs, shots flying and striking, shield, hand aim, bumps, the edge, docking)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -226,7 +232,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 45 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 46 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -260,7 +266,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap;
   since v71 `galley`: the stove, its dishes and their effects; since v79 `defence`: bots against armed boarders; since v85
   `fleet`: our ships, and which one's state is in place; since v86 `wing`: a second pirate ship fighting from afar,
-  `shuttle`: the fleet's shuttle between the hangars).
+  `shuttle`: the fleet's shuttle between the hangars; since v92 `arena`: the fight in real time, ships as bodies in space).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -299,7 +305,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
-  world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `sounds.gd` (any
+  world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `arena_seen.gd` (v92: the fight in space as the client knows it), `sounds.gd` (any
   sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet; since v87 built from `body.png`, v88 the suits from `suit_man.png`/`suit_woman.png`), `sprites.gd` (v74: pictures
   replaced from `sprites/` next to the game; every sheet and item picture loads through it).
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
@@ -310,7 +316,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `first_shift.gd` (v74, H and the first-shift checklist).
   (v81) `ship_editor.gd` (the ship editor) with `src/ui/editor/`: `drawing.gd` (the model, tools, undo, text), `canvas.gd`
   (drawing and the mouse), `checks.gd` (the problems panel).
-  (v84) `ship_preview.gd`, the main menu's small picture of a ship. (v86) `shuttle_view.gd`, the shuttle's console.
+  (v84) `ship_preview.gd`, the main menu's small picture of a ship. (v86) `shuttle_view.gd`, the shuttle's console. (v92) `space_view.gd`, the fight in space.
   (v75) `src/client/music.gd` (one music player with a crossfade, menu and fight), `src/client/bug_report.gd` (the zip).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
@@ -558,6 +564,14 @@ The parameters for these checks are described in the header of `src/main.gd`.
   in `FLEET_FITS`. A save keeps `layout` (`map.crc`): a mismatch resets the cells' state (`Campaign.restore`). Protocol 65.
   Stairs (`/`) change a character's deck inside `Mover.step` (`ShipMap.stair_to`, when a step is over): anything that moves a
   character by hand onto a far end of a flight sends it on next tick. `Paths` maps a step onto a far end to its other deck.
+- (v92) The fight in space is `server.arena` (`Arena`): it runs only while `gunnery.flies` and a pirate fights (`_lead_fights`,
+  `_wing_fights`). Bodies 0 and 1 are our fleet's ships, `Arena.LEAD` (2) the ship alongside, `Arena.WING` (3) its wingman; a body's
+  shape is `ArenaShape` (shared with the client, `of_fleet`/`of_layout`). With the arena on, Gunnery's shots go through
+  `arena.fire_ours`/`fire_theirs` and come back as `arena_hit`/`arena_bubble`/`arena_guard`/`arena_miss`; `Gunnery.in_flight()` does
+  not count them (`arena.in_flight()` does). A gun fires only while `arena.bears` (beams: `reaches`). Tests about the old fight set
+  `server.arena.enabled = false`; `arena.hold_pirates` keeps pirates where a test puts them; `enemy_hit_chance` 1 aims true, 0
+  aims clear of the whole ship. `S_ARENA`, `S_ARENA_SHOT`, `C_PILOT`, `C_TURRET` are new (protocol 66); the client keeps it in
+  `GameClient.arena` (`ArenaSeen`) and draws it in `SpaceView`. Use target 49 is a gun mount taken by hand.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
