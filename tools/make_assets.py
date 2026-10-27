@@ -253,6 +253,11 @@ NEW_ART = {
     "wall_bl": "external_corner_l",
     "wall_br": "external_corner_r",
     "wall_tdown": "T-shaped_corner",
+    # (v90.1, his drawing of which pieces join) the wall above a crossing or a turned T ends in his
+    # vertical_wall_to_T-shaped_corner, whose foot opens into the band's top: under it the crossing is his
+    # T and the turned T is the plain horizontal wall
+    "wall_cross": "T-shaped_corner",
+    "wall_tup": "horizontal_wall",
     "wall_v": "vertical_wall",
     "wall_v_end": "vertical_wall_to_T-shaped_corner",
     "wall_v_end_l": "vertical_wall_to_internal_corner_r",
@@ -313,22 +318,11 @@ def art_transplant(old, old_wall, wall):
     return out
 
 
-# (v90.1) wall joints made from his T: the band piece below, and how many rows of the turned T go over it
-WALL_JOINS = {"wall_cross": ("T-shaped_corner", 16), "wall_tup": ("horizontal_wall", 20)}
-
-
 def art_tile(art, mock, images, name):
     """The picture for a tile of the sheet from the author's set, or None (drawn as before)."""
     floor = art["floor_m"]
     if name in NEW_ART:
         return art[NEW_ART[name]]
-    if name in WALL_JOINS:
-        # his set has the T only one way (a wall going down from the band): the ones going up are it
-        # turned over, its top rows over the band (rows 0..rows)
-        base, rows = WALL_JOINS[name]
-        im = art[base].copy()
-        im.paste(art["T-shaped_corner"].transpose(Image.FLIP_TOP_BOTTOM).crop((0, 0, 32, rows)), (0, 0))
-        return im
     if name == "door_half":
         return art_on(floor, art["Door_horizontal_base_open_stage_2"])
     if name == "door_open":

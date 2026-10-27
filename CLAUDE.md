@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v90.1 (version 0.83.1: the author's own tile set for walls, floors, doors, windows and machines; v90.1 joins walls meeting from above) is the latest. Plans one to four are done except the darkness front (the
+Build v90.2 (version 0.83.2: the author's own tile set for walls, floors, doors, windows and machines; v90.2 wall crossings as he drew them) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -119,7 +119,7 @@ suit, wrecks and bodies kept, bots climb ladders whatever is in front, «К ор
 hunters 1.25x fewer, click a system to jump, a drawn gun sight, sounds heard from the feet.
 v90 (his Aseprite tile set, `art_src/tileset/`; questions on `https://claude.ai/artifact/FkyjH7eBxzYEQhCXbPkNFG`): every wall,
 floor, window and door from his set, doors in four kinds with lamps and open stages, ten machines (wide over a row of signs, from
-behind when facing up); the rest of his set (stairs, holo table, soil, floor lamps, window stages, lockers, boxes) waits for his answers. v90.1 (his note): walls meeting from above are joined (`wall_tup`, the crossing from his T turned over).
+behind when facing up); the rest of his set (stairs, holo table, soil, floor lamps, window stages, lockers, boxes) waits for his answers. v90.1/v90.2 (his notes): wall crossings are his T under `vertical_wall_to_T-shaped_corner`; a wall from above only meets the plain band (`wall_tup`).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
