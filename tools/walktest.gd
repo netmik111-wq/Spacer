@@ -123,6 +123,8 @@ func _corners() -> void:
 			for d in range(Net.DIR_UP_LEFT, Net.DIRS + 1):
 				var dx: int = Net.DX[d]
 				var dy: int = Net.DY[d]
+				if map.stair_to[y * map.width + x] >= 0 or map.stair_to[(y + dy) * map.width + x + dx] >= 0:
+					continue                 # (v91) a step onto the stairs' far end comes out on the other deck
 				var st := Mover.State.new()
 				st.place(x, y)
 				st.dir = d

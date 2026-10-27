@@ -103,6 +103,10 @@ var air_down := PackedInt32Array()   # per cell: the cell below that shares its 
                                      # a hatch), or -1
 var air_up := PackedInt32Array()     # the same, the other way
 var climb := PackedInt32Array()      # per cell: where the ladder here leads (a cell on another deck), or -1
+var stair_to := PackedInt32Array()   # (v91, the author's F3) per cell: where stepping onto it takes one (the same
+                                     # spot of the deck above or below: see _find_stairs), or -1
+var flights: Array = []              # (v91) each flight of stairs on one deck: {"cells": [top, bottom] on the way down,
+                                     # "way": the way down (Vector2i), "down": true on the upper deck (his dark stairs)}
 
 # Another ship alongside (a derelict). Its drawing lives in its own map file
 # and is laid into this grid while it is near, at some place over our own
@@ -133,9 +137,14 @@ var tile_ids := {}                   # tile name -> id
 var tile_names := PackedStringArray() # (v91) tile id -> name
 var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wall, used from the room it faces
 var on_floor := {}                   # (v91, the author) cell -> the floor's tile under a machine standing on the floor:
-                                     # nobody walks there, but one sees over it
+                                     # nobody walks there, but one sees over it (unless it is `tall`)
+var tall := {}                       # (v91, the author's G1: "vision is blocked if it's tall") such cells of the machines
+                                     # in TALL: they stop sight and light as a wall does
 var root := PackedInt32Array()       # (v91) per cell: the cell that stands for the machine it is a piece of (see MACHINE_WIDE)
 var pieces := {}                     # (v91) such a cell -> every cell of its machine, for a machine of more than one
+# (v91, the author's G1) the machines on the floor one cannot see over; the rest (consoles, the workbench, the
+# stove, trays, the autodoc...) are low, and sight passes over them
+const TALL := ["engine", "air_plant", "locker", "shield", "bay", "smes", "smes_small", "cryo"]
 # (v90, the author's tile set) how many tiles wide a machine's picture is: a row of as many of one machine
 # ("33" for the helm, "444" for the gun console) is one machine drawn wide, used from any of its cells.
 # (v91) The star chart's big holo table is two by two ("11" over "11").
@@ -379,10 +388,14 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		opaque[i] = 1 if id >= 0 and not ok and not windows.has(id) else 0
 		h = (h * 31 + id + 2) & 0x7FFFFFFF
 	on_floor = {}
+	tall = {}
 	for t: Array in data.get("things", []):
 		var at := int(t[1]) * width + int(t[0])
 		on_floor[at] = int(t[2])
 		opaque[at] = 0
+		if cells[at] >= 0 and TALL.has(tile_names[cells[at]].trim_prefix("pirate_")):
+			tall[at] = true
+			opaque[at] = 1
 		h = (h * 31 + at + 3) & 0x7FFFFFFF
 	spawns = []
 	for s: Array in data["spawns"]:
@@ -570,6 +583,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			if climb[under] < 0:
 				climb[under] = i             # (a shaft through three decks would need a choice of direction)
 
+	var stairs_problem := _find_stairs(name)
+	if stairs_problem != "":
+		return stairs_problem
+
 	hull = PackedInt32Array()
 	for y in height:
 		for x in width:
@@ -591,6 +608,68 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	return ""
 
 
+func _stair(c: int) -> bool:
+	return c >= 0 and c < cells.size() and cells[c] >= 0 and tile_names[cells[c]].trim_prefix("pirate_") == "stairs"
+
+
+func _find_stairs(name: String) -> String:
+	## (v91, the author's F3: "dark stairs go down, white go up") A flight of stairs is two cells of '/' in a row on
+	## one deck and the same two on the deck below. Going down, one walks onto the upper flight from its open end
+	## and, stepping onto its other end (over the stairwell), comes out on the lower deck at the cell under it,
+	## walking on into the room there; going up the other way round. The upper flight ends at a wall, the lower
+	## one at the room's floor, so `stair_to` holds the two cells where one changes decks.
+	stair_to = PackedInt32Array()
+	stair_to.resize(width * height)
+	stair_to.fill(-1)
+	flights = []
+	var done := {}
+	var down := deck_stride * width
+	for i in cells.size():
+		if not _stair(i) or done.has(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var along := Vector2i(1, 0) if x + 1 < width and _stair(i + 1) else Vector2i(0, 1)
+		var step := along.y * width + along.x
+		var j := i + step
+		if not _stair(j) or deck_of(j / width) != deck_of(y) or _stair(j + step):
+			return "Карта «%s»: лестница в %d,%d должна быть длиной в две клетки." % [name, x, y]
+		done[i] = true
+		done[j] = true
+		if _stair(i - down) and _stair(j - down):
+			continue                         # the lower flight of a pair, met with the upper one
+		if not (_stair(i + down) and _stair(j + down)):
+			return "Карта «%s»: лестнице в %d,%d нужна такая же на палубе ниже." % [name, x, y]
+		done[i + down] = true
+		done[j + down] = true
+		# below, the flight comes out into the room at one end and has a wall behind the other
+		var top := -1
+		var bottom := -1
+		var way := along
+		var lj := j + down
+		var li := i + down
+		if walkable(lj % width + along.x, lj / width + along.y) and not _stair(lj + step):
+			top = li
+			bottom = lj
+		elif walkable(li % width - along.x, li / width - along.y) and not _stair(li - step):
+			top = lj
+			bottom = li
+			way = -along
+		if top < 0 or walkable(top % width - way.x, top / width - way.y):
+			return "Карта «%s»: лестница в %d,%d должна выходить в отсек на палубе ниже одним концом, а другим упираться в стену." % [name, x, y]
+		var over := bottom - down
+		if walkable(over % width + way.x, over / width + way.y):
+			return "Карта «%s»: лестница в %d,%d наверху должна упираться в стену." % [name, x, y]
+		stair_to[over] = bottom
+		stair_to[top] = top - down
+		if air_down[over] < 0:
+			air_down[over] = bottom
+			air_up[bottom] = over
+		flights.append({"cells": PackedInt32Array([top - down, over]), "way": way, "down": true})
+		flights.append({"cells": PackedInt32Array([top, bottom]), "way": way, "down": false})
+	return ""
+
+
 func _place_vents() -> void:
 	## (v69, the author's idea) A vent in every room but an airlock's chamber: on the
 	## floor cell nearest the room's middle that is no ladder, hatch or catwalk.
@@ -609,7 +688,7 @@ func _place_vents() -> void:
 		var best := -1
 		var best_d := INF
 		for c in room:
-			if climb[c] >= 0 or see_through[c] == 1:
+			if climb[c] >= 0 or see_through[c] == 1 or _stair(c):
 				continue
 			var d := Vector2(c % width, c / width).distance_squared_to(mid)
 			if d < best_d - 0.001:
@@ -899,6 +978,7 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 		opaque[c] = base_opaque[c]
 		door_of[c] = -1
 		on_floor.erase(c)
+		tall.erase(c)
 		root[c] = c
 		pieces.erase(c)
 	other_cells = PackedInt32Array()
@@ -925,6 +1005,8 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 				opaque[c] = o.opaque[from]
 				if o.on_floor.has(from):
 					on_floor[c] = o.on_floor[from]
+				if o.tall.has(from):
+					tall[c] = true
 				var r: int = o.root[from]
 				root[c] = (at.y + r / o.width) * width + at.x + r % o.width
 				if o.pieces.has(from):
@@ -1084,6 +1166,14 @@ func fitting_front(cell: int) -> int:
 		if walkable(x + v.x, y + v.y):
 			return (y + v.y) * width + x + v.x
 	return -1
+
+
+func behind(cell: int) -> int:
+	## (v91) The wall cell a machine standing on the floor has its back to; -1 = none.
+	var front := fitting_front(cell)
+	if not on_floor.has(cell) or front < 0:
+		return -1
+	return cell - (front - cell)
 
 
 func _wall(x: int, y: int) -> bool:

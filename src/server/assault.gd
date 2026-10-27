@@ -171,7 +171,7 @@ func landing_cells(n: int = TELEPORT_PARTY) -> PackedInt32Array:
 		var room: int = rooms.pop_at(_rng.randi_range(0, rooms.size() - 1))
 		var free := PackedInt32Array()
 		for c: int in map.rooms[room]:
-			if map.door_of[c] < 0 and map.climb[c] < 0 and not _someone_at(c):
+			if map.door_of[c] < 0 and map.climb[c] < 0 and map.stair_to[c] < 0 and not _someone_at(c):
 				free.append(c)
 		if not free.is_empty():
 			out.append(free[_rng.randi_range(0, free.size() - 1)])

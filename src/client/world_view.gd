@@ -1181,41 +1181,40 @@ func _door_types() -> void:
 
 
 func _door_look(d: int, frame: int) -> String:
-	## (v90) The tile a door is drawn in: shut with its lamp (green: opens; yellow: only for some jobs;
-	## red: welded, locked against boarders, its shutter down or (v91) held by its airlock's other door),
-	## or opening, frame 1.. of its stages.
+	## (v90) The tile a door is drawn in: shut with its lamp, or opening, frame 1.. of its stages (his open
+	## frames have the lamp yellow). (v91, the author's D2b: "green is open, yellow is like the open-up
+	## animation, red is blocked closed") green: it opens for us; red: it does not (see _blocked).
 	var map := client.map
-	var doors := client.doors
 	var o := "h" if map.door_kind[d] == ShipMap.DOOR_BAND else "v"
 	var t := _door_type[d] if d < _door_type.size() else "base"
 	var head := "%sdoor_%s_%s_" % [map.door_tint(d), t, o]
 	if frame > 0:
 		return head + "open%d" % frame
-	var lit := "green"
-	if doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1 or doors.held_by_partner(d):
-		lit = "red"
-	elif map.door_access[d] != 0 and doors.picked[d] == 0:
-		lit = "yellow"
-	# (v91, the author's D2) a locked door's lamp blinks, once a second
-	if lit != "green" and (Time.get_ticks_msec() / 500) % 2 == 1 and map.tile_ids.has(head + "off"):
-		return head + "off"
-	return head + lit
+	return head + ("red" if _blocked(d) else "green")
+
+
+func _blocked(d: int) -> bool:
+	## (v91) A shut door that will not open for us now: welded, locked against boarders, blast-locked, held by
+	## its airlock's other door, or of a room our job may not enter.
+	var doors := client.doors
+	return doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1 or doors.held_by_partner(d) \
+		or doors.barred(d, client.map.door_access[d], client.pred.access)
 
 
 func _lamp_of(d: int) -> String:
-	## (v91, the author's F2) The colour of the lamps on the floor by a door that may not open: green it
-	## opens, yellow only for some jobs, red for nobody now (welded, blast-locked, its shutter down or the
-	## airlock's other door open), orange broken (stuck open, or no power). "" = no lamps by this door.
+	## (v91, the author's F2 and D2b) The colour of the lamps on the floor by a door that may not open, as
+	## its own lamp: green it opens for us, yellow it is open or on the way, red it will not open for us
+	## now; orange broken (stuck, or no power). "" = no lamps by this door.
 	var map := client.map
 	var doors := client.doors
 	if not map.door_here(d) or (map.door_access[d] == 0 and map.door_partner[d] < 0):
 		return ""
 	if doors.jammed[d] == 1 or doors.dead[d] == 1 or doors.manual:
 		return "orange"
-	if doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1 or doors.held_by_partner(d):
-		return "red"
-	if map.door_access[d] != 0 and doors.picked[d] == 0:
+	if client.door_open_amount(d) > 0.0:
 		return "yellow"
+	if _blocked(d):
+		return "red"
 	return "green"
 
 
@@ -1269,6 +1268,32 @@ func _lay_marks() -> void:
 		for c: int in map.vents:
 			_decks[map.deck_of_cell(c)].marks.set_cell(Vector2i(c % map.width, map.local_y(c / map.width)), _source_id,
 				Vector2i(vent % map.atlas_columns, vent / map.atlas_columns))
+	# (v91, the author's F3) his stairs over each flight: dark going down, white going up, drawn down to the
+	# right or downwards and turned the other way by flipping (make_assets.py STAIRS)
+	for f: Dictionary in map.flights:
+		var two: PackedInt32Array = f["cells"]
+		var way: Vector2i = f["way"]
+		var head := "%sstairs_%s_%s_" % ["pirate_" if map.tile_names[map.cells[two[0]]].begins_with("pirate_") else "",
+			"dn" if f["down"] else "up", "h" if way.y == 0 else "v"]
+		if not map.tile_ids.has(head + "0"):
+			continue
+		var first := mini(two[0], two[1])
+		var at := Vector2i(first % map.width, map.local_y(first / map.width))
+		var layer: TileMapLayer = _decks[map.deck_of_cell(first)].marks
+		var spots: Array = [[0, Vector2i(0, -1)], [1, Vector2i(1, -1)], [2, Vector2i(0, 0)], [3, Vector2i(1, 0)]] if way.y == 0 \
+			else [[0, Vector2i(0, 0)], [1, Vector2i(0, 1)]]
+		for spot: Array in spots:
+			var piece: int = spot[0]
+			var to: Vector2i = spot[1]
+			var turn := 0
+			if way.x < 0:
+				to.x = 1 - to.x
+				turn = TileSetAtlasSource.TRANSFORM_FLIP_H
+			elif way.y < 0:
+				to.y = 1 - to.y
+				turn = TileSetAtlasSource.TRANSFORM_FLIP_V
+			var id: int = map.tile_ids[head + str(piece)]
+			layer.set_cell(at + to, _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns), turn)
 	for d in map.doors.size():
 		if not map.door_here(d) or map.door_vent[d] != 1:
 			continue
@@ -1882,6 +1907,12 @@ func _draw_look() -> void:
 			if faces and seen.has(n):
 				walls_seen.append(c)
 				break
+	# (v91) a tall machine seen: the wall it stands against shows above it, as the rest of the wall does
+	for c: Vector2i in walls_seen.duplicate():
+		var cell := (c.y + dy) * map.width + c.x
+		var back := map.behind(cell) if map.tall.has(cell) else -1
+		if back >= 0 and not walls_seen.has(Vector2i(back % map.width, back / map.width - dy)):
+			walls_seen.append(Vector2i(back % map.width, back / map.width - dy))
 	for c: Vector2i in seen:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
 	for c: Vector2i in walls_seen:

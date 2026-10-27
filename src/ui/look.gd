@@ -82,6 +82,10 @@ static func name_at(client: GameClient, cell: int, seen: bool) -> String:
 			lines.append("На полу: " + ", ".join(names))
 	if map.climb[cell] >= 0 and lines.is_empty():
 		lines.append("Лестница")
+	if lines.is_empty():
+		for f: Dictionary in map.flights:         # (v91, the author's F3)
+			if (f["cells"] as PackedInt32Array).has(cell):
+				lines.append("Ступени вниз" if f["down"] else "Ступени вверх")
 	if map.is_brig(cell) and door < 0:
 		lines.append("Камера гауптвахты: здесь пленный не освободится")   # (v75, the author's P1)
 	return "\n".join(lines)

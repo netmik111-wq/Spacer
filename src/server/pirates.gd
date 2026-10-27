@@ -169,7 +169,8 @@ func cut_in() -> Vector2i:
 		var x: int = cell % map.width
 		var y: int = cell / map.width
 		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0:
+			# ((v91) never onto the stairs' far end: one standing there is on the other deck at once)
+			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0 and map.stair_to[(y + d.y) * map.width + x + d.x] < 0:
 				ways.append([cell, Vector2i(x + d.x, y + d.y)])
 				break
 	if ways.is_empty():

@@ -14,7 +14,7 @@ extends RefCounted
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
 const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFVEJNL"
-const FLOOR_CHARS := ".sgcH"
+const FLOOR_CHARS := ".sgcH/"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
 const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
@@ -514,6 +514,10 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 					cover = "hatch" if down else "ladder"
 				if cover != "":
 					piece = cover + piece.substr(5)
+				if c == "/":
+					if _at(below, x, y, w, h) != "/" and _at(above, x, y, w, h) != "/":
+						problems.append(_problem(deck, x, y, "Ступеням нужна «/» в той же клетке палубы выше или ниже."))
+					piece = "stairs"
 				if thing:
 					var reach := false
 					for v: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:

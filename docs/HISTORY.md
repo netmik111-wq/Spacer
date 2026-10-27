@@ -199,10 +199,14 @@ Open problems:
 
 ### v91 (his v90 answers and two pictures; plan on "Spacer v91 Plan")
 
-- Machines stand on the floor in front of the walls, used from their front, seen over (his M1, M3; my G1-G4 picks). Our ship
+- Machines stand on the floor in front of the walls, used from their front (his M1, M3, G1-G4); tall ones (lockers, SMES,
+  engine, air plant...) block sight, low ones are seen over, none is walked through (his card pick). Our ship
   redrawn with 3-tall rooms, a big bridge and the holo table in its middle; old drawings move their machines out of the walls
   when loaded; a save of a redrawn ship starts its cells over.
-- Doors: kinds from the drawing (`&` lines, the editor), blinking locked lamps, lamps on the floor by lockable doors, the danger
+- Stairs between decks (his F3): walk over a flight to change decks, dark going down, white going up; bots use them; one
+  flight on our ship by the stern ladder.
+- Doors: kinds from the drawing (`&` lines, the editor), lamps green (opens for you), yellow (opening), red (blocked for you),
+  lamps on the floor by lockable doors, the danger
   line in airlocks, vents in his picture. Windows: outer and inner panes, upright windows, shutters at red alert and over a
   broken window (1 s, the room keeps its air). Boxes on the walls (first aid and spare parts from the locker's stock, fire box,
   light), the pump as his button, his ship icons on the chart.

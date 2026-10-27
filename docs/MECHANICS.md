@@ -2395,7 +2395,11 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
 - **Every machine stands on a floor cell in front of a wall**, not in the wall: consoles, the supply locker, both SMES,
   the engine, the air plant, the workbench, the module bay, the autodoc, the body scanner, the comms console, trays,
   cryopods, the stove, the holomap, the shield generator. The wall behind it is a plain wall.
-- **Nobody walks through a machine; sight passes over it** (it is low, like a table); air goes round it.
+- **Nobody walks through a machine** (his pick on the card: machines solid, small decor walk-through when it comes);
+  air goes round it. **Sight passes over the low ones** (consoles, the holomap and holo table, the workbench, the autodoc,
+  the body scanner, trays, the stove) and **is stopped by the tall ones** (his G1 note: "vision is blocked if it's tall"):
+  the supply locker, both SMES, the engine, the air plant, the module bay, the shield generator, cryopods. They cast
+  shadows too; the wall behind a tall machine still shows when the machine is seen.
 - **It is used from its front**: the floor cell its face looks at (away from the wall at its back). From behind or from
   the side it does nothing. A machine by a side wall is drawn from the side (his "_r"/"_l" pictures), one with its back to
   the bottom wall from behind (his "_up" pictures).
@@ -2416,11 +2420,12 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
 
 - **A door's kind** (plain, technical, cargo, hermetic) is still chosen from the map, and a drawing may now give any door
   another kind: a line `& deck x y base|tech|cargo|herm`, or in the editor the mark tool on a door (a menu of the kinds).
-- **A locked door's lamp blinks** once a second: yellow (only some jobs open it) and red (it opens for nobody now). Red now
-  also shows when the other door of its airlock is open (it will not open until that one shuts).
-- **Lamps on the floor** on both sides of every door that can lock (a job's door, an airlock's doors): green, it opens;
-  yellow, only for some jobs; red, for nobody now (welded, locked against boarders, its emergency shutter down, or the
-  airlock's other door open); orange, broken (stuck open, or no power).
+- **A door's lamp** (his D2b: "green is open, yellow is the open-up animation, red is blocked closed"): **green**, it
+  opens for you; **yellow** while it opens and stands open (his open pictures); **red**, it will not open for you now:
+  welded, locked against boarders, blast-locked, held shut while the other door of its airlock is open, or a room your job
+  may not enter. No blinking. A welded door keeps its seam (his own picture for sealed doors may come later).
+- **Lamps on the floor** on both sides of every door that can lock (a job's door, an airlock's doors), turned toward it,
+  show the same: green, yellow (open or opening), red; and orange, broken (stuck open, or no power).
 - **The danger line**: his yellow and black line on the floor just inside an airlock's outer door.
 - **Room vents** are drawn with his picture.
 
@@ -2453,3 +2458,14 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
   claw ship (red), a wreck or a derelict his small broken one (grey); a trader his freighter (yellow); a hunter on the
   cluster chart his small fast ship (red).
 
+### Stairs (his F3: "dark stairs go down, white go up")
+
+- **A flight of stairs** joins two decks: two cells in a row on the upper deck (his dark stairs) over the same two on the
+  deck below (his white ones). **Walk over it** and you come out on the other deck: no key, hands free, as quick as
+  walking (a ladder takes a press of E). Going down, you step onto the flight from the room and, stepping onto its far end
+  (over the stairwell), come out at the bottom on the deck below and walk on into the room there; going up the other way.
+- Bots, pirates and robots take the stairs on their ways too. Whoever you haul comes along.
+- Air is shared between the decks through the stairwell.
+- **Our ship has one flight**, in the small room at the stern on the upper deck (by the ladder) down to the room by the
+  supply locker. In the ship editor it is the sign `/`, two in a row on a deck and the same two on the deck below: the upper
+  flight must end at a wall, the lower one must come out into a room at one end with a wall at the other.

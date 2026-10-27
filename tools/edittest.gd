@@ -80,7 +80,7 @@ func _tile_set() -> void:
 	for kind in ["base", "tech", "cargo", "herm"]:
 		for o: int in 2:
 			var head := "door_%s_%s_" % [kind, "hv"[o]]
-			for lamp in ["green", "yellow", "red", "off"]:      # (v91) "off": a locked door's lamp blinking
+			for lamp in ["green", "yellow", "red"]:
 				want.append(head + lamp)
 			for i in range(1, int(WorldView.DOOR_STAGES[o]) + 1):
 				want.append(head + "open%d" % i)

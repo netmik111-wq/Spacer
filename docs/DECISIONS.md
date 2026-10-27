@@ -1824,7 +1824,12 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
 
 - **Machines stand on the floor** (his M1 "machines become objects on the ground", M3 "not walls, on the ground", two pictures
   of a locker and the gun console before the bottom wall). A machine sign is a thing on a floor cell (`things` in the map's
-  JSON: cell and the floor under it; `ShipMap.on_floor`): `walk` 0, `opaque` 0 (G1 A: walked round, seen over, as in SS13).
+  JSON: cell and the floor under it; `ShipMap.on_floor`): `walk` 0, `opaque` 0 (G1: walked round, seen over, as in SS13).
+  His G1 note "if it's small like a cabinet you can move through it, but vision is blocked if it's tall": asked on a card,
+  he picked "machines solid, decor walk-through" (small decor such as his v2/v3 lockers, when it comes, may be walked
+  through). Tall machines (`ShipMap.TALL`: locker, both SMES, engine, air plant, module bay, shield, cryopod; by his
+  pictures and what they are) are `opaque` 1 (`ShipMap.tall`), so they stop sight and cast shadows; the wall at a tall
+  machine's back (`ShipMap.behind`) is told seen by the client when the machine is, or a dark patch would sit above it.
   Air does not stand in its cell (the air grid is walkable cells), so it goes round it; against a wall that changes nothing.
   The signs are `MapBuilder.MACHINE_SIGNS` (= `MACHINE_SIGNS` in `make_assets.py`); the oxygen station, the intercom, the pump,
   guns, the dock console and the boxes stay wall things. A run of machine signs between two wall pieces with nothing solid
@@ -1844,12 +1849,16 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   locker, people and bodies go to spawn places. Mine: cells of the old drawing may be walls or machines now.
 - **Door kinds from the drawing** (his D1, my D1b A): a `& deck x y kind` line or the editor's mark menu on a door; without
   one, v90's rule. The map JSON carries `door_looks`.
-- **Blinking** (his D2, my D2b A): yellow and red blink at 1 Hz; the dark frame (`door_*_off`) is the lit lamp's pixels at
-  about 30% (where his `lock_1` and `unlock` differ). Red now also when the airlock's other door holds it shut
-  (`Doors.held_by_partner`), as the floor lamps say.
-- **Floor lamps** (his F2, my F2b A) only by doors that can lock (job doors, airlock doors), on the floor cells either side,
-  turned toward the door (TileMap transform flags). They do not blink: two blinking lamps per door would make corridors busy.
-  Orange is "broken": stuck open, a dead ship's door, or no power. The lamp's bar is cut from his `floor_door_lamp_*` minus
+- **Door lamps** (his D2b note: "green is open, yellow is like open up animation, red is blocked closed; sealed door with
+  welding for now, a sprite for sealed doors later"): his open frames already have the lamp yellow, so a shut door is green
+  or red only; red is "will not open for me" (`WorldView._blocked`: welded, blast-locked, locked, held by its airlock
+  partner, or `Doors.barred` for our own `pred.access`), so a job's door is green to those it opens for. A blast-locked door
+  stays red for the crew too, though it opens for us: it says the ship is sealed. No blinking (my first reading of his D2
+  "with animation", dropped with the `door_*_off` frames, which were never shipped). v90's yellow shut frame stays in the
+  sheet unused (the sheet's older pieces keep their places).
+- **Floor lamps** (his F2, my F2b A, he picked A) only by doors that can lock (job doors, airlock doors), on the floor cells
+  either side, turned toward the door (TileMap transform flags): green, yellow while the door is open or opening, red as the
+  door's own lamp. Orange is "broken": stuck open, a dead ship's door, or no power. The lamp's bar is cut from his `floor_door_lamp_*` minus
   his plain floor, so it lies over any floor. Vents and the danger line are in their own layer under the lamps.
 - **Window panes** (his W2): v1 where the cell above or below is space, v2 elsewhere. His v1 horizontal pane has no shutter
   stages, so a shutter coming down over it is drawn in the v2 stages (asked him whether to draw v1 stages).
@@ -1867,5 +1876,15 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
 - **Chart icons** (his M5): ours his big ship (`map_ship_5`) in his own colour (87, 191, 236 at alpha 132), turned toward
   the course and keeping that heading when stopped; pirates `map_ship_3`, wrecks and derelicts `map_ship_4`, traders `map_ship_2`,
   hunters `map_ship_1`. The small ones are drawn twice as big (4-10 px otherwise). In the sheet they are white, tinted when drawn.
-- **Not in v91**: his stairs (F3b) change moving between decks (prediction in `Mover`, bots' ways, air between decks): their
-  own build after his answer. His brown and red lockers (M6 C: only looks) need a sign for a decor locker: asked.
+- **Stairs** (his F3 "dark stairs down, white up", F3b A): sign `/`, two cells in a row on a deck over the same two on the
+  deck below (`ShipMap._find_stairs`; the direction comes from the drawing: the lower flight opens into a room at one end,
+  the upper one ends at a wall). One changes decks on arriving (the step over, `cd` 0) on the far end of a flight
+  (`ShipMap.stair_to`): over the stairwell above, under the upper deck's floor below, in shared `Mover.step`, so the client
+  predicts it, and placed in the middle of the cell with no slide drawn between decks (a quarter-step walker's offsets are
+  dropped: half a tile at most). No ping-pong: one comes out on a cell that is not a far end. Mine: a flight is 2 long
+  because his pictures are 48-64 px; his "big" (two wide) pictures are not used yet. The pictures lie in the marks layer,
+  a row's flight 2×2 (the top of his white railing reaches into the row above), a column's 1×2, flipped for the other way.
+  Paths treat a step onto a far end as arriving below (bots, pirates, robots). Air: the far end above shares air with the
+  cell under it (`air_down`). Our ship02 got one flight next to the stern ladder (the ladder stays: tests know it).
+- **Not in v91**: his brown and red lockers (M6 C: only looks) need a sign for a decor locker (and, by his card pick, may
+  be walked through).

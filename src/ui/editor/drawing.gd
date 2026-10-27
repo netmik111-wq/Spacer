@@ -82,7 +82,7 @@ static func is_object(sign: String) -> bool:
 
 static func base_for(sign: String) -> String:
 	## The floor an object stands on when none was drawn: a spawn place or a ladder on floor, the rest in a wall.
-	return "." if sign == "s" or sign == "H" else "#"
+	return "." if sign == "s" or sign == "H" or sign == "/" else "#"
 
 
 func base_text() -> String:

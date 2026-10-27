@@ -5,12 +5,15 @@ extends SceneTree
 ## from its front only. Every window of ours has a shutter: a hole torn in a window lets the air
 ## out for a moment, then its shutter shuts over it and the room keeps its air until the hole is
 ## mended; at red alert every shutter is down; a shutter down stops sight as a wall does; without
-## power none moves. Clients are told: 2 a hole behind a shutter, 3 a shutter down.
+## power none moves. Clients are told: 2 a hole behind a shutter, 3 a shutter down. A tall machine stops
+## sight. Stairs: walking over a flight takes one to the other deck and back, bots' ways go over them.
 ## Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
 const Net := preload("res://src/shared/net.gd")
 const Sight := preload("res://src/shared/sight.gd")
+const Mover := preload("res://src/shared/mover.gd")
+const Paths := preload("res://src/server/paths.gd")
 
 var failed := 0
 var server: GameServer
@@ -35,6 +38,7 @@ func _initialize() -> void:
 	_red_alert()
 	_no_power()
 	_boxes()
+	_stairs()
 	server.stop()
 	server.free()
 	print("windowtest: %d failed" % failed)
@@ -63,6 +67,15 @@ func _machines() -> void:
 	if behind >= 0 and behind < map.walk.size() and map.walk[behind] == 1:
 		_expect(map.use_ahead(behind % map.width, behind / map.width, Net.dir_of(f.x - h.x, f.y - h.y), {}) != map.machine_of(helm),
 			"not from behind")
+	# (v91, his G1) one cannot see over a tall machine: the supply locker stops sight, the helm does not
+	var locker: int = map.locker.keys()[0]
+	var hx := helm % map.width
+	var hy := helm / map.width
+	_expect(map.tall.has(locker) and Sight.blocks(map, server.doors, locker % map.width, locker / map.width)
+		and not map.tall.has(helm) and not Sight.blocks(map, server.doors, hx, hy),
+		"a tall machine (the supply locker) stops sight, a low one (the helm) does not")
+	var back := map.behind(locker)
+	_expect(back >= 0 and map.walk[back] == 0 and not map.on_floor.has(back), "the locker has its back to a wall")
 	# every wide machine is one: each piece of it is used as its first
 	var wide := 0
 	for root: int in map.pieces.keys():
@@ -203,6 +216,44 @@ func _boxes() -> void:
 	_expect(p.count(Net.ITEM_PART) == 1 and p.count(Net.ITEM_BOARD) == 1, "the spare parts box gives a part, then a circuit board")
 	_expect(not map.hull.has(box) and not map.hull.has(tech), "no hole is ever torn in a box")
 	server.crew.remove(p)
+
+
+func _walk(st: Mover.State, dir: int, ticks: int) -> void:
+	st.dir = dir
+	for t in ticks:
+		Mover.step(st, server.map, server.doors, 1000 + t)
+	st.dir = 0
+
+
+func _stairs() -> void:
+	print("  -- stairs")
+	var map := server.map
+	_expect(map.flights.size() == 2, "the ship has a flight of stairs: dark on the upper deck, white below (%d)" % map.flights.size())
+	if map.flights.size() != 2:
+		return
+	var upper: PackedInt32Array = map.flights[0]["cells"]
+	var lower: PackedInt32Array = map.flights[1]["cells"]
+	_expect(map.flights[0]["down"] and not map.flights[1]["down"] and map.deck_of_cell(upper[0]) + 1 == map.deck_of_cell(lower[0]),
+		"one above the other")
+	for fine: bool in [true, false]:
+		var st := Mover.State.new()
+		st.fine = fine
+		var a := upper[0]
+		st.place(a % map.width, a / map.width)
+		var way: Vector2i = map.flights[0]["way"]
+		var dir := Net.dir_of(way.x, way.y)
+		_walk(st, dir, Net.MOVE_TICKS * 3)
+		var here := st.y * map.width + st.x
+		_expect(map.deck_of(st.y) == map.deck_of_cell(lower[0]) and here != lower[1] and map.walk[here] == 1,
+			"%s over the stairs goes down to the deck below, out into the room (%d,%d)" % ["a player" if fine else "a bot", st.x, st.y])
+		_walk(st, Net.dir_of(-way.x, -way.y), Net.MOVE_TICKS * 3 + 2)
+		_expect(map.deck_of(st.y) == map.deck_of_cell(upper[0]), "and back the other way goes up (%d,%d)" % [st.x, st.y])
+	# a bot's way from the room above to the room below
+	var below: int = lower[1] + (map.flights[1]["way"] as Vector2i).y * map.width + (map.flights[1]["way"] as Vector2i).x * 3
+	var ok := func(x: int, y: int) -> bool: return map.walkable(x, y) and map.climb[y * map.width + x] < 0   # (not by the ladder)
+	var start := upper[0] - map.width
+	var found: Array = Paths.first_step(map, start, {below: true}, ok)
+	_expect(int(found[1]) == below, "a bot finds its way down the stairs")
 
 
 func _expect(ok: bool, what: String) -> void:

@@ -208,11 +208,11 @@ for _i in range(4):
     FLOOR_LOOKS.append(("console_1_fl_t_%d" % _i, None, "wall"))
 TILES += FLOOR_LOOKS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in FLOOR_LOOKS]
-# (v91, the author's D2 and F2) a locked door's lamp blinks: the door with its lamp dark; lamps on the floor
-# by a door (green opens, yellow only for some jobs, orange broken, red blocked), the danger line inside an
-# airlock's outer door and a room's air vent, each alone on a clear tile, laid over the floor by the client
-MARKS = [("door_%s_%s_off" % (_type, _o), None, "door") for _type in DOOR_TYPES for _o in ("h", "v")]
-MARKS += [("lamp_" + _c, None, "floor") for _c in ("green", "yellow", "orange", "red")]
+# (v91, the author's F2 and D2b) lamps on the floor by a door (green opens, yellow open or opening, orange
+# broken, red blocked), the danger line inside an airlock's outer door and a room's air vent, each alone on a
+# clear tile, laid over the floor by the client. (A door's own yellow frame, from v90, is no longer laid: his
+# yellow lamp is in his open frames.)
+MARKS = [("lamp_" + _c, None, "floor") for _c in ("green", "yellow", "orange", "red")]
 MARKS += [("danger_line", None, "floor"), ("vent", None, "floor")]
 TILES += MARKS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MARKS]
@@ -231,6 +231,16 @@ TILES += [(PIRATE + _name, None, "wall") for _name in WALL_BOX_ART]
 MAP_SHIPS = [("map_ship_%d" % _i, None, "floor") for _i in range(1, 6)]
 TILES += MAP_SHIPS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MAP_SHIPS]
+# (v91, the author's F3: "dark stairs go down, white go up") a flight of stairs ('/', two cells on a deck and the
+# same two on the deck below): its cells are plain floor ("stairs"); his picture is laid over them by the client
+# (WorldView._lay_marks) in pieces, a flight along a row as 2x2 (the row above takes the top of the railing),
+# one along a column as 1x2, drawn going down to the right or downwards and flipped for the other way
+STAIRS = [("stairs", None, "floor")]
+for _k in ("dn", "up"):
+    STAIRS += [("stairs_%s_h_%d" % (_k, _i), None, "floor") for _i in range(4)]
+    STAIRS += [("stairs_%s_v_%d" % (_k, _i), None, "floor") for _i in range(2)]
+TILES += STAIRS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in STAIRS]
 ATLAS_COLS = 8
 
 
@@ -434,6 +444,27 @@ def art_tile(art, mock, images, name):
     standing = art_standing(art, name)
     if standing is not None:
         return standing
+    if name == "stairs":
+        return floor
+    if name.startswith("stairs_"):
+        _, k, o, i = name.split("_")
+        i = int(i)
+        if o == "h":
+            canvas = Image.new("RGBA", (2 * T, 2 * T), (0, 0, 0, 0))
+            if k == "dn":
+                canvas.alpha_composite(art["stairs_down_horizontal"], (0, T))
+            else:
+                canvas.alpha_composite(art["stairs_up_horizontal"], (8, 2 * T - 48))
+            return canvas.crop(((i % 2) * T, (i // 2) * T, (i % 2 + 1) * T, (i // 2 + 1) * T))
+        canvas = Image.new("RGBA", (T, 2 * T), (0, 0, 0, 0))
+        if k == "dn":
+            canvas.alpha_composite(art["stairs_down_vertical"], (0, 0))
+            canvas.alpha_composite(art["stairs_down_vertical"], (0, T))
+        else:
+            up = art["stairs_up_vertical"]
+            canvas.alpha_composite(up, (0, 2 * T - up.height))
+            canvas.alpha_composite(up.crop((0, 0, T, 2 * T - up.height)), (0, 0))
+        return canvas.crop((0, i * T, T, (i + 1) * T))
     if name.startswith("lamp_"):
         return art_alone(art["floor_door_lamp_" + name[5:]], floor)
     if name.startswith("map_ship_"):
@@ -451,17 +482,6 @@ def art_tile(art, mock, images, name):
         return art["floor_danger_line_decal"]
     if name == "vent":
         return art["vent_floor"]
-    if name.startswith("door_") and name.endswith("_off"):
-        _, kind, o, _ = name.split("_")
-        way = "horizontal" if o == "h" else "vertical"
-        lit, green = art["Door_%s_%s_lock_1" % (way, kind)], art["Door_%s_%s_unlock" % (way, kind)]
-        out = lit.copy()
-        for y in range(T):
-            for x in range(T):
-                if lit.getpixel((x, y)) != green.getpixel((x, y)):
-                    r, g, b, a = lit.getpixel((x, y))
-                    out.putpixel((x, y), (r * 30 // 100, g * 26 // 100, b * 22 // 100, a))
-        return out
     if name in NEW_ART:
         return art[NEW_ART[name]]
     if name == "door_half":
@@ -989,6 +1009,8 @@ def build_tiles():
 #   'g'  glass floor (the deck below shows through; air does not pass)
 #   'c'  catwalk: a grating (the deck below shows through and shares its air)
 #   'H'  ladder between decks: the same cell on two decks, one above the other
+#   '/'  (v91) stairs: two cells in a row on a deck and the same two on the deck below; the upper
+#        flight ends at a wall, the lower one at the room's floor (ShipMap._find_stairs)
 #   '#'  wall (piece chosen from its neighbours)
 #   'D'  door in a horizontal wall      'A'  airlock in a vertical wall
 #   'W'  window    '<' '>'  wide window (left, right half)
@@ -1050,7 +1072,7 @@ def build_tiles():
 BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFVEJNL")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
-FLOOR_CHARS = set(".sgcH")
+FLOOR_CHARS = set(".sgcH/")
 # (v91, the author: "it's not walls, it's on the ground") machines stand on the floor: a machine sign is
 # in the wall only in a row of machines between two pieces of wall with nothing solid above or below it
 # (the old way, still read); anywhere else it is a thing on the floor, the floor going on under it
@@ -1142,6 +1164,10 @@ def resolve_map(name, lines, ids, w, h, above, below):
                     cover = "hatch" if down else "ladder"
                 if cover:
                     piece = cover + piece[5:]
+                if c == "/":
+                    if other(below, x, y) != "/" and other(above, x, y) != "/":
+                        raise MapError(f"{name}: stairs at {x},{y} need a '/' in the same cell of the deck above or below")
+                    piece = "stairs"
                 if (x, y) in things:
                     if not any(at(x + dx, y + dy) in FLOOR_CHARS for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0))):
                         raise MapError(f"{name}: machine '{c}' at {x},{y} has no floor beside it to be used from")

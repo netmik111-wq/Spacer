@@ -91,7 +91,7 @@ func _near_floor(cell: int) -> int:
 				var x := cell % w + dx
 				var y := cell / w + dy
 				if absi(dx) + absi(dy) == r and map.walkable(x, y) and map.door_at(x, y) < 0 and map.on_ship(y * w + x) \
-						and map.deck_of(y) == map.deck_of(cell / w) and map.climb[y * w + x] < 0:
+						and map.deck_of(y) == map.deck_of(cell / w) and map.climb[y * w + x] < 0 and map.stair_to[y * w + x] < 0:
 					return y * w + x
 	return cell
 

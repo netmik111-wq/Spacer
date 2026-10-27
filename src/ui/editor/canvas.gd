@@ -288,7 +288,7 @@ func _draw_preview(cs: float) -> void:
 
 static func icon_tile(s: String) -> String:
 	## The tile that stands for a sign in the palette and in previews.
-	return {"#": "wall_h", ".": "floor_m_t", "s": "floor_m_t", "g": "glass_m_t", "c": "grate_m_t", "H": "ladder_m_t",
+	return {"#": "wall_h", ".": "floor_m_t", "s": "floor_m_t", "g": "glass_m_t", "c": "grate_m_t", "H": "ladder_m_t", "/": "stairs_up_v_1",
 		"D": "door", "A": "airlock_closed", "W": "window", "<": "window_l", ">": "window_r",
 		"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 		"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
