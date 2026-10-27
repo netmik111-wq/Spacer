@@ -82,6 +82,7 @@ var is_host := false                 # we are the hosting player: we may make ot
 var doors := Doors.new()
 var air := PackedByteArray()         # per cell: 0..Net.AIR_FULL (cells outside our view keep their last value)
 var holes := {}                      # breached hull cell -> true
+var shut_panes := {}                 # (v91) window cell -> true: its shutter is down (it stops sight as a wall)
 var floor_things := {}               # things lying on the floor: cell -> PackedByteArray (see Net.SEC_FLOOR)
 var floor_changes := 0               # goes up whenever something is put down or picked up
 var ship_changes := 0                # goes up whenever doors, hull or air change: views redraw on it
@@ -383,6 +384,7 @@ func close() -> void:
 	checks_bad = 0
 	ship_checks_bad = 0
 	holes.clear()
+	shut_panes.clear()
 	floor_things.clear()
 	hand = 0
 	store.clear()
@@ -848,6 +850,18 @@ func lit_cells() -> Dictionary:
 	return out
 
 
+func _shut_pane(cell: int, down: bool) -> void:
+	## (v91) A window's shutter comes down or goes up: it stops sight and light as the server's does.
+	if shut_panes.has(cell) == down or not map.panes.has(cell):
+		return
+	if down:
+		shut_panes[cell] = true
+	else:
+		shut_panes.erase(cell)
+	map.set_pane(cell, down)
+	other_changes += 1                   # (what light and sight draw is made again)
+
+
 func glow(origin: Vector2, facing: int, radius: float, ahead: float) -> Dictionary:
 	## Sight.glow on our map and doors, remembered: the same pool of light is
 	## asked for many times while nobody moves and no door changes.
@@ -1056,7 +1070,8 @@ func use_target(facing: int = -1) -> int:
 	## 40 = (v69) a door whose broken lock can be mended,
 	## 41 = (v70) a pirates' bomb in front or underfoot (held E disarms it), 42 = a shut door with a welder in hand,
 	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove,
-	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console.
+	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console,
+	## 47 = (v91) a first-aid box, 48 = a spare parts box.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1122,6 +1137,10 @@ func use_target(facing: int = -1) -> int:
 			return 31
 		if map.cryo.has(cell):
 			return 32
+		if map.med_box.has(cell):
+			return 47
+		if map.tech_box.has(cell):
+			return 48
 		if map.stove.has(cell):
 			return 44                        # (v71) the galley's stove
 		var door := map.door_of[cell]
@@ -1244,6 +1263,7 @@ func usable_at(cell: int) -> bool:
 	## lying, a ladder? For the outline under the mouse (WorldView._draw_hover).
 	if cell < 0 or cell >= map.cells.size():
 		return false
+	cell = map.machine_of(cell)              # (v91) any piece of a wide machine
 	if holes.has(cell) or floor_things.has(cell) or map.door_of[cell] >= 0 or map.climb[cell] >= 0 or map.guns.has(cell) \
 			or gear_here(cell) != "-":
 		return true
@@ -1270,7 +1290,7 @@ func click_facing(c: Vector2i) -> int:
 		return -1
 	if c.x < 0 or c.y < 0 or c.x >= map.width or c.y >= map.height:
 		return -1
-	var cell := c.y * map.width + c.x
+	var cell := map.machine_of(c.y * map.width + c.x)
 	var here := pred.y * map.width + pred.x
 	var order: Array[int] = [pred.facing]
 	for f in range(1, Net.DIRS + 1):     # (v74) the slants too
@@ -2228,6 +2248,7 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 	air.resize(map.width * map.height)
 	air.fill(0)
 	holes.clear()
+	shut_panes.clear()
 	phase = PLAYING
 	login_ms = Time.get_ticks_msec() - _t_connect
 	joined.emit()
@@ -2292,10 +2313,12 @@ func _on_world(pkt: PackedByteArray) -> void:
 			pos += 2
 			for i in count:
 				var cell := pkt.decode_s16(pos + 2) * map.width + pkt.decode_s16(pos)
-				if pkt[pos + 4] != 0:
+				var state: int = pkt[pos + 4]        # (v91) 1 a hole, 2 a hole behind a window's shutter, 3 a shutter down
+				if state == 1 or state == 2:
 					holes[cell] = true
 				else:
 					holes.erase(cell)
+				_shut_pane(cell, state >= 2)
 				pos += Net.HULL_BYTES
 			ship_changes += 1
 		elif sec == Net.SEC_FLOOR:
@@ -2344,6 +2367,9 @@ func _on_world(pkt: PackedByteArray) -> void:
 			for cell: int in holes.keys():
 				if _outside_view(cell % map.width, cell / map.width):
 					holes.erase(cell)
+			for cell: int in shut_panes.keys():
+				if _outside_view(cell % map.width, cell / map.width):
+					_shut_pane(cell, false)
 			for cell: int in floor_things.keys():
 				if _outside_view(cell % map.width, cell / map.width):
 					floor_things.erase(cell)

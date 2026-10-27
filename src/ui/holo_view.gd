@@ -276,7 +276,7 @@ func _draw_plan() -> void:
 					continue
 				var r := Rect2(Vector2((x - _x0) * _px, top + (y - first) * _px), Vector2(_px, _px))
 				if map.base_walk[cell] == 0:
-					_plan.draw_rect(r, WINDOW if map.base_opaque[cell] == 0 else WALL)
+					_plan.draw_rect(r, WINDOW if map.base_opaque[cell] == 0 and not map.on_floor.has(cell) else WALL)
 					if broken_cells.has(cell):
 						var bad: bool = broken_cells[cell]
 						var mark := r.grow(-_px * 0.22)
@@ -356,7 +356,7 @@ func _describe(cell: int) -> String:
 				what = d[1]
 		if what != "":
 			parts.append("%s: %s" % [what, "не работает" if client.broken.has(cell) else "в порядке"])
-		elif map.base_opaque[cell] == 0:
+		elif map.base_opaque[cell] == 0 and not map.on_floor.has(cell):
 			parts.append("иллюминатор")
 		else:
 			parts.append("переборка")

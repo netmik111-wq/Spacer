@@ -13,16 +13,23 @@ extends RefCounted
 
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
-const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFV"
-const FLOOR_CHARS := ".sgcH"
+const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFVEJNL"
+const FLOOR_CHARS := ".sgcH/"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
 const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
 	"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 	"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 	"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
+	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
+	"E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}       # (v91) the author's wall boxes
 const KINDS := ["ship", "pirate", "derelict", "asteroid"]
+## (v91, the author: "it's not walls, it's on the ground") Machines stand on the floor. A machine sign is in the
+## wall only in a row of machines between two pieces of wall with nothing solid above or below it (the old way);
+## anywhere else it is a thing on the floor, the floor going on under it. Old drawings move their machines out
+## of the wall onto the floor in front of them (to_floor), where there is room.
+const MACHINE_SIGNS := "1345678MZBUYXSQKGCP"
+const DOOR_LOOKS := ["base", "tech", "cargo", "herm"]   # (v91, the author's D1) the kinds of door a "&" line gives
 
 static var _tiles := {}              # tile name -> id (from assets/tiles.json)
 static var _kinds := PackedStringArray()
@@ -67,7 +74,7 @@ static func read(text: String) -> Dictionary:
 		var l: String = raw
 		if l.begins_with(";"):
 			continue
-		if l.begins_with("@") or l.begins_with("%"):
+		if l.begins_with("@") or l.begins_with("%") or l.begins_with("&"):
 			marks.append(l)
 			continue
 		if l.begins_with("="):
@@ -156,7 +163,7 @@ static func build(name: String, text: String) -> Dictionary:
 			tinted[k] = ids.get("pirate_" + k, ids[k])
 		ids = tinted
 	var problems := []
-	var parts := read(text)
+	var parts := read(to_floor(text))
 	var decks: Array = parts["decks"]
 	if decks.is_empty():
 		problems.append(_problem(-1, 0, 0, "Нет ни одной палубы."))
@@ -180,6 +187,7 @@ static func build(name: String, text: String) -> Dictionary:
 	cells.fill(-1)
 	var spawns := []
 	var doors := []
+	var things := []
 	var grids := []
 	for d in decks.size():
 		grids.append(_grid(decks[d][1], w, h))
@@ -194,6 +202,8 @@ static func build(name: String, text: String) -> Dictionary:
 			spawns.append([s[0], s[1] + d * stride])
 		for o: Array in out[2]:
 			doors.append([o[0], o[1] + d * stride, o[2]])
+		for t: Array in out[3]:
+			things.append([t[0], t[1] + d * stride, t[2]])
 	if spawns.is_empty() and kind == "ship":
 		problems.append(_problem(-1, 0, 0, "Нет мест появления экипажа (пол «s»)."))
 	var door_access := []
@@ -202,8 +212,24 @@ static func build(name: String, text: String) -> Dictionary:
 	var access_rooms := []
 	var brig_rooms := []
 	var zones := []
+	var door_looks := []
 	for l: String in parts["marks"]:
 		var bits := l.substr(1).split(" ", false)
+		if l.begins_with("&"):
+			# (v91, the author's D1) a door of another kind's look
+			var right := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
+				and DOOR_LOOKS.has(bits[3])
+			var on := -1
+			for k in doors.size():
+				if right and int(doors[k][0]) == int(bits[1]) and int(doors[k][1]) == int(bits[2]) + (int(bits[0]) - 1) * stride:
+					on = k
+			if not right:
+				problems.append(_problem(-1, 0, 0, "Неверная строка «%s»." % l))
+			elif on < 0:
+				problems.append(_problem(int(bits[0]) - 1, int(bits[1]), int(bits[2]), "Метка вида двери стоит не на двери."))
+			else:
+				door_looks.append([int(bits[1]), int(bits[2]) + (int(bits[0]) - 1) * stride, bits[3]])
+			continue
 		var system := l.begins_with("%")
 		var what := bits[3] if bits.size() == 4 else ""
 		var ok := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
@@ -249,14 +275,15 @@ static func build(name: String, text: String) -> Dictionary:
 		names.append(d[0])
 	var data := {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
 		"decks": names, "cells": Array(cells), "spawns": spawns, "doors": doors,
-		"door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones}
+		"door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
+		"things": things, "door_looks": door_looks}
 	return {"data": data, "problems": problems, "kind": kind}
 
 
 static func _mark_name(what: String) -> String:
 	return {"bridge": "мостик", "engine": "машинное", "medbay": "медотсек", "armory": "оружейная", "guns": "орудия",
 		"brig": "камера", "weapons": "оружие", "helm": "управление", "crew": "каюты", "jump": "прыжковый двигатель",
-		"shields": "щиты"}.get(what, what)
+		"shields": "щиты", "base": "обычная", "tech": "техн.", "cargo": "грузовая", "herm": "герм."}.get(what, what)
 
 
 static func _problem(deck: int, x: int, y: int, text: String) -> Dictionary:
@@ -277,9 +304,165 @@ static func _at(g: Array, x: int, y: int, w: int, h: int) -> String:
 	return row[x] if x < row.length() else " "
 
 
-static func _solid(g: Array, x: int, y: int, w: int, h: int) -> bool:
+static func _raw_solid(g: Array, x: int, y: int, w: int, h: int) -> bool:
 	var c := _at(g, x, y, w, h)
 	return BAND_CHARS.find(c) >= 0 or c == "A"
+
+
+static func _solid(g: Array, x: int, y: int, w: int, h: int, things: Dictionary = {}) -> bool:
+	return _raw_solid(g, x, y, w, h) and not things.has(Vector2i(x, y))
+
+
+static func _floor_at(g: Array, x: int, y: int, w: int, h: int, things: Dictionary) -> bool:
+	return _floor(_at(g, x, y, w, h)) or things.has(Vector2i(x, y))
+
+
+static func _wall_end(c: String) -> bool:
+	return (BAND_CHARS.find(c) >= 0 or c == "A") and MACHINE_SIGNS.find(c) < 0
+
+
+static func things_of(g: Array, w: int, h: int) -> Dictionary:
+	## (v91) The cells of a deck's drawing where a machine stands on the floor.
+	var things := {}
+	for y in h:
+		var x := 0
+		while x < w:
+			if MACHINE_SIGNS.find(_at(g, x, y, w, h)) < 0:
+				x += 1
+				continue
+			var x1 := x
+			while MACHINE_SIGNS.find(_at(g, x1 + 1, y, w, h)) >= 0:
+				x1 += 1
+			var in_wall := _wall_end(_at(g, x - 1, y, w, h)) and _wall_end(_at(g, x1 + 1, y, w, h))
+			for i in range(x, x1 + 1):
+				if _raw_solid(g, i, y - 1, w, h) or _raw_solid(g, i, y + 1, w, h):
+					in_wall = false
+			if not in_wall:
+				for i in range(x, x1 + 1):
+					things[Vector2i(i, y)] = true
+			x = x1 + 1
+	return things
+
+
+static func to_floor(text: String) -> String:
+	## (v91, the author's G3) A drawing with its machines moved out of the walls onto the floor in front of
+	## them: each row of machines in a wall goes one cell into the room below it (or, failing that, above),
+	## where that is plain floor ("."), no mark points, no doorway is blocked and no part of the deck is cut
+	## off. Rows that have no such room stay in the wall. Lines other than the decks' are kept as they are.
+	var lines := text.replace("\r", "").split("\n")
+	var avoid := {}                      # deck -> {Vector2i: true}: the cells marks point at
+	for l: String in lines:
+		if l.begins_with("@") or l.begins_with("%"):
+			var bits := l.substr(1).split(" ", false)
+			if bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int():
+				var d := int(bits[0]) - 1
+				if not avoid.has(d):
+					avoid[d] = {}
+				avoid[d][Vector2i(int(bits[1]), int(bits[2]))] = true
+	var deck := -1
+	var start := -1                      # the line index of the deck's first row
+	var spans := []                      # [deck, first line, line after the last]
+	for i in lines.size():
+		var l: String = lines[i]
+		if l.begins_with("="):
+			if deck >= 0:
+				spans.append([deck, start, i])
+			deck += 1
+			start = i + 1
+		elif deck < 0 and not l.begins_with(";") and not l.begins_with("@") and not l.begins_with("%") and l.strip_edges() != "":
+			deck = 0
+			start = i
+	if deck >= 0:
+		spans.append([deck, start, lines.size()])
+	for span: Array in spans:
+		var rows := PackedStringArray()
+		var w := 1
+		for i in range(span[1], span[2]):
+			if lines[i].begins_with(";") or lines[i].begins_with("@") or lines[i].begins_with("%"):
+				continue
+			rows.append(lines[i])
+			w = maxi(w, lines[i].length())
+		var h := rows.size()
+		var g := _grid(rows, w, h)
+		var moved := _move_out(g, w, h, avoid.get(span[0], {}))
+		if not moved:
+			continue
+		var k := 0
+		for i in range(span[1], span[2]):
+			if lines[i].begins_with(";") or lines[i].begins_with("@") or lines[i].begins_with("%"):
+				continue
+			lines[i] = (g[k] as String).rstrip(" ")
+			k += 1
+	return "\n".join(lines)
+
+
+static func _move_out(g: Array, w: int, h: int, avoid: Dictionary) -> bool:
+	var moved := false
+	var parts := _parts(g, w, h)
+	for y in h:
+		var x := 0
+		while x < w:
+			if MACHINE_SIGNS.find(_at(g, x, y, w, h)) < 0:
+				x += 1
+				continue
+			var x1 := x
+			while MACHINE_SIGNS.find(_at(g, x1 + 1, y, w, h)) >= 0:
+				x1 += 1
+			var run_end := x1 + 1
+			if things_of(g, w, h).has(Vector2i(x, y)):
+				x = run_end
+				continue
+			for dy: int in [1, -1]:
+				var ty := y + dy
+				var ok := ty >= 0 and ty < h
+				for i in range(x, x1 + 1):
+					if not ok:
+						break
+					var beyond := _at(g, i, ty + dy, w, h)
+					ok = _at(g, i, ty, w, h) == "." and not avoid.has(Vector2i(i, ty)) and beyond != "D"
+				if ok and (_at(g, x - 1, ty, w, h) == "A" or _at(g, x1 + 1, ty, w, h) == "A"):
+					ok = false
+				if not ok:
+					continue
+				var before := g.duplicate()
+				var row: String = g[y]
+				var to: String = g[ty]
+				for i in range(x, x1 + 1):
+					to = to.substr(0, i) + row[i] + to.substr(i + 1)
+					row = row.substr(0, i) + "#" + row.substr(i + 1)
+				g[y] = row
+				g[ty] = to
+				if _parts(g, w, h) > parts:
+					for r in h:
+						g[r] = before[r]
+					continue
+				moved = true
+				break
+			x = run_end
+	return moved
+
+
+static func _parts(g: Array, w: int, h: int) -> int:
+	## How many pieces a deck's walkable cells (floor and doorways) fall into.
+	var seen := {}
+	var count := 0
+	for y in h:
+		for x in w:
+			var c := _at(g, x, y, w, h)
+			if seen.has(Vector2i(x, y)) or not (_floor(c) or c == "D" or c == "A"):
+				continue
+			count += 1
+			var todo := [Vector2i(x, y)]
+			seen[Vector2i(x, y)] = true
+			while not todo.is_empty():
+				var p: Vector2i = todo.pop_back()
+				for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n := p + step
+					var nc := _at(g, n.x, n.y, w, h)
+					if not seen.has(n) and (_floor(nc) or nc == "D" or nc == "A"):
+						seen[n] = true
+						todo.append(n)
+	return count
 
 
 static func _floor(c: String) -> bool:
@@ -293,23 +476,26 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 	cells.fill(-1)
 	var spawns := []
 	var doors := []
+	var under := []
+	var things := things_of(g, w, h)
 	for y in h:
 		for x in w:
 			var c := _at(g, x, y, w, h)
 			if c == " ":
 				continue
-			var n := _solid(g, x, y - 1, w, h)
-			var s := _solid(g, x, y + 1, w, h)
-			var e := _solid(g, x + 1, y, w, h)
-			var wst := _solid(g, x - 1, y, w, h)
+			var n := _solid(g, x, y - 1, w, h, things)
+			var s := _solid(g, x, y + 1, w, h, things)
+			var e := _solid(g, x + 1, y, w, h, things)
+			var wst := _solid(g, x - 1, y, w, h, things)
 			var piece := ""
-			if _floor(c):
+			var thing := things.has(Vector2i(x, y))
+			if _floor(c) or thing:
 				if c == "s":
 					spawns.append([x, y])
-				var left := _floor(_at(g, x - 1, y, w, h))
-				var right := _floor(_at(g, x + 1, y, w, h))
-				var top := not _floor(_at(g, x, y - 1, w, h))
-				var bottom := not _floor(_at(g, x, y + 1, w, h))
+				var left := _floor_at(g, x - 1, y, w, h, things)
+				var right := _floor_at(g, x + 1, y, w, h, things)
+				var top := not _floor_at(g, x, y - 1, w, h, things)
+				var bottom := not _floor_at(g, x, y + 1, w, h, things)
 				if top and bottom:
 					problems.append(_problem(deck, x, y, "Комната в одну клетку высотой: нужно две или больше."))
 				var row := "t" if top else ("b" if bottom else "m")   # (the author: rooms taller than two)
@@ -328,6 +514,20 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 					cover = "hatch" if down else "ladder"
 				if cover != "":
 					piece = cover + piece.substr(5)
+				if c == "/":
+					if _at(below, x, y, w, h) != "/" and _at(above, x, y, w, h) != "/":
+						problems.append(_problem(deck, x, y, "Ступеням нужна «/» в той же клетке палубы выше или ниже."))
+					piece = "stairs"
+				if thing:
+					var reach := false
+					for v: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+						reach = reach or _floor(_at(g, x + v.x, y + v.y, w, h))
+					if not reach:
+						problems.append(_problem(deck, x, y, "Машине нужен пол рядом: оттуда ею пользуются."))
+					if _at(g, x, y - 1, w, h) == "D" or _at(g, x, y + 1, w, h) == "D" or _at(g, x - 1, y, w, h) == "A" or _at(g, x + 1, y, w, h) == "A":
+						problems.append(_problem(deck, x, y, "Машина загораживает дверь."))
+					under.append([x, y, int(ids.get(piece, -1))])
+					piece = SPECIAL[c]
 			elif ROCK_CHARS.find(c) >= 0:
 				piece = {"R": "rock_%d" % ((x * 7 + y * 13) % 3 + 1), "O": "rock_ore", ",": "rock_ground"}[c]
 			elif c == "A":
@@ -340,21 +540,23 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 			elif BAND_CHARS.find(c) >= 0:
 				var horizontal := e or wst
 				if not horizontal:
-					if c != "#":
+					if c == "W" and n and s:
+						piece = "window_v"       # (v91, the author's W3) a window in a side wall
+					elif c != "#":
 						problems.append(_problem(deck, x, y, "«%s» должна стоять в горизонтальной стене." % _what(c)))
 						piece = SPECIAL.get(c, "wall_v")
 					elif not n or not s:
 						problems.append(_problem(deck, x, y, "Одинокий кусок стены."))
 						piece = "wall_v"
 					else:
-						var below_is_band := _solid(g, x - 1, y + 1, w, h) or _solid(g, x + 1, y + 1, w, h)
+						var below_is_band := _solid(g, x - 1, y + 1, w, h, things) or _solid(g, x + 1, y + 1, w, h, things)
 						if not below_is_band:
 							piece = "wall_v"
 						elif _at(g, x, y - 1, w, h) == "A":
 							piece = "wall_v_end_a"
-						elif not _solid(g, x - 1, y + 1, w, h):
+						elif not _solid(g, x - 1, y + 1, w, h, things):
 							piece = "wall_v_end_l"
-						elif not _solid(g, x + 1, y + 1, w, h):
+						elif not _solid(g, x + 1, y + 1, w, h, things):
 							piece = "wall_v_end_r"
 						else:
 							piece = "wall_v_end"
@@ -373,13 +575,17 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 				elif e and wst:
 					piece = "wall_cross" if (n and s) else ("wall_tdown" if s else ("wall_tup" if n else "wall_h"))
 				elif e and not wst:
-					if n == s:
+					if n and s:
+						piece = "wall_jr"        # (v91) a vertical wall going on past a band that leaves it to the right
+					elif n == s:
 						problems.append(_problem(deck, x, y, "Конец стены без угла."))
 						piece = "wall_h"
 					else:
 						piece = "wall_tl" if s else "wall_bl"
 				else:
-					if n == s:
+					if n and s:
+						piece = "wall_jl"
+					elif n == s:
 						problems.append(_problem(deck, x, y, "Конец стены без угла."))
 						piece = "wall_h"
 					else:
@@ -388,7 +594,7 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 				problems.append(_problem(deck, x, y, "Неизвестный знак «%s»." % c))
 				continue
 			cells[y * w + x] = int(ids.get(piece, -1))
-	return [cells, spawns, doors]
+	return [cells, spawns, doors, under]
 
 
 static func _what(c: String) -> String:

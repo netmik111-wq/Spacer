@@ -10,6 +10,8 @@ const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Stations := preload("res://src/server/stations.gd")    # only for its numbers
+const Sprites := preload("res://src/client/sprites.gd")
+const OURS := Color(87 / 255.0, 191 / 255.0, 236 / 255.0, 132 / 255.0)   # (v91) the colour of the author's ship icons
 # (v77) What each kind of place found takes (Sectors.P_*), and the work places' hint once the ship is there.
 const PLACE_HINTS: Array[String] = [
 	"Обломки, контейнер, тела, поле боя: подлетите к метке, найденное подберут или оно всплывёт у шлюза.",
@@ -41,6 +43,8 @@ var buttons: GridContainer           # the buttons under those
 var buttons_for := -1                # what the buttons were last built for (-1: build them anew)
 var _story_seen := 0                 # (v63) the comms console's marks as last drawn
 var show_road := false               # (v64, the author's C16) the chart shows the road of clusters instead of this one
+var _icons: Texture2D                # (v91) the tile sheet, for the author's ship icons
+var _heading := 0.0                  # (v91) the way our ship's icon points (it keeps it when the ship stops)
 
 
 func _init(p_client: GameClient, p_chart: Control, p_text: Label, p_buttons: GridContainer) -> void:
@@ -407,6 +411,22 @@ func draw(kind: int) -> void:
 		_draw_chart()
 
 
+func _icon(at: Vector2, which: int, colour: Color, angle: float = 0.0) -> bool:
+	## (v91, the author's M5) One of his five ship pictures on the chart (map_ship_1..5), centred there and
+	## turned by `angle` (it points left). False when the sheet has none (an older sheet of one's own).
+	var id: int = client.map.tile_ids.get("map_ship_%d" % which, -1)
+	if id < 0:
+		return false
+	if _icons == null:
+		_icons = Sprites.sheet("tiles")
+	var cols := client.map.atlas_columns
+	var big := 1.0 if which == 5 else 2.0    # (the small ones are drawn twice as big)
+	chart.draw_set_transform(at, angle, Vector2(big, big))
+	chart.draw_texture_rect_region(_icons, Rect2(-16, -16, 32, 32), Rect2((id % cols) * 32, (id / cols) * 32, 32, 32), colour)
+	chart.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	return true
+
+
 func _draw_chart() -> void:
 	## The chart of the cluster: where the ship is, where it can jump, what is known about
 	## the rest, the exits, the hunters and the nebula. (v64) Or the road of clusters.
@@ -464,7 +484,8 @@ func _draw_chart() -> void:
 	for h: Array in client.road.get("hunters", []):
 		if int(h[0]) < sectors.count:
 			var at: Vector2 = place.call(int(h[0])) + Vector2(10, -10)
-			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -6), at + Vector2(5, 0), at + Vector2(0, 6), at + Vector2(-5, 0)]), HUNTER)
+			if not _icon(at, 1, HUNTER):         # (v91) the author's small fast ship
+				chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -6), at + Vector2(5, 0), at + Vector2(0, 6), at + Vector2(-5, 0)]), HUNTER)
 			if h[1]:
 				chart.draw_arc(at, 8.0, 0.0, TAU, 16, HUNTER, 1.5)
 	_draw_story(place)
@@ -603,7 +624,8 @@ func _draw_helm() -> void:
 		Sectors.STATION, Sectors.TRADER:
 			var colour := Color(0.3, 0.85, 0.8) if sectors.kind[here] == Sectors.STATION else Color(0.95, 0.85, 0.35)
 			chart.draw_arc(spot, sectors.reach[here] * scale, 0.0, TAU, 32, Color(colour, 0.6), 1.0)
-			chart.draw_rect(Rect2(spot - Vector2(4, 4), Vector2(8, 8)), colour)
+			if sectors.kind[here] == Sectors.STATION or not _icon(spot, 2, colour):    # (v91) a trader: his freighter
+				chart.draw_rect(Rect2(spot - Vector2(4, 4), Vector2(8, 8)), colour)
 			chart.draw_string(font, spot + Vector2(-70, 26), "станция" if sectors.kind[here] == Sectors.STATION else
 				("торговец: " + Sectors.DEAL_NAMES[sectors.deal[here]] if sectors.deal.size() > here else "торговец"),
 				HORIZONTAL_ALIGNMENT_CENTER, 140, 12, colour)
@@ -640,12 +662,16 @@ func _draw_helm() -> void:
 		chart.draw_line(ship, dest, Color(1, 1, 1, 0.55), 1.0)
 		chart.draw_line(dest + Vector2(-5, -5), dest + Vector2(5, 5), Color.WHITE, 1.0)
 		chart.draw_line(dest + Vector2(-5, 5), dest + Vector2(5, -5), Color.WHITE, 1.0)
-	chart.draw_circle(ship, 5.0, Color.WHITE)
-	chart.draw_arc(ship, 9.0, 0.0, TAU, 24, Color(1, 1, 1, 0.6), 1.0)
+	if client.ship_under_way() and client.ship_dest.distance_to(client.ship_pos()) > 0.5:
+		_heading = (client.ship_dest - client.ship_pos()).angle() - PI
+	if not _icon(ship, 5, OURS, _heading):        # (v91, the author's M5) our ship in his colour
+		chart.draw_circle(ship, 5.0, Color.WHITE)
+	chart.draw_arc(ship, 15.0, 0.0, TAU, 24, Color(1, 1, 1, 0.35), 1.0)
 	if client.other_here() and (not client.other_derelict or sectors.kind[here] != Sectors.DERELICT):
 		# (v74, the author's note: a pirate ship our guns wrecked was not on the chart) the ship alongside
 		var colour := PLACE_COLOURS[Sectors.P_HULK] if client.other_dark() else HUNTER
-		var by := ship + Vector2(16, -10)
-		chart.draw_rect(Rect2(by - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
+		var by := ship + Vector2(20, -14)
+		if client.other_rock or not _icon(by, 4 if client.other_dark() else 3, colour):
+			chart.draw_rect(Rect2(by - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
 		chart.draw_string(font, by + Vector2(-60, -8), "астероид" if client.other_rock else "обломки пиратов" if client.other_wreck else
 			("пираты" if client.pirates_alongside() else "корабль рядом"), HORIZONTAL_ALIGNMENT_CENTER, 120, 11, colour)

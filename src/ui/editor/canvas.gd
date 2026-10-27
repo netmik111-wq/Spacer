@@ -13,6 +13,7 @@ signal mark_asked(cell: Vector2i)    # the room-mark tool was clicked on a cell
 signal changed                       # something was drawn (a stroke ended)
 
 const MapBuilder := preload("res://src/shared/map_builder.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 const Sprites := preload("res://src/client/sprites.gd")
 const Drawing := preload("res://src/ui/editor/drawing.gd")
 
@@ -39,6 +40,7 @@ var view := Vector2(40, 40)          # where the canvas's corner is on the scree
 var _tex: Texture2D
 var _built := {}                     # MapBuilder's layout of the drawing as it was last drawn
 var _built_at := -1                  # Drawing.changes then
+var _standing := {}                  # (v91) cell of the built layout -> [the floor's tile under a machine standing there, its picture]
 var _ids := {}
 var _hover := Vector2i(-1, -1)
 var _down := -1                      # the mouse button held (MOUSE_BUTTON_*), -1 = none
@@ -97,6 +99,7 @@ func _process(_delta: float) -> void:
 	if drawing != null and key != _built_at:
 		_built_at = key
 		_built = MapBuilder.build("ships:edit", drawing.to_text() if show_objects else drawing.base_text())["data"]
+		_standing = _machines_standing()
 		queue_redraw()
 
 
@@ -106,6 +109,24 @@ func _tile_id(name: String) -> int:
 	if drawing != null and drawing.kind == "pirate" and _ids.has("pirate_" + name):
 		return int(_ids["pirate_" + name])
 	return int(_ids.get(name, -1))
+
+
+func _machines_standing() -> Dictionary:
+	## (v91) The machines standing on the floor as the game draws them: turned the way they face, wide ones in pieces.
+	var out := {}
+	if _built.is_empty() or (_built.get("things", []) as Array).is_empty():
+		return out
+	var map := ShipMap.new()
+	var ok := map.load_data("ships:edit", FileAccess.get_file_as_string("res://assets/tiles.json"), _built, false) == ""
+	var names := {}
+	for n: String in _ids.keys():
+		names[int(_ids[n])] = n
+	var w := int(_built["width"])
+	for th: Array in _built["things"]:
+		var c := int(th[1]) * w + int(th[0])
+		var look := map.standing_look(c) if ok else str(names.get(int((_built["cells"] as Array)[c]), "")).trim_prefix("pirate_") + "_fl"
+		out[c] = [int(th[2]), _tile_id(look)]
+	return out
 
 
 func tile_region(id: int) -> Rect2:
@@ -121,10 +142,12 @@ func _cell_tile(d: int, x: int, y: int) -> int:
 		return -1
 	var id := int((_built["cells"] as Array)[(d * int(_built["deck_stride"]) + y) * w + x])
 	var s := drawing.at(d, Vector2i(x, y)) if show_objects else drawing.base_at(d, Vector2i(x, y))
-	if s == "D":
-		return _tile_id("door")
-	if s == "A":
-		return _tile_id("airlock_closed")
+	if s == "D" or s == "A":
+		# (v91) in the kind its mark gives it, the plain one else
+		var m := drawing.mark_at(d, Vector2i(x, y), "&")
+		var look := "base" if m < 0 else str(drawing.marks[m]["what"])
+		var door := _tile_id("door_%s_%s_green" % [look, "h" if s == "D" else "v"])
+		return door if door >= 0 else _tile_id("door" if s == "D" else "airlock_closed")
 	return id
 
 
@@ -150,6 +173,12 @@ func _draw() -> void:
 			if id < 0:
 				continue
 			var r := Rect2(view + Vector2(x, y) * cs, Vector2(cs, cs))
+			var standing: Array = _standing.get((deck * int(_built["deck_stride"]) + y) * int(_built["width"]) + x, [])
+			if not standing.is_empty():
+				draw_texture_rect_region(_tex, r, tile_region(int(standing[0])))
+				if int(standing[1]) >= 0:
+					draw_texture_rect_region(_tex, r, tile_region(int(standing[1])))
+				continue
 			var kind := MapBuilder.tile_kind(id)
 			if kind == "glass" or kind == "grate" or kind == "hatch":
 				var under := _cell_tile(deck + 1, x, y)
@@ -191,6 +220,13 @@ func _draw_marks(cs: float) -> void:
 		if int(m["deck"]) != deck:
 			continue
 		var what := str(m["what"])
+		if str(m["type"]) == "&":
+			# (v91) a door's kind: a word on the door (its picture is drawn in that kind)
+			var spot := view + (Vector2(int(m["x"]), int(m["y"])) + Vector2(0.05, 0.3)) * cs
+			var word := MapBuilder._mark_name(what)
+			draw_string_outline(font, spot, word, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(10 * zoom), 8), 3, Color(0, 0, 0, 0.8))
+			draw_string(font, spot, word, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(10 * zoom), 8), Color(1.0, 0.85, 0.4))
+			continue
 		var col: Color = SYSTEM_COLOUR if str(m["type"]) == "%" else MARK_COLOURS.get(what, Color.WHITE)
 		var cells := drawing.room_cells(deck, Vector2i(int(m["x"]), int(m["y"])))
 		for c: Vector2i in cells:
@@ -252,12 +288,13 @@ func _draw_preview(cs: float) -> void:
 
 static func icon_tile(s: String) -> String:
 	## The tile that stands for a sign in the palette and in previews.
-	return {"#": "wall_h", ".": "floor_m_t", "s": "floor_m_t", "g": "glass_m_t", "c": "grate_m_t", "H": "ladder_m_t",
+	return {"#": "wall_h", ".": "floor_m_t", "s": "floor_m_t", "g": "glass_m_t", "c": "grate_m_t", "H": "ladder_m_t", "/": "stairs_up_v_1",
 		"D": "door", "A": "airlock_closed", "W": "window", "<": "window_l", ">": "window_r",
 		"1": "console_1", "2": "console_2", "3": "console_3", "4": "console_4", "5": "console_5", "6": "engine",
 		"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 		"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
-		"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
+		"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock", "E": "med_box", "J": "tech_box",
+		"N": "fire_box", "L": "wall_light", "R": "rock_1", "O": "rock_ore", ",": "rock_ground"}.get(s, "")
 
 
 # ---------------------------------------------------------------- the mouse

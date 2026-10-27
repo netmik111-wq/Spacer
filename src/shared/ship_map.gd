@@ -25,7 +25,7 @@ const FLEET_JOIN := "|"              # (v85, the author's FS1) "ship02|ship01": 
 const FLEET_GAP := 4                 # rows of open space between two ships of the fleet
 # (v85) what each ship of the fleet has of its own: set in place by use_ship (the server's and the client's
 # code ask `helm`, `guns`, `smes`... of the ship they work for; a gun or a tray is numbered within its ship)
-const FLEET_FITS := ["oxygen", "helm", "chart", "engine", "air_plant", "locker", "intercom", "holo", "shield", "bench",
+const FLEET_FITS := ["oxygen", "helm", "chart", "engine", "air_plant", "locker", "intercom", "med_box", "tech_box", "holo", "shield", "bench",
 	"bay", "autodoc", "scanner", "smes", "smes_small", "comms", "trays", "cryo", "stove", "backup_rooms", "guns",
 	"gun_console", "drone_console", "lock_pump", "vents", "spawns"]
 
@@ -53,6 +53,7 @@ var door_of := PackedInt32Array()    # door number per cell, -1 = no door there
 var door_sides := PackedInt32Array() # per door, two cells: the floor on either side of it (-1 = none).
                                      # The first is above or to the left, the second below or to the right.
 var hull := PackedInt32Array()       # cells of the outer shell that can be breached: wall or window
+var panes := PackedInt32Array()      # (v91) our ships' window cells: each has a shutter (Systems.update_panes)
                                      # with a walkable cell on one side and space on another
 var oxygen := {}                     # wall cells with an oxygen station (the red box): cell -> true
 var helm := {}                       # wall cells with the ship's controls (the panel with orange lights)
@@ -61,6 +62,8 @@ var engine := {}                     # wall cells with the engine: it drives the
 var air_plant := {}                  # wall cells with the air plant: cell -> the cell it blows into
 var locker := {}                     # wall cells with the supply locker
 var intercom := {}                   # wall cells with an intercom panel
+var med_box := {}                    # (v91, the author's M7) wall cells with a first-aid box (see Supplies.box)
+var tech_box := {}                   # (v91) wall cells with a spare parts box
 var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var drone_console := {}              # (v54) wall cells with the drone monitor (the fifth console of the mockup)
@@ -90,6 +93,7 @@ var door_partner := PackedInt32Array() # per door: the other door of its airlock
                                      # Only one of the two may be open at a time (see Doors.bump)
 var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
 var door_access := PackedByteArray() # per door: the access it asks for (Net.ACCESS_* bits), 0 = anybody
+var door_look := PackedStringArray() # (v91, the author's D1) per door: the kind it is drawn as ("" = by its rooms)
 var vents := PackedInt32Array()     # (v69) floor cells with a room's air vent, one per room (see _place_vents)
 var access_in := PackedByteArray()   # (v69) per cell: the access of the restricted room it lies in (0 = none):
                                      # its doors open for anybody leaving it (see leaving)
@@ -99,6 +103,10 @@ var air_down := PackedInt32Array()   # per cell: the cell below that shares its 
                                      # a hatch), or -1
 var air_up := PackedInt32Array()     # the same, the other way
 var climb := PackedInt32Array()      # per cell: where the ladder here leads (a cell on another deck), or -1
+var stair_to := PackedInt32Array()   # (v91, the author's F3) per cell: where stepping onto it takes one (the same
+                                     # spot of the deck above or below: see _find_stairs), or -1
+var flights: Array = []              # (v91) each flight of stairs on one deck: {"cells": [top, bottom] on the way down,
+                                     # "way": the way down (Vector2i), "down": true on the upper deck (his dark stairs)}
 
 # Another ship alongside (a derelict). Its drawing lives in its own map file
 # and is laid into this grid while it is near, at some place over our own
@@ -126,13 +134,28 @@ var tile_size := 32
 var atlas_columns := 8
 var tile_kinds := PackedStringArray()
 var tile_ids := {}                   # tile name -> id
+var tile_names := PackedStringArray() # (v91) tile id -> name
 var fitting := PackedByteArray()     # per tile id: 1 = a thing fitted into a wall, used from the room it faces
+var on_floor := {}                   # (v91, the author) cell -> the floor's tile under a machine standing on the floor:
+                                     # nobody walks there, but one sees over it (unless it is `tall`)
+var tall := {}                       # (v91, the author's G1: "vision is blocked if it's tall") such cells of the machines
+                                     # in TALL: they stop sight and light as a wall does
+var root := PackedInt32Array()       # (v91) per cell: the cell that stands for the machine it is a piece of (see MACHINE_WIDE)
+var pieces := {}                     # (v91) such a cell -> every cell of its machine, for a machine of more than one
+# (v91, the author's G1) the machines on the floor one cannot see over; the rest (consoles, the workbench, the
+# stove, trays, the autodoc...) are low, and sight passes over them
+const TALL := ["engine", "air_plant", "locker", "shield", "bay", "smes", "smes_small", "cryo"]
+# (v90, the author's tile set) how many tiles wide a machine's picture is: a row of as many of one machine
+# ("33" for the helm, "444" for the gun console) is one machine drawn wide, used from any of its cells.
+# (v91) The star chart's big holo table is two by two ("11" over "11").
+const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_5": 1, "comms": 2, "holo": 2,
+	"locker": 1, "intercom": 1, "smes": 2, "smes_small": 1}
 
 # Things set into a wall face one room (see fitting_front) and are used from
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo", "stove", "dock"]
+	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -323,9 +346,11 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	atlas_columns = int(tiles["columns"])
 	tile_kinds = PackedStringArray()
 	tile_ids = {}
+	tile_names = PackedStringArray()
 	for t: Dictionary in tiles["tiles"]:
 		tile_ids[str(t["name"])] = tile_kinds.size()
 		tile_kinds.append(str(t["kind"]))
+		tile_names.append(str(t["name"]))
 	map_name = name
 	width = int(data["width"])
 	height = int(data["height"])
@@ -362,6 +387,16 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		walk[i] = 1 if ok else 0
 		opaque[i] = 1 if id >= 0 and not ok and not windows.has(id) else 0
 		h = (h * 31 + id + 2) & 0x7FFFFFFF
+	on_floor = {}
+	tall = {}
+	for t: Array in data.get("things", []):
+		var at := int(t[1]) * width + int(t[0])
+		on_floor[at] = int(t[2])
+		opaque[at] = 0
+		if cells[at] >= 0 and TALL.has(tile_names[cells[at]].trim_prefix("pirate_")):
+			tall[at] = true
+			opaque[at] = 1
+		h = (h * 31 + at + 3) & 0x7FFFFFFF
 	spawns = []
 	for s: Array in data["spawns"]:
 		spawns.append(Vector2i(int(s[0]), int(s[1])))
@@ -387,6 +422,12 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		door_access.append(int(access[d]) if d < access.size() else 0)
 		h = (h * 31 + door_access[d]) & 0x7FFFFFFF
 	crc = ((h * 31 + width) * 31 + deck_stride * 7 + deck_count) & 0x7FFFFFFF
+	door_look = PackedStringArray()
+	door_look.resize(doors.size())
+	for l: Array in data.get("door_looks", []):
+		var d := door_of[int(l[1]) * width + int(l[0])]
+		if d >= 0:
+			door_look[d] = str(l[2])
 	door_sides = PackedInt32Array()
 	for d in doors.size():
 		var at: Vector2i = doors[d]
@@ -401,6 +442,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	air_plant = {}
 	locker = {}
 	intercom = {}
+	med_box = {}
+	tech_box = {}
 	holo = {}
 	shield = {}
 	bench = {}
@@ -440,7 +483,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		if at >= 0 and at < room_of.size() and room_of[at] >= 0:
 			for c: int in rooms[room_of[at]]:
 				brig[c] = 1
+	_group_machines()
 	for i in cells.size():
+		if cells[i] >= 0 and cells[i] < fitting.size() and fitting[cells[i]] == 1 and root[i] != i:
+			continue                         # (v91) a piece of a wide machine: its first cell stands for it
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
 			guns.append(i)
 		if cells[i] >= 0 and cells[i] == tile_ids.get("console_4", -2):
@@ -453,6 +499,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			locker[i] = true
 		if cells[i] == tile_ids.get("intercom", -1):
 			intercom[i] = true
+		if cells[i] == tile_ids.get("med_box", -1):
+			med_box[i] = true
+		if cells[i] == tile_ids.get("tech_box", -1):
+			tech_box[i] = true
 		if cells[i] == tile_ids.get("holo", -1):
 			holo[i] = true
 		if cells[i] == tile_ids.get("shield", -1):
@@ -487,13 +537,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		if cells[i] == tile_ids.get("engine", -1):
 			engine[i] = true
 		elif cells[i] == tile_ids.get("air_plant", -1):
-			# it blows into the room it faces: the cell below it, or failing that the one above
-			var x := i % width
-			var y := i / width
-			if walkable(x, y + 1):
-				air_plant[i] = i + width
-			elif walkable(x, y - 1):
-				air_plant[i] = i - width
+			# it blows into the room it faces
+			var front := fitting_front(i)
+			if front >= 0:
+				air_plant[i] = front
 		if cells[i] == tile_ids.get("console_2", -1):
 			oxygen[i] = true
 		elif cells[i] == tile_ids.get("console_3", -1):
@@ -536,6 +583,10 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			if climb[under] < 0:
 				climb[under] = i             # (a shaft through three decks would need a choice of direction)
 
+	var stairs_problem := _find_stairs(name)
+	if stairs_problem != "":
+		return stairs_problem
+
 	hull = PackedInt32Array()
 	for y in height:
 		for x in width:
@@ -549,7 +600,73 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			var outside := is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 			if inside and outside:
 				hull.append(y * width + x)
+	panes = PackedInt32Array()
+	for i in cells.size():
+		if cells[i] >= 0 and windows.has(cells[i]) and not tile_names[cells[i]].ends_with("window_field"):
+			panes.append(i)
 	_place_vents()
+	return ""
+
+
+func _stair(c: int) -> bool:
+	return c >= 0 and c < cells.size() and cells[c] >= 0 and tile_names[cells[c]].trim_prefix("pirate_") == "stairs"
+
+
+func _find_stairs(name: String) -> String:
+	## (v91, the author's F3: "dark stairs go down, white go up") A flight of stairs is two cells of '/' in a row on
+	## one deck and the same two on the deck below. Going down, one walks onto the upper flight from its open end
+	## and, stepping onto its other end (over the stairwell), comes out on the lower deck at the cell under it,
+	## walking on into the room there; going up the other way round. The upper flight ends at a wall, the lower
+	## one at the room's floor, so `stair_to` holds the two cells where one changes decks.
+	stair_to = PackedInt32Array()
+	stair_to.resize(width * height)
+	stair_to.fill(-1)
+	flights = []
+	var done := {}
+	var down := deck_stride * width
+	for i in cells.size():
+		if not _stair(i) or done.has(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var along := Vector2i(1, 0) if x + 1 < width and _stair(i + 1) else Vector2i(0, 1)
+		var step := along.y * width + along.x
+		var j := i + step
+		if not _stair(j) or deck_of(j / width) != deck_of(y) or _stair(j + step):
+			return "Карта «%s»: лестница в %d,%d должна быть длиной в две клетки." % [name, x, y]
+		done[i] = true
+		done[j] = true
+		if _stair(i - down) and _stair(j - down):
+			continue                         # the lower flight of a pair, met with the upper one
+		if not (_stair(i + down) and _stair(j + down)):
+			return "Карта «%s»: лестнице в %d,%d нужна такая же на палубе ниже." % [name, x, y]
+		done[i + down] = true
+		done[j + down] = true
+		# below, the flight comes out into the room at one end and has a wall behind the other
+		var top := -1
+		var bottom := -1
+		var way := along
+		var lj := j + down
+		var li := i + down
+		if walkable(lj % width + along.x, lj / width + along.y) and not _stair(lj + step):
+			top = li
+			bottom = lj
+		elif walkable(li % width - along.x, li / width - along.y) and not _stair(li - step):
+			top = lj
+			bottom = li
+			way = -along
+		if top < 0 or walkable(top % width - way.x, top / width - way.y):
+			return "Карта «%s»: лестница в %d,%d должна выходить в отсек на палубе ниже одним концом, а другим упираться в стену." % [name, x, y]
+		var over := bottom - down
+		if walkable(over % width + way.x, over / width + way.y):
+			return "Карта «%s»: лестница в %d,%d наверху должна упираться в стену." % [name, x, y]
+		stair_to[over] = bottom
+		stair_to[top] = top - down
+		if air_down[over] < 0:
+			air_down[over] = bottom
+			air_up[bottom] = over
+		flights.append({"cells": PackedInt32Array([top - down, over]), "way": way, "down": true})
+		flights.append({"cells": PackedInt32Array([top, bottom]), "way": way, "down": false})
 	return ""
 
 
@@ -571,7 +688,7 @@ func _place_vents() -> void:
 		var best := -1
 		var best_d := INF
 		for c in room:
-			if climb[c] >= 0 or see_through[c] == 1:
+			if climb[c] >= 0 or see_through[c] == 1 or _stair(c):
 				continue
 			var d := Vector2(c % width, c / width).distance_squared_to(mid)
 			if d < best_d - 0.001:
@@ -827,6 +944,7 @@ func add_other(name: String) -> int:
 		door_partner.append(-1)
 		door_vent.append(0)
 		door_access.append(0)              # another ship's doors ask for no access
+		door_look.append("")
 	return others.size() - 1
 
 
@@ -859,6 +977,10 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 		walk[c] = base_walk[c]
 		opaque[c] = base_opaque[c]
 		door_of[c] = -1
+		on_floor.erase(c)
+		tall.erase(c)
+		root[c] = c
+		pieces.erase(c)
 	other_cells = PackedInt32Array()
 	other_at = at
 	for d in range(other_first_door, doors.size()):
@@ -869,6 +991,7 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 	var o = other
 	for d in o.doors.size():
 		door_kind[other_first_door + d] = o.door_kind[d]
+		door_look[other_first_door + d] = o.door_look[d]
 	if at != NO_OTHER:
 		for y in o.height:
 			for x in o.width:
@@ -880,6 +1003,17 @@ func place_other(at: Vector2i, kind: int = 0) -> void:
 				cells[c] = o.cells[from]
 				walk[c] = o.walk[from]
 				opaque[c] = o.opaque[from]
+				if o.on_floor.has(from):
+					on_floor[c] = o.on_floor[from]
+				if o.tall.has(from):
+					tall[c] = true
+				var r: int = o.root[from]
+				root[c] = (at.y + r / o.width) * width + at.x + r % o.width
+				if o.pieces.has(from):
+					var mine := PackedInt32Array()
+					for q: int in o.pieces[from]:
+						mine.append((at.y + q / o.width) * width + at.x + q % o.width)
+					pieces[c] = mine
 		for d in o.doors.size():
 			var p: Vector2i = o.doors[d] + at
 			doors[other_first_door + d] = p
@@ -1019,14 +1153,108 @@ func cell_ahead(x: int, y: int, facing: int) -> int:
 func fitting_front(cell: int) -> int:
 	## The floor cell a thing fitted into this wall cell faces: the one below it,
 	## failing that above, then to the right or left. -1 = no fitting here.
+	## (v91) A machine standing on the floor faces away from the wall it stands against.
 	if cell < 0 or cell >= cells.size() or cells[cell] < 0 or cells[cell] >= fitting.size() or fitting[cells[cell]] == 0:
 		return -1
 	var x := cell % width
 	var y := cell / width
+	if on_floor.has(cell):
+		for v: Vector2i in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+			if _wall(x + v.x, y + v.y) and walkable(x - v.x, y - v.y):
+				return (y - v.y) * width + x - v.x
 	for v: Vector2i in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
 		if walkable(x + v.x, y + v.y):
 			return (y + v.y) * width + x + v.x
 	return -1
+
+
+func behind(cell: int) -> int:
+	## (v91) The wall cell a machine standing on the floor has its back to; -1 = none.
+	var front := fitting_front(cell)
+	if not on_floor.has(cell) or front < 0:
+		return -1
+	return cell - (front - cell)
+
+
+func _wall(x: int, y: int) -> bool:
+	## (v91) A wall here (a window, a fitting in it, an airlock's frame), not a machine on the floor nor open space?
+	if x < 0 or y < 0 or x >= width or y >= height:
+		return false
+	var c := y * width + x
+	return cells[c] >= 0 and walk[c] == 0 and not on_floor.has(c)
+
+
+func _group_machines() -> void:
+	## (v91) Which cells are pieces of one machine (MACHINE_WIDE): a row of as many of one as its picture is wide,
+	## along the wall it stands at (down a side wall for one facing sideways); the holo table two by two. Its first
+	## cell (top, then left) stands for it everywhere: in the lists of machines, for "use", breakdowns and mending.
+	root = PackedInt32Array()
+	root.resize(width * height)
+	for i in root.size():
+		root[i] = i
+	pieces = {}
+	for i in cells.size():
+		var id := cells[i]
+		if id < 0 or id >= fitting.size() or fitting[id] == 0 or root[i] != i or pieces.has(i):
+			continue
+		var x := i % width
+		var y := i / width
+		var name := tile_names[id].trim_prefix("pirate_")
+		var k: int = MACHINE_WIDE.get(name, 1)
+		if k < 2:
+			continue
+		var group := PackedInt32Array()
+		if name == "console_1" and on_floor.has(i) and x + 1 < width and y + 1 < height \
+				and cells[i + 1] == id and cells[i + width] == id and cells[i + width + 1] == id:
+			group = PackedInt32Array([i, i + 1, i + width, i + width + 1])
+		else:
+			var front := fitting_front(i)
+			var step := width if front == i - 1 or front == i + 1 else 1
+			# the run of this machine this cell starts (cells before it are already grouped or on their own)
+			var run := 0
+			var c := i
+			while c < cells.size() and cells[c] == id and (step == width or c / width == y) and root[c] == c:
+				run += 1
+				c += step
+			var before := 0
+			c = i - step
+			while c >= 0 and cells[c] == id and (step == width or c / width == y):
+				before += 1
+				c -= step
+			if before > 0 or run % k != 0:
+				continue                     # not a whole number of machines: each cell is one on its own
+			for j in run:
+				group.append(i + j * step)
+			for g in range(0, run, k):
+				var one := group.slice(g, g + k)
+				for p in one:
+					root[p] = one[0]
+				pieces[one[0]] = one
+			continue
+		for p in group:
+			root[p] = group[0]
+		pieces[group[0]] = group
+
+
+func standing_look(cell: int) -> String:
+	## (v91) The picture a machine standing on the floor here is drawn in (tools/make_assets.py FLOOR_LOOKS),
+	## without the pirates' "pirate_": turned the way it faces, a piece of a wide one. "" = no machine on the floor.
+	if not on_floor.has(cell) or cells[cell] < 0:
+		return ""
+	var name := tile_names[cells[cell]].trim_prefix("pirate_")
+	var front := fitting_front(cell)
+	var side := "_up" if front == cell - width else ("_r" if front == cell - 1 else ("_l" if front == cell + 1 else ""))
+	var all: PackedInt32Array = pieces.get(root[cell], PackedInt32Array())
+	if all.is_empty():
+		return name + "_fl" + side
+	if name == "console_1" and all.size() == 4:
+		return "console_1_fl_t_%d" % all.find(cell)
+	return "%s_fl%s_w%d_%d" % [name, side, all.size(), all.find(cell)]
+
+
+func machine_of(cell: int) -> int:
+	## (v91) The cell that stands for the machine this cell is a piece of (itself for anything else).
+	return root[cell] if cell >= 0 and cell < root.size() else cell
 
 
 func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
@@ -1035,20 +1263,24 @@ func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
 	## from the room it faces (never through the wall), from the cell in front
 	## of it or either cell beside that one (facing the wall). Cells in `keep`
 	## (holes in the hull) are always the cell ahead. -1 = nothing.
+	## (v91) A machine standing on the floor is reached from any cell round it; a piece of
+	## a wide one gives the cell that stands for the whole machine (machine_of).
 	var ahead := cell_ahead(x, y, facing)
 	if ahead < 0 or keep.has(ahead):
 		return ahead
 	var here := y * width + x
+	if on_floor.has(ahead):
+		return root[ahead]
 	if Net.diagonal(facing):
 		# (v74) facing on a slant: a thing on the floor there or somebody there; failing that,
 		# a fitting right beside us on either side of the slant; never a doorway or a wall
 		for c: int in [y * width + x + Net.DX[facing], (y + Net.DY[facing]) * width + x]:
-			if fitting_front(c) == here:
-				return c
+			if fitting_front(c) == here or on_floor.has(c):
+				return root[c]
 		return ahead if walk[ahead] == 1 and door_of[ahead] < 0 else -1
 	var front := fitting_front(ahead)
 	if front >= 0:
-		return ahead if front == here else -1
+		return root[ahead] if front == here else -1
 	if walk[ahead] == 1 or cells[ahead] < 0:
 		return ahead
 	# a bare wall: a fitting beside this spot of it, facing the cell beside us
@@ -1056,7 +1288,7 @@ func use_ahead(x: int, y: int, facing: int, keep: Dictionary = {}) -> int:
 	for side: int in [-along, along]:
 		var c := ahead + side
 		if c >= 0 and c < cells.size() and absi(c % width - ahead % width) <= 1 and fitting_front(c) == here + side:
-			return c
+			return root[c]
 	return ahead
 
 
@@ -1115,6 +1347,13 @@ func deck_of(y: int) -> int:
 
 func deck_of_cell(cell: int) -> int:
 	return (cell / width) / deck_stride
+
+
+func set_pane(cell: int, down: bool) -> void:
+	## (v91, the author's W1) A window's shutter down stops light and sight as a wall does; up, the
+	## window lets them through again. The server and the client both call it (Systems.update_panes,
+	## GameClient's hull records), so they see alike.
+	opaque[cell] = 1 if down else 0
 
 
 func local_y(y: int) -> int:

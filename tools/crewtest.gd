@@ -174,9 +174,9 @@ func _initialize() -> void:
 	print("speech")
 	server.keep_heard = true
 	server.air.refill()
-	p.st.place(13, 14)                   # by the intercom of the upper corridor
-	q.st.place(17, 14)
-	e.st.place(23, map.deck_stride + 14) # by one on the lower deck
+	p.st.place(13, 15)                   # by the intercom of the upper corridor
+	q.st.place(17, 15)
+	e.st.place(23, map.deck_stride + 15) # by one on the lower deck
 	for who in [p, q, e]:
 		who.st.dir = Net.DIR_NONE
 		who.said.clear()
@@ -206,7 +206,7 @@ func _initialize() -> void:
 	server.air.air[q.st.y * map.width + q.st.x] = 0.0
 	_say(p, "а в вакууме?")
 	_expect(_heard(q) < 0, "a vacuum carries no voice")
-	q.st.place(14, 14)
+	q.st.place(14, 15)
 	_say(p, "шлем к шлему")
 	_expect(_heard(q) == Net.CHAT_NEAR, "except helmet to helmet")
 	server.air.refill()

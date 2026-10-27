@@ -152,6 +152,9 @@ const TELEPORT_COLOUR := Color(0.55, 0.75, 1.0)
 class DeckView:
 	var group: Node2D                # everything of this deck
 	var layer: TileMapLayer          # its tiles
+	var marks: TileMapLayer          # (v91) the author's marks on the floor: room vents, an airlock's danger line
+	var lamps: TileMapLayer          # (v91, his F2) lamps on the floor by the doors that may not open
+	var objects: TileMapLayer        # (v91) the machines standing on its floor, over the floor under them
 	var holes: Node2D                # breaches in its hull
 	var fx: Node2D                   # air streaming out, sparks
 	var things: Node2D               # things lying on the floor
@@ -224,12 +227,13 @@ void fragment() {
 """
 const STAR_PIXELS_PER_UNIT := 9.0
 const DOOR_STAGES := [3, 2]            # (v90) open frames of a door in a horizontal wall and in a vertical one
-# (v90) machines the author's tile set draws, and how many tiles wide (see _laid and tools/make_assets.py MACHINE_ART)
-const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_5": 1, "comms": 2, "holo": 2,
-	"locker": 1, "intercom": 1, "smes": 2, "smes_small": 1}
 var _tile_names := PackedStringArray()   # (v90) tile id -> its name in the sheet
 var _source_id := 0
 var _door_shown := PackedStringArray()  # per door: the name of the tile on screen ("" = none yet)
+var _lamp_shown := PackedStringArray()  # (v91) per door: the colour of its floor lamps on screen ("" = none yet)
+var _pane_stage := {}                # (v91) window cell -> how far down its shutter is drawn (1 up .. 5 down)
+var _pane_shown := {}                # (v91) window cell -> the tile it is drawn in now
+const PANE_STAGES_PER_SECOND := 4.0  # (the author's W1b) a shutter comes down in a second
 var _door_type := PackedStringArray()   # (v90) per door: base, tech, cargo or herm (see _door_types)
 var _door_was_open := PackedByteArray()
 var _door_closing := PackedFloat32Array()   # per door: seconds left of the closing frame
@@ -326,6 +330,15 @@ func setup(p_client: GameClient) -> void:
 		deck.layer = TileMapLayer.new()
 		deck.layer.tile_set = tiles
 		deck.group.add_child(deck.layer)
+		deck.marks = TileMapLayer.new()
+		deck.marks.tile_set = tiles
+		deck.group.add_child(deck.marks)
+		deck.lamps = TileMapLayer.new()
+		deck.lamps.tile_set = tiles
+		deck.group.add_child(deck.lamps)
+		deck.objects = TileMapLayer.new()
+		deck.objects.tile_set = tiles
+		deck.group.add_child(deck.objects)
 		deck.ceiling = TileMapLayer.new()
 		deck.ceiling.tile_set = tiles
 		deck.ceiling.modulate = CEILING_TINT
@@ -356,6 +369,8 @@ func setup(p_client: GameClient) -> void:
 	# doors are redrawn as they open and close
 	_door_shown.resize(map.doors.size())
 	_door_shown.fill("")
+	_lamp_shown.resize(map.doors.size())
+	_lamp_shown.fill("")
 	_door_was_open.resize(map.doors.size())
 	_door_closing.resize(map.doors.size())
 
@@ -529,6 +544,9 @@ func _arrange(shown: int) -> void:
 		deck.group.z_index = _decks.size() + 1 if above else _decks.size() - 1 - d
 		deck.group.modulate = BELOW_TINT if d > shown else Color.WHITE
 		deck.layer.visible = not above
+		deck.marks.visible = not above
+		deck.lamps.visible = not above
+		deck.objects.visible = not above
 		deck.holes.visible = not above
 		deck.fx.visible = not above
 		deck.things.visible = not above
@@ -715,6 +733,11 @@ func _update_ship(delta: float) -> void:
 			var at: Vector2i = map.doors[d]
 			_decks[map.deck_of(at.y)].layer.set_cell(Vector2i(at.x, map.local_y(at.y)), _source_id,
 				Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+		var lamp := _lamp_of(d)
+		if lamp != _lamp_shown[d]:
+			_lamp_shown[d] = lamp
+			_lay_lamps(d, lamp)
+	_update_panes(delta)
 	# holes in the hull
 	if client.ship_changes != _ship_seen:
 		_ship_seen = client.ship_changes
@@ -730,6 +753,8 @@ func _update_ship(delta: float) -> void:
 			if not client.holes.has(cell):
 				(_hole_views[cell] as Sprite2D).queue_free()
 				_hole_views.erase(cell)
+			else:
+				(_hole_views[cell] as Sprite2D).visible = not client.shut_panes.has(cell)   # (v91) behind its shutter
 		for deck in _decks:
 			deck.fx.queue_redraw()
 	else:
@@ -802,8 +827,9 @@ func _draw_things(d: int) -> void:
 		if int(c[0]) == d and map.walk[int(c[3])] == 1:
 			var lie := Vector2.from_angle(float(c[2])) * 2.0
 			pen.draw_line(c[1] - lie, c[1] + lie, Color(0.86, 0.66, 0.26, clampf(float(c[4]) / CASING_FADE, 0.0, 1.0)), 1.5)
-	# (v69) each room's air vent: a grille in the floor, under whatever lies on it
-	for cell: int in map.vents:
+	# (v69) each room's air vent: a grille in the floor, under whatever lies on it (v91: the author's picture
+	# in the marks layer; drawn here only for an older sheet of one's own without it)
+	for cell: int in map.vents if not map.tile_ids.has("vent") else PackedInt32Array():
 		if map.deck_of_cell(cell) != d:
 			continue
 		var at := _on_deck(cell) * _tile + Vector2(8, 11)
@@ -1015,6 +1041,9 @@ func _paint_decks() -> void:
 	for d in _decks.size():
 		var deck: DeckView = _decks[d]
 		deck.layer.clear()
+		deck.marks.clear()
+		deck.lamps.clear()
+		deck.objects.clear()
 		deck.ceiling.clear()
 		for y in map.deck_height:
 			for x in map.width:
@@ -1025,10 +1054,20 @@ func _paint_decks() -> void:
 				var in_atlas := Vector2i(id % map.atlas_columns, id / map.atlas_columns)
 				if map.see_through[cell] == 1:
 					deck.ceiling.set_cell(Vector2i(x, y), _source_id, in_atlas)
-				id = _laid(cell, id)
-				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns))
+				var look := _laid(cell, id)
+				if map.on_floor.has(cell):
+					# (v91) a machine standing on the floor: the floor under it, the machine over it
+					var under: int = map.on_floor[cell]
+					deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(under % map.atlas_columns, under / map.atlas_columns))
+					if look != id:
+						deck.objects.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
+					continue
+				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
 	_door_shown.fill("")
+	_lamp_shown.fill("")
+	_pane_shown.clear()
 	_door_types()
+	_lay_marks()
 	_other_seen = client.other_changes
 
 
@@ -1045,32 +1084,72 @@ func _laid(cell: int, id: int) -> int:
 	## where it stands. A window between windows is one long pane; a machine whose front is the room
 	## above is seen from behind; a row of as many of one machine as its picture is wide ("33" for the
 	## helm, "444" for the gun console) is drawn as one wide machine. The map itself is not changed.
+	## (v91) A machine standing on the floor gets its picture alone (drawn over the floor), turned the way
+	## it faces: from the front, from behind, or from the side by a side wall.
 	var map := client.map
 	var full := _tile_name(id)
 	var tint := "pirate_" if full.begins_with("pirate_") else ""
 	var name := full.trim_prefix(tint)
 	var x := cell % map.width
 	var look := ""
-	if name in ["window", "window_l", "window_r"]:
-		var left := x > 0 and _tile_name(map.cells[cell - 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
-		var right := x + 1 < map.width and _tile_name(map.cells[cell + 1]).trim_prefix(tint) in ["window", "window_l", "window_r"]
-		look = "window_m" if left and right else ("window_r" if left else ("window_l" if right else "window"))
-	elif MACHINE_WIDE.has(name):
+	if name in ["window", "window_l", "window_r", "window_v"]:
+		return _pane_look(cell, 1)
+	elif map.on_floor.has(cell):
+		look = map.standing_look(cell)
+	elif ShipMap.MACHINE_WIDE.has(name):
 		var up := map.fitting_front(cell) == cell - map.width
-		var k: int = MACHINE_WIDE[name]
-		var pos := 0
-		while x - pos > 0 and map.cells[cell - pos - 1] == id:
-			pos += 1
-		var run := pos + 1
-		while x + run - pos < map.width and map.cells[cell + run - pos] == id:
-			run += 1
-		if k > 1 and run % k == 0:
-			look = "%s%s_w%d_%d" % [name, "_up" if up else "", k, pos % k]
+		var root := map.machine_of(cell)
+		if map.pieces.has(root):
+			var all: PackedInt32Array = map.pieces[root]
+			look = "%s%s_w%d_%d" % [name, "_up" if up else "", all.size(), all.find(cell)]
 		elif up:
 			look = name + "_up"
 	if look == "" or look == name:
 		return id
 	return int(map.tile_ids.get(tint + look, id))
+
+
+func _pane_look(cell: int, stage: int) -> int:
+	## (v90) A window between windows is one long pane; (v91, the author's W2 and W3) one onto open space
+	## is his outer pane, one between rooms the inner; a window in a side wall is his upright one. Stage
+	## 1 is the window, 2..5 its shutter coming down.
+	var map := client.map
+	var id := map.cells[cell]
+	var full := _tile_name(id)
+	var tint := "pirate_" if full.begins_with("pirate_") else ""
+	var name := full.trim_prefix(tint)
+	var x := cell % map.width
+	var look := ""
+	if name == "window_v":
+		var up := cell >= map.width and map.cells[cell - map.width] == id
+		var down := cell + map.width < map.cells.size() and map.cells[cell + map.width] == id
+		look = "window_v_%s_s%d" % ["m" if up and down else ("down" if up else ("up" if down else "single")), stage]
+	else:
+		var panes := ["window", "window_l", "window_r"]
+		var left := x > 0 and _tile_name(map.cells[cell - 1]).trim_prefix(tint) in panes
+		var right := x + 1 < map.width and _tile_name(map.cells[cell + 1]).trim_prefix(tint) in panes
+		var piece := "_m" if left and right else ("_r" if left else ("_l" if right else ""))
+		var y := cell / map.width
+		var outer := map.is_space(x, y - 1) or map.is_space(x, y + 1)
+		if stage > 1:
+			look = "window%s_s%d" % [piece, stage]
+		else:
+			look = ("window_o" if outer and map.tile_ids.has(tint + "window_o" + piece) else "window") + piece
+	return int(map.tile_ids.get(tint + look, id))
+
+
+func _update_panes(delta: float) -> void:
+	## (v91) Window shutters come down and go up a stage at a time, as the server says they stand.
+	var map := client.map
+	for c: int in map.panes:
+		var want := 5.0 if client.shut_panes.has(c) else 1.0
+		var stage := move_toward(float(_pane_stage.get(c, 1.0)), want, delta * PANE_STAGES_PER_SECOND)
+		_pane_stage[c] = stage
+		var look := _pane_look(c, clampi(roundi(stage), 1, 5))
+		if int(_pane_shown.get(c, -1)) != look:
+			_pane_shown[c] = look
+			_decks[map.deck_of_cell(c)].layer.set_cell(Vector2i(c % map.width, map.local_y(c / map.width)), _source_id,
+				Vector2i(look % map.atlas_columns, look / map.atlas_columns))
 
 
 func _door_types() -> void:
@@ -1090,6 +1169,8 @@ func _door_types() -> void:
 		var t := "base"
 		if not map.door_here(d):
 			pass
+		elif map.door_look[d] != "":
+			t = map.door_look[d]             # (v91, the author's D1) the kind the drawing gives it
 		elif map.door_partner[d] >= 0 or a < 0 or b < 0:
 			t = "herm"
 		elif map.door_access[d] != 0:
@@ -1100,20 +1181,130 @@ func _door_types() -> void:
 
 
 func _door_look(d: int, frame: int) -> String:
-	## (v90) The tile a door is drawn in: shut with its lamp (green: opens; yellow: only for some jobs;
-	## red: welded, locked against boarders or its shutter down), or opening, frame 1.. of its stages.
+	## (v90) The tile a door is drawn in: shut with its lamp, or opening, frame 1.. of its stages (his open
+	## frames have the lamp yellow). (v91, the author's D2b: "green is open, yellow is like the open-up
+	## animation, red is blocked closed") green: it opens for us; red: it does not (see _blocked).
 	var map := client.map
-	var doors := client.doors
 	var o := "h" if map.door_kind[d] == ShipMap.DOOR_BAND else "v"
 	var t := _door_type[d] if d < _door_type.size() else "base"
 	var head := "%sdoor_%s_%s_" % [map.door_tint(d), t, o]
 	if frame > 0:
 		return head + "open%d" % frame
-	if doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1:
-		return head + "red"
-	if map.door_access[d] != 0 and doors.picked[d] == 0:
-		return head + "yellow"
-	return head + "green"
+	return head + ("red" if _blocked(d) else "green")
+
+
+func _blocked(d: int) -> bool:
+	## (v91) A shut door that will not open for us now: welded, locked against boarders, blast-locked, held by
+	## its airlock's other door, or of a room our job may not enter.
+	var doors := client.doors
+	return doors.welded[d] == 1 or doors.blast[d] == 1 or doors.locked[d] == 1 or doors.held_by_partner(d) \
+		or doors.barred(d, client.map.door_access[d], client.pred.access)
+
+
+func _lamp_of(d: int) -> String:
+	## (v91, the author's F2 and D2b) The colour of the lamps on the floor by a door that may not open, as
+	## its own lamp: green it opens for us, yellow it is open or on the way, red it will not open for us
+	## now; orange broken (stuck, or no power). "" = no lamps by this door.
+	var map := client.map
+	var doors := client.doors
+	if not map.door_here(d) or (map.door_access[d] == 0 and map.door_partner[d] < 0):
+		return ""
+	if doors.jammed[d] == 1 or doors.dead[d] == 1 or doors.manual:
+		return "orange"
+	if client.door_open_amount(d) > 0.0:
+		return "yellow"
+	if _blocked(d):
+		return "red"
+	return "green"
+
+
+func _beside(d: int, flat: int) -> PackedInt32Array:
+	## (v91) The floor cells on either side of a door, each with the turn of a mark lying along the door
+	## (one drawn for the door above it): [cell, turn, cell, turn...].
+	var map := client.map
+	var out := PackedInt32Array()
+	var at: Vector2i = map.doors[d]
+	for k in 2:
+		var c := map.door_sides[d * 2 + k]
+		if c < 0 or map.walk[c] != 1 or map.on_floor.has(c):
+			continue
+		var way := at - Vector2i(c % map.width, c / map.width)
+		var turn := 0
+		if way.y > 0:
+			turn = TileSetAtlasSource.TRANSFORM_FLIP_V
+		elif way.x < 0:
+			turn = TileSetAtlasSource.TRANSFORM_TRANSPOSE
+		elif way.x > 0:
+			turn = TileSetAtlasSource.TRANSFORM_TRANSPOSE | TileSetAtlasSource.TRANSFORM_FLIP_H
+		if flat == 1 and way.y != 0:
+			turn = 0                         # a mark across the middle needs no flip
+		elif flat == 1:
+			turn = TileSetAtlasSource.TRANSFORM_TRANSPOSE
+		out.append(c)
+		out.append(turn)
+	return out
+
+
+func _lay_lamps(d: int, lamp: String) -> void:
+	var map := client.map
+	var id: int = map.tile_ids.get(map.door_tint(d) + "lamp_" + lamp, -1) if lamp != "" else -1
+	var by := _beside(d, 0)
+	for k in range(0, by.size(), 2):
+		var c := by[k]
+		var layer := _decks[map.deck_of_cell(c)].lamps
+		var spot := Vector2i(c % map.width, map.local_y(c / map.width))
+		if id < 0:
+			layer.erase_cell(spot)
+		else:
+			layer.set_cell(spot, _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns), by[k + 1])
+
+
+func _lay_marks() -> void:
+	## (v91) The author's marks on the floor: a grille over each room's air vent, the danger line just
+	## inside an airlock's outer door. An older sheet without them keeps the vents drawn as before.
+	var map := client.map
+	var vent: int = map.tile_ids.get("vent", -1)
+	if vent >= 0:
+		for c: int in map.vents:
+			_decks[map.deck_of_cell(c)].marks.set_cell(Vector2i(c % map.width, map.local_y(c / map.width)), _source_id,
+				Vector2i(vent % map.atlas_columns, vent / map.atlas_columns))
+	# (v91, the author's F3) his stairs over each flight: dark going down, white going up, drawn down to the
+	# right or downwards and turned the other way by flipping (make_assets.py STAIRS)
+	for f: Dictionary in map.flights:
+		var two: PackedInt32Array = f["cells"]
+		var way: Vector2i = f["way"]
+		var head := "%sstairs_%s_%s_" % ["pirate_" if map.tile_names[map.cells[two[0]]].begins_with("pirate_") else "",
+			"dn" if f["down"] else "up", "h" if way.y == 0 else "v"]
+		if not map.tile_ids.has(head + "0"):
+			continue
+		var first := mini(two[0], two[1])
+		var at := Vector2i(first % map.width, map.local_y(first / map.width))
+		var layer: TileMapLayer = _decks[map.deck_of_cell(first)].marks
+		var spots: Array = [[0, Vector2i(0, -1)], [1, Vector2i(1, -1)], [2, Vector2i(0, 0)], [3, Vector2i(1, 0)]] if way.y == 0 \
+			else [[0, Vector2i(0, 0)], [1, Vector2i(0, 1)]]
+		for spot: Array in spots:
+			var piece: int = spot[0]
+			var to: Vector2i = spot[1]
+			var turn := 0
+			if way.x < 0:
+				to.x = 1 - to.x
+				turn = TileSetAtlasSource.TRANSFORM_FLIP_H
+			elif way.y < 0:
+				to.y = 1 - to.y
+				turn = TileSetAtlasSource.TRANSFORM_FLIP_V
+			var id: int = map.tile_ids[head + str(piece)]
+			layer.set_cell(at + to, _source_id, Vector2i(id % map.atlas_columns, id / map.atlas_columns), turn)
+	for d in map.doors.size():
+		if not map.door_here(d) or map.door_vent[d] != 1:
+			continue
+		var line: int = map.tile_ids.get(map.door_tint(d) + "danger_line", -1)
+		if line < 0:
+			continue
+		var by := _beside(d, 1)
+		for k in range(0, by.size(), 2):
+			var c := by[k]
+			_decks[map.deck_of_cell(c)].marks.set_cell(Vector2i(c % map.width, map.local_y(c / map.width)), _source_id,
+				Vector2i(line % map.atlas_columns, line / map.atlas_columns), by[k + 1])
 
 
 func _leave_afterimage(id: int, sprite: Sprite2D, _at: Vector2i) -> void:
@@ -1339,7 +1530,13 @@ func _draw_hover() -> void:
 	var corner := _on_deck(_hover_on.x) * _tile
 	match _hover_kind():
 		1:
-			_hover_pen.draw_texture(_tile_line(client.map.cells[_hover_on.x], _hover_on.x), corner, _hover_colour())
+			# (v91) every piece of a wide machine
+			var map := client.map
+			var root := map.machine_of(_hover_on.x)
+			for c: int in (map.pieces[root] if map.pieces.has(root) else PackedInt32Array([_hover_on.x])):
+				var line := _tile_line(map.cells[c], c)
+				if line != null:
+					_hover_pen.draw_texture(line, _on_deck(c) * _tile, _hover_colour())
 		2:
 			_floor_things_at(_hover_pen, _hover_on.x, corner)    # the things again, over their silhouettes
 		3:
@@ -1380,7 +1577,9 @@ func _tile_line(own: int, cell: int) -> Texture2D:
 			if int(map.tile_ids[n]) == id:
 				name = n
 		var wall: int = map.tile_ids.get("pirate_wall_h" if name.begins_with("pirate_") else "wall_h", -1)
-		if wall >= 0:
+		if map.on_floor.has(cell) and id != own:
+			wall = -1                        # (v91) a machine on the floor: its picture alone, on a clear tile
+		if wall >= 0 or id != own:
 			line = _outline_of(id, wall)
 	_tile_lines[id] = line
 	return line
@@ -1396,7 +1595,7 @@ func _outline_of(id: int, wall: int) -> Texture2D:
 	for y in t:
 		for x in t:
 			var a := _tiles_image.get_pixel(at.x + x, at.y + y)
-			var b := _tiles_image.get_pixel(bare.x + x, bare.y + y)
+			var b := _tiles_image.get_pixel(bare.x + x, bare.y + y) if wall >= 0 else Color(0, 0, 0, 0)
 			if absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) + absf(a.a - b.a) > 0.1:
 				inside[y * t + x] = 1
 	# close one-pixel gaps (a pixel of the thing the colour of the wall), then
@@ -1708,6 +1907,12 @@ func _draw_look() -> void:
 			if faces and seen.has(n):
 				walls_seen.append(c)
 				break
+	# (v91) a tall machine seen: the wall it stands against shows above it, as the rest of the wall does
+	for c: Vector2i in walls_seen.duplicate():
+		var cell := (c.y + dy) * map.width + c.x
+		var back := map.behind(cell) if map.tall.has(cell) else -1
+		if back >= 0 and not walls_seen.has(Vector2i(back % map.width, back / map.width - dy)):
+			walls_seen.append(Vector2i(back % map.width, back / map.width - dy))
 	for c: Vector2i in seen:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
 	for c: Vector2i in walls_seen:
@@ -2269,8 +2474,8 @@ func _draw_fx(d: int) -> void:
 			pen.draw_line(from, to, Color(1.0, 0.9, 0.4, 0.95), 1.0)
 			pen.draw_rect(Rect2(to, Vector2(1, 1)), Color(1, 1, 1))
 	for cell: int in client.holes.keys():
-		if map.deck_of_cell(cell) != d:
-			continue
+		if map.deck_of_cell(cell) != d or client.shut_panes.has(cell):
+			continue                         # (v91) a window's shutter over it lets no air out
 		var hx := cell % map.width
 		var hy := cell / map.width           # in the map's grid: that is where the air is looked up
 		var ly := map.local_y(hy)            # on its deck: that is where it is drawn

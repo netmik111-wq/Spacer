@@ -91,6 +91,8 @@ static func apply_input(st: State, value: int) -> void:
 static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	if st.cd > 0:
 		st.cd -= 1
+	if st.cd == 0:
+		_take_stairs(st, map)
 	if st.rise > 0:
 		# (v82) getting up: it may turn, not walk, and stands once the second is over
 		st.rise = 0 if st.down else st.rise - 1
@@ -149,6 +151,20 @@ static func step(st: State, map: ShipMap, doors: Doors, tick: int) -> bool:
 	st.cd = st.span
 	st.move_tick = tick
 	return true
+
+
+static func _take_stairs(st: State, map: ShipMap) -> void:
+	## (v91, the author's F3) A step onto the far end of a flight of stairs, once over, comes out on the
+	## other deck (ShipMap.stair_to): in the middle of the cell there, drawn there at once (no slide between decks).
+	var to := map.stair_to[st.y * map.width + st.x] if map.stair_to.size() > 0 else -1
+	if to < 0 or map.held.has(to):
+		return
+	st.x = to % map.width
+	st.y = to / map.width
+	st.ox = 0
+	st.oy = 0
+	st.fx = st.qx()
+	st.fy = st.qy()
 
 
 static func slant_open(map: ShipMap, x: int, y: int, dx: int, dy: int) -> bool:

@@ -51,7 +51,7 @@ func update(p: Player) -> void:
 			p.train(Net.SKILL_REPAIR)
 			p.remove(Net.ITEM_PATCH)
 			server.air.set_hole(cell, false)
-			server.replication.hull_record(cell, 0)
+			server.replication.hull_record(cell, server.systems.pane_state(cell))
 			server.chat.say("%s заделывает пробоину. Вентиляция понемногу вернёт воздух в отсек." % p.name)
 	elif server.outside.can_mend(p, cell):
 		# (v61) the hull's strength mended from outside, a patch at a time
@@ -269,6 +269,8 @@ func press(p: Player) -> void:
 		server.medbay.scan(p, ahead)         # (v60) the body scanner's report
 	elif ahead >= 0 and server.map.trays.has(ahead) and server.garden.can(p, ahead) != "":
 		server.chat.tell(p, server.garden.can(p, ahead))     # (v63) how the plant is doing, or why nothing can be planted
+	elif ahead >= 0 and not server.supplies.box_kinds(ahead).is_empty():
+		server.supplies.box(p, ahead)        # (v91) a first-aid box or a spare parts box on the wall
 	elif ahead >= 0 and server.map.cryo.has(ahead):
 		server.chat.tell(p, "Криокапсула. Резерв экипажа спит здесь и не ест: %d чел. Замена погибшему выходит отсюда." % server.reserve)
 	elif usable_ahead(p) or _lying_near(p):

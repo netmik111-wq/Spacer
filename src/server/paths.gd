@@ -17,7 +17,7 @@ static func first_step(map: ShipMap, start: int, goals: Dictionary, ok: Callable
 	## [the first step of a shortest way from `start` to the nearest of `goals` (a direction
 	## 1..8, -1 = the ladder underfoot, 0 = none), that goal (-1 = none reachable)].
 	## `ok(x, y)`: may the walker step into that cell (bounds are checked here).
-	## Ladders are climbed (but not out in space). `start` itself never counts as a goal.
+	## Ladders are climbed (but not out in space), (v91) stairs walked. `start` itself never counts as a goal.
 	var w := map.width
 	var h := map.height
 	var cost := {start: 0}
@@ -46,7 +46,9 @@ static func first_step(map: ShipMap, start: int, goals: Dictionary, ok: Callable
 					memo[j] = ok.call(nx, ny) and not (map.held.has(j) and not goals.has(j))
 				if memo[j]:
 					open[d] = true
-					_reach(buckets, cost, first, j, b + STRAIGHT, d if cell == start else int(first[cell]))
+					# (v91) a step onto the stairs' far end comes out on the other deck
+					var to := map.stair_to[j] if map.stair_to[j] >= 0 else j
+					_reach(buckets, cost, first, to, b + STRAIGHT, d if cell == start else int(first[cell]))
 			if slants and map.door_of[cell] < 0:
 				for d in range(5, Net.DIRS + 1):
 					var dx: int = Net.DX[d]

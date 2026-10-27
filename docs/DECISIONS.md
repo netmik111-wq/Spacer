@@ -1818,3 +1818,73 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
   `horizontal_wall`, whose top face the foot opens into. v90.1's made-up flipped-T pieces are gone. His
   `internal_corner_l/r` (with `vertical_wall_to_internal_corner_l/r` above) join a vertical wall that goes on down past a band
   turning one way; our maps refuse such a wall (├, ┤), so they stay unused until a map allows them.
+
+
+## v91: machines on the floor, doors, windows, wall boxes (his v90 answers and two pictures)
+
+- **Machines stand on the floor** (his M1 "machines become objects on the ground", M3 "not walls, on the ground", two pictures
+  of a locker and the gun console before the bottom wall). A machine sign is a thing on a floor cell (`things` in the map's
+  JSON: cell and the floor under it; `ShipMap.on_floor`): `walk` 0, `opaque` 0 (G1: walked round, seen over, as in SS13).
+  His G1 note "if it's small like a cabinet you can move through it, but vision is blocked if it's tall": asked on a card,
+  he picked "machines solid, decor walk-through" (small decor such as his v2/v3 lockers, when it comes, may be walked
+  through). Tall machines (`ShipMap.TALL`: locker, both SMES, engine, air plant, module bay, shield, cryopod; by his
+  pictures and what they are) are `opaque` 1 (`ShipMap.tall`), so they stop sight and cast shadows; the wall at a tall
+  machine's back (`ShipMap.behind`) is told seen by the client when the machine is, or a dark patch would sit above it.
+  Air does not stand in its cell (the air grid is walkable cells), so it goes round it; against a wall that changes nothing.
+  The signs are `MapBuilder.MACHINE_SIGNS` (= `MACHINE_SIGNS` in `make_assets.py`); the oxygen station, the intercom, the pump,
+  guns, the dock console and the boxes stay wall things. A run of machine signs between two wall pieces with nothing solid
+  above or below is still read as in the wall, so old drawings with a console row in a wall band keep working.
+- **Its front** is the floor cell opposite its back: the first of up, down, left, right that is a plain wall with walkable
+  floor on the other side (`ShipMap.fitting_front`). Used only from there (`use_ahead`), as wall machines were.
+- **Wide machines are one** (`ShipMap.root`, `pieces`, `machine_of`): a row of k same signs, k from `MACHINE_WIDE`, is
+  grouped from its first cell; only the root goes into the device dictionaries, so breakdowns, use and hints see one
+  machine. A 2×2 block of the chart sign on the floor is his big holo table.
+- **Old drawings are converted when read** (G3 A, `MapBuilder.to_floor`, also in the editor): each in-wall machine moves to
+  the floor: a row of machines in a wall goes one cell into the room below it (or else above), where that is plain floor, no
+  `@`/`%` mark points, no doorway is blocked and no part of the deck is cut off; a row with no such room stays in the wall.
+  The game's own maps were converted once by `tools/floorize.gd`; `ship02` was redrawn by hand (G2 A): rooms with machines 3
+  tall, the bridge 4× with the holo table in its middle, the engine and the air plant inside the locked engine rooms.
+- **A save of a ship drawn anew** (`"layout"` = `ShipMap.crc` in the save): a mismatch keeps the campaign (crew, store, money,
+  road) but not what sits in cells: air, holes, broken machines, jammed and picked doors are dropped, floor things go to the
+  locker, people and bodies go to spawn places. Mine: cells of the old drawing may be walls or machines now.
+- **Door kinds from the drawing** (his D1, my D1b A): a `& deck x y kind` line or the editor's mark menu on a door; without
+  one, v90's rule. The map JSON carries `door_looks`.
+- **Door lamps** (his D2b note: "green is open, yellow is like open up animation, red is blocked closed; sealed door with
+  welding for now, a sprite for sealed doors later"): his open frames already have the lamp yellow, so a shut door is green
+  or red only; red is "will not open for me" (`WorldView._blocked`: welded, blast-locked, locked, held by its airlock
+  partner, or `Doors.barred` for our own `pred.access`), so a job's door is green to those it opens for. A blast-locked door
+  stays red for the crew too, though it opens for us: it says the ship is sealed. No blinking (my first reading of his D2
+  "with animation", dropped with the `door_*_off` frames, which were never shipped). v90's yellow shut frame stays in the
+  sheet unused (the sheet's older pieces keep their places).
+- **Floor lamps** (his F2, my F2b A, he picked A) only by doors that can lock (job doors, airlock doors), on the floor cells
+  either side, turned toward the door (TileMap transform flags): green, yellow while the door is open or opening, red as the
+  door's own lamp. Orange is "broken": stuck open, a dead ship's door, or no power. The lamp's bar is cut from his `floor_door_lamp_*` minus
+  his plain floor, so it lies over any floor. Vents and the danger line are in their own layer under the lamps.
+- **Window panes** (his W2): v1 where the cell above or below is space, v2 elsewhere. His v1 horizontal pane has no shutter
+  stages, so a shutter coming down over it is drawn in the v2 stages (asked him whether to draw v1 stages).
+- **Window shutters** (his W1 A and my W1b A): the server decides (`Systems.update_panes`, every air step, per fleet ship by
+  its own alert and power). Down at red alert, and over a window with a hole `PANE_SHUT_TICKS` (1 s) after it was torn: the
+  hole stays in `Air.holes` (it needs a patch, counts as a hole) but is `Air.sealed` (no leak, no hiss). Clients learn it as
+  hull states 2 (hole behind a shutter) and 3 (shutter down), protocol 65. A shutter down is opaque on both sides
+  (`ShipMap.set_pane`; the server forgets its cached lines of sight, the client bumps `other_changes`): a metal plate.
+  Without power nothing moves, as the doors' shutters. A save does not keep the sealing: after loading, a broken window
+  shuts again 1 s later.
+- **Wall boxes** (his M7): the first-aid box and the spare parts box are the supply locker's stock within reach, not stock of
+  their own: nothing new comes aboard, nothing to save, no number changes (he wants numbers tested by people first). With a
+  whole one in hand E puts it back (the same key, so no new control). The spare parts box gives the kind one carries fewer of.
+  The fire box and the wall light are pictures (no fire yet; light is not per room in this game). New signs `E J N L`.
+- **Chart icons** (his M5): ours his big ship (`map_ship_5`) in his own colour (87, 191, 236 at alpha 132), turned toward
+  the course and keeping that heading when stopped; pirates `map_ship_3`, wrecks and derelicts `map_ship_4`, traders `map_ship_2`,
+  hunters `map_ship_1`. The small ones are drawn twice as big (4-10 px otherwise). In the sheet they are white, tinted when drawn.
+- **Stairs** (his F3 "dark stairs down, white up", F3b A): sign `/`, two cells in a row on a deck over the same two on the
+  deck below (`ShipMap._find_stairs`; the direction comes from the drawing: the lower flight opens into a room at one end,
+  the upper one ends at a wall). One changes decks on arriving (the step over, `cd` 0) on the far end of a flight
+  (`ShipMap.stair_to`): over the stairwell above, under the upper deck's floor below, in shared `Mover.step`, so the client
+  predicts it, and placed in the middle of the cell with no slide drawn between decks (a quarter-step walker's offsets are
+  dropped: half a tile at most). No ping-pong: one comes out on a cell that is not a far end. Mine: a flight is 2 long
+  because his pictures are 48-64 px; his "big" (two wide) pictures are not used yet. The pictures lie in the marks layer,
+  a row's flight 2×2 (the top of his white railing reaches into the row above), a column's 1×2, flipped for the other way.
+  Paths treat a step onto a far end as arriving below (bots, pirates, robots). Air: the far end above shares air with the
+  cell under it (`air_down`). Our ship02 got one flight next to the stern ladder (the ladder stays: tests know it).
+- **Not in v91**: his brown and red lockers (M6 C: only looks) need a sign for a decor locker (and, by his card pick, may
+  be walked through).

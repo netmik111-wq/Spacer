@@ -234,13 +234,15 @@ func _append_ship_full(out: PackedByteArray, c: int, cx: int, cy: int) -> void:
 			put_door(buf, d)
 		_append_records(out, Net.SEC_DOOR, buf, Net.DOOR_BYTES)
 	var holes := PackedByteArray()
-	for cell: int in server.air.holes.keys():
-		if chunk_of(cell % server.map.width, cell / server.map.width) == c:
+	var told := {}
+	for cell: int in server.air.holes.keys() + server.systems.panes_down.keys():    # (v91) shutters down too
+		if chunk_of(cell % server.map.width, cell / server.map.width) == c and not told.has(cell):
+			told[cell] = true
 			var o := holes.size()
 			holes.resize(o + Net.HULL_BYTES)
 			holes.encode_s16(o, cell % server.map.width)
 			holes.encode_s16(o + 2, cell / server.map.width)
-			holes.encode_u8(o + 4, 1)
+			holes.encode_u8(o + 4, server.systems.pane_state(cell))
 	if not holes.is_empty():
 		_append_records(out, Net.SEC_HULL, holes, Net.HULL_BYTES)
 	var things := PackedByteArray()

@@ -28,6 +28,7 @@ var map: ShipMap
 var air := PackedFloat32Array()      # per cell; cells nobody can stand in stay 0
 var level := PackedByteArray()       # the same, rounded for the network: 0..Net.AIR_FULL
 var holes := {}                      # breached hull cell -> true
+var sealed := {}                     # (v91) holes in a window behind its shutter: they let no air out
 var settled := false                 # nothing is moving: steps are skipped until something changes
 
 var _next := PackedFloat32Array()
@@ -48,6 +49,7 @@ func setup(p_map: ShipMap) -> void:
 	_near.resize(n * 6)
 	_leaks.resize(n)
 	holes.clear()
+	sealed.clear()
 	reshape()
 	for i in _cells:
 		air[i] = 1.0
@@ -78,6 +80,8 @@ func reshape() -> void:
 			_near[i * 6 + 4] = map.air_up[i]
 			_near[i * 6 + 5] = map.air_down[i]
 	for cell: int in holes.keys():
+		if sealed.has(cell):
+			continue
 		var x := cell % map.width
 		var y := cell / map.width
 		for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
@@ -99,6 +103,25 @@ func set_hole(cell: int, on: bool) -> bool:
 		holes[cell] = true
 	else:
 		holes.erase(cell)
+		if sealed.has(cell):
+			sealed.erase(cell)               # (v91) it let no air out already
+			return true
+	_leak(cell, on)
+	return true
+
+
+func seal(cell: int, on: bool) -> void:
+	## (v91, the author's W1) A window's shutter shuts over a hole in it (it lets no air out) or opens.
+	if not holes.has(cell) or sealed.has(cell) == on:
+		return
+	if on:
+		sealed[cell] = true
+	else:
+		sealed.erase(cell)
+	_leak(cell, not on)
+
+
+func _leak(cell: int, on: bool) -> void:
 	var x := cell % map.width
 	var y := cell / map.width
 	for o: Vector2i in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
@@ -106,7 +129,6 @@ func set_hole(cell: int, on: bool) -> bool:
 			var i := (y + o.y) * map.width + x + o.x
 			_leaks[i] = _leaks[i] + 1 if on else _leaks[i] - 1
 	settled = false
-	return true
 
 
 func refill() -> void:

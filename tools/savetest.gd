@@ -122,6 +122,30 @@ func _initialize() -> void:
 	_expect(back.count(Net.ITEM_PISTOL + 5) == 1 and back.count(Net.ITEM_RADIO) == 1 and absf(back.health - health_was) < 0.01 and absf(back.wounds - wounds_was) < 0.01,
 		"with what it carried and its wounds")
 
+	print("a ship drawn anew since the save (v91)")
+	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(PATH))
+	saved["layout"] = int(saved["layout"]) + 1
+	var anew := PATH.get_basename() + "_anew.json"
+	var f := FileAccess.open(anew, FileAccess.WRITE)
+	f.store_string(JSON.stringify(saved))
+	f.close()
+	var c := GameServer.new()
+	get_root().add_child(c)
+	c.start(26195, "ship02", 0)
+	c.director.auto = false
+	_expect(c.resume_campaign(anew) == "", "it still goes on")
+	_expect(c.floor_things.is_empty() and c.ship.store[Net.ITEM_MAG] >= 1 and c.ship.store[Net.ITEM_PART] >= 1, "what lay on the floor is in the locker")
+	_expect(c.air.holes.is_empty() and c.ship.broken.is_empty(), "no holes nor breakdowns in cells that are something else now")
+	var spot := Vector2i(int(c.saved_crew["Аня"]["x"]), int(c.saved_crew["Аня"]["y"]))
+	var lying := Vector2i(-1, -1)
+	for who in c.players:
+		if who != null and who.corpse and who.name == "Боря":
+			lying = Vector2i(who.st.x, who.st.y)
+	_expect(c.map.spawns.has(spot) and c.map.spawns.has(lying), "the living and the dead are where one comes aboard")
+	c.stop()
+	c.queue_free()
+	Campaign.forget(anew)
+
 	print("the end")
 	var sm := b.crew.summary_packet()
 	_expect(sm.size() > 10 + 1 + 4 * b.usage.NAMES.size(), "the end screen gets what people used")

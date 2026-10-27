@@ -219,6 +219,8 @@ func _doorways() -> void:
 			table.copy_from(server.doors)
 			for t in range(1, 80):
 				Mover.step(whole, map, table, t)
+				if Vector2i(whole.x, whole.y) == after:
+					break                    # (v91: rooms three tall, it would walk on)
 			if Vector2i(whole.x, whole.y) != after:
 				continue
 			for s: int in [-1, 1]:
@@ -243,6 +245,8 @@ func _doorways() -> void:
 					Mover.step(st, map, table2, t)
 					if map.door_at(st.x, st.y) == d and (st.ox if way.y != 0 else st.oy) != 0:
 						in_line = false
+					if Vector2i(st.x, st.y) == after:
+						break
 				tried += 1
 				if Vector2i(st.x, st.y) == after and in_line:
 					through += 1

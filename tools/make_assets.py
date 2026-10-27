@@ -21,7 +21,7 @@ import struct
 import sys
 import zlib
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "art_src")
@@ -181,6 +181,66 @@ TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in LOOKS]
 # from above only (a turned T); last, as above
 TILES.append(("wall_tup", None, "wall"))
 TILES.append((PIRATE + "wall_tup", None, "wall"))
+# (v91) a vertical wall going on past a band that leaves it to one side (├ and ┤): his internal corners
+TILES += [("wall_jr", None, "wall"), ("wall_jl", None, "wall"), (PIRATE + "wall_jr", None, "wall"), (PIRATE + "wall_jl", None, "wall")]
+# (v91, his W3) a window in a side wall ('W' in a vertical wall); the client lays a column of them in his pieces
+TILES += [("window_v", None, "wall"), (PIRATE + "window_v", None, "wall")]
+# (v91, the author: "now it's not walls, it's on the ground") a machine standing on the floor is laid in two
+# tiles: the floor under it (the map's "things") and its picture alone, over the floor (WorldView._paint_decks):
+#   <machine>_fl, _fl_up, _fl_r, _fl_l   facing down (seen from the front), up (from behind), left (its back to
+#                                        a wall on its right: his "_r" pictures) and right
+#   <machine>_fl<side>_wK_I              piece I of one K tiles wide (from the top down for _r and _l)
+#   console_1_fl_t_I                     piece I (along the rows) of the star chart's big holo table, two by two
+FLOOR_MACHINES = ["console_1", "console_3", "console_4", "console_5", "engine", "air_plant", "locker", "holo", "shield",
+                  "bench", "bay", "autodoc", "scanner", "smes", "smes_small", "comms", "tray", "cryo", "stove"]
+FLOOR_SIDE = {"console_3": ("pilot_terminal_r", None), "console_4": ("gun_terminal_r", None),
+              "comms": ("communications_terminal_r", None), "console_5": ("drone_terminal_r", "drone_terminal_l"),
+              "locker": ("Locker_r", "Locker_l")}
+FLOOR_LOOKS = []
+for _m in FLOOR_MACHINES:
+    _k = MACHINE_ART[_m][2] if _m in MACHINE_ART else 1
+    for _side in ("", "_up", "_r", "_l"):
+        FLOOR_LOOKS.append((_m + "_fl" + _side, None, "wall"))
+        if _k > 1:
+            for _i in range(_k):
+                FLOOR_LOOKS.append(("%s_fl%s_w%d_%d" % (_m, _side, _k, _i), None, "wall"))
+for _i in range(4):
+    FLOOR_LOOKS.append(("console_1_fl_t_%d" % _i, None, "wall"))
+TILES += FLOOR_LOOKS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in FLOOR_LOOKS]
+# (v91, the author's F2 and D2b) lamps on the floor by a door (green opens, yellow open or opening, orange
+# broken, red blocked), the danger line inside an airlock's outer door and a room's air vent, each alone on a
+# clear tile, laid over the floor by the client. (A door's own yellow frame, from v90, is no longer laid: his
+# yellow lamp is in his open frames.)
+MARKS = [("lamp_" + _c, None, "floor") for _c in ("green", "yellow", "orange", "red")]
+MARKS += [("danger_line", None, "floor"), ("vent", None, "floor")]
+TILES += MARKS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MARKS]
+# (v91, his W2) a window onto open space is his "v1" pane (the rest, between rooms, his "v2"); laid by the
+# client in place of the map's window, by what is on its other side. While its shutter comes down it is
+# drawn in the v2 stages (his set has no v1 stages for a horizontal window)
+OUTER_PANES = [("window_o" + _piece, None, "wall") for _piece in WINDOW_PIECES]
+TILES += OUTER_PANES
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in OUTER_PANES]
+# (v91, his M7) things on a wall: the first-aid box and the spare parts box (each hands out what the supply
+# locker keeps of them), the fire box (only a picture until there is fire) and a wall light
+WALL_BOX_ART = {"med_box": "med_box", "tech_box": "tex_box", "fire_box": "fire_box", "wall_light": "wall_light_horizontal"}
+TILES += [(_name, None, "wall") for _name in WALL_BOX_ART]
+TILES += [(PIRATE + _name, None, "wall") for _name in WALL_BOX_ART]
+# (v91, his M5) his five ship pictures for the star chart, white (the chart tints them; ours in his colour)
+MAP_SHIPS = [("map_ship_%d" % _i, None, "floor") for _i in range(1, 6)]
+TILES += MAP_SHIPS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MAP_SHIPS]
+# (v91, the author's F3: "dark stairs go down, white go up") a flight of stairs ('/', two cells on a deck and the
+# same two on the deck below): its cells are plain floor ("stairs"); his picture is laid over them by the client
+# (WorldView._lay_marks) in pieces, a flight along a row as 2x2 (the row above takes the top of the railing),
+# one along a column as 1x2, drawn going down to the right or downwards and flipped for the other way
+STAIRS = [("stairs", None, "floor")]
+for _k in ("dn", "up"):
+    STAIRS += [("stairs_%s_h_%d" % (_k, _i), None, "floor") for _i in range(4)]
+    STAIRS += [("stairs_%s_v_%d" % (_k, _i), None, "floor") for _i in range(2)]
+TILES += STAIRS
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in STAIRS]
 ATLAS_COLS = 8
 
 
@@ -258,6 +318,8 @@ NEW_ART = {
     # T and the turned T is the plain horizontal wall
     "wall_cross": "T-shaped_corner",
     "wall_tup": "horizontal_wall",
+    "wall_jr": "internal_corner_r",
+    "wall_jl": "internal_corner_l",
     "wall_v": "vertical_wall",
     "wall_v_end": "vertical_wall_to_T-shaped_corner",
     "wall_v_end_l": "vertical_wall_to_internal_corner_r",
@@ -318,9 +380,108 @@ def art_transplant(old, old_wall, wall):
     return out
 
 
+def art_standing(art, name):
+    """(v91) A machine standing on the floor, alone on a clear tile (FLOOR_LOOKS), or None for another name."""
+    m = next((m for m in FLOOR_MACHINES if name.startswith(m + "_fl")), None)
+    if m is None:
+        return None
+    rest = name[len(m) + 3:]
+    clear = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    if rest.startswith("_t_"):
+        table = art["holo_map_big"].copy()
+        table.alpha_composite(art["holo_map_big_sphere"])
+        i = int(rest[3:])
+        return table.crop((i % 2 * T, i // 2 * T, i % 2 * T + T, i // 2 * T + T))
+    side, i = rest, -1
+    if "_w" in rest:
+        side, wide = rest.split("_w")
+        i = int(wide.split("_")[1])
+    k = MACHINE_ART[m][2] if m in MACHINE_ART else 1
+    if m == "tray":
+        full = art["hydroponic_floor_single"]                       # (his F1) a garden bed of soil
+    elif m in MACHINE_ART:
+        down, up, _ = MACHINE_ART[m]
+        full = art[up or down] if side == "_up" else art[down]
+        if side in ("_r", "_l"):
+            r, l = FLOOR_SIDE.get(m, (None, None))
+            if r is None:
+                full = full.rotate(90 if side == "_r" else -90, expand=True)   # no side view drawn: the front turned
+            elif side == "_r":
+                full = art[r]
+            else:
+                full = art[l] if l else ImageOps.mirror(art[r])
+    else:
+        full = make_machine(clear, m)                               # the game's own drawing, without the wall
+    tall = side in ("_r", "_l") and full.height > full.width
+    if k == 1 or full.size == (T, T):
+        return art_on(clear, full.crop((0, 0, T, T)) if full.size != (T, T) else full)
+    if i >= 0:
+        box = (0, i * T, T, i * T + T) if tall else (i * T, 0, i * T + T, T)
+        return art_on(clear, full.crop(box))
+    one = clear.copy()                                              # one cell of a wide machine: its two ends
+    if tall:
+        one.paste(full.crop((0, 0, T, T // 2)), (0, 0))
+        one.paste(full.crop((0, full.height - T // 2, T, full.height)), (0, T // 2))
+    else:
+        one.paste(full.crop((0, 0, T // 2, T)), (0, 0))
+        one.paste(full.crop((full.width - T // 2, 0, full.width, T)), (T // 2, 0))
+    return one
+
+
+def art_alone(picture, bare):
+    """What a picture of his has that the bare one has not, on a clear tile (a lamp off its floor plate)."""
+    out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    for y in range(T):
+        for x in range(T):
+            if picture.getpixel((x, y)) != bare.getpixel((x, y)):
+                out.putpixel((x, y), picture.getpixel((x, y)))
+    return out
+
+
 def art_tile(art, mock, images, name):
     """The picture for a tile of the sheet from the author's set, or None (drawn as before)."""
     floor = art["floor_m"]
+    standing = art_standing(art, name)
+    if standing is not None:
+        return standing
+    if name == "stairs":
+        return floor
+    if name.startswith("stairs_"):
+        _, k, o, i = name.split("_")
+        i = int(i)
+        if o == "h":
+            canvas = Image.new("RGBA", (2 * T, 2 * T), (0, 0, 0, 0))
+            if k == "dn":
+                canvas.alpha_composite(art["stairs_down_horizontal"], (0, T))
+            else:
+                canvas.alpha_composite(art["stairs_up_horizontal"], (8, 2 * T - 48))
+            return canvas.crop(((i % 2) * T, (i // 2) * T, (i % 2 + 1) * T, (i // 2 + 1) * T))
+        canvas = Image.new("RGBA", (T, 2 * T), (0, 0, 0, 0))
+        if k == "dn":
+            canvas.alpha_composite(art["stairs_down_vertical"], (0, 0))
+            canvas.alpha_composite(art["stairs_down_vertical"], (0, T))
+        else:
+            up = art["stairs_up_vertical"]
+            canvas.alpha_composite(up, (0, 2 * T - up.height))
+            canvas.alpha_composite(up.crop((0, 0, T, 2 * T - up.height)), (0, 0))
+        return canvas.crop((0, i * T, T, (i + 1) * T))
+    if name.startswith("lamp_"):
+        return art_alone(art["floor_door_lamp_" + name[5:]], floor)
+    if name.startswith("map_ship_"):
+        out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+        for y in range(T):
+            for x in range(T):
+                if art[name].getpixel((x, y))[3] > 0:
+                    out.putpixel((x, y), (255, 255, 255, 255))
+        return out
+    if name in WALL_BOX_ART:
+        return art_on(art["horizontal_wall"], art[WALL_BOX_ART[name]])
+    if name == "lock_pump":
+        return art_on(art["horizontal_wall"], art["button"])    # (v91, his M7) the airlock pump is his button
+    if name == "danger_line":
+        return art["floor_danger_line_decal"]
+    if name == "vent":
+        return art["vent_floor"]
     if name in NEW_ART:
         return art[NEW_ART[name]]
     if name == "door_half":
@@ -333,6 +494,10 @@ def art_tile(art, mock, images, name):
         for spot in list(FLOOR_SPOTS) + ["n"]:
             if name == family + "_" + spot:
                 return art_floor(art, family, spot)
+    if name == "window_v":
+        return art["glass_wall_v1_vertical_single_stage_1"]
+    if name.startswith("window_o"):
+        return art["glass_wall_v1_horizontal_%s" % WINDOW_SPOTS[name[len("window_o"):]]]
     if name.startswith("window") and name != "window_field":
         if name.startswith("window_v_"):
             piece, stage = name[len("window_v_"):].rsplit("_s", 1)
@@ -844,6 +1009,8 @@ def build_tiles():
 #   'g'  glass floor (the deck below shows through; air does not pass)
 #   'c'  catwalk: a grating (the deck below shows through and shares its air)
 #   'H'  ladder between decks: the same cell on two decks, one above the other
+#   '/'  (v91) stairs: two cells in a row on a deck and the same two on the deck below; the upper
+#        flight ends at a wall, the lower one at the room's floor (ShipMap._find_stairs)
 #   '#'  wall (piece chosen from its neighbours)
 #   'D'  door in a horizontal wall      'A'  airlock in a vertical wall
 #   'W'  window    '<' '>'  wide window (left, right half)
@@ -867,6 +1034,9 @@ def build_tiles():
 #   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
 #   'F'  (v86) a force field in the hull: air stays in, light and sight pass; the shuttle parks outside it
 #   'V'  (v86) wall with the shuttle's dock console: board the shuttle here or call it (a fleet's ships)
+#   'E'  (v91) wall with a first-aid box: E takes a first-aid kit the supply locker keeps (or puts one back)
+#   'J'  (v91) wall with a spare parts box: the same with spare parts (and circuit boards)
+#   'N'  (v91) wall with a fire box (a picture until there is fire)   'L'  (v91) a wall light
 #   'R'  (v81) an asteroid's rock      'O'  (v81) a vein of ore in the rock      ','  (v81) bare rock ground
 #        (rock and ground follow no room rule: draw them any shape)
 #
@@ -878,6 +1048,12 @@ def build_tiles():
 # x, y is any floor cell of the room (counted in the deck's drawing, first row 0). Every door of
 # that room then opens only for those whose job gives that access (see Net.ACCESS_*).
 # (v75) The access "brig" is no lock: it marks a brig cell, where a prisoner never slips the cuffs.
+#
+# (v91, the author's D1) A door is drawn by its room's kind (hermetic at an airlock or into space, technical
+# where only some jobs pass, cargo into a room with the supply locker or the module bay, else the plain one);
+# a line of its own gives one door the look of another kind:
+#   & <deck number, from 1> <x> <y> <base|tech|cargo|herm>
+# where x, y is the door's cell (the ship editor's door marks).
 #
 # A ship others fight (the pirate ship) names the rooms its systems stand in, the same way:
 #   % <deck number, from 1> <x> <y> <system>
@@ -893,12 +1069,22 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFV")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFVEJNL")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
-FLOOR_CHARS = set(".sgcH")
+FLOOR_CHARS = set(".sgcH/")
+# (v91, the author: "it's not walls, it's on the ground") machines stand on the floor: a machine sign is
+# in the wall only in a row of machines between two pieces of wall with nothing solid above or below it
+# (the old way, still read); anywhere else it is a thing on the floor, the floor going on under it
+MACHINE_SIGNS = set("1345678MZBUYXSQKGCP")
 COVER_OF = {"g": "glass", "c": "grate"}
 ROCK_CHARS = set("RO,")
+
+
+MACHINE_OF = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
+              "1": "console_1", "2": "console_2", "3": "console_3",
+              "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
+              "E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}
 
 
 class MapError(Exception):
@@ -917,12 +1103,36 @@ def resolve_map(name, lines, ids, w, h, above, below):
     def at(x, y):
         return g[y][x] if 0 <= x < w and 0 <= y < h else " "
 
-    def solid(x, y):  # anything that is part of the wall structure
+    def raw_solid(x, y):
         return at(x, y) in BAND_CHARS or at(x, y) == "A"
+
+    things = set()                               # (v91) machines standing on the floor
+    for y in range(h):
+        x = 0
+        while x < w:
+            if at(x, y) not in MACHINE_SIGNS:
+                x += 1
+                continue
+            x1 = x
+            while at(x1 + 1, y) in MACHINE_SIGNS:
+                x1 += 1
+            ends = [at(x - 1, y), at(x1 + 1, y)]
+            in_wall = all((e in BAND_CHARS or e == "A") and e not in MACHINE_SIGNS for e in ends) and \
+                not any(raw_solid(i, y - 1) or raw_solid(i, y + 1) for i in range(x, x1 + 1))
+            if not in_wall:
+                things.update((i, y) for i in range(x, x1 + 1))
+            x = x1 + 1
+
+    def solid(x, y):  # anything that is part of the wall structure
+        return raw_solid(x, y) and (x, y) not in things
+
+    def floor(x, y):
+        return at(x, y) in FLOOR_CHARS or (x, y) in things
 
     cells = [-1] * (w * h)
     spawns = []
     doors = []                                   # [x, y, "D" or "A"]
+    under = []                                   # (v91) [x, y, the floor's tile] under each thing on the floor
     for y in range(h):
         for x in range(w):
             c = at(x, y)
@@ -930,13 +1140,13 @@ def resolve_map(name, lines, ids, w, h, above, below):
             piece = None
             if c == " ":
                 continue
-            if c in FLOOR_CHARS:
+            if c in FLOOR_CHARS or (x, y) in things:
                 if c == "s":
                     spawns.append([x, y])
-                left = at(x - 1, y) in FLOOR_CHARS
-                right = at(x + 1, y) in FLOOR_CHARS
-                top = at(x, y - 1) not in FLOOR_CHARS
-                bottom = at(x, y + 1) not in FLOOR_CHARS
+                left = floor(x - 1, y)
+                right = floor(x + 1, y)
+                top = not floor(x, y - 1)
+                bottom = not floor(x, y + 1)
                 if top and bottom:
                     raise MapError(f"{name}: floor at {x},{y} is in a room one tile tall (rooms are two or more)")
                 row = "t" if top else ("b" if bottom else "m")   # (v81) rooms may be taller than two
@@ -954,6 +1164,17 @@ def resolve_map(name, lines, ids, w, h, above, below):
                     cover = "hatch" if down else "ladder"
                 if cover:
                     piece = cover + piece[5:]
+                if c == "/":
+                    if other(below, x, y) != "/" and other(above, x, y) != "/":
+                        raise MapError(f"{name}: stairs at {x},{y} need a '/' in the same cell of the deck above or below")
+                    piece = "stairs"
+                if (x, y) in things:
+                    if not any(at(x + dx, y + dy) in FLOOR_CHARS for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0))):
+                        raise MapError(f"{name}: machine '{c}' at {x},{y} has no floor beside it to be used from")
+                    if "D" in (at(x, y - 1), at(x, y + 1)) or "A" in (at(x - 1, y), at(x + 1, y)):
+                        raise MapError(f"{name}: machine '{c}' at {x},{y} stands in a doorway")
+                    under.append([x, y, ids[piece]])
+                    piece = MACHINE_OF[c]
             elif c in ROCK_CHARS:
                 piece = {"R": "rock_%d" % ((x * 7 + y * 13) % 3 + 1), "O": "rock_ore", ",": "rock_ground"}[c]
             elif c == "A":
@@ -967,6 +1188,10 @@ def resolve_map(name, lines, ids, w, h, above, below):
                 horizontal = e or wst
                 if not horizontal:
                     # part of a vertical wall
+                    if c == "W" and n and s:
+                        piece = "window_v"   # (v91, the author's W3) a window in a side wall
+                        cells[y * w + x] = ids[piece]
+                        continue
                     if c != "#":
                         raise MapError(f"{name}: '{c}' at {x},{y} must be inside a horizontal wall")
                     if not n or not s:
@@ -983,9 +1208,7 @@ def resolve_map(name, lines, ids, w, h, above, below):
                     else:
                         piece = "wall_v_end"
                 else:
-                    special = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
-                               "1": "console_1", "2": "console_2", "3": "console_3",
-                               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock"}
+                    special = MACHINE_OF
                     if c in special:
                         if not (e and wst) or n or s:
                             raise MapError(f"{name}: '{c}' at {x},{y} needs plain wall on both sides and none above/below")
@@ -1003,24 +1226,30 @@ def resolve_map(name, lines, ids, w, h, above, below):
                     elif e and wst:
                         piece = "wall_cross" if (n and s) else ("wall_tdown" if s else ("wall_tup" if n else "wall_h"))
                     elif e and not wst:
-                        if n == s:
+                        if n and s:
+                            piece = "wall_jr"    # (v91) a vertical wall going on past a band that leaves it to the right
+                        elif n == s:
                             raise MapError(f"{name}: wall end at {x},{y} has no matching corner piece")
-                        piece = "wall_tl" if s else "wall_bl"
+                        else:
+                            piece = "wall_tl" if s else "wall_bl"
                     else:
-                        if n == s:
+                        if n and s:
+                            piece = "wall_jl"
+                        elif n == s:
                             raise MapError(f"{name}: wall end at {x},{y} has no matching corner piece")
-                        piece = "wall_tr" if s else "wall_br"
+                        else:
+                            piece = "wall_tr" if s else "wall_br"
             else:
                 raise MapError(f"{name}: unknown character '{c}' at {x},{y}")
             cells[y * w + x] = ids[piece]
-    return cells, spawns, doors
+    return cells, spawns, doors, under
 
 
 def read_decks(name, lines):
     """Splits a drawing into decks: [(deck name, lines)], top deck first."""
     decks = []
     for l in lines:
-        if l.startswith("@") or l.startswith("%"):
+        if l.startswith("@") or l.startswith("%") or l.startswith("&"):
             continue
         if l.startswith("="):
             decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
@@ -1045,14 +1274,15 @@ def resolve_ship(name, lines, ids):
     stride = ((h + 1 + 15) // 16) * 16
     total = stride * (len(decks) - 1) + h
     cells = [-1] * (w * total)
-    spawns, doors = [], []
+    spawns, doors, under = [], [], []
     for d, (_, rows) in enumerate(decks):
         above = decks[d - 1][1] if d > 0 else None
         below = decks[d + 1][1] if d + 1 < len(decks) else None
-        deck_cells, deck_spawns, deck_doors = resolve_map("%s, deck %d" % (name, d + 1), rows, ids, w, h, above, below)
+        deck_cells, deck_spawns, deck_doors, deck_under = resolve_map("%s, deck %d" % (name, d + 1), rows, ids, w, h, above, below)
         cells[d * stride * w:d * stride * w + w * h] = deck_cells
         spawns += [[x, y + d * stride] for x, y in deck_spawns]
         doors += [[x, y + d * stride, k] for x, y, k in deck_doors]
+        under += [[x, y + d * stride, t] for x, y, t in deck_under]
     if not spawns and not name.startswith("derelict") and not name.startswith("pirate") and not name.startswith("asteroid"):
         raise MapError(f"{name}: no spawn points ('s')")
     door_access = [0] * len(doors)
@@ -1110,9 +1340,21 @@ def resolve_ship(name, lines, ids):
                     seen.add((x + dx, y + dy))
                     todo.append((x + dx, y + dy))
         zones.append([SYSTEMS.index(parts[3]), sorted((y + d * stride) * w + x for x, y in seen)])
+    door_looks = []                      # (v91, the author's D1) "& deck x y kind": that door drawn as base, tech, cargo or herm
+    for l in lines:
+        if not l.startswith("&"):
+            continue
+        parts = l[1:].split()
+        if len(parts) != 4 or parts[3] not in DOOR_TYPES:
+            raise MapError(f"{name}: bad door line '{l}'")
+        d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        if not any(dx == x0 and dy == y0 + d * stride for dx, dy, _ in doors):
+            raise MapError(f"{name}: door line '{l}' does not point at a door")
+        door_looks.append([x0, y0 + d * stride, parts[3]])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
-            "door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones}
+            "door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
+            "things": under, "door_looks": door_looks}
 
 
 def build_maps(images, ids):

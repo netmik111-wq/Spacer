@@ -29,8 +29,8 @@ func _initialize() -> void:
 	var lock: Dictionary = map.lock_pump[pump]
 	var inner: int = lock["inner"]
 	var outer: int = lock["outer"]
-	_expect((lock["chamber"] as PackedInt32Array).size() == 6 and map.door_vent[outer] == 1 and map.door_vent[inner] == 0,
-		"its chamber is 6 cells, the outer door opens into space")
+	_expect((lock["chamber"] as PackedInt32Array).size() == 9 and map.door_vent[outer] == 1 and map.door_vent[inner] == 0,
+		"its chamber is 9 cells, the outer door opens into space")
 	_run(4)
 	_expect(server.doors.locked[outer] == 1 and server.doors.locked[inner] == 0, "with air inside the outer door is sealed, the inner one is not")
 

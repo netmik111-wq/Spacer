@@ -39,7 +39,8 @@ func move(p: Player) -> void:
 		p.st.rise = 0
 	var was_x := p.st.x
 	var was_y := p.st.y
-	if Mover.step(p.st, server.map, server.doors, tick):
+	# ((v91) a step onto the stairs' far end, once over, comes out on the other deck, step or none)
+	if Mover.step(p.st, server.map, server.doors, tick) or p.st.x != was_x or p.st.y != was_y:
 		p.self_dirty = true
 		if p.st.x != was_x or p.st.y != was_y:
 			p.steps += 1

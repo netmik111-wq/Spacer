@@ -71,7 +71,7 @@ func _folders() -> void:
 	_write("mine", ours)
 	var lines := PackedStringArray()
 	for l in ours.split("\n"):
-		lines.append(l if l.begins_with("@") or l.begins_with("%") or l.begins_with(";") or l.begins_with("=") else l.replace("3", "#"))
+		lines.append(l if l.begins_with("@") or l.begins_with("%") or l.begins_with(";") or l.begins_with("=") else l.replace("3", "."))   # (v91: the helm stands on the floor)
 	_write("nohelm", "\n".join(lines))
 	_write("pirate_mine", FileAccess.get_file_as_string("res://maps/pirate02.txt"))
 	_write("derelict_mine", FileAccess.get_file_as_string("res://maps/derelict01.txt"))
