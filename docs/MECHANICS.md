@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v91 (version 0.84).
+Last updated: build v92 (version 0.85).
 
 Contents:
 
@@ -730,6 +730,55 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
   fuel, **30%** of the time one of its crew joins our reserve, and it leaves (no reward, no wreck).
 - Our shot is a refusal; so is silence for 20 s. Either way it then charges its jump to run, as below.
 - The guns can aim at any room, known or not: click it on the plan. Unknown rooms have no system button.
+
+### The fight in space (v92)
+
+Since v92 (the author's roadmap, item 0) a ship fight happens in real time in space, like Starsector, but every gun
+is worked by a person. Inside, the ship is the same grid it always was and never turns; outside, each ship is a
+**body** built from its drawing (all decks laid over each other, seen from above) that flies and turns.
+- **The space**: a circle of **170** cells round the place the fight began. A raider comes out of the dark about
+  **70** cells off (its wingman about **95**), broadside on.
+- **Flying**: the ship has a top speed, a push and a turn rate. Ours: **6** cells/s, push **1.6**, turn **0.35** rad/s.
+  Pirates by class: cutter 9 / 2.6 / 0.6, raider 7.5 / 2.0 / 0.45, gunship 6 / 1.5 / 0.32, cruiser 5 / 1.2 / 0.26,
+  battleship and carrier 4.5 / 1.0 / 0.22, drone ship 8 / 2.4 / 0.55. Backwards is 60% of the push, sideways 50%.
+  With no push a ship loses **25%** of its speed a second (its dampers). No engine or no power: it drifts.
+- **The pilot** at the ship's controls sees the fight in space instead of the sector map: **W/S** ahead and back,
+  **A/D** turn, **Q/E** sideways, **Space** the evade (a push of **6** cells/s sideways, away from the nearest shot
+  coming). The keys hold for 2 s after the last word from the client. Esc steps away from the controls.
+- **Nobody at the controls**: the ship drifts to a stop. A **bot** at the controls flies to the battle position the
+  console set: close in **30** cells, at a distance **60**, on the flank **32** (to its side), behind **28**.
+- **Pirate pilots** keep the range their temper likes (reckless 25, storm 30, machine 35, calculating 40, hunter 45,
+  siege 50, cautious 55), circling slowly round us and turning so most of their guns bear. A boarding ship closes
+  in as its docking clock runs down. A ship with its helm down or unmanned keeps its heading. A fleeing ship runs
+  straight out, and is gone past **1.15 x 170** cells.
+- **Guns** are turrets on the hull: each turns **90°** either side of straight out of its wall (180° in all). A gun
+  fires only at what is inside its arc. The gun console still fires every gun that bears; a gun that does not
+  bear is skipped and the console says so («Цель вне сектора обстрела»).
+- **Aiming by hand**: at a gun mount, "use" (anything in hand but a gun or a round for it) takes the gun's
+  controls: the mouse aims at any point of space inside the arc, the left button fires when it is charged. A gun
+  aimed by hand is left to its gunner by the console and the bots. A bot at a mount fires its gun by itself
+  whenever the gun bears. In a fight, empty hands at a mount no longer take the gun down.
+- **Shots fly**: blaster pellets **32** cells/s, ion **36**, neural **40**, lasers **45**, kinetic **55**, rockets
+  **22**, the railgun **110**; rockets reach **110** cells, the rest **85**. A shot strikes the first solid cell of
+  a ship it meets; the hit lands on that cell (a deck by lot where decks overlap): a breach, or the machine there
+  put out. A shot aimed at a gun, a console or the shield generator puts it out if it lands within **3** cells of it.
+- **Aim**: bots and pirates lead a moving target. Their aim is off by a spread that grows with how likely the old
+  dice roll was to miss (**0.12** rad per unit of the miss chance) and with range (doubled at **60** cells). Every
+  gun also scatters by itself: blasters **0.08** rad, guns of 4+ shots **0.05**, the rest **0.012**. So everything
+  that used to change hit chances (the pilot's dodge, evasion, the battle position, the focusing array) still
+  does, by making aim worse or better.
+- **Shields** are a bubble **1.6** cells off the hull. A shot that meets it is stopped as before (the shield takes
+  the hit), or passes (ion, kinetic rules and piercing as in "Ship weapons"). **Point defence** meets rockets
+  **16** cells off the hull, with its old chance.
+- **Beams, tractors, siphons, bombs** work while the target is inside the gun's arc and within **90** cells.
+- **Docking**: a boarding ship's docking clock waits while it is farther than **24** cells (plus our ship's size)
+  from the ship it boards. Docked, it rides alongside.
+- **Collisions**: ships that meet push apart; closing faster than **2** cells/s, both take **1** hull damage (at most
+  once every 2 s per pair).
+- **Leaving**: our ship out past the edge (170 cells) with no pirate within **60** cells for **3** s is out of the
+  fight: the pirates are left behind, as a jump away would leave them.
+- **V**: anyone aboard can open a small window of the fight in space at the top right of the screen.
+- Fights whose shots land at once (tests, the parting volley) still roll the old dice.
 
 ### Our crew at their posts (v55)
 
@@ -1547,6 +1596,7 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
 | F2 | admin panel (host and admins) |
 | Esc | menu: settings, admin panel, saving (host) |
 | H | (v74) the help book |
+| V | (v92) a small window of the fight in space (in a fight); at the controls in a fight W/S/A/D/Q/E steer |
 | F1 | ship status and key hints at the top of the screen (hidden by default since v47) |
 | F3 | debug |
 | F11 | full screen |
