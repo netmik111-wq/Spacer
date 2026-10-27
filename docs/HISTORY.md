@@ -197,6 +197,17 @@ Open problems:
 - v88.1 (0.81.1), his answers and note: pirates' visors glow red (U2 B); the shadow is drawn by the game and lies along a
   body lying down. Build in `/mnt/project-files/builds/v88.1/`.
 
+### v91 (his v90 answers and two pictures; plan on "Spacer v91 Plan")
+
+- Machines stand on the floor in front of the walls, used from their front, seen over (his M1, M3; my G1-G4 picks). Our ship
+  redrawn with 3-tall rooms, a big bridge and the holo table in its middle; old drawings move their machines out of the walls
+  when loaded; a save of a redrawn ship starts its cells over.
+- Doors: kinds from the drawing (`&` lines, the editor), blinking locked lamps, lamps on the floor by lockable doors, the danger
+  line in airlocks, vents in his picture. Windows: outer and inner panes, upright windows, shutters at red alert and over a
+  broken window (1 s, the room keeps its air). Boxes on the walls (first aid and spare parts from the locker's stock, fire box,
+  light), the pump as his button, his ship icons on the chart.
+- Protocol 65; new `tools/windowtest.gd` (45 scripts). Version 0.84, build in `/mnt/project-files/builds/v91/`.
+
 ### v90 (his tile set; questions on "Spacer v90 Tiles")
 
 - His Aseprite tile set draws the walls, floors, see-through floors, windows (a row is one pane), doors (four kinds, lamps by

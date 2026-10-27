@@ -20,6 +20,7 @@ var pump_goal := {}                    # (v73) pump cell -> the chamber air it s
 var cycles := {}                     # (v69) airlock pump cell -> [the door pressed, the tick it was pressed] (see call_lock)
 var vents_on := true                 # (v69) the room vents (tests switch them off)
 var panes_down := {}                 # (v91) window cell -> true: its shutter is down (see update_panes)
+var panes_on := true                 # (v91) window shutters work (tests that want a window's hole left open switch them off)
 var _pane_torn := {}                 # (v91) window cell -> the tick a hole was torn in it
 var _pane_sent := {}                 # (v91) window cell -> the hull state clients were last told (see pane_state)
 const PANE_SHUT_TICKS := 20          # (v91, the author's W1b) a broken window's shutter shuts 1 s after the hole
@@ -492,7 +493,7 @@ func update_panes() -> void:
 	## shutter down stops sight and light as a wall does. They need power, as the doors' shutters do:
 	## without it nothing drops and nothing lifts.
 	var red := server.stations.alert == Net.ALERT_RED
-	var powered := server.powered()
+	var powered := server.powered() and panes_on
 	var changed := false
 	for c: int in server.map.panes:
 		if not server.fleet.mine(c):

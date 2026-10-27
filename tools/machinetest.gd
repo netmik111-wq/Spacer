@@ -141,6 +141,7 @@ func _initialize() -> void:
 	p.supply = false
 
 	print("emergency shutters")
+	server.systems.panes_on = false          # (v91: the hole is in a window, whose own shutter would close over it)
 	_give(p, 3, 3)
 	_expect(_sealed().is_empty(), "with the same pressure everywhere no shutter is down")
 	# a hole in the room in the top left corner of the top deck: its two doors are 7,3 and 10,1

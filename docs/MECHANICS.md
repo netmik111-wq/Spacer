@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v90.2 (version 0.83.2).
+Last updated: build v91 (version 0.84).
 
 Contents:
 
@@ -51,6 +51,8 @@ Contents:
 41. [Man and woman base bodies (v87)](#41-man-and-woman-base-bodies-v87)
 42. [Suited man and woman (v88)](#42-suited-man-and-woman-v88)
 43. [The Notebook's 18 notes (v89)](#43-the-notebooks-18-notes-v89)
+44. [The author's tile set (v90)](#44-the-authors-tile-set-v90)
+45. [Machines on the floor, doors, windows, wall boxes (v91)](#45-machines-on-the-floor-doors-windows-wall-boxes-v91)
 
 ---
 
@@ -2380,4 +2382,74 @@ He sent his own tile set (an Aseprite sheet with named slices); questions on the
   machine (engine, air plant, autodoc, trays...) is still drawn by the game, on his wall.
 - **Replacing pictures**: «sprites/original/tiles.png» in the build is the new sheet; «sprites/old/tiles.png» keeps the
   v89 sheet (the game does not read the old folder).
+
+
+## 45. Machines on the floor, doors, windows, wall boxes (v91)
+
+His answers on the page "Spacer v90 Tiles" (https://claude.ai/artifact/FkyjH7eBxzYEQhCXbPkNFG) and two pictures of
+machines standing in front of the bottom wall; my plan and picks on "Spacer v91 Plan"
+(https://claude.ai/artifact/YE4L4MZxffs8FVnetN4kuq).
+
+### Machines stand on the floor (his M1, M3, G1-G4)
+
+- **Every machine stands on a floor cell in front of a wall**, not in the wall: consoles, the supply locker, both SMES,
+  the engine, the air plant, the workbench, the module bay, the autodoc, the body scanner, the comms console, trays,
+  cryopods, the stove, the holomap, the shield generator. The wall behind it is a plain wall.
+- **Nobody walks through a machine; sight passes over it** (it is low, like a table); air goes round it.
+- **It is used from its front**: the floor cell its face looks at (away from the wall at its back). From behind or from
+  the side it does nothing. A machine by a side wall is drawn from the side (his "_r"/"_l" pictures), one with its back to
+  the bottom wall from behind (his "_up" pictures).
+- **Wide machines**: a row of signs as wide as his picture is one machine (the helm 2, the gun console 3, the comms console
+  2, the SMES 2); any of its cells uses it. The star chart on our bridge is his big holo table, 2×2 in the middle of the floor.
+- **Still in the wall**: the oxygen station, the intercom, the airlock pump, the ship's guns, the shuttle's dock console, the
+  wall boxes (below). A row of machine signs between two pieces of wall with nothing solid above or below stays in the wall
+  too (the old way: a few such remain on the test ship).
+- **Our ship is redrawn** (his G2 A): rooms with machines are 3 tiles tall, the bridge is four times its old size with the
+  holo table in its middle, the engine and the air plant stand in the engine rooms (locked: engineers and the captain).
+  An airlock chamber is 3×3 now, so the pump takes longer to empty and fill it (9 cells).
+- **Old drawings** (his G3 A): a ship from the editor with machines in the wall has each one moved onto the floor cell in
+  front of it when it loads (where there is room); the editor shows them there.
+- **An old save of a ship drawn anew**: the campaign goes on, but the ship starts over as drawn now: air full, no holes, nothing
+  broken; things that lay on the floor are in the supply locker, and everybody stands at the spawn places.
+
+### Doors (his D1, D2, F2)
+
+- **A door's kind** (plain, technical, cargo, hermetic) is still chosen from the map, and a drawing may now give any door
+  another kind: a line `& deck x y base|tech|cargo|herm`, or in the editor the mark tool on a door (a menu of the kinds).
+- **A locked door's lamp blinks** once a second: yellow (only some jobs open it) and red (it opens for nobody now). Red now
+  also shows when the other door of its airlock is open (it will not open until that one shuts).
+- **Lamps on the floor** on both sides of every door that can lock (a job's door, an airlock's doors): green, it opens;
+  yellow, only for some jobs; red, for nobody now (welded, locked against boarders, its emergency shutter down, or the
+  airlock's other door open); orange, broken (stuck open, or no power).
+- **The danger line**: his yellow and black line on the floor just inside an airlock's outer door.
+- **Room vents** are drawn with his picture.
+
+### Windows and their shutters (his W1, W2, W3)
+
+- **A window onto open space is his tall pane (v1), a window between rooms his other one (v2)**; windows in side walls are
+  his upright ones.
+- **Every window of ours has a shutter.** It comes down over every window at red alert and goes up when the alert is over.
+- **A broken window**: a hit that breaks a window leaves a hole, the air rushes out for a moment, and 1 second later its
+  shutter shuts: the room keeps its air (the vents fill it again) and the hiss stops. The hole is still there behind the
+  shutter and needs a patch like any hole; once it is patched the shutter goes up (unless it is red alert). A hit on a window
+  whose shutter is already down lets no air out at all.
+- **A shutter down stops sight and light** as a wall does. It comes down in a second, in his stages.
+- **Without power the shutters do not move**, as the doors' emergency shutters.
+- The label under the mouse says «Окно: ставень опущен» or «Разбитое окно за ставнем…».
+
+### Boxes on the walls (his M7)
+
+- **First-aid box** (sign `E`): E takes a whole first-aid kit out of the supply locker's stock (the box keeps nothing of its
+  own, so nothing new comes aboard); with a whole kit in hand, E puts it back. With none in the locker it says so.
+- **Spare parts box** (sign `J`): the same with spare parts and circuit boards (it gives the kind you carry fewer of).
+- **Fire box** (`N`) and **wall light** (`L`): pictures only (there is no fire in the game yet).
+- **The airlock pump** is drawn as his button.
+- Our ship has a first-aid box in the medbay, a spare parts box in the engine room, two fire boxes and three lights in the
+  corridors. No hole is ever torn in a box.
+
+### The chart (his M5)
+
+- His five ship pictures: our ship is his big one in his colour, pointing the way it flies; a pirate ship alongside is his
+  claw ship (red), a wreck or a derelict his small broken one (grey); a trader his freighter (yellow); a hunter on the
+  cluster chart his small fast ship (red).
 

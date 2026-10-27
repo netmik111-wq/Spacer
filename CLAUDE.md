@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v90.2 (version 0.83.2: the author's own tile set for walls, floors, doors, windows and machines; v90.2 wall crossings as he drew them) is the latest. Plans one to four are done except the darkness front (the
+Build v91 (version 0.84: machines stand on the floor, door kinds and lamps, window shutters, wall boxes) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -120,6 +120,11 @@ hunters 1.25x fewer, click a system to jump, a drawn gun sight, sounds heard fro
 v90 (his Aseprite tile set, `art_src/tileset/`; questions on `https://claude.ai/artifact/FkyjH7eBxzYEQhCXbPkNFG`): every wall,
 floor, window and door from his set, doors in four kinds with lamps and open stages, ten machines (wide over a row of signs, from
 behind when facing up); the rest of his set (stairs, holo table, soil, floor lamps, window stages, lockers, boxes) waits for his answers. v90.1/v90.2 (his notes): wall crossings are his T under `vertical_wall_to_T-shaped_corner`; a wall from above only meets the plain band (`wall_tup`).
+v91 (his v90 answers, two pictures; plan `https://claude.ai/artifact/YE4L4MZxffs8FVnetN4kuq`): machines stand on the floor in front
+of walls (used from the front, seen over), our ship redrawn (3-tall rooms, big bridge, holo table), old drawings converted on load;
+door kinds from `&` lines, blinking locked lamps, floor lamps, danger line; outer/inner panes and window shutters (red alert, broken
+window after 1 s); first-aid and spare parts boxes (the locker's stock), fire box, wall light; his ship icons on the chart. Left for
+his answers: stairs (F3b), decor lockers (M6), v1 shutter stages.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -150,7 +155,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 44 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 45 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -195,6 +200,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/fleettest.gd (since v85: two ships, own state, one purse, flying together, targets, saves, losing one)
     godot --headless --path . --script res://tools/wingtest.gd (since v86: the fleet notes' fixes, the pirates' wingman)
     godot --headless --path . --script res://tools/shuttletest.gd (since v86: hangars, the force field, boarding, flying, calling the shuttle)
+    godot --headless --path . --script res://tools/windowtest.gd (since v91: machines on the floor, window shutters, wall boxes)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -219,7 +225,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 44 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 45 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -540,6 +546,14 @@ The parameters for these checks are described in the header of `src/main.gd`.
   up, wide machines; `_door_look`: door kind, lamp, open stage): whatever reads a cell's look from the layer rather than
   `map.cells` gets that piece. A new machine picture goes into `MACHINE_ART` (make_assets) and `WorldView.MACHINE_WIDE` together;
   `edittest` checks the sheet has every piece.
+- (v91) A machine sign is a thing on the floor (`ShipMap.on_floor`: cell -> the floor tile under it; walk 0, opaque 0), unless
+  its row sits in a wall band (`MapBuilder.MACHINE_SIGNS`, the same set in `make_assets.py`). Ask for a machine through
+  `map.machine_of(cell)` (a wide one's root; only roots are in the device dictionaries) and its use cell through
+  `fitting_front`; draw it with `standing_look`. Old drawings go through `MapBuilder.to_floor` when read. Window shutters are
+  `Systems.panes_down` (hull states 2/3; `Air.sealed` holes leak nothing; a test that wants a window's hole to keep leaking sets
+  `server.systems.panes_on = false`); whatever changes a pane's opacity calls
+  `ShipMap.set_pane` on both sides and the server forgets `replication.lines`. Wall boxes (`med_box`, `tech_box`) are wall things
+  in `FLEET_FITS`. A save keeps `layout` (`map.crc`): a mismatch resets the cells' state (`Campaign.restore`). Protocol 65.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -588,4 +602,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
   `6` engine, `7` air plant, `8` supply locker (a wall, like consoles; the script draws their tiles),
   `I` intercom, `M` holomap, `5` drone monitor (v54), `B` workbench (v58), `U` module bay (v59), `Y` autodoc, `X` body scanner (v60), `S` SMES, `Q` bridge backup SMES (v61),
   `K` comms console, `P` hydroponic tray, `C` cryopod (v63), `G` the galley's stove (v71). A line `% deck x y system` names the room of an enemy ship's system (used only by
-  the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked.
+  the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked. (v91) `E` first-aid box, `J` spare parts box, `N` fire box, `L` wall light (wall things); a line
+  `& deck x y base|tech|cargo|herm` gives a door its look; machine signs outside a wall band are machines on the floor.
