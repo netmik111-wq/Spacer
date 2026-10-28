@@ -119,6 +119,8 @@ func asked(p: Player, pkt: PackedByteArray) -> void:
 			server.ship.credits = mini(server.ship.credits + Net.ADMIN_CREDITS_GIVEN, 60000)
 		Net.ADMIN_HULL:
 			server.ship.hull = server.ship.hull_max
+			server.ship.worn.clear()                 # (v93) and the armour
+			server.arena.armour_mended()
 		Net.ADMIN_RESERVE:
 			server.reserve = mini(server.reserve + 1, Net.RESERVE_MAX)
 		Net.ADMIN_PIRATE:

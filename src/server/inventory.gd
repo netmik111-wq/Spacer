@@ -140,6 +140,8 @@ func act(p: Player) -> bool:
 				return false
 		p.put_on(item)
 		p.slots[p.hand] = old
+		if wear == Net.WEAR_EYES:
+			server.usage.note(p, "goggles")
 		return true
 	if p.cond != Net.COND_OK or p.corpse or Items.switched(item) == Net.ITEM_NONE:
 		return false

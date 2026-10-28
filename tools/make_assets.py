@@ -144,14 +144,16 @@ DOOR_OPEN = {"h": 3, "v": 2}
 WINDOW_PIECES = ["", "_l", "_m", "_r"]
 WINDOW_V_PIECES = ["up", "m", "down", "single"]
 # machine -> (picture facing down, picture facing up or None, width in tiles)
+# (v93, the author's note "it looks at the walls, it needs to look inside") his "_up" picture is the machine at
+# the top wall, its front to the room below (we see its screen), and "_down" the one at the bottom wall
 MACHINE_ART = {
     "console_1": ("holo_map_small", None, 2),
-    "console_3": ("pilot_terminal_down", "pilot_terminal_up", 2),
-    "console_4": ("gun_terminal_down", "gun_terminal_up", 3),
-    "console_5": ("drone_terminal_down", "drone_terminal_up", 1),
-    "comms": ("communications_terminal_down", "communications_terminal_up", 2),
+    "console_3": ("pilot_terminal_up", "pilot_terminal_down", 2),
+    "console_4": ("gun_terminal_up", "gun_terminal_down", 3),
+    "console_5": ("drone_terminal_up", "drone_terminal_down", 1),
+    "comms": ("communications_terminal_up", "communications_terminal_down", 2),
     "holo": ("ship_map", None, 2),
-    "locker": ("Locker_down", "Locker_up", 1),
+    "locker": ("Locker_up", "Locker_down", 1),
     "intercom": ("intercom", None, 1),
     "smes": ("SMES_big", None, 2),
     "smes_small": ("SMES", None, 1),
@@ -216,10 +218,10 @@ MARKS = [("lamp_" + _c, None, "floor") for _c in ("green", "yellow", "orange", "
 MARKS += [("danger_line", None, "floor"), ("vent", None, "floor")]
 TILES += MARKS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in MARKS]
-# (v91, his W2) a window onto open space is his "v1" pane (the rest, between rooms, his "v2"); laid by the
-# client in place of the map's window, by what is on its other side. While its shutter comes down it is
-# drawn in the v2 stages (his set has no v1 stages for a horizontal window)
-OUTER_PANES = [("window_o" + _piece, None, "wall") for _piece in WINDOW_PIECES]
+# (v91, his W2; v93, his note "outer windows without shutters") a window between rooms is his "v1" pane, which
+# has no shutter; one onto open space is his "v2", whose shutter comes down in his stages. Laid by the client in
+# place of the map's window, by what is on its other side
+OUTER_PANES = [("window_in" + _piece, None, "wall") for _piece in WINDOW_PIECES]
 TILES += OUTER_PANES
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in OUTER_PANES]
 # (v91, his M7) things on a wall: the first-aid box and the spare parts box (each hands out what the supply
@@ -241,6 +243,11 @@ for _k in ("dn", "up"):
     STAIRS += [("stairs_%s_v_%d" % (_k, _i), None, "floor") for _i in range(2)]
 TILES += STAIRS
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in STAIRS]
+# (v93, the author's note) the star chart's globe floats a tile above its table: its upper half, two pieces laid
+# over the floor of the row above the table (WorldView._paint_decks); last, as above
+GLOBE = [("holo_globe_%d" % _i, None, "floor") for _i in range(2)]
+TILES += GLOBE
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in GLOBE]
 ATLAS_COLS = 8
 
 
@@ -388,10 +395,8 @@ def art_standing(art, name):
     rest = name[len(m) + 3:]
     clear = Image.new("RGBA", (T, T), (0, 0, 0, 0))
     if rest.startswith("_t_"):
-        table = art["holo_map_big"].copy()
-        table.alpha_composite(art["holo_map_big_sphere"])
         i = int(rest[3:])
-        return table.crop((i % 2 * T, i // 2 * T, i % 2 * T + T, i // 2 * T + T))
+        return holo_table(art).crop((i % 2 * T, (i // 2 + 1) * T, i % 2 * T + T, (i // 2 + 2) * T))
     side, i = rest, -1
     if "_w" in rest:
         side, wide = rest.split("_w")
@@ -428,6 +433,15 @@ def art_standing(art, name):
     return one
 
 
+def holo_table(art):
+    """(v93, the author's note "the blue globe is one tile lower") The star chart's holo table, two by two, with
+    its globe floating a tile above the projector: three rows, the top one the globe's upper half alone."""
+    table = Image.new("RGBA", (2 * T, 3 * T), (0, 0, 0, 0))
+    table.alpha_composite(art["holo_map_big"], (0, T))
+    table.alpha_composite(art["holo_map_big_sphere"], (0, 0))
+    return table
+
+
 def art_alone(picture, bare):
     """What a picture of his has that the bare one has not, on a clear tile (a lamp off its floor plate)."""
     out = Image.new("RGBA", (T, T), (0, 0, 0, 0))
@@ -444,6 +458,9 @@ def art_tile(art, mock, images, name):
     standing = art_standing(art, name)
     if standing is not None:
         return standing
+    if name.startswith("holo_globe_"):
+        i = int(name[-1])
+        return holo_table(art).crop((i * T, 0, i * T + T, T))
     if name == "stairs":
         return floor
     if name.startswith("stairs_"):
@@ -496,8 +513,8 @@ def art_tile(art, mock, images, name):
                 return art_floor(art, family, spot)
     if name == "window_v":
         return art["glass_wall_v1_vertical_single_stage_1"]
-    if name.startswith("window_o"):
-        return art["glass_wall_v1_horizontal_%s" % WINDOW_SPOTS[name[len("window_o"):]]]
+    if name.startswith("window_in"):
+        return art["glass_wall_v1_horizontal_%s" % WINDOW_SPOTS[name[len("window_in"):]]]
     if name.startswith("window") and name != "window_field":
         if name.startswith("window_v_"):
             piece, stage = name[len("window_v_"):].rsplit("_s", 1)

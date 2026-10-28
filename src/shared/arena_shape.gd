@@ -24,6 +24,7 @@ var w := 0
 var h := 0
 var kind := PackedByteArray()        # per cell (w * h), the most solid of the decks' there (EMPTY..GUN)
 var outline := PackedVector2Array()  # the middle of every solid cell that touches empty space, in the body's frame
+var edge := PackedByteArray()        # (v93) per cell: 1 = a solid cell that touches empty space (the outer wall: armour)
 var radius := 0.0                    # from the middle to the farthest corner
 var _skip_other := false             # (the grid) the ship alongside's cells are not ours
 
@@ -78,6 +79,7 @@ func _build(p_map: RefCounted, cx: int, cy: int, cw: int, ch: int) -> void:
 		for x in w:
 			kind[y * w + x] = grid[(lo.y + y) * cw + lo.x + x]
 	radius = Vector2(w, h).length() / 2.0
+	edge.resize(w * h)
 	for y in h:
 		for x in w:
 			if kind[y * w + x] == EMPTY:
@@ -85,6 +87,11 @@ func _build(p_map: RefCounted, cx: int, cy: int, cw: int, ch: int) -> void:
 			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 				if at(x + d.x, y + d.y) == EMPTY:
 					outline.append(middle(x, y))
+					break
+			# (v93) the outer wall that holds armour: open space beside it, a corner's too (a shot may come in slanting there)
+			for d: Vector2i in [Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if at(x + d.x, y + d.y) == EMPTY:
+					edge[y * w + x] = 1
 					break
 
 
@@ -173,3 +180,27 @@ func outward(cell: int) -> Vector2:
 			best_n = n
 			best = d
 	return best
+
+
+func index(c: Vector2i) -> int:
+	## (v93) That cell's number in `kind` and `edge`, or -1 outside the shape.
+	return c.y * w + c.x if c.x >= 0 and c.y >= 0 and c.x < w and c.y < h else -1
+
+
+func armoured(i: int) -> bool:
+	## (v93) Does that cell carry armour: a cell of the outer hull (a wall, a gun mount, a window, a door in it)?
+	return i >= 0 and i < edge.size() and edge[i] == 1 and kind[i] != EMPTY
+
+
+func normal(c: Vector2i) -> Vector2:
+	## (v93) Which way the hull faces at that cell, in the body's frame: the open cells within two of it,
+	## summed. A side of the drawing is a staircase of cells; this smooths it, so a shot's angle to the
+	## hull (and a ricochet) does not depend on which step it met.
+	var sum := Vector2.ZERO
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			if (dx != 0 or dy != 0) and at(c.x + dx, c.y + dy) == EMPTY:
+				sum += Vector2(dx, dy).normalized()
+	if sum.length_squared() < 0.0001:
+		sum = middle(c.x, c.y)
+	return sum.normalized() if sum.length_squared() > 0.0 else Vector2.RIGHT

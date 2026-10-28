@@ -3569,42 +3569,42 @@
   },
   {
    "id": 713,
-   "name": "window_o",
+   "name": "window_in",
    "kind": "wall"
   },
   {
    "id": 714,
-   "name": "window_o_l",
+   "name": "window_in_l",
    "kind": "wall"
   },
   {
    "id": 715,
-   "name": "window_o_m",
+   "name": "window_in_m",
    "kind": "wall"
   },
   {
    "id": 716,
-   "name": "window_o_r",
+   "name": "window_in_r",
    "kind": "wall"
   },
   {
    "id": 717,
-   "name": "pirate_window_o",
+   "name": "pirate_window_in",
    "kind": "wall"
   },
   {
    "id": 718,
-   "name": "pirate_window_o_l",
+   "name": "pirate_window_in_l",
    "kind": "wall"
   },
   {
    "id": 719,
-   "name": "pirate_window_o_m",
+   "name": "pirate_window_in_m",
    "kind": "wall"
   },
   {
    "id": 720,
-   "name": "pirate_window_o_r",
+   "name": "pirate_window_in_r",
    "kind": "wall"
   },
   {
@@ -3825,6 +3825,26 @@
   {
    "id": 764,
    "name": "pirate_stairs_up_v_1",
+   "kind": "floor"
+  },
+  {
+   "id": 765,
+   "name": "holo_globe_0",
+   "kind": "floor"
+  },
+  {
+   "id": 766,
+   "name": "holo_globe_1",
+   "kind": "floor"
+  },
+  {
+   "id": 767,
+   "name": "pirate_holo_globe_0",
+   "kind": "floor"
+  },
+  {
+   "id": 768,
+   "name": "pirate_holo_globe_1",
    "kind": "floor"
   }
  ]

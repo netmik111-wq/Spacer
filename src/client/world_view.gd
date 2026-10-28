@@ -127,6 +127,10 @@ void fragment() {
 	COLOR.a *= clamp(texture(mask, SCREEN_UV).g, 0.0, 1.0) * clamp(texture(cone, SCREEN_UV).g, 0.0, 1.0);
 }
 """
+const NVG_DARK := 0.3                            # (v93) how dark the dark stays through night vision
+const NVG_TINT := 0.22                           # and how green it is
+const THERMAL_REACH := 7.0                       # (v93) as Replication.THERMAL_REACH
+const HEAT_COLOUR := Color(1.0, 0.45, 0.1)
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
 const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
 	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд",   # (v75: the kinds from 10 on were never played)
@@ -297,6 +301,8 @@ var _spent_from := Vector2.INF       # a shotgun's pellets come together and lea
 var _stains: Array = []              # (v75) blood on the floor: [deck, position on its deck (pixels), radius, (v80) cell]
 var _sparks: Array = []              # (v75) sparks off a robot hit: [deck, position, seconds left]
 var _alert_tint: ColorRect           # (v75) red light over the world at red alert
+var _nvg_tint: ColorRect             # (v93) the green of night vision, while it is dark
+var _heat: Array[Vector2] = []       # (v93) where thermal goggles show somebody through a wall (deck pixels)
 var _red := 0.0                      # how red it is now (eased)
 var _amb_timer := 6.0                # (v75, the author's F5) seconds to the next sound of the ship itself
 var _jumps_heard := -1               # client.jumps as last heard (the hull creaks after a jump)
@@ -450,6 +456,11 @@ func setup(p_client: GameClient) -> void:
 	_alert_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_alert_tint.color = Color(1.0, 0.08, 0.04, 0.0)
 	_dark_layer.add_child(_alert_tint)
+	_nvg_tint = ColorRect.new()
+	_nvg_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_nvg_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_nvg_tint.color = Color(0.2, 1.0, 0.3, 0.0)
+	_dark_layer.add_child(_nvg_tint)
 	# We always see ourselves, even in pitch dark (without the glow around us
 	# the author asked to be rid of): a copy of our figure over the dark.
 	_me_layer = CanvasLayer.new()
@@ -789,7 +800,11 @@ func _update_ship(delta: float) -> void:
 	_dim = _find_dim()
 	_near = _find_near()
 	_shade.queue_redraw()
-	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", DARK)
+	# (v93, the author's O1) night vision: the dark is a thin green veil over what we look at
+	var nvg := eyes() == Net.ITEM_NVG
+	var gloom := maxf(_dark, 1.0 if client.other_dark() else 0.0) if nvg else 0.0
+	(_dark_sheet.material as ShaderMaterial).set_shader_parameter("dark", Color(DARK, NVG_DARK) if nvg else DARK)
+	_nvg_tint.color.a = NVG_TINT * gloom
 	# where light falls is drawn again only when it may have changed
 	var mask_key := hash([_dark, _deck_shown, client.my_deck(), client.my_cond, client.other_changes, client.other_dark(),
 		_dim.hash(), _near.hash(), _lit.hash()])
@@ -1061,6 +1076,7 @@ func _paint_decks() -> void:
 					deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(under % map.atlas_columns, under / map.atlas_columns))
 					if look != id:
 						deck.objects.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
+					_lay_globe(deck, cell, x, y)
 					continue
 				deck.layer.set_cell(Vector2i(x, y), _source_id, Vector2i(look % map.atlas_columns, look / map.atlas_columns))
 	_door_shown.fill("")
@@ -1069,6 +1085,19 @@ func _paint_decks() -> void:
 	_door_types()
 	_lay_marks()
 	_other_seen = client.other_changes
+
+
+func _lay_globe(deck: DeckView, cell: int, x: int, y: int) -> void:
+	## (v93, the author's note "the blue globe is one tile lower") The star chart's globe floats a tile above
+	## its table: its upper half is laid over the floor of the row above the table's top row.
+	var map := client.map
+	var all: PackedInt32Array = map.pieces.get(map.machine_of(cell), PackedInt32Array())
+	if all.size() != 4 or all.find(cell) > 1 or y < 1:
+		return
+	var tint := "pirate_" if _tile_name(map.cells[cell]).begins_with("pirate_") else ""
+	var globe := int(map.tile_ids.get(tint + "holo_globe_%d" % all.find(cell), -1))
+	if globe >= 0 and not map.on_floor.has(cell - map.width) and map.cells[cell - map.width] >= 0:
+		deck.objects.set_cell(Vector2i(x, y - 1), _source_id, Vector2i(globe % map.atlas_columns, globe / map.atlas_columns))
 
 
 func _tile_name(id: int) -> String:
@@ -1110,8 +1139,8 @@ func _laid(cell: int, id: int) -> int:
 
 
 func _pane_look(cell: int, stage: int) -> int:
-	## (v90) A window between windows is one long pane; (v91, the author's W2 and W3) one onto open space
-	## is his outer pane, one between rooms the inner; a window in a side wall is his upright one. Stage
+	## (v90) A window between windows is one long pane; (v91, the author's W2 and W3; v93) one onto open space
+	## is his "v2" pane with a shutter, one between rooms his "v1"; a window in a side wall is his upright one. Stage
 	## 1 is the window, 2..5 its shutter coming down.
 	var map := client.map
 	var id := map.cells[cell]
@@ -1129,12 +1158,11 @@ func _pane_look(cell: int, stage: int) -> int:
 		var left := x > 0 and _tile_name(map.cells[cell - 1]).trim_prefix(tint) in panes
 		var right := x + 1 < map.width and _tile_name(map.cells[cell + 1]).trim_prefix(tint) in panes
 		var piece := "_m" if left and right else ("_r" if left else ("_l" if right else ""))
-		var y := cell / map.width
-		var outer := map.is_space(x, y - 1) or map.is_space(x, y + 1)
 		if stage > 1:
 			look = "window%s_s%d" % [piece, stage]
 		else:
-			look = ("window_o" if outer and map.tile_ids.has(tint + "window_o" + piece) else "window") + piece
+			# (v93, his note) onto open space his "v2" pane with its shutter, between rooms his "v1"
+			look = ("window" if map.outer_pane(cell) or not map.tile_ids.has(tint + "window_in" + piece) else "window_in") + piece
 	return int(map.tile_ids.get(tint + look, id))
 
 
@@ -1996,7 +2024,21 @@ func _clear_to(from: Vector2, start: Vector2i, to: Vector2i) -> bool:
 
 func _my_dark() -> bool:
 	## Is our character in the dark: a ship without power, or aboard a derelict?
+	## (v93) Not with night vision on.
+	if eyes() == Net.ITEM_NVG:
+		return false
 	return _dark >= 0.5 or client.dark_cell(client.pred.y * client.map.width + client.pred.x)
+
+
+func eyes() -> int:
+	## (v93, the author's O1) The goggles we wear (Net.ITEM_NVG, ITEM_THERMAL), or ITEM_NONE.
+	return client.worn[Net.WEAR_EYES] if client.worn.size() > Net.WEAR_EYES else Net.ITEM_NONE
+
+
+func _warm(id: int, cond: int) -> bool:
+	## (v93) Does it show in thermal goggles (as Replication.warm): alive, not a machine.
+	var colour := client.player_colour(id)
+	return cond != Net.COND_DEAD and colour != Net.ROBOT_COLOUR and colour != Net.OUR_ROBOT_COLOUR
 
 
 func can_see(x: int, y: int) -> bool:
@@ -2011,7 +2053,7 @@ func can_see(x: int, y: int) -> bool:
 	var dark := _my_dark()
 	var arcs := Sight.eye_arcs(dark)
 	var ahead := client.look_way()               # (v77) the mouse's way, or the way we face
-	if not dark and not client.dark_cell(y * map.width + x):
+	if not dark and (eyes() == Net.ITEM_NVG or not client.dark_cell(y * map.width + x)):
 		return Sight.sees_way(map, client.doors, me, ahead, on_ours, arcs, Sight.SIGHT_REACH)
 	if Vector2(on_ours).distance_to(me) <= Sight.DARK_REACH + 0.5 \
 			and Sight.sees_way(map, client.doors, me, ahead, on_ours, arcs, Sight.DARK_REACH):
@@ -2243,6 +2285,13 @@ func _draw_sounds() -> void:
 	var font := ThemeDB.fallback_font
 	var screen := get_viewport_rect().size
 	var zoom := _camera.zoom.x
+	# (v93) thermal goggles: a warm figure through the wall, a glowing blob the shape of a body
+	var beat := 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 5.0)
+	for at: Vector2 in _heat:
+		var spot := (at - _camera.position) * zoom + screen * 0.5
+		_sound_pen.draw_circle(spot + Vector2(0, -15) * zoom, 8.0 * zoom, Color(HEAT_COLOUR, 0.25 * beat))
+		_sound_pen.draw_circle(spot + Vector2(0, -21) * zoom, 3.5 * zoom, Color(1.0, 0.85, 0.3, 0.75 * beat))
+		_sound_pen.draw_rect(Rect2(spot + Vector2(-4.5, -17) * zoom, Vector2(9, 15) * zoom), Color(HEAT_COLOUR, 0.65 * beat))
 	for snd: Array in _sounds:
 		if int(snd[2]) != _deck_shown:
 			continue
@@ -2523,6 +2572,8 @@ func _process(delta: float) -> void:
 		if not got.is_empty():
 			samples[id] = got
 	var nudge := _passing(samples)
+	_heat.clear()
+	var thermal := eyes() == Net.ITEM_THERMAL
 	for id: int in samples.keys():
 		var s: Array = samples[id]
 		var sprite: Sprite2D = _views.get(id)
@@ -2564,6 +2615,9 @@ func _process(delta: float) -> void:
 		if bool(_shown.get(id, false)) and not sprite.visible and id != client.my_id:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible
+		if thermal and not sprite.visible and id != client.my_id and its_deck == my_deck and _warm(id, cond) \
+				and Vector2(cell_x, cell_y).distance_to(Vector2(client.pred.x, client.pred.y)) <= THERMAL_REACH:
+			_heat.append(_feet(pos) + nudge.get(id, Vector2.ZERO))   # (v93) seen as heat through the wall
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, id)
 		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)

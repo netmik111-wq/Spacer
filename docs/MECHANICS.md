@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v92 (version 0.85).
+Last updated: build v93 (version 0.86).
 
 Contents:
 
@@ -251,7 +251,7 @@ Contents:
 
 ### Clothing
 
-- Three clothing places, to the left of the slots: **spacesuit**, **jumpsuit**, **backpack**.
+- Four clothing places, to the left of the slots: **spacesuit**, **jumpsuit**, **backpack**, (v93) **goggles**.
 - **Put on**: take it in hand and press Z. If something is already worn there, it goes into your hand
   (a swap).
 - **Take off**: click the worn item, it goes into your hand (or a free slot). The jumpsuit
@@ -265,6 +265,11 @@ Contents:
   by clicking, but you **can give a spacesuit to an unconscious person** (not a dead one): it goes
   onto them and their oxygen supply is turned on, so they don't suffocate in space.
 - A dead player returns (R) in a new spacesuit and jumpsuit; the old ones stay on the body.
+- **Goggles** (v93, the author's O1), worn over the eyes, with a suit too; traders sell them, the locker keeps them:
+  - **Night vision** («Прибор ночного видения», **30** credits): in the dark (no power, the lights' breaker off, a
+    derelict) everything is seen as if lit, under a thin green veil; people too, as far as the eyes reach.
+  - **Thermal goggles** («Тепловизор», **45** credits): living people (awake or out cold, bots too) within **7**
+    cells on one's own deck show through walls as glowing orange figures. Robots and bodies are cold.
 
 ## 7. Engine and power
 
@@ -758,11 +763,16 @@ is worked by a person. Inside, the ship is the same grid it always was and never
   controls: the mouse aims at any point of space inside the arc, the left button fires when it is charged. A gun
   aimed by hand is left to its gunner by the console and the bots. A bot at a mount fires its gun by itself
   whenever the gun bears. In a fight, empty hands at a mount no longer take the gun down.
+- **Every gun with the mouse** (v93, the author's P1 note: "one player steers and shoots"): the pilot at the ship's
+  controls holds the left button to fire every gun nobody holds at its mount at the mouse's point, while steering
+  with the keys. At the **gun console** in a fight the screen shows the fight in space and does the same (Tab: the
+  old guns screen); the gun console comes before the pilot. Let go, the guns go back to their bots at once.
 - **Shots fly**: blaster pellets **32** cells/s, ion **36**, neural **40**, lasers **45**, kinetic **55**, rockets
   **22**, the railgun **110**; rockets reach **110** cells, the rest **85**. A shot strikes the first solid cell of
   a ship it meets; the hit lands on that cell (a deck by lot where decks overlap): a breach, or the machine there
   put out. A shot aimed at a gun, a console or the shield generator puts it out if it lands within **3** cells of it.
-- **Aim**: bots and pirates lead a moving target. Their aim is off by a spread that grows with how likely the old
+- **Aim**: bots and pirates lead a moving target. (v93, the author's P5 A) The pilot's old dodge chance is gone in
+  space: a ship dodges by flying. Their aim is off by a spread that grows with how likely the old
   dice roll was to miss (**0.12** rad per unit of the miss chance) and with range (doubled at **60** cells). Every
   gun also scatters by itself: blasters **0.08** rad, guns of 4+ shots **0.05**, the rest **0.012**. So everything
   that used to change hit chances (the pilot's dodge, evasion, the battle position, the focusing array) still
@@ -770,6 +780,11 @@ is worked by a person. Inside, the ship is the same grid it always was and never
 - **Shields** are a bubble **1.6** cells off the hull. A shot that meets it is stopped as before (the shield takes
   the hit), or passes (ion, kinetic rules and piercing as in "Ship weapons"). **Point defence** meets rockets
   **16** cells off the hull, with its old chance.
+- **The shield's shape** (v93, the author's D3 C): "use" at our shield generator switches it round: a bubble round
+  the whole ship, then an **arc** on the bow, starboard, the stern, port, and back to the bubble. An arc covers
+  **72°** either side of its middle; the rest of the ship is open. In the arc the shield is stronger: a shot passes
+  as if the shield were **1.5x** what it is, and a shot it stops takes only **half** the usual off it. Pirates keep
+  a bubble. The arc is drawn in space; it is kept in a save.
 - **Beams, tractors, siphons, bombs** work while the target is inside the gun's arc and within **90** cells.
 - **Docking**: a boarding ship's docking clock waits while it is farther than **24** cells (plus our ship's size)
   from the ship it boards. Docked, it rides alongside.
@@ -779,6 +794,30 @@ is worked by a person. Inside, the ship is the same grid it always was and never
   fight: the pirates are left behind, as a jump away would leave them.
 - **V**: anyone aboard can open a small window of the fight in space at the top right of the screen.
 - Fights whose shots land at once (tests, the parting volley) still roll the old dice.
+
+### Armour, penetration and ricochet (v93)
+
+The author's roadmap item 0.2. Every cell of a ship's **outer wall** (a wall, window or door with open space among
+its 8 neighbours) carries points of **armour**; inner walls carry none.
+- **Points**: ours **2** on every outer cell, plus the armour module's tier (1–3); a window holds at most **1**.
+  Pirates by class: cutter **1**, raider **1**, gunship **2**, cruiser **3**, battleship and carrier **4**, drone
+  ship **1**; one more with the armour of their own the old rules gave them.
+- **Penetration** of a shot: laser **2**, rapid laser **1**, heavy **3**, siege **4**, «Феникс» **4**, «Сверхновая»
+  **6**, blaster **1**, rockets **4**, «Опустошитель» **6**, autocannon **3**, railgun **5**, «Молот» **5**,
+  «Шрапнель» **2**. Ion, EMP, neural, beams, tractor, siphon and bombs pass armour by (and wear nothing).
+- **A slant thickens it**: a shot meeting the wall at an angle must pass the armour divided by the cosine of that
+  angle, at most **2x** (one within some 18° of straight on counts as straight on).
+- **Held or through**: a shot whose penetration is below that is **held**: nothing happens inside, the ship only
+  shakes («броня не пробита», «наша броня выдержала»). Otherwise it goes through and lands as before.
+- **Wear**: every shot that meets armour, held or through, wears points off that cell: **2** for penetration 4+,
+  else **1**. A worn-through cell lets anything in. Worn places are drawn darker in space (red-brown when bare).
+- **Ricochet**: a shot meeting the wall more than **60°** off straight on may glance off: kinetic **70%**, lasers
+  and blasters **30%**, rockets **15%**. It wears nothing, flies on at **70%** of its speed for **1.2** s, never back
+  into the ship it glanced off, and can strike another ship it meets (the old random ricochet is gone in space).
+- **Mending**: ours stays worn after the fight (and in a save). It is mended from **outside** with a patch, as the
+  hull is (a suit, a patch in hand, hold "use" at the outer wall): each mend makes the armour whole in the 3x3
+  cells there, even with the hull whole; bots go out for it too. Docking at a station, the hull bought at the
+  locker and the admin's hull make all of it whole. A pirate's armour is new each fight.
 
 ### Our crew at their posts (v55)
 
@@ -2452,7 +2491,9 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
   shadows too; the wall behind a tall machine still shows when the machine is seen.
 - **It is used from its front**: the floor cell its face looks at (away from the wall at its back). From behind or from
   the side it does nothing. A machine by a side wall is drawn from the side (his "_r"/"_l" pictures), one with its back to
-  the bottom wall from behind (his "_up" pictures).
+  the bottom wall from behind. (v93, his Notebook note and N1 A: until v93 the "_up" and "_down" pictures were swapped, so
+  machines looked into the wall; now one at the top wall shows its face to the room, one at the bottom wall its back.)
+  The holo table's sphere floats a tile above the table (v93, his N2 A).
 - **Wide machines**: a row of signs as wide as his picture is one machine (the helm 2, the gun console 3, the comms console
   2, the SMES 2); any of its cells uses it. The star chart on our bridge is his big holo table, 2×2 in the middle of the floor.
 - **Still in the wall**: the oxygen station, the intercom, the airlock pump, the ship's guns, the shuttle's dock console, the
@@ -2481,9 +2522,10 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
 
 ### Windows and their shutters (his W1, W2, W3)
 
-- **A window onto open space is his tall pane (v1), a window between rooms his other one (v2)**; windows in side walls are
-  his upright ones.
-- **Every window of ours has a shutter.** It comes down over every window at red alert and goes up when the alert is over.
+- **A window onto open space is his pane with a shutter frame (v2), a window between rooms his plain one (v1)** (v93, his
+  Notebook note and N3 A: until v93 the other way round); windows in side walls are his upright ones.
+- **Every outer window of ours has a shutter** (v93: windows between rooms have none). It comes down at red alert and goes
+  up when the alert is over.
 - **A broken window**: a hit that breaks a window leaves a hole, the air rushes out for a moment, and 1 second later its
   shutter shuts: the room keeps its air (the vents fill it again) and the hiss stops. The hole is still there behind the
   shutter and needs a patch like any hole; once it is patched the shutter goes up (unless it is red alert). A hit on a window

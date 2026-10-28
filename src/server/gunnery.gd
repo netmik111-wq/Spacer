@@ -568,6 +568,21 @@ func jump_seconds_left() -> int:
 
 # ---------------------------------------------------------------- our guns and shield
 
+const ARC_WORDS := ["дуга вперёд, по носу", "дуга на правый борт", "дуга назад, по корме", "дуга на левый борт"]
+const ARC_STRONG := 1.5               # (v93) an arc counts as this much more shield against what gets through
+const ARC_TAKES := 0.5                # and takes this share of the shield a stopped shot wears off
+
+
+func turn_shield(p) -> void:
+	## (v93, the author's D3 C: "switch the shield's direction by hand at the generator, to survive") E at our shield
+	## generator: the bubble round the whole ship, then an arc on the bow, starboard, the stern, port, and round again.
+	var ship = server.ship
+	ship.shield_arc = ship.shield_arc + 1 if ship.shield_arc < 3 else -1
+	server.chat.tell(p, "Щит: %s." % ("пузырь вокруг всего корабля" if ship.shield_arc < 0 else
+		ARC_WORDS[ship.shield_arc] + " — крепче, но закрывает только эту сторону"))
+	server.usage.note(p, "shield_arc")
+
+
 func shield_cell() -> int:
 	## Our shield generator's wall cell, or -1 if the ship has none.
 	return server.map.shield.keys()[0] if not server.map.shield.is_empty() else -1
@@ -1110,6 +1125,8 @@ func _broken_off() -> void:
 func _hit_chance(w: int) -> float:
 	## Ours: better while its bridge is out (it cannot dodge) and while our tractor beam holds it.
 	var dodge := _dodge if _manned(Net.ESYS_HELM) else minf(_dodge, 0.0)
+	if flies and server.arena.on():
+		dodge = 0.0                          # (v93, the author's P5 A) in space it dodges by flying, not by a roll
 	var hit := clampf(float(Weapons.info(w)["hit"]) - dodge + server.stations.our_hit_bonus() + _aim_bonus, 0.05, Weapons.BEST_HIT)
 	var bonus := (Weapons.BLIND_BONUS if down(Net.ESYS_HELM) else 0.0) + (Weapons.TRACTOR_BONUS if held() else 0.0)
 	if bonus > 0.0:
@@ -1138,6 +1155,7 @@ func _tractor(i: int, w: int) -> void:
 const HOW_PLAIN := 0                 # (v58) what became of one of our shots on its way (see _our_volley)
 const HOW_DOWN := 1                  # shot down by its point defence
 const HOW_RICOCHET := 2              # turned aside by its armour
+const HOW_HELD := 5                  # (v93) its armour held it (Arena)
 const HOW_SOFT := 3                  # a kinetic shell that went through its shield, one damage the less
 
 
@@ -1220,6 +1238,9 @@ func _our_shot_lands(log: Dictionary, hit: bool, room: int, stop: bool, spot: Ve
 	elif how == HOW_RICOCHET:
 		log["ricochet"] += 1
 		server.combat.jolt(Net.JOLT_THEIR_SHIELD, _shot_kind(w), spot)
+	elif how == HOW_HELD:
+		log["held"] = int(log.get("held", 0)) + 1
+		server.combat.jolt(Net.JOLT_THEIR_SHIELD, _shot_kind(w), spot)
 	elif stop:
 		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
 		log["stopped"] += 1
@@ -1250,6 +1271,8 @@ func _tell_volley(log: Dictionary) -> void:
 		parts.append("промах" + ("" if int(log["misses"]) == 1 else " ×%d" % int(log["misses"])))
 	if int(log.get("ricochet", 0)) > 0:
 		parts.append("рикошет от брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
+	if int(log.get("held", 0)) > 0:
+		parts.append("броня не пробита" + ("" if int(log["held"]) == 1 else " ×%d" % int(log["held"])))
 	if int(log.get("down", 0)) > 0:
 		var what := "ракет" if Weapons.klass(int(log["w"])) == Weapons.CLASS_ROCKET else "снаряд"
 		parts.append(("%s сбила их точечная оборона" % ("ракету" if what == "ракет" else "снаряд")) if int(log["down"]) == 1
@@ -2260,13 +2283,17 @@ func arena_bubble(p: Dictionary, body_id: int, at: Vector2) -> bool:
 		return stop
 	server.fleet.use(body_id)
 	server.wing.use(int(p["foe"]))
+	var arc: bool = server.ship.shield_arc >= 0     # (v93) an arc is stronger where it stands (Arena covers the rest)
 	if kinetic:
 		meta["soft"] = true
 		stop = int(Weapons.info(w)["damage"]) <= Weapons.KINETIC_SHIELD
-	elif _meets_shield(w, server.outfit.hardened()) and _rng.randf() >= Weapons.through_chance(server.ship.shield - pierce):
+	elif _meets_shield(w, server.outfit.hardened()) and _rng.randf() >= Weapons.through_chance(server.ship.shield * (ARC_STRONG if arc else 1.0) - pierce):
 		stop = true
 	if stop:
+		var was: float = server.ship.shield
 		_their_shot_lands(meta["log"], 0, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], server.arena.bodies[body_id].local(at)))
+		if arc and server.ship.shield < was:
+			server.ship.shield = was - (was - server.ship.shield) * ARC_TAKES
 	server.wing.use(0)
 	server.fleet.use(0)
 	return stop
@@ -2279,7 +2306,6 @@ func arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Ar
 	var meta: Dictionary = p["meta"]
 	var w: int = p["w"]
 	var arena = server.arena
-	var kinetic := Weapons.klass(w) == Weapons.CLASS_KINETIC
 	if int(p["side"]) == 0:
 		server.fleet.use(int(meta["ship"]))
 		server.wing.use(body_id - arena.LEAD)
@@ -2287,19 +2313,20 @@ func arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Ar
 		var cell: int = cells[_rng.randi_range(0, cells.size() - 1)] if not cells.is_empty() else -1
 		var room := _room_by(lay, cell)
 		var how := HOW_PLAIN
-		if kinetic and _rng.randf() < enemy_armour:
-			how = HOW_RICOCHET
+		if p.has("armour"):
+			how = HOW_RICOCHET if int(p["armour"]) == Net.RICOCHET else HOW_HELD   # (v93) Arena's armour met it
 		elif meta.has("soft"):
 			how = HOW_SOFT
 		var spot := Vector2(-1, -1)
 		if not _wing() and cell >= 0 and server.map.other_at != server.map.NO_OTHER:
 			var c: int = server.derelict._cell(server.map.other_at, cell)
 			spot = Vector2(c % server.map.width + 0.5, c / server.map.width + 0.5)
-		server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), Net.RICOCHET if how == HOW_RICOCHET else Net.LANDED, room, 0, 1)
+		var ends := Net.RICOCHET if how == HOW_RICOCHET else (Net.HELD if how == HOW_HELD else Net.LANDED)
+		server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), Net.RICOCHET if how == HOW_HELD else ends, room, 0, 1)
 		_our_shot_lands(meta["log"], true, room, false, spot, how)
 		server.wing.use(0)
 		server.fleet.use(0)
-		return Net.RICOCHET if how == HOW_RICOCHET else Net.LANDED
+		return ends
 	server.fleet.use(body_id)
 	server.wing.use(int(p["foe"]))
 	var map = server.map
@@ -2321,9 +2348,9 @@ func arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Ar
 		if person < 0 or b.shape.local_of(person).distance_to(local) > arena.HIT_NEAR * 2.0:
 			person = _crew_near(struck)
 		_their_shot_lands(log, Net.LANDED, -1, person, spot)
-	elif kinetic and server.ship.armour > 0.0 and _rng.randf() < server.ship.armour:
-		how = Net.RICOCHET                   # (v59) our armour plating turns the shell aside
-		_their_shot_lands(log, Net.RICOCHET, -1, -1, spot)
+	elif p.has("armour"):
+		how = int(p["armour"])               # (v93) our armour held it, or it glanced off (Arena)
+		_their_shot_lands(log, how, -1, -1, spot)
 	else:
 		var cell := hull
 		if Weapons.info(w).has("disable"):
@@ -2439,6 +2466,9 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 	elif ends == Net.RICOCHET:
 		log["ricochet"] += 1
 		server.combat.jolt(Net.JOLT_HULL, _shot_kind(w), spot)
+	elif ends == Net.HELD:
+		log["held"] = int(log.get("held", 0)) + 1          # (v93) our armour held: a blow, nothing inside
+		server.combat.jolt(Net.JOLT_HULL, _shot_kind(w), spot)
 	elif ends == 0:
 		ship.shield = maxf(ship.shield - Weapons.shield_damage(w), 0.0)
 		log["stopped"] += 1
@@ -2468,7 +2498,8 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 			else:
 				said.append("Не работает: %s." % map.device_name(target))
 		elif (Weapons.hole_chance(w) >= 1.0 or fx == Weapons.FX_HOLE or _rng.randf() < Weapons.hole_chance(w)) \
-				and not (server.outfit.no_hole() > 0.0 and _rng.randf() < server.outfit.no_hole()):
+				and not (not server.arena.on() and server.outfit.no_hole() > 0.0 and _rng.randf() < server.outfit.no_hole()):
+			# ((v93) in the fight in space the plating's points of armour (Arena) take the place of its chance)
 			said.append("Обшивка пробита.")
 			if server.systems.breach(cell):
 				server.crew.hull_hit(_armoured(Net.HULL_PER_HOLE * (damage - 1)))
@@ -2509,6 +2540,8 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 			else "«Заслон» сбил %s (%d)" % ["ракеты" if rocket else "снаряды", int(log["down"])])
 	if int(log.get("ricochet", 0)) > 0:
 		parts.append("рикошет от нашей брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
+	if int(log.get("held", 0)) > 0:
+		parts.append("наша броня выдержала" + ("" if int(log["held"]) == 1 else " ×%d" % int(log["held"])))
 	if parts.is_empty() and said.is_empty():
 		return
 	var line := "Пираты стреляют (%s)%s%s" % [Weapons.lower_name(w, fx), (": " + ", ".join(parts) + ".") if not parts.is_empty() else ".",

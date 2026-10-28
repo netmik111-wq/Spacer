@@ -110,7 +110,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"at": [server.sectors.cell[server.ship.sector].x, server.sectors.cell[server.ship.sector].y],
 		"pos": [server.ship.pos.x, server.ship.pos.y],
 		"store": store, "store_air": server.ship.store_air, "credits": server.ship.credits, "tank": server.ship.tank,
-		"reserve": server.reserve, "hull": server.ship.hull, "voyage": server.voyage_ticks,
+		"reserve": server.reserve, "hull": server.ship.hull, "worn": _keyed(server.ship.worn), "arc": server.ship.shield_arc, "voyage": server.voyage_ticks,
 		"jumps": server.jumps, "farthest": server.farthest, "won": server.won, "dead_names": server.dead_names.keys(),
 		"ships_beaten": server.ships_beaten, "boarders_killed": server.boarders_killed, "deaths": server.deaths, "earned": server.ship.earned,
 		"holes": holes, "broken": broken,
@@ -148,7 +148,7 @@ static func _fleet_of(server: Node) -> Array:
 			if not server.map.is_other(cell) and server.fleet.mine(cell):
 				broken.append(cell)
 		out.append({
-			"store": store, "store_air": s.store_air, "tank": s.tank, "hull": s.hull, "hull_max": s.hull_max,
+			"store": store, "store_air": s.store_air, "tank": s.tank, "hull": s.hull, "hull_max": s.hull_max, "worn": _keyed(s.worn), "arc": s.shield_arc,
 			"lost": server.fleet.is_lost(i), "broken": broken,
 			"mounts": Array(s.mounts), "armed": Array(s.armed), "shield_on": s.shield_on, "hardened": s.hardened,
 			"mount_fx": Array(s.mount_fx), "guard": s.guard, "guard_armed": s.guard_armed,
@@ -174,6 +174,8 @@ static func _fleet_back(server: Node, saved: Array, redrawn: bool = false) -> vo
 		s.tank = float(d["tank"])
 		s.hull_max = int(d["hull_max"])
 		s.hull = int(d["hull"])
+		s.worn = _unkeyed(d.get("worn", {}))         # (v93; older saves: whole armour, a bubble)
+		s.shield_arc = int(d.get("arc", -1))
 		server.fleet.lost[i] = bool(d.get("lost", false))
 		var mounts := PackedByteArray(d["mounts"])
 		var armed := PackedByteArray(d["armed"])
@@ -275,6 +277,8 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.complex_repairs = bool(data.get("complex", false))      # (v71; older saves: plain repairs)
 	server.ship.hull_max = int(data.get("hull_max", Net.HULL_MAX))
 	server.ship.hull = int(data["hull"])
+	server.ship.worn = _unkeyed(data.get("worn", {}))   # (v93; older saves: whole armour, a bubble)
+	server.ship.shield_arc = int(data.get("arc", -1))
 	server.power.load_panel(data.get("panel", {}))          # (v68) the power panel's breakers and engines
 	server.usage.load_from(data.get("usage", {}))            # (v82) what people used, over the evenings
 	if data.has("mounts"):

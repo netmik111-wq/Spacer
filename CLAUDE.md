@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v92 (version 0.85: the fight in real time, ships flying in space) is the latest. Plans one to four are done except the darkness front (the
+Build v93 (version 0.86: armour, penetration and ricochet in space; goggles) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -129,8 +129,14 @@ his answers: decor lockers (M6: walk-through, by his card), v1 shutter stages.
 v92 (his roadmap, plan `/mnt/project-files/plans/roadmap-v92.md`, questions `https://claude.ai/artifact/V1AEJgkFnsjG9b8vk4DAmj`,
 built on my picks while his answers are pending): item 0, the fight in real time: ships as bodies in space (`Arena`, `ArenaShape`),
 the pilot steers with WASD/QE at the controls, guns are 180° turrets fired from the console, by bots or by hand at the mount, shots
-fly and strike the cell they meet, shields are bubbles, the docking clock waits while far, leaving past the edge. Next on his
-roadmap: v93 armour and ricochet, v94 docking and boarding pods, then places, arsenal, races.
+fly and strike the cell they meet, shields are bubbles, the docking clock waits while far, leaving past the edge.
+v93 (his answers on `https://claude.ai/artifact/GePkt2SGzwqVSACbk6hZNJ` and the v92 page; one Notebook note with a picture):
+armour on the outer wall (ours 2, pirates by class), penetration thickened by the slant, wear, ricochets that fly on and
+strike another ship, worn armour mended from outside; the shield a bubble or a stronger arc (E at the generator); a lone
+pilot fires every free gun with the mouse, the gun console shows space; no dodge roll in space; night vision and thermal
+goggles (a fourth wear place); his note: machine pictures face the room, the globe a tile up, outer windows with shutters.
+Next on his roadmap: v94 docking and boarding pods with three mount kinds (hardpoint, side 180°, roof 360°) and choosing
+the enemy deck to hit, then places, arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -161,7 +167,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 46 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 48 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -208,6 +214,8 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/shuttletest.gd (since v86: hangars, the force field, boarding, flying, calling the shuttle)
     godot --headless --path . --script res://tools/windowtest.gd (since v91: machines on the floor, window shutters, wall boxes, stairs)
     godot --headless --path . --script res://tools/arenatest.gd (since v92: shapes, the pilot, drift, arcs, shots flying and striking, shield, hand aim, bumps, the edge, docking)
+    godot --headless --path . --script res://tools/armourtest.gd (since v93: armour, penetration, slant, wear, ricochet, mending outside, all guns from the helm, the shield's arc)
+    godot --headless --path . --script res://tools/eyestest.gd (since v93: goggles, night vision, thermal through walls)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -232,7 +240,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 46 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 48 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -305,7 +313,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
 - `src/client/`: `game_client.gd` (network, prediction, what the client knows), `world_view.gd` (the
-  world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `arena_seen.gd` (v92: the fight in space as the client knows it), `sounds.gd` (any
+  world, light and sight drawing), `fight_fx.gd` (v56: ships' shots flying and bursting), `arena_seen.gd` (v92: the fight in space as the client knows it; v93 worn armour), `sounds.gd` (any
   sound can be replaced by `sounds/NAME.ogg|wav` next to the game), `options.gd`, `item_art.gd`, `crew_art.gd` (v85: the people's sheet; since v87 built from `body.png`, v88 the suits from `suit_man.png`/`suit_woman.png`), `sprites.gd` (v74: pictures
   replaced from `sprites/` next to the game; every sheet and item picture loads through it).
 - `src/ui/`: `game_screen.gd` (HUD, chat, the console frame), console screens `bridge_view.gd` (chart and
@@ -572,6 +580,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `server.arena.enabled = false`; `arena.hold_pirates` keeps pirates where a test puts them; `enemy_hit_chance` 1 aims true, 0
   aims clear of the whole ship. `S_ARENA`, `S_ARENA_SHOT`, `C_PILOT`, `C_TURRET` are new (protocol 66); the client keeps it in
   `GameClient.arena` (`ArenaSeen`) and draws it in `SpaceView`. Use target 49 is a gun mount taken by hand.
+- (v93) Armour is per body in the arena (`Body.plates`, `Body.worn`; ours share `Ship.worn`, keyed by `ArenaShape` index):
+  whatever makes our hull whole by hand also clears `ship.worn` and calls `arena.armour_mended()`. A shot dictionary
+  with `"off"` glanced off that body (never hits it again, says nothing at its end); `"armour"` tells Gunnery it was held
+  or glanced (`Net.HELD`, `Net.RICOCHET`). `arena.pane_armour` is a test knob (windows hold 1). `Net.ALL_GUNS` in
+  C_TURRET is the helm's or gun console's mouse for every free gun. `Ship.shield_arc` (-1 bubble, 0..3) rides in the
+  S_ARENA flags (`Net.ARENA_ARC_SHIFT`). Worn things are `Net.WORN` = 4 (`WEAR_EYES`): old saves are resized on load.
+  Sight asks goggles in `Replication.sees` (and its cache key) and `WorldView.can_see`/`_my_dark`. Protocol 67.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

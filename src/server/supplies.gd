@@ -306,9 +306,12 @@ func store_asked(p: Player, action: int, item: int) -> void:
 			if can_trade():
 				server.prisons.sell(p)       # (v70, the author's J5) a station or a trader takes our prisoners
 		Net.STORE_BUY_HULL:
-			if trader_here() and server.ship.credits >= Net.PRICE_HULL and server.ship.hull < server.ship.hull_max and server.over == Net.OVER_NONE:
+			if trader_here() and server.ship.credits >= Net.PRICE_HULL and (server.ship.hull < server.ship.hull_max or not server.ship.worn.is_empty()) \
+					and server.over == Net.OVER_NONE:
 				server.ship.credits -= Net.PRICE_HULL
 				server.ship.hull = mini(server.ship.hull + Net.HULL_LOT, server.ship.hull_max)
+				server.ship.worn.clear()             # (v93, my A5 pick) the trader's yard makes the armour whole too
+				server.arena.armour_mended()
 	tell_store()
 
 

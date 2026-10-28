@@ -179,6 +179,7 @@ func restore_character(p: Player, c: Dictionary) -> void:
 	p.skills.resize(Net.SKILLS)              # (v60: a save from before piloting has three)
 	p.slots = PackedByteArray(c["slots"])
 	p.worn = PackedByteArray(c["worn"])
+	p.worn.resize(Net.WORN)              # (v93) a save from before the goggles kept three
 	p.hand = int(c["hand"])
 	p.tank = float(c["tank"])
 	p.supply = bool(c["supply"])
@@ -216,6 +217,7 @@ func restore_body(c: Dictionary) -> void:
 	b.wounds = float(c["wounds"])
 	b.slots = PackedByteArray(c["slots"])
 	b.worn = PackedByteArray(c["worn"])
+	b.worn.resize(Net.WORN)
 	b.tank = float(c["tank"])
 	becomes_corpse(b)
 

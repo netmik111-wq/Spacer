@@ -1918,3 +1918,37 @@ Questions on "Spacer v89 Notes" (https://claude.ai/artifact/FryDUDpk8c5nbDpC3mJG
 - **Collisions** (P4 A) hurt a little (1 hull) and push apart; ramming as a weapon waits for the boarding pods (v94).
 - Known gap: walking out in a suit to a far ship is still possible, because the grid placement of the ship
   alongside is unchanged; v94 (docking and pods) settles crossing.
+
+## v93: armour, penetration, ricochet; his note; goggles
+
+His answers on "Spacer v93: броня" (`https://claude.ai/artifact/GePkt2SGzwqVSACbk6hZNJ`, all A except O1 B) and on the
+v92 page (D3 C, P1 note, P5 A, O4 A).
+- **The note's picture** (machines looking into the wall, the globe too low, outer windows without shutters): his
+  "_up" picture is a machine at the TOP wall with its face to the room below, so `MACHINE_ART` swaps them (N1 A); the
+  holo table's sphere is laid on the objects layer a tile above the table (N2 A, `WorldView._lay_globe`); his v2 pane
+  (with the shutter frame) is the outer window, v1 the inner one (N3 A). Only outer windows get shutters
+  (`ShipMap.outer_pane`): a shutter between two rooms guards nothing from space.
+- **Armour on the outer wall only** (A1 A): `ArenaShape.edge` marks a solid cell with open space among its 8 neighbours
+  (4 neighbours missed the corners a slanted shot enters by). Ours 2 points, pirates 1..4 by class; the armour
+  module adds its tier; windows at most 1, so a window stays a weak spot.
+- **Penetration against points, thickened by the slant** (A2 A): `pen < left / cos(angle)` (at most 2x) holds it.
+  Simple to read: a laser (2) is held by 3, goes through 2 head-on but not at 50°. `SLANT_SLACK` lets a nearly
+  head-on shot count as head-on (float noise in the normal otherwise held shots that should pass).
+- **Every shot that meets armour wears it**, through or not, heavier guns more (A3 A): a long fight opens holes in
+  the armour where the enemy keeps hitting, which rewards turning the other side.
+- **Ricochet flies on** (R1 A, his note "can hit another enemy"): a glanced shot keeps 70% speed for 1.2 s, never
+  back into the same ship (`off`), and can strike any other ship of the side it was fired at. It wears nothing
+  (it did not bite). Kinetic 70%, lasers 30%: the old v59 random kinetic ricochet is replaced in space.
+- **Mended from outside** (M1 A): the same hull mending (suit, patch, hold use at the outer wall) also makes worn
+  armour whole in a 3x3 area; bots go out for it when the hull is whole. Station docking, the bought hull and the
+  admin also make it whole. Worn armour is in the Ship (`Ship.worn`) and the save.
+- **The shield's arc** (his D3 C): E at the generator cycles bubble -> bow -> starboard -> stern -> port. The arc is
+  72° either side and counts the shield as 1.5x, a stopped shot taking half: worth turning to the threat, punished
+  by a flanker. Pirates keep bubbles (no AI for it yet).
+- **One pilot fires all free guns** (his P1 note): `Net.ALL_GUNS` in C_TURRET; a gunner at his mount keeps his gun,
+  the gun console's mouse comes before the pilot's. The gun console in a fight shows space (Tab: the old screen).
+- **No dodge roll in space** (his P5 A): the pilot's dodge chance is 0 while the arena flies; flying is the dodge.
+- **Goggles now** (his O1 B): a fourth wear place (`Net.WEAR_EYES`), night vision makes the dark count as lit for
+  sight (server `Replication.sees`, client `can_see`) with a thin green veil; thermal shows the warm (alive, not
+  robots) within 7 cells on one's deck through walls, drawn over everything as an orange figure. Prices 30 and 45
+  (my pick; numbers to his playtests). Mount kinds (hardpoint, side, roof) and choosing the enemy deck went to v94.
