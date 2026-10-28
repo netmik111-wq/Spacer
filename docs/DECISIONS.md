@@ -1993,3 +1993,7 @@ Questions on `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`; built on my pi
 - **A side wall's joint by a door** (his bug note): the map's piece was right (├), but the wall going on above it lay
   out of sight, so it looked broken off. The sight mask now shows half a cell more of a side wall above and below a seen
   joint (`WorldView._side_wall`), which reads as a wall going on.
+
+- (v94, after the build, mine) `Pirates.cut_in` never cuts in onto a cell with no walkable neighbour. ship02's
+  cell 39,13 (between the helm and the drone monitor, against the hull) is such a nook since v91: a boarder cut in
+  there stood forever (peopletest's robber failed 1 run in 16). The fix reaches players with the next build.
