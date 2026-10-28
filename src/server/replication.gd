@@ -337,7 +337,9 @@ func sees(p: Player, q: Player) -> bool:
 		if not Items.light(q.in_hand()).is_empty():
 			return true                      # its beam is seen from anywhere around
 	var eyes := p.worn[Net.WEAR_EYES]
-	if eyes == Net.ITEM_THERMAL and its_deck == my_deck and dist <= THERMAL_REACH and warm(q):
+	if eyes == Net.ITEM_THERMAL and its_deck == my_deck and dist <= THERMAL_REACH and warm(q) \
+			and Sight.in_arcs(Vector2(Net.way(p.st.facing)), Vector2(on_ours) - from, _arcs_light):
+		# (v94, the author's note: "I see people behind my back") only inside the field of view
 		return true                          # (v93, the author's O1) its heat shows through walls
 	if dist > Sight.SIGHT_REACH + 1.5:
 		return false

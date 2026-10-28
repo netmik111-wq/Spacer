@@ -26,6 +26,21 @@ var kind := PackedByteArray()        # per cell (w * h), the most solid of the d
 var outline := PackedVector2Array()  # the middle of every solid cell that touches empty space, in the body's frame
 var edge := PackedByteArray()        # (v93) per cell: 1 = a solid cell that touches empty space (the outer wall: armour)
 var radius := 0.0                    # from the middle to the farthest corner
+
+# (v94, the author's G1 note: "three mount kinds: a hardpoint, fixed and the strongest; a side turret, 180°; a roof
+# turret, 360°, the weakest") A gun mount's kind, by the "^" line of its drawing or else by its wall: a gun in the bow
+# wall or in the bow's fifth of the ship is fixed and points along the bow, any other a side turret. Shared: the server aims and fires by it,
+# the client draws its arc.
+const MOUNT_HARD := 0
+const MOUNT_SIDE := 1
+const MOUNT_ROOF := 2
+const MOUNT_NAMES: Array[String] = ["носовое", "бортовое", "на крыше"]
+const MOUNT_ARC: Array[float] = [PI / 36.0, PI / 2.0, PI]          # how far either side of straight out it turns
+const MOUNT_TURN: Array[float] = [0.0, PI / 2.0, PI / 3.0]          # radians a second it turns (0: fixed, it does not)
+const MOUNT_DAMAGE: Array[float] = [1.25, 1.0, 0.8]
+const MOUNT_SPREAD: Array[float] = [0.5, 1.0, 1.3]                  # its scatter against a side turret's
+const KIND_OF := {"hard": MOUNT_HARD, "side": MOUNT_SIDE, "roof": MOUNT_ROOF}
+const BOW_SHARE := 0.3                # a gun this far forward of the middle (a share of the length) is fixed by itself
 var _skip_other := false             # (the grid) the ship alongside's cells are not ours
 
 
@@ -180,6 +195,19 @@ func outward(cell: int) -> Vector2:
 			best_n = n
 			best = d
 	return best
+
+
+func mount_kind(cell: int) -> int:
+	## (v94) The kind of the gun mount at that cell of the drawing (MOUNT_*).
+	if map != null and map.gun_kind.has(cell):
+		return int(KIND_OF.get(map.gun_kind[cell], MOUNT_SIDE))
+	return MOUNT_HARD if outward(cell).x > 0.7 or local_of(cell).x > w * BOW_SHARE else MOUNT_SIDE
+
+
+func mount_out(cell: int) -> float:
+	## (v94) Which way a mount points when straight, in the body's frame: a fixed gun along the bow
+	## (Starsector's hardpoints; its own hull does not stop our shots), a turret out of its wall.
+	return 0.0 if mount_kind(cell) == MOUNT_HARD else outward(cell).angle()
 
 
 func index(c: Vector2i) -> int:

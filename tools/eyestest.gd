@@ -2,7 +2,7 @@ extends SceneTree
 ## (v93) Checks the goggles (the author's O1) on a real server stepped by hand:
 ##   godot --headless --path . --script res://tools/eyestest.gd
 ## Goggles are worn over the eyes (Z), in their own place; night vision sees in the dark as if it were lit;
-## thermal goggles show the living through a wall nearby on one's own deck, never the dead or robots, never
+## thermal goggles show the living through a wall nearby on one's own deck, (v94) inside the field of view only, never the dead or robots, never
 ## far off. Fails with exit code 1.
 
 const GameServer := preload("res://src/server/game_server.gd")
@@ -64,6 +64,11 @@ func _initialize() -> void:
 		_expect(not r.sees(p, q), "a wall hides one")
 		p.worn[Net.WEAR_EYES] = Net.ITEM_THERMAL
 		_expect(r.sees(p, q), "thermal goggles show it through the wall")
+		var ahead: int = p.st.facing
+		var w: Vector2 = -Net.way(ahead)
+		p.st.facing = Net.dir_of(roundi(w.x), roundi(w.y))
+		_expect(not r.sees(p, q), "but not behind one's back (v94, the author's note)")
+		p.st.facing = ahead
 		q.robot = true
 		_expect(not r.sees(p, q), "but not a robot")
 		q.robot = false

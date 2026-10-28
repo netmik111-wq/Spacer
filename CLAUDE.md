@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v93 (version 0.86: armour, penetration and ricochet in space; goggles) is the latest. Plans one to four are done except the darkness front (the
+Build v94 (version 0.87: the fight like Starsector, three mount kinds) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -135,8 +135,13 @@ armour on the outer wall (ours 2, pirates by class), penetration thickened by th
 strike another ship, worn armour mended from outside; the shield a bubble or a stronger arc (E at the generator); a lone
 pilot fires every free gun with the mouse, the gun console shows space; no dodge roll in space; night vision and thermal
 goggles (a fourth wear place); his note: machine pictures face the room, the globe a tile up, outer windows with shutters.
-Next on his roadmap: v94 docking and boarding pods with three mount kinds (hardpoint, side 180°, roof 360°) and choosing
-the enemy deck to hit, then places, arsenal, races.
+v94 (his "make all guns work properly ... more like in Starsector"; questions `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`,
+built on my picks): every gun's own numbers in space (`Weapons.SPACE`), Starsector's damage kinds, heat (flux) with the shield
+stopping shots, overload and venting (V), the pilot's shield on the right mouse, Starsector's armour, hull points (every 100
+through = one hit inside), three mount kinds (fixed, side 180°, roof 360°; `^` lines; our ship's fourth, fixed bow gun starts
+off), ammunition clips, the gun console always in space; his notes: thermal only in the view cone, a side wall's joint.
+Next: v95 his note "fly the ship round the system with WASD instead of the old helm map" (needs questions), then docking
+and boarding pods, choosing the enemy deck, places, arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -167,7 +172,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 48 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 49 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -216,6 +221,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/arenatest.gd (since v92: shapes, the pilot, drift, arcs, shots flying and striking, shield, hand aim, bumps, the edge, docking)
     godot --headless --path . --script res://tools/armourtest.gd (since v93: armour, penetration, slant, wear, ricochet, mending outside, all guns from the helm, the shield's arc)
     godot --headless --path . --script res://tools/eyestest.gd (since v93: goggles, night vision, thermal through walls)
+    godot --headless --path . --script res://tools/fluxtest.gd (since v94: every gun in space, heat, overload, vent, the pilot's shield, mount kinds, clips)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -240,7 +246,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 48 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 49 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -324,7 +330,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `first_shift.gd` (v74, H and the first-shift checklist).
   (v81) `ship_editor.gd` (the ship editor) with `src/ui/editor/`: `drawing.gd` (the model, tools, undo, text), `canvas.gd`
   (drawing and the mouse), `checks.gd` (the problems panel).
-  (v84) `ship_preview.gd`, the main menu's small picture of a ship. (v86) `shuttle_view.gd`, the shuttle's console. (v92) `space_view.gd`, the fight in space.
+  (v84) `ship_preview.gd`, the main menu's small picture of a ship. (v86) `shuttle_view.gd`, the shuttle's console. (v92) `space_view.gd`, the fight in space (v94: also beside the gun console's list, `GunsView.compact`).
   (v75) `src/client/music.gd` (one music player with a crossfade, menu and fight), `src/client/bug_report.gd` (the zip).
 - `tools/`: tests (`*test.gd`, `runtests.sh`, `nettest.sh`), `bench.sh`, `sightbench.gd`, `fightbench.gd`, `lagproxy.rs`,
   `make_assets.py`, `fxshot.gd` (v56: a picture of the fight's effects, `godot --path . --script res://tools/fxshot.gd -- OUT.png`
@@ -587,6 +593,16 @@ The parameters for these checks are described in the header of `src/main.gd`.
   C_TURRET is the helm's or gun console's mouse for every free gun. `Ship.shield_arc` (-1 bubble, 0..3) rides in the
   S_ARENA flags (`Net.ARENA_ARC_SHIFT`). Worn things are `Net.WORN` = 4 (`WEAR_EYES`): old saves are resized on load.
   Sight asks goggles in `Replication.sees` (and its cache key) and `WorldView.can_see`/`_my_dark`. Protocol 67.
+- (v94) In space a gun's damage, pace and heat are `Weapons.SPACE` (`space_ticks`, `space_shots`, `space_damage`,
+  `burst_heat`, `clip`); `Weapons.penetration` is gone. A shot's `"d"`/`"type"` ride in the shot dictionary. Hull damage
+  goes into `Body.debt`; every `Arena.INSIDE_UNIT` makes one hit inside, passed to Gunnery as `meta["units"]` (`Gunnery._units`
+  overrides the gun's own damage in `_land_through`/`_their_shot_lands`). The shield in space is heat (`Body.heat`, `hard`,
+  `cap`): `Ship.shield` and `Gunnery.enemy_shield` are written from it each tick, never set them by hand in a space test (use
+  `arena.pirate_shields = false` to keep the pirates' down). Turrets turn at `ArenaShape.MOUNT_TURN`: a test that moves a
+  target runs a second or two before asking `bears`. A gun's kind is `ArenaShape.mount_kind` (`ShipMap.gun_kind` from `^`
+  lines), its straight-out angle `mount_out`. Ammo in space comes through `Mounts.clip` (in `Fleet.OWN`). ship02 has 4 guns;
+  guns past `Gunnery.START_ARMED` start switched off. A heavy gun's late hits wait in `Gunnery._flying`: a test that resets
+  the pirate between shots clears it. C_SHIELD is new; S_ARENA's body record is 31 bytes + 4 a gun (protocol 68).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

@@ -1945,6 +1945,29 @@ func _draw_look() -> void:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
 	for c: Vector2i in walls_seen:
 		_look.draw_rect(Rect2(Vector2(c) * _tile, Vector2(_tile, _tile)), green)
+	# (v94, the author's note "wall connection not right") a side wall seen where a band leaves it (├ ┤, a
+	# crossing, an airlock in it) goes on up or down into walls the eye does not reach: half of the next cell
+	# shows, so the wall reads as going on rather than broken off at the joint
+	for c: Vector2i in walls_seen:
+		var cell := (c.y + dy) * map.width + c.x
+		if not _side_wall(cell):
+			continue
+		for d: int in [-1, 1]:
+			var n := c + Vector2i(0, d)
+			if walls_seen.has(n) or seen.has(n) or n.y < 0 or n.y + dy >= map.height:
+				continue
+			if _side_wall((n.y + dy) * map.width + n.x):
+				_look.draw_rect(Rect2(Vector2(n.x, n.y + (0.5 if d < 0 else 0.0)) * _tile, Vector2(_tile, _tile * 0.5)), green)
+
+
+func _side_wall(cell: int) -> bool:
+	## (v94) Is that cell part of a wall running up and down (a side wall, its joints, an airlock in it)?
+	var map := client.map
+	if cell < 0 or cell >= map.cells.size() or map.cells[cell] < 0 or map.walk[cell] == 1:
+		return false
+	var name: String = map.tile_names[map.cells[cell]] if map.cells[cell] < map.tile_names.size() else ""
+	name = name.trim_prefix("pirate_")
+	return name.begins_with("wall_v") or name.begins_with("wall_j") or name == "wall_cross" or name == "airlock" or name == "window_v"
 
 
 func _ray_reach(origin: Vector2, way: Vector2, start: Vector2i, reach: float) -> float:
@@ -2616,7 +2639,9 @@ func _process(delta: float) -> void:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible
 		if thermal and not sprite.visible and id != client.my_id and its_deck == my_deck and _warm(id, cond) \
-				and Vector2(cell_x, cell_y).distance_to(Vector2(client.pred.x, client.pred.y)) <= THERMAL_REACH:
+				and Vector2(cell_x, cell_y).distance_to(Vector2(client.pred.x, client.pred.y)) <= THERMAL_REACH \
+				and Sight.in_arcs(client.look_way(), Vector2(cell_x, cell_y) - Vector2(client.pred.x, client.pred.y), Sight.eye_arcs(false)):
+			# (v94, the author's note) only inside the field of view, never behind one's back
 			_heat.append(_feet(pos) + nudge.get(id, Vector2.ZERO))   # (v93) seen as heat through the wall
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, id)

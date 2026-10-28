@@ -1070,6 +1070,7 @@ def build_tiles():
 # where only some jobs pass, cargo into a room with the supply locker or the module bay, else the plain one);
 # a line of its own gives one door the look of another kind:
 #   & <deck number, from 1> <x> <y> <base|tech|cargo|herm>
+#   ^ <deck number, from 1> <x> <y> <hard|side|roof>   (v94) that gun mount's kind (else by its wall: bow = hard)
 # where x, y is the door's cell (the ship editor's door marks).
 #
 # A ship others fight (the pirate ship) names the rooms its systems stand in, the same way:
@@ -1266,7 +1267,7 @@ def read_decks(name, lines):
     """Splits a drawing into decks: [(deck name, lines)], top deck first."""
     decks = []
     for l in lines:
-        if l.startswith("@") or l.startswith("%") or l.startswith("&"):
+        if l.startswith("@") or l.startswith("%") or l.startswith("&") or l.startswith("^"):
             continue
         if l.startswith("="):
             decks.append((l[1:].strip() or "Палуба %d" % (len(decks) + 1), []))
@@ -1368,10 +1369,22 @@ def resolve_ship(name, lines, ids):
         if not any(dx == x0 and dy == y0 + d * stride for dx, dy, _ in doors):
             raise MapError(f"{name}: door line '{l}' does not point at a door")
         door_looks.append([x0, y0 + d * stride, parts[3]])
+    gun_kinds = []                       # (v94, the author's G1 note) "^ deck x y kind": a gun mount fixed (hard), side or roof
+    for l in lines:
+        if not l.startswith("^"):
+            continue
+        parts = l[1:].split()
+        if len(parts) != 4 or parts[3] not in ("hard", "side", "roof"):
+            raise MapError(f"{name}: bad gun line '{l}'")
+        d, x0, y0 = int(parts[0]) - 1, int(parts[1]), int(parts[2])
+        rows = decks[d][1]
+        if not (0 <= y0 < len(rows) and 0 <= x0 < len(rows[y0]) and rows[y0][x0] == "T"):
+            raise MapError(f"{name}: gun line '{l}' does not point at a gun")
+        gun_kinds.append([x0, y0 + d * stride, parts[3]])
     return {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
             "decks": [n for n, _ in decks], "cells": cells, "spawns": spawns, "doors": doors,
             "door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
-            "things": under, "door_looks": door_looks}
+            "things": under, "door_looks": door_looks, "gun_kinds": gun_kinds}
 
 
 def build_maps(images, ids):

@@ -32,7 +32,8 @@ const AIM := Color(1.0, 0.92, 0.35)
 const SHIELD := Color(0.4, 0.65, 1.0)
 const ION := Color(0.45, 0.7, 1.0)
 const PANEL_NOTE := "Питание орудий и щита включают на щите питания у СМЭС в машинном отделении."
-const GUN_PLACES: Array[String] = ["левый борт у носа", "правый борт у носа", "днище"]
+const ArenaShape := preload("res://src/shared/arena_shape.gd")
+var _shapes := {}                    # (v94) fleet ship -> its ArenaShape, for where its guns are and their kind
 const SYSTEM_ABOUT: Array[String] = [
 	"Выбить орудия: пираты перестанут стрелять. Повреждённые орудия стреляют реже.",
 	"Выбить рубку: пираты будут промахиваться вдвое чаще, а наши попадания станут вернее.",
@@ -73,6 +74,7 @@ var _hover := -2                     # the system under the mouse: Net.ESYS_*, -
 var _hover_room := -1                # the room of the plan under the mouse (-1 = none)
 var _hover_gun := -1                 # the gun whose row the mouse is over
 var _time := 0.0
+var compact := false                 # (v94) beside the view of space: one column, no plan, no long help
 
 
 func setup(p_client: GameClient) -> void:
@@ -178,6 +180,15 @@ func setup(p_client: GameClient) -> void:
 	_about = _label(self, 13)
 	_about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_about.custom_minimum_size = Vector2(BAR + 24 + PLAN.x, 52)
+	if compact:
+		# (v94, the author's note) space beside it shows the fight: the console keeps its guns and orders in one column
+		row.remove_child(right)
+		left.add_child(right)
+		_plan.visible = false
+		_about.visible = false
+		_enemy_line.custom_minimum_size = Vector2(BAR, 0)
+		_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_status.custom_minimum_size = Vector2(BAR, 0)
 
 
 func _label(parent: Control, font_size: int) -> Label:
@@ -443,7 +454,7 @@ func _update_guns(fighting: bool) -> void:
 		var w: int = client.gun_weapon[i]
 		var flags: int = client.gun_flags[i]
 		var row: Array = _gun_rows[i]
-		var place := GUN_PLACES[i] if i < GUN_PLACES.size() else ""
+		var place := _gun_place(i)
 		var state := ""
 		if c == Net.GUN_BROKEN:
 			state = "сломано, нужен ремонт"
@@ -593,3 +604,27 @@ func _on_plan_input(event: InputEvent) -> void:
 		var system := _system_in(room)
 		client.send_aim(system if system >= 0 else (Net.AIM_ROOM + room if room >= 0 else Net.AIM_ANY))
 		_plan.accept_event()
+
+
+func _gun_place(i: int) -> String:
+	## (v94) Where gun i of our ship is and what kind of mount it is: «левый борт у носа, бортовое».
+	var map = client.map
+	if i >= map.guns.size():
+		return ""
+	var f: int = maxi(map.fleet_on, 0)
+	if not _shapes.has(f):
+		_shapes[f] = ArenaShape.of_fleet(map, f)
+	var sh = _shapes[f]
+	var c: int = map.guns[i]
+	var kind: int = sh.mount_kind(c)
+	if kind == ArenaShape.MOUNT_HARD:
+		return "в носу, неподвижное"
+	var out: Vector2 = sh.outward(c)
+	var side := "корма"
+	if out.y < -0.5:
+		side = "левый борт"
+	elif out.y > 0.5:
+		side = "днище" if map.deck_of(c / map.width) > 0 else "правый борт"
+	if out.x > -0.5 and sh.local_of(c).x > sh.w * 0.15:
+		side += " у носа"
+	return "%s, %s" % [side, ArenaShape.MOUNT_NAMES[kind]]

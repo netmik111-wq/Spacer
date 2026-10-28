@@ -1,8 +1,9 @@
 extends SceneTree
 ## (v93) Checks armour in the fight in space (Arena: the author's plan 0.2) on a real server stepped by hand:
 ##   godot --headless --path . --script res://tools/armourtest.gd
-## Armour lies on the outer wall only and faces out; a weak shot is held and wears it, a strong one goes through,
-## a worn place lets a weak one through; ion passes armour by; a slant thickens it; shots met at a slant glance
+## Armour lies on the outer wall only and faces out; (v94) it weakens a hit by Starsector's damage / (damage + armour),
+## never below 15%, wears by the hit, a worn place lets more through, kinetic is weak and explosive strong against it,
+## a slant thickens it; shots met at a slant glance
 ## off (kinetic more than lasers) and fly on harmless; the pirate's shots held by our armour leave the inside
 ## whole and the armour worn; ours stays worn after the fight and is mended from outside with a patch; the
 ## client reads ARENA_ARMOUR. Also (his P1 note) the helm's mouse fires every gun no gunner holds, and (his D3 C)
@@ -69,7 +70,7 @@ func _initialize() -> void:
 	_expect(d.pirates_come(2, true), "(a raider comes)")
 	_run(1)
 	var e = a.body(Arena.LEAD)
-	_expect(e != null and e.plates >= 1, "the raider's wall holds armour (%d)" % (e.plates if e != null else -1))
+	_expect(e != null and e.plates >= 50.0, "the raider's wall holds armour (%d)" % (e.plates if e != null else -1))
 	e.rot = 0.0
 	var spot := -1
 	for x in e.shape.w:
@@ -81,39 +82,70 @@ func _initialize() -> void:
 	var c := Vector2i(spot % e.shape.w, spot / e.shape.w)
 	var l: Vector2 = e.shape.middle(c.x, c.y)
 	var down: Vector2 = -e.shape.normal(c)       # straight into the wall
-	e.plates = 3
+	# (v94, Starsector's armour) the armour round the place weakens a hit by damage / (damage + armour), never below 15%
+	e.plates = 100.0
 	e.worn = {}
-	_expect(a._armour(_shot(Weapons.LASER), e, l, down) == Net.HELD, "a laser (2) is held by 3 points of armour")
-	_expect(int(e.worn.get(spot, 0)) == 1, "and wears one off (%d)" % int(e.worn.get(spot, 0)))
-	_expect(a._armour(_shot(Weapons.LASER), e, l, down) == Net.LANDED, "on the worn place a laser goes through")
+	e.debt = 0.0
+	var hit := _shot(Weapons.LASER)
+	_expect(a._strike(hit, e, l, down) == Net.HELD, "a laser (30) against 100 points of armour is held")
+	var laser_did := float(hit["meta"].get("struck", 0.0))
+	_expect(laser_did > 6.5 and laser_did < 10.0, "and does about 30 x 30 / 130 to the hull, a little more by a window (%.1f)" % laser_did)
+	_expect(absf(float(e.worn.get(spot, 0.0)) - 15.0) < 0.5, "the armour there wears by half the hit, its neighbours the rest (%.1f)" % float(e.worn.get(spot, 0.0)))
+	for k in 6:
+		a._strike(_shot(Weapons.LASER), e, l, down)
+	hit = _shot(Weapons.LASER)
+	a._strike(hit, e, l, down)
+	_expect(float(hit["meta"].get("struck", 0.0)) > laser_did + 1.0, "on the worn place a laser does more (%.1f)" % float(hit["meta"].get("struck", 0.0)))
 	e.worn = {}
-	_expect(a._armour(_shot(Weapons.RAILGUN), e, l, down) == Net.LANDED, "a railgun (5) goes through whole armour")
-	_expect(int(e.worn.get(spot, 0)) == 2, "and wears two off (%d)" % int(e.worn.get(spot, 0)))
+	e.debt = 0.0
+	hit = _shot(Weapons.RAILGUN)
+	_expect(a._strike(hit, e, l, down) == Net.LANDED and int(hit["meta"].get("units", 0)) >= 2, "a railgun (400) gets two hits inside (%d)" % int(hit["meta"].get("units", 0)))
 	e.worn = {}
-	_expect(a._armour(_shot(Weapons.ION), e, l, down) == Net.LANDED and e.worn.is_empty(), "an ion shot passes armour by and wears nothing")
-	# a slant thickens it: a heavy laser (3) against 2 points, head-on and 50 degrees off
-	e.plates = 2
-	_expect(a._armour(_shot(Weapons.HEAVY), e, l, down) == Net.LANDED, "a heavy laser (3) goes through 2 points head-on")
+	e.debt = 0.0
+	e.plates = 10000.0
+	hit = _shot(Weapons.LASER)
+	a._strike(hit, e, l, down)
+	_expect(absf(float(hit["meta"].get("struck", 0.0)) - 30.0 * Arena.MIN_SHARE) < 0.1, "the thickest armour still lets 15%% through (%.1f)" % float(hit["meta"].get("struck", 0.0)))
+	# kinetic is half against armour, explosive double
+	e.plates = 100.0
+	var kind_hit := {}
+	for w: int in [Weapons.AUTOCANNON, Weapons.ROCKET]:
+		e.worn = {}
+		e.debt = 0.0
+		hit = _shot(w)
+		a._strike(hit, e, l, down)
+		kind_hit[w] = float(hit["meta"].get("struck", 0.0)) / Weapons.space_damage(w)
+	_expect(kind_hit[Weapons.ROCKET] > kind_hit[Weapons.AUTOCANNON] * 2.0, "a rocket gets through armour far better than a shell (%.2f vs %.2f of its damage)" % [kind_hit[Weapons.ROCKET], kind_hit[Weapons.AUTOCANNON]])
+	# a slant thickens it: a heavy laser head-on and 50 degrees off
 	e.worn = {}
+	e.debt = 0.0
+	hit = _shot(Weapons.HEAVY)
+	a._strike(hit, e, l, down)
+	var head_on := float(hit["meta"].get("struck", 0.0))
+	e.worn = {}
+	e.debt = 0.0
 	var slant := down.rotated(deg_to_rad(50.0))
-	_expect(a._armour(_shot(Weapons.HEAVY), e, l, slant) == Net.HELD, "and is held by them met 50° off")
+	hit = _shot(Weapons.HEAVY)
+	a._strike(hit, e, l, slant)
+	_expect(float(hit["meta"].get("struck", 0.0)) < head_on * 0.8, "met 50° off, the armour holds more (%.1f vs %.1f head-on)" % [float(hit["meta"].get("struck", 0.0)), head_on])
+	e.debt = 0.0
 	# glancing off, met 75 degrees off
 	var glance := down.rotated(deg_to_rad(75.0))
 	var kin := 0
 	var las := 0
 	for k in 400:
 		e.worn = {}
-		if a._armour(_shot(Weapons.AUTOCANNON), e, l, glance) == Net.RICOCHET:
+		if a._strike(_shot(Weapons.AUTOCANNON), e, l, glance) == Net.RICOCHET:
 			kin += 1
 		e.worn = {}
-		if a._armour(_shot(Weapons.LASER), e, l, glance) == Net.RICOCHET:
+		if a._strike(_shot(Weapons.LASER), e, l, glance) == Net.RICOCHET:
 			las += 1
 	_expect(kin > 240 and kin < 320, "kinetic shells met 75° off glance off about 70%% of the time (%d of 400)" % kin)
 	_expect(las > 80 and las < 160 and las < kin, "lasers less often (%d of 400)" % las)
 	e.worn = {}
 	var rico := 0
 	for k in 100:
-		if a._armour(_shot(Weapons.AUTOCANNON), e, l, down) == Net.RICOCHET:
+		if a._strike(_shot(Weapons.AUTOCANNON), e, l, down) == Net.RICOCHET:
 			rico += 1
 	_expect(rico == 0, "nothing glances off met head-on")
 
@@ -126,7 +158,11 @@ func _initialize() -> void:
 	_expect(a.shots.size() == 1 and a.shots[0].get("off", -1) == e.id, "a shell that glanced off flies on (never back into that ship)")
 	_expect((a.shots[0]["vel"] as Vector2).dot(e.shape.normal(c).rotated(e.rot)) > 0.0, "away from the wall it met")
 	_run(Arena.BOUNCE_LIFE * Net.TICK_HZ + 2)
-	_expect(a.shots.is_empty(), "and is gone after a while")
+	var still := 0
+	for q: Dictionary in a.shots:
+		if int(q.get("off", -1)) == e.id:
+			still += 1
+	_expect(still == 0, "and is gone after a while")
 
 	# a shell that glanced off flies on through the ship it met (it is never struck twice by one shell)
 	a.shots.clear()
@@ -140,7 +176,11 @@ func _initialize() -> void:
 	a.shots.append(back)
 	var hits0: int = g.enemy_hull
 	_run(4)
-	_expect(a.shots.size() == 1 and g.enemy_hull == hits0, "a glanced shell passes through the ship it glanced off")
+	var ours_left := 0
+	for q: Dictionary in a.shots:
+		if int(q.get("off", -1)) == e.id:
+			ours_left += 1                     # (v94: the pirate's own shots fly too, faster than before)
+	_expect(ours_left == 1 and g.enemy_hull == hits0, "a glanced shell passes through the ship it glanced off")
 	a.shots.clear()
 
 	# (the author's P1 note) one at the helm aims every free gun with the mouse; a gunner's own gun stays his
@@ -168,9 +208,11 @@ func _initialize() -> void:
 	var r: Vector2 = ours.shape.bubble()
 	_expect(a._covers(ours, Vector2(-r.x, 0)) and a._covers(ours, Vector2(r.x, 0)), "a bubble covers all round")
 	g.turn_shield(pilot)
+	_run(1)
 	_expect(server.ship.shield_arc == 0 and a._covers(ours, Vector2(r.x, 0)) and not a._covers(ours, Vector2(-r.x, 0)),
 		"E at the generator: an arc on the bow, the stern open")
 	g.turn_shield(pilot)
+	_run(1)
 	_expect(server.ship.shield_arc == 1 and a._covers(ours, Vector2(0, r.y)) and not a._covers(ours, Vector2(0, -r.y)), "then starboard")
 	for k in 3:
 		g.turn_shield(pilot)
@@ -181,9 +223,9 @@ func _initialize() -> void:
 
 	# the pirate's shots, held by our armour: the inside stays whole, the armour wears
 	var b = a.body(0)
-	_expect(b.plates == Arena.ARMOUR_OURS + server.outfit.armour_tier(), "our wall holds %d points" % b.plates)
-	b.plates = 99
-	a.pane_armour = 99                         # (a window holds a single point: it would let the odd shot in)
+	_expect(b.plates == Arena.ARMOUR_OURS + Arena.ARMOUR_TIER * server.outfit.armour_tier(), "our wall holds %d points" % b.plates)
+	b.plates = 5000.0
+	a.pane_share = 1.0                         # (a window holds a third: it would let more in)
 	for k in g.enemy_weapons.size():
 		g.enemy_weapons[k] = Weapons.LASER
 	server.ship.shield_on = false
@@ -191,7 +233,7 @@ func _initialize() -> void:
 	g.enemy_hit_chance = 1.0
 	var holes0: int = server.air.holes.size()
 	var hull0: int = server.ship.hull
-	for i in 6:
+	for i in 2:                                # (v94: 15% always gets through, so not too many shots)
 		_hold(Vector2(0, 0), 0.0, Vector2(0, -50), PI / 2.0)
 		for k in g.enemy_charge.size():
 			g.enemy_charge[k] = 1.0
@@ -201,7 +243,7 @@ func _initialize() -> void:
 
 	# ours stays worn after the fight
 	b.plates = Arena.ARMOUR_OURS
-	a.pane_armour = Arena.PANE_ARMOUR
+	a.pane_share = Arena.PANE_SHARE
 	g.enemy_hit_chance = 0.0
 	a.shots.clear()
 	a._later.clear()

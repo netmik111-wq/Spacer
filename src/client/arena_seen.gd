@@ -44,7 +44,7 @@ func read(pkt: PackedByteArray) -> void:
 	var at := 6
 	var seen := {}
 	for i in n:
-		if at + 18 > pkt.size():
+		if at + 31 > pkt.size():
 			break
 		var id: int = pkt[at]
 		var flags: int = pkt[at + 1]
@@ -54,14 +54,24 @@ func read(pkt: PackedByteArray) -> void:
 		var rot := pkt.decode_u16(at + 12) / 65535.0 * TAU
 		var spin := pkt.decode_s16(at + 14) / 1000.0
 		var shield: int = pkt[at + 16]
-		var guns: int = pkt[at + 17]
-		at += 18
+		# (v94) hull points, heat, the shield's state and its arc's way
+		var hp := Vector2(pkt.decode_u16(at + 18), pkt.decode_u16(at + 20))
+		var heat := Vector2(pkt.decode_u16(at + 22), pkt.decode_u16(at + 24))
+		var hard: float = pkt[at + 26] / 200.0
+		var sstate: int = pkt[at + 27]
+		var sdir := pkt.decode_s16(at + 28) / 1000.0
+		var guns: int = pkt[at + 30]
+		at += 31
 		var aims := PackedFloat32Array()
 		var gunf := PackedByteArray()
+		var charge := PackedFloat32Array()
 		for k in guns:
+			if at + 4 > pkt.size():
+				break
 			aims.append(pkt.decode_s16(at) / 1000.0)
 			gunf.append(pkt[at + 2])
-			at += 3
+			charge.append(pkt[at + 3] / 200.0)
+			at += 4
 		seen[id] = true
 		var b: Dictionary = bodies.get(id, {})
 		if b.is_empty() or int(b["layout"]) != layout:
@@ -71,7 +81,7 @@ func read(pkt: PackedByteArray) -> void:
 				armour.erase(id)             # a new pirate: its armour whole
 		var snaps: Array = b["snaps"]
 		snaps.append({"tick": tick, "pos": pos, "vel": vel, "rot": rot, "spin": spin, "shield": shield, "flags": flags,
-			"aims": aims, "gunf": gunf})
+			"aims": aims, "gunf": gunf, "hp": hp, "heat": heat, "hard": hard, "sstate": sstate, "sdir": sdir, "charge": charge})
 		if snaps.size() > KEEP:
 			snaps.remove_at(0)
 	for id: int in bodies.keys():
@@ -218,11 +228,21 @@ func gun_spot(id: int, k: int) -> Vector2:
 	return s.local_of(guns[k]) if k < guns.size() else Vector2.ZERO
 
 
+func gun_kind(id: int, k: int) -> int:
+	## (v94) That gun's mount kind (ArenaShape.MOUNT_*), as Arena._gun.
+	var s := shape_of(id)
+	if s == null:
+		return ArenaShape.MOUNT_SIDE
+	var key := ("f%d" % id) if layout_of(id) < 0 else ("o%d" % layout_of(id))
+	var guns: PackedInt32Array = _guns.get(key, PackedInt32Array())
+	return s.mount_kind(guns[k]) if k < guns.size() else ArenaShape.MOUNT_SIDE
+
+
 func gun_out(id: int, k: int) -> float:
-	## The angle straight out of that gun's wall (as Arena._gun).
+	## The angle that gun points when straight (as Arena._gun).
 	var s := shape_of(id)
 	if s == null:
 		return 0.0
 	var key := ("f%d" % id) if layout_of(id) < 0 else ("o%d" % layout_of(id))
 	var guns: PackedInt32Array = _guns.get(key, PackedInt32Array())
-	return s.outward(guns[k]).angle() if k < guns.size() else 0.0
+	return s.mount_out(guns[k]) if k < guns.size() else 0.0

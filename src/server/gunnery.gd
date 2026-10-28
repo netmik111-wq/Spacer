@@ -74,6 +74,7 @@ const Weapons := preload("res://src/shared/weapons.gd")
 const Hulls := preload("res://src/shared/hulls.gd")
 const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
+const ArenaShape := preload("res://src/shared/arena_shape.gd")
 
 const CHARGE_SECONDS := 8.0          # (the plain laser's; each weapon has its own, see Weapons)
 const ENEMY_HULL := 12               # damage a raider takes before it is wrecked (v49: was 6; v53: per class, see Hulls)
@@ -162,6 +163,7 @@ var flies := true                    # (v56) shots take their flight before they
 var _flying: Array = []              # (v56) shots on their way: [the tick they land, what they do then]
 var _fx := RandomNumberGenerator.new()   # (v56) for what is only drawn (so the game's own lots stay as they were)
 var _aim_bonus := 0.0                # (v60) added to our hit chance while the console's volley is rolled (the gunnery skill)
+var _units := -1                     # (v94) while a hit in space lands: its damage inside in old points (-1: the gun's own)
 const GUNNER_HIT := 0.05             # (v60) the most the gunnery skill of the one at the console adds to our hit chance
 var goal := Net.GOAL_NONE            # (v68) what this fight is for besides wrecking it (Net.GOAL_*)
 var goal_lost := false               # the cargo is smashed, the bounty lost or the courier gone
@@ -193,6 +195,16 @@ func setup(p_server: Node) -> void:
 		ship.mounts.fill(Weapons.LASER)
 		ship.armed.resize(n)
 		ship.armed.fill(1)
+		# (v94) a fixed gun starts switched off where the ship has turrets too (ours got one in v94: the power at
+		# the start stays as it was); the power panel turns it on
+		var shape = ArenaShape.of_fleet(server.map, server.fleet.on)
+		var turrets := 0
+		for c: int in server.map.guns:
+			if shape.mount_kind(c) != ArenaShape.MOUNT_HARD:
+				turrets += 1
+		for i in n:
+			if turrets > 0 and shape.mount_kind(server.map.guns[i]) == ArenaShape.MOUNT_HARD:
+				ship.armed[i] = 0
 	ship.mount_fx.resize(n)
 	charge.resize(n)
 	charge.fill(1.0)
@@ -771,19 +783,24 @@ func tick() -> void:
 	for cell: int in ship.jammed.keys():
 		if server.tick >= int(ship.jammed[cell]):
 			ship.jammed.erase(cell)
+	var space: bool = server.arena.on()
 	for i in charge.size():
 		var w: int = ship.mounts[i]
 		if w == Weapons.NONE or ship.armed[i] == 0:
 			charge[i] = 0.0
 		elif server.powered() and not ship.broken.has(map.guns[i]) and not jammed(map.guns[i]):
-			charge[i] = minf(charge[i] + server.mounts.pace(i) / Weapons.charge_ticks(w), 1.0)   # (v60) quicker with a gunner
+			# (v60) quicker with a gunner; (v94) in space each gun's own pace, Starsector's
+			charge[i] = minf(charge[i] + server.mounts.pace(i) / (Weapons.space_ticks(w) if space else Weapons.charge_ticks(w)), 1.0)
 	if ship.guard == Weapons.NONE or not ship.guard_armed:
 		guard_charge = 0.0
 	elif server.powered():
-		guard_charge = minf(guard_charge + 1.0 / Weapons.charge_ticks(ship.guard), 1.0)
+		guard_charge = minf(guard_charge + 1.0 / (Weapons.space_ticks(ship.guard) if space else Weapons.charge_ticks(ship.guard)), 1.0)
 	# our shield: it falls without power, its generator or when switched off; it holds while ionised
+	# ((v94) in space its strength is what its heat leaves, set by Arena)
 	var gen := shield_cell()
-	if gen < 0 or not ship.shield_on or not server.powered() or ship.broken.has(gen):
+	if space:
+		pass
+	elif gen < 0 or not ship.shield_on or not server.powered() or ship.broken.has(gen):
 		ship.shield = 0.0
 	elif not jammed(gen):
 		ship.shield = minf(ship.shield + server.outfit.shield_regen() * server.stations.shield_pace() / Net.TICK_HZ, Weapons.SHIELD_FULL)
@@ -836,19 +853,26 @@ func tick_enemy() -> void:
 			var pace: float = 1.0 / _weapons_slowness() / _slower * float(Hulls.temper(temper)["pace"]) \
 				* (1.0 if _manned(Net.ESYS_WEAPONS) else UNMANNED_PACE) * server.hazards.enemy_pace() \
 				* (PHASE2_PACE if phase2 and boss == 1 else 1.0) * (RUNNER_PACE if goal == Net.GOAL_RUNNER else 1.0)
+			var space: bool = server.arena.on()
 			for k in enemy_weapons.size():
-				enemy_charge[k] = minf(enemy_charge[k] + pace / Weapons.charge_ticks(enemy_weapons[k]), 1.0)
-				if enemy_charge[k] >= 1.0 and engaged() and (not server.arena.on() or Weapons.bomb(enemy_weapons[k])
-						or server.arena.enemy_bears(server.wing.on, k)):   # (v92) its gun must bear on us
+				var ew: int = enemy_weapons[k]
+				enemy_charge[k] = minf(enemy_charge[k] + pace / (Weapons.space_ticks(ew) if space else Weapons.charge_ticks(ew)), 1.0)
+				if enemy_charge[k] >= 1.0 and engaged() and (not space or Weapons.bomb(ew)
+						or server.arena.enemy_bears(server.wing.on, k) and server.arena.enemy_heat_ok(server.wing.on, ew)):
+					# (v92) its gun must bear on us; (v94) and its ship not be overloaded or too hot
 					enemy_charge[k] = 0.0
-					_enemy_fires(enemy_weapons[k], enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE, 0, k)
+					if space and not Weapons.bomb(ew):
+						server.arena.enemy_heated(server.wing.on, ew)
+					_enemy_fires(ew, enemy_fx[k] if k < enemy_fx.size() else Weapons.FX_NONE, 0, k)
 		if engaged() and server.tick >= _mend_next:
 			_mend_tick()
 	server.fleet.use(0)
 
 
 func _enemy_shield_tick() -> void:
-	## Its shield refills as fast as its generator is whole; knocked out, it falls.
+	## Its shield refills as fast as its generator is whole; knocked out, it falls. ((v94) in space: Arena's heat)
+	if flies and server.arena.on():
+		return
 	if systems.size() <= Net.ESYS_SHIELDS or systems_full[Net.ESYS_SHIELDS] == 0 or systems[Net.ESYS_SHIELDS] == 0:
 		enemy_shield = 0.0
 	elif server.tick >= systems_out[Net.ESYS_SHIELDS]:
@@ -1015,6 +1039,7 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 	var arena = server.arena
 	var space: bool = arena.on()
 	var wide := 0                        # (v92) guns that would fire but do not bear on the target
+	var hot := 0                         # (v94) guns that would fire but their ship is too hot
 	var fired := 0
 	var focus := _focus(which)
 	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS) * server.stations.share(p)   # (v60) the one at the console aims better with skill (v70: a bot, half)
@@ -1030,6 +1055,9 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 		if space and not (arena.reaches(server.fleet.on, i, server.wing.on) if _instant(w) else arena.bears(server.fleet.on, i)):
 			wide += 1                        # (v92) the target is outside its arc (or out of a beam's reach)
 			continue
+		if space and not arena.heat_ok(server.fleet.on, w):
+			hot += 1                         # (v94) overloaded, venting, or too hot for one more burst
+			continue
 		if not server.mounts.take_round(i):        # (v68) a round loaded by hand first, then the locker
 			server.chat.tell(p, "Орудие %d: нет %s в трюме (%s)." % [i + 1, "снарядов" if ammo == Net.ITEM_SHELL else "ракет",
 				Weapons.lower_name(w, fx)])
@@ -1037,6 +1065,8 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 		charge[i] = 0.0
 		fired += 1
 		server.mounts.fired(i)
+		if space and not _instant(w):
+			arena.heated(server.fleet.on, w)       # (v94) a beam heats a second at a time (_beam_pulse)
 		if Weapons.klass(w) == Weapons.CLASS_BEAM or Weapons.klass(w) == Weapons.CLASS_SIPHON:
 			beam_left[i] = Weapons.pulses(w)
 			_beam_next[i] = server.tick
@@ -1057,6 +1087,8 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 	_aim_bonus = 0.0
 	if wide > 0 and fired == 0 and not at_mount and not p.bot:
 		server.chat.tell(p, "Цель вне сектора обстрела: орудия стреляют только в свою сторону. Пилоту нужно развернуть корабль бортом.")
+	elif hot > 0 and fired == 0 and not at_mount and not p.bot:
+		server.chat.tell(p, "Корабль перегрет: орудия ждут, пока сойдёт нагрев (или сбросьте его: V у пульта управления).")
 	if fired > 0:
 		p.train(Net.SKILL_GUNS)
 		if ransom > 0 and engaged():
@@ -1138,7 +1170,9 @@ func _tractor(i: int, w: int) -> void:
 	## The tractor beam: it never misses; unless the shield stops it, it holds the ship.
 	var map = server.map
 	var cell: int = map.guns[i]
-	if _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
+	var space_stop: bool = server.arena.on() and server.arena._shielded(server.arena.of_enemy(server.wing.on)) \
+		if server.arena.of_enemy(server.wing.on) != null else false
+	if space_stop or not server.arena.on() and _meets_shield(w, false) and _enemy_shield_up() and _rng.randf() >= Weapons.through_chance(enemy_shield):
 		_draw_beam(cell, Net.SHOT_TRACTOR, 0, -1, w)
 		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
 		server.chat.say_bridge("Орудие %d (захватный луч): щит пиратов не пустил луч.%s" % [i + 1, _enemy_state()])
@@ -1177,7 +1211,7 @@ func _our_volley(i: int, w: int, fx: int = Weapons.FX_NONE, start: int = 0, focu
 	var x: int = cell % map.width
 	var y: int = cell / map.width
 	server.combat.jolt(Net.JOLT_FIRE, w, Vector2(x, y))
-	var shots: int = Weapons.info(w)["shots"]
+	var shots: int = Weapons.space_shots(w) if flies and server.arena.on() else int(Weapons.info(w)["shots"])
 	var log := {"gun": i, "w": w, "fx": fx, "left": shots, "misses": 0, "stopped": 0, "down": 0, "ricochet": 0,
 		"hits": PackedStringArray(), "said": PackedStringArray(), "focus": focus > 0.0, "ship": server.fleet.on}
 	var shield := enemy_shield              # as the shield will be when each shot meets it
@@ -1242,7 +1276,8 @@ func _our_shot_lands(log: Dictionary, hit: bool, room: int, stop: bool, spot: Ve
 		log["held"] = int(log.get("held", 0)) + 1
 		server.combat.jolt(Net.JOLT_THEIR_SHIELD, _shot_kind(w), spot)
 	elif stop:
-		enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
+		if not server.arena.on():
+			enemy_shield = maxf(enemy_shield - Weapons.shield_damage(w), 0.0)
 		log["stopped"] += 1
 		server.combat.jolt(Net.JOLT_THEIR_SHIELD, _shot_kind(w), spot)
 	else:
@@ -1277,8 +1312,8 @@ func _tell_volley(log: Dictionary) -> void:
 		var what := "ракет" if Weapons.klass(int(log["w"])) == Weapons.CLASS_ROCKET else "снаряд"
 		parts.append(("%s сбила их точечная оборона" % ("ракету" if what == "ракет" else "снаряд")) if int(log["down"]) == 1
 			else "%s сбила их точечная оборона (%d)" % ["ракеты" if what == "ракет" else "снаряды", int(log["down"])])
-	if parts.is_empty():
-		return
+	if parts.is_empty() or said.is_empty() and hits.is_empty() and server.arena.on():
+		return                               # (v94) in space guns fire every second: only what got inside is told
 	server.chat.say_bridge("Орудие %d (%s%s): %s.%s%s" % [int(log["gun"]) + 1, Weapons.lower_name(int(log["w"]), int(log.get("fx", 0))),
 		", сведённый луч" if log.get("focus", false) else "", "; ".join(parts),
 		"" if said.is_empty() else " " + " ".join(_unique(said)), _enemy_state()])
@@ -1457,6 +1492,22 @@ func _beam_pulse(i: int) -> void:
 	var r := ""
 	if space and not server.arena.reaches(server.fleet.on, i, server.wing.on):
 		r = "-"                              # (v92) the target has left its arc or its reach: this second burns nothing
+	elif space:
+		# (v94) a second of the beam in space: a raised shield takes it as heat, else it burns the hull through its armour
+		server.arena.heated(server.fleet.on, w)
+		var burn: Dictionary = server.arena.beam_burn(server.fleet.on, i, server.wing.on, room, w)
+		if bool(burn["stopped"]):
+			r = ""
+		elif int(burn["units"]) > 0:
+			var lay = server.map.others[server.arena.of_enemy(server.wing.on).layout]
+			var at_room := _room_by(lay, int(burn["cell"]))
+			if at_room >= 0:
+				room = at_room
+			_units = int(burn["units"])
+			r = _land_through(w, system_in(room), room, server.ship.mount_fx[i])
+			_units = -1
+		else:
+			r = "+"
 	else:
 		r = _land_on_enemy(w, system_in(room), room, server.ship.mount_fx[i])
 		if space:
@@ -1495,20 +1546,30 @@ func _siphon_pulse(i: int) -> void:
 	if server.arena.on():
 		server.arena.draw_beam(server.fleet.on, i, server.wing.on, -1, Net.SHOT_SIPHON, false)
 	var log: Array = _beam_log[i]
-	var take := minf(enemy_shield, Weapons.SIPHON_DRAIN)
-	enemy_shield -= take
-	log[0] += take
-	var gen := shield_cell()
-	if take > 0.0 and gen >= 0 and ship.shield_on and server.powered() and not ship.broken.has(gen) and not jammed(gen):
-		var room: float = Weapons.SHIELD_FULL - ship.shield
-		ship.shield = minf(ship.shield + take, Weapons.SHIELD_FULL)
-		log[1] += minf(take, room)
+	if server.arena.on():
+		# (v94) in space it moves heat: what it puts on their raised shield it takes off ours
+		var n := Weapons.space_damage(Weapons.SIPHON)
+		var cooled: float = server.arena.siphon(server.fleet.on, server.wing.on, n) if server.arena.reaches(server.fleet.on, i, server.wing.on) else -1.0
+		if cooled >= 0.0:
+			log[0] += n
+			log[1] += cooled
+	else:
+		var take := minf(enemy_shield, Weapons.SIPHON_DRAIN)
+		enemy_shield -= take
+		log[0] += take
+		var gen := shield_cell()
+		if take > 0.0 and gen >= 0 and ship.shield_on and server.powered() and not ship.broken.has(gen) and not jammed(gen):
+			var room: float = Weapons.SHIELD_FULL - ship.shield
+			ship.shield = minf(ship.shield + take, Weapons.SHIELD_FULL)
+			log[1] += minf(take, room)
 	beam_left[i] -= 1
 	_beam_next[i] = server.tick + Weapons.BEAM_PULSE_TICKS
 	if beam_left[i] == 0:
 		var what := ""
 		if log[0] <= 0.0:
-			what = "у пиратов нет щита, тянуть нечего."
+			what = "у пиратов нет щита, тянуть нечего." if not server.arena.on() else "щит пиратов опущен или вне досягаемости, тянуть нечего."
+		elif server.arena.on():
+			what = "нагрел щит пиратов на %d, наш корабль остыл на %d." % [roundi(log[0]), roundi(log[1])]
 		else:
 			what = "вытянул из щита пиратов %d, нашему щиту %s." % [roundi(log[0]),
 				("+%d" % roundi(log[1])) if log[1] > 0.0 else "ничего (генератор не работает или щит полон)"]
@@ -1623,7 +1684,7 @@ func _land_through(w: int, system: int, room: int, fx: int = Weapons.FX_NONE, so
 		var extra := _fx_on_enemy(fx, system, room)
 		said = _join(said, extra)
 		return "+" if said == "" else said
-	var damage: int = info["damage"]
+	var damage: int = info["damage"] if _units < 0 else _units
 	if soft:
 		damage = maxi(damage - Weapons.KINETIC_SHIELD, 0)
 		enemy_shield = maxf(enemy_shield - Weapons.KINETIC_WEAR, 0.0)
@@ -2236,7 +2297,7 @@ func _enemy_fires_arena(w: int, fx: int, start: int, k: int) -> void:
 	## console, the shield generator, the hull near our people) and flies; how far off it goes depends
 	## on how good the gun and its crew are, and whether it hits depends on where our ship is by then.
 	reveal(room_of_system(Net.ESYS_WEAPONS), "Вспышки выстрелов выдали отсек пиратов")
-	var shots: int = Weapons.info(w)["shots"]
+	var shots: int = Weapons.space_shots(w)
 	var chance: float = float(Weapons.info(w)["hit"]) if enemy_hit_chance < 0.0 else enemy_hit_chance
 	if enemy_hit_chance < 0.0:
 		chance = clampf(chance + ENEMY_EDGE + server.stations.their_hit_bonus(), 0.05, 0.95)
@@ -2260,49 +2321,40 @@ func _enemy_fires_arena(w: int, fx: int, start: int, k: int) -> void:
 # ---------------------------------------------------------------- (v92) shots in the fight's space (Arena)
 
 func arena_bubble(p: Dictionary, body_id: int, at: Vector2) -> bool:
-	## A shot meets the shield's bubble of the ship `body_id`: true if the shield stops it there.
+	## A shot stopped by the shield's bubble of the ship `body_id` ((v94) Arena decides, and heats that ship): told.
 	var meta: Dictionary = p["meta"]
 	var w: int = p["w"]
-	var kinetic := Weapons.klass(w) == Weapons.CLASS_KINETIC and not Weapons.passes_shield(w)
-	var stop := false
-	var pierce := float(meta.get("pierce", 0.0)) + (Weapons.FX_PIERCE_BY if int(meta.get("fx", 0)) == Weapons.FX_PIERCE else 0.0)
 	if int(p["side"]) == 0:
 		server.fleet.use(int(meta["ship"]))
 		server.wing.use(body_id - server.arena.LEAD)
-		if kinetic:
-			meta["soft"] = true              # (v58) a shell through the shield: a point the less
-			stop = int(Weapons.info(w)["damage"]) <= Weapons.KINETIC_SHIELD
-		elif _meets_shield(w, false) and _rng.randf() >= Weapons.through_chance(enemy_shield - pierce):
-			stop = true
-		if stop:
-			var room := _fx_room()
-			server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), 0, room, 0, 1)
-			_our_shot_lands(meta["log"], true, room, true, _room_spot(room), HOW_SOFT if meta.has("soft") else HOW_PLAIN)
+		var room := _fx_room()
+		server.combat.tell_volley(Net.VOLLEY_OURS, _shot_kind(w), 0, room, 0, 1)
+		_our_shot_lands(meta["log"], true, room, true, _room_spot(room))
 		server.wing.use(0)
 		server.fleet.use(0)
-		return stop
+		return true
 	server.fleet.use(body_id)
 	server.wing.use(int(p["foe"]))
-	var arc: bool = server.ship.shield_arc >= 0     # (v93) an arc is stronger where it stands (Arena covers the rest)
-	if kinetic:
-		meta["soft"] = true
-		stop = int(Weapons.info(w)["damage"]) <= Weapons.KINETIC_SHIELD
-	elif _meets_shield(w, server.outfit.hardened()) and _rng.randf() >= Weapons.through_chance(server.ship.shield * (ARC_STRONG if arc else 1.0) - pierce):
-		stop = true
-	if stop:
-		var was: float = server.ship.shield
-		_their_shot_lands(meta["log"], 0, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], server.arena.bodies[body_id].local(at)))
-		if arc and server.ship.shield < was:
-			server.ship.shield = was - (was - server.ship.shield) * ARC_TAKES
+	_their_shot_lands(meta["log"], 0, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], server.arena.bodies[body_id].local(at)))
 	server.wing.use(0)
 	server.fleet.use(0)
-	return stop
+	return true
 
 
 func arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Array, at: Vector2) -> int:
 	## A shot strikes the hull of the ship `body_id` at that point (`cells`: the drawing's cells there,
 	## one per deck). What it does is what a hit did before v92, at the place it struck. Returns how it
 	## ended (Net.LANDED, RICOCHET) for the drawing.
+	var meta: Dictionary = p["meta"]
+	var w: int = p["w"]
+	var arena = server.arena
+	_units = int(meta.get("units", -1)) if Weapons.meets_armour(w) else -1   # (v94) the hits inside its hull points made
+	var how_now := _arena_hit(p, body_id, local, cells, at)
+	_units = -1
+	return how_now
+
+
+func _arena_hit(p: Dictionary, body_id: int, local: Vector2, cells: PackedInt32Array, at: Vector2) -> int:
 	var meta: Dictionary = p["meta"]
 	var w: int = p["w"]
 	var arena = server.arena
@@ -2470,12 +2522,13 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		log["held"] = int(log.get("held", 0)) + 1          # (v93) our armour held: a blow, nothing inside
 		server.combat.jolt(Net.JOLT_HULL, _shot_kind(w), spot)
 	elif ends == 0:
-		ship.shield = maxf(ship.shield - Weapons.shield_damage(w), 0.0)
+		if not server.arena.on():
+			ship.shield = maxf(ship.shield - Weapons.shield_damage(w), 0.0)
 		log["stopped"] += 1
 		server.combat.jolt(Net.JOLT_SHIELD, _shot_kind(w), spot)
 	elif cell >= 0:
 		var info := Weapons.info(w)
-		var damage: int = info.get("damage", 0)
+		var damage: int = info.get("damage", 0) if _units < 0 else _units
 		if soft:
 			damage = maxi(damage - Weapons.KINETIC_SHIELD, 0)
 			ship.shield = maxf(ship.shield - Weapons.KINETIC_WEAR, 0.0)
@@ -2542,8 +2595,8 @@ func _their_shot_lands(log: Dictionary, ends: int, target: int, cell: int, spot:
 		parts.append("рикошет от нашей брони" + ("" if int(log["ricochet"]) == 1 else " ×%d" % int(log["ricochet"])))
 	if int(log.get("held", 0)) > 0:
 		parts.append("наша броня выдержала" + ("" if int(log["held"]) == 1 else " ×%d" % int(log["held"])))
-	if parts.is_empty() and said.is_empty():
-		return
+	if parts.is_empty() and said.is_empty() or said.is_empty() and server.arena.on():
+		return                               # (v94) in space: only what got inside is told
 	var line := "Пираты стреляют (%s)%s%s" % [Weapons.lower_name(w, fx), (": " + ", ".join(parts) + ".") if not parts.is_empty() else ".",
 		"" if said.is_empty() else " Попадание! " + " ".join(said)]
 	# (v68, the author's G3) what the volley did to us is a warning for everybody; misses and the shield are the bridge's

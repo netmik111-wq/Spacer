@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 67
+const PROTOCOL := 68
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -261,6 +261,10 @@ const ARENA_THRUST := 1             # its engines push now
 const ARENA_GLUED := 2              # docked: it rides alongside the ship it boards
 const ARENA_PILOTED := 4            # a player steers it
 const ARENA_ARC_SHIFT := 3           # (v93) bits 3..5: the shield's shape, 0 a bubble, 1..4 an arc on the bow, starboard, stern, port
+const ARENA_RAISED := 1             # (v94) S_ARENA's shield state: the shield is up
+const ARENA_OVERLOAD := 2           # it is overloaded
+const ARENA_VENT := 4               # its ship vents its heat
+const C_SHIELD := 39                # (v94) the pilot's shield: u8 bits (1 up, 2 vent now), s16 the arc's heading*1000 (the fight's space)
 const ALL_GUNS := 255                # (v93) C_TURRET's gun: every gun of the ship nobody aims by hand (the pilot, the gun console)
 const ARENA_SHOT_FLY := 0
 const ARENA_SHOT_END := 1

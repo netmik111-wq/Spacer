@@ -1952,3 +1952,44 @@ v92 page (D3 C, P1 note, P5 A, O4 A).
   sight (server `Replication.sees`, client `can_see`) with a thin green veil; thermal shows the warm (alive, not
   robots) within 7 cells on one's deck through walls, drawn over everything as an orange figure. Prices 30 and 45
   (my pick; numbers to his playtests). Mount kinds (hardpoint, side, roof) and choosing the enemy deck went to v94.
+
+## v94: the fight like Starsector (his "make all guns work properly ... more like in Starsector")
+
+Questions on `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`; built on my picks (all A) while his answers wait.
+- **Three mount kinds pulled from the v94 docking plan** (his G1 note, M1 A): fixed (along the bow, ±5°, damage x1.25,
+  scatter x0.5), side turret (180°, 90°/s) and roof turret (360°, 60°/s, x0.8, scatter x1.3). The kind is a `^` line or
+  by place: a gun in the bow fifth or a bow wall is fixed. A fixed gun points along the bow from a side wall: our own
+  hull never stops our shots, so no new tile art was needed. Docking and boarding pods wait for v95+.
+- **Our ship got a fourth mount**, a fixed laser in the bow wall of the lower deck, so the author sees a fixed gun at
+  once. It starts switched off (`Gunnery.START_ARMED` 3): the power at the start is unchanged (his "no number changes").
+- **Turrets turn at their own pace** (M2 A): before v94 they snapped to the target; now a turret must turn first, which
+  makes the pilot's turning matter.
+- **Starsector's damage kinds** (D1 A): energy, kinetic (x2 shields, x0.5 armour), explosive (x0.5 / x2), fragments
+  (x0.25 / x0.25, full on a bare hull) and ion (x1 plus extra shield heat, a chance to put a system out).
+- **Every 100 hull points that get through is one hit inside** (D2 A): the inside (breaches, systems, crew) stays the
+  old fight's, so v92/v93 and everything aboard still work; hull points are only the measure in space. Our hull is shown
+  x20 (4000) but saves, repairs and prices keep the old 0..200.
+- **Guns fire on their own clocks, 0.3-12 s** (D3 A, `Weapons.SPACE`): the old 5-20 s charges made space quiet. The
+  numbers are mine, scaled so a laser against a raider's armour does about 7 a hit: a fight lasts about as long as v93's.
+- **Ammunition as a clip** (D4 A): one round feeds a few bursts (`Mounts.clip`), so a fast autocannon does not empty the
+  locker in a minute.
+- **The shield is heat, Starsector's flux** (S1 A): it stops every shot (but the railgun, «Сверхновая», bombs and half a
+  blaster's pellets) and heats by the damage; the shield's own heat (`hard`) goes only while it is down. Full: an
+  overload of 5 s (S2 A), no shield and no guns. V vents (S3 A). Old shield points stay as what the screens show
+  (100 x the heat left), so the old UI still reads.
+- **The pilot holds the shield with the right mouse button** and its arc follows the mouse (S4 A); with nobody holding
+  it, it goes up when a shot is 1.2 s off and down to cool (bots and pirates the same). The v93 generator switch (bubble
+  or arc) stays.
+- **Our own shots heat us** (S5 A): firing and shielding share one heat, the central Starsector choice.
+- **Starsector's armour** (A1 A): per cell 150 (ours), pirates 50..300 by class; a hit counts half the cell and half its
+  neighbours, at least 5%; damage x s/(s+armour), at least 15%. Wear by s, half on the cell. The v93 penetration table
+  is gone; ricochet and mending outside stay.
+- **The gun console always shows space** (his Notebook note, U1 A) with the guns' list in one column beside it; the old
+  FTL screen and its Tab are gone. His other note (the helm's old system map replaced by flying with WASD) goes to v95:
+  it changes how a jump and system flight work and needs its own questions.
+- **Chat is quiet in space**: with many shots a second, only hits that get inside, an overload and what goes wrong are
+  said; the bars show the rest.
+- **Thermal goggles inside the view cone only** (his bug note): both `Replication.sees` and `WorldView`.
+- **A side wall's joint by a door** (his bug note): the map's piece was right (├), but the wall going on above it lay
+  out of sight, so it looked broken off. The sight mask now shows half a cell more of a side wall above and below a seen
+  joint (`WorldView._side_wall`), which reads as a wall going on.

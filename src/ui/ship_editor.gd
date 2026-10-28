@@ -73,6 +73,9 @@ const LOCKS := [["bridge", "Мостик (замок)"], ["engine", "Машин�
 # (v91, the author's D1) what a door may look like: the mark on a door cell
 const DOOR_KINDS := [["base", "Дверь: обычная"], ["tech", "Дверь: техническая"], ["cargo", "Дверь: грузовая"],
 	["herm", "Дверь: герметичная"]]
+# (v94, the author's G1 note) a gun mount's kind: the mark on a gun cell ("по месту": by its wall, as the game picks)
+const GUN_KINDS := [["hard", "Орудие: носовое (неподвижное, ±5°, сильнее)"], ["side", "Орудие: бортовое (180°)"],
+	["roof", "Орудие: на крыше (360°, слабее)"]]
 const SYSTEMS := [["weapons", "Оружие"], ["helm", "Рубка"], ["engine", "Двигатель"], ["crew", "Кубрик"],
 	["jump", "Гипердвигатель"], ["shields", "Щиты"]]
 const TOOLS := [
@@ -580,11 +583,20 @@ func _move_deck(by: int) -> void:
 
 func _on_mark_asked(c: Vector2i) -> void:
 	var on_door := drawing.at(_canvas.deck, c) in ["D", "A"]
-	if drawing.room_cells(_canvas.deck, c).is_empty() and not on_door:
-		_note("Метки ставятся на пол комнаты или на дверь.")
+	var on_gun := drawing.at(_canvas.deck, c) == "T"
+	if drawing.room_cells(_canvas.deck, c).is_empty() and not on_door and not on_gun:
+		_note("Метки ставятся на пол комнаты, на дверь или на орудие.")
 		return
 	_mark_cell = c
 	_mark_menu.clear()
+	if on_gun:
+		for i in GUN_KINDS.size():
+			_mark_menu.add_item(str(GUN_KINDS[i][1]), 300 + i)
+		_mark_menu.add_separator()
+		_mark_menu.add_item("Орудие: по месту (само)", 399)
+		_mark_menu.position = Vector2i(get_global_mouse_position()) + get_window().position
+		_mark_menu.popup()
+		return
 	if on_door:
 		for i in DOOR_KINDS.size():
 			_mark_menu.add_item(str(DOOR_KINDS[i][1]), 200 + i)
@@ -606,6 +618,11 @@ func _on_mark_asked(c: Vector2i) -> void:
 
 
 func _on_mark_chosen(id: int) -> void:
+	if id >= 300:
+		drawing.set_mark(_canvas.deck, _mark_cell, "^", str(GUN_KINDS[id - 300][0]) if id < 300 + GUN_KINDS.size() else "")
+		drawing.commit()
+		_canvas.queue_redraw()
+		return
 	if id >= 200:
 		drawing.set_mark(_canvas.deck, _mark_cell, "&", str(DOOR_KINDS[id - 200][0]) if id < 200 + DOOR_KINDS.size() else "")
 		drawing.commit()
