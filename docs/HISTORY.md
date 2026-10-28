@@ -764,3 +764,20 @@ while his answers are pending:
   fight in space in a fight, a gun mount can be taken by hand (use target 49, C_TURRET), V shows a small window.
 - `tools/arenatest.gd` (30/30 passes); guntest and derelicttest keep the old fight (`arena.enabled = false`).
   Protocol 66. Nettest, lossy nettest and the soak test pass.
+
+## v93: armour, penetration and ricochet; his note; goggles
+
+The roadmap's item 0.2, his answers on "Spacer v93: броня" (`https://claude.ai/artifact/GePkt2SGzwqVSACbk6hZNJ`, all A
+but O1 B) and on the v92 page (D3 C, the P1 note, P5 A), and one Notebook note with a picture of the v92 ship.
+- Armour on every outer wall cell (`ArenaShape.edge`, `normal`): ours 2 (+ the armour module's tier), pirates 1..4 by
+  class, windows 1. Penetration per gun (`Weapons.PENETRATION`), thickened by the slant (at most 2x); held shots only
+  shake the ship; every hit wears the armour (2 for heavy guns); ricochets past 60° (kinetic 70%, lasers 30%) fly on
+  and can strike another ship. Ours stays worn (`Ship.worn`, saved) and is mended from outside with a patch, by people
+  and bots; the station, the bought hull and the admin make it whole. Clients see worn places (`ARENA_ARMOUR`).
+- The shield a bubble or an arc on one side (E at the generator; 1.5x strength, half the wear). The pilot's mouse fires
+  every free gun (`Net.ALL_GUNS`); the gun console shows the fight in space (Tab: the old screen). No dodge roll in space.
+- Night vision and thermal goggles: a fourth wear place (`Net.WEAR_EYES`), sold by traders (30 and 45).
+- His note: machines' "_up"/"_down" pictures swapped back (they faced the wall), the holo globe a tile higher, outer
+  windows are his v2 pane with shutters, inner ones v1 without.
+- `tools/armourtest.gd`, `tools/eyestest.gd` (30/30 each). Protocol 67, 48 test scripts. Mount kinds and choosing the
+  enemy deck moved to v94.

@@ -602,7 +602,7 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 				hull.append(y * width + x)
 	panes = PackedInt32Array()
 	for i in cells.size():
-		if cells[i] >= 0 and windows.has(cells[i]) and not tile_names[cells[i]].ends_with("window_field"):
+		if cells[i] >= 0 and windows.has(cells[i]) and not tile_names[cells[i]].ends_with("window_field") and outer_pane(i):
 			panes.append(i)
 	_place_vents()
 	return ""
@@ -1250,6 +1250,14 @@ func standing_look(cell: int) -> String:
 	if name == "console_1" and all.size() == 4:
 		return "console_1_fl_t_%d" % all.find(cell)
 	return "%s_fl%s_w%d_%d" % [name, side, all.size(), all.find(cell)]
+
+
+func outer_pane(cell: int) -> bool:
+	## (v93, the author's note) A window onto open space: it has a shutter (his "v2" pane). One between rooms
+	## has none (his "v1").
+	var x := cell % width
+	var y := cell / width
+	return is_space(x - 1, y) or is_space(x + 1, y) or is_space(x, y - 1) or is_space(x, y + 1)
 
 
 func machine_of(cell: int) -> int:

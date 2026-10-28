@@ -31,6 +31,7 @@ const HEARTBEAT_TICKS := 10         # a client hears from the server at least th
 const SELF_REFRESH_TICKS := 20      # own state is re-confirmed at least this often
 const CHECK_TICKS := 40             # how often a client gets a checksum of what it should know
 const CONTACT := 1.5                # this close on the same deck somebody is felt, if not seen
+const THERMAL_REACH := 7.0           # (v93) thermal goggles show the living through walls this far, on one's own deck
 const SEEN_GRACE := 4               # ticks somebody stays sent after going out of sight: the client
                                     # judges sight by its own clock, a little apart from ours
 const MARGIN_DEG := 12.0            # the cone is judged this much wider each side, for the same reason
@@ -335,15 +336,27 @@ func sees(p: Player, q: Player) -> bool:
 			return true
 		if not Items.light(q.in_hand()).is_empty():
 			return true                      # its beam is seen from anywhere around
+	var eyes := p.worn[Net.WEAR_EYES]
+	if eyes == Net.ITEM_THERMAL and its_deck == my_deck and dist <= THERMAL_REACH and warm(q):
+		return true                          # (v93, the author's O1) its heat shows through walls
 	if dist > Sight.SIGHT_REACH + 1.5:
 		return false
 	var cell := q.st.y * map.width + q.st.x
 	var dark := _unlit(p.st.y * map.width + p.st.x)
-	if not dark and not _unlit(cell):
+	if eyes == Net.ITEM_NVG or not dark and not _unlit(cell):   # (v93) night vision: the dark is as if lit
 		return Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_light, Sight.SIGHT_REACH + 1, lines)
 	if dist <= Sight.DARK_REACH + 1.5 and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.DARK_REACH + 1, lines):
 		return true
 	return _lit_cells().has(cell) and Sight.sees(map, server.doors, from, p.st.facing, on_ours, _arcs_dark, Sight.SIGHT_REACH + 1, lines)
+
+
+static func _eyes_key(p: Player) -> int:
+	return 1 if p.worn[Net.WEAR_EYES] == Net.ITEM_NVG else (2 if p.worn[Net.WEAR_EYES] == Net.ITEM_THERMAL else 0)
+
+
+static func warm(q: Player) -> bool:
+	## (v93) Does it show in thermal goggles: alive (awake or not), not a machine.
+	return q.cond != Net.COND_DEAD and not q.robot and not q.corpse
 
 
 func _prepare() -> void:
@@ -416,7 +429,7 @@ func _characters(p: Player, view_moved: bool) -> PackedByteArray:
 			var k: int = p.known[slot]
 			if not _in_view(p, k & 0xFFFF, (k >> 16) & 0xFFFF):
 				p.known.erase(slot)
-	var a_mine := p.st.x | (p.st.y << 12) | (p.st.facing << 24) | (p.cond << 28)
+	var a_mine := p.st.x | (p.st.y << 12) | (p.st.facing << 24) | (p.cond << 28) | (_eyes_key(p) << 56)   # (v93) goggles
 	var known := p.known
 	for q: Player in server.players:
 		if q == null:

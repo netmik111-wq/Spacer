@@ -11,6 +11,10 @@ extends RefCounted
 ## chamber out, floats out to the hull and mends until the hull is whole or its
 ## patches run out, then comes back and pumps the chamber full again. A pirate
 ## showing up calls it back at once.
+##
+## (v93, the author's D4 A) The same work mends the armour the fight wore off (Ship.worn): a patch (or scrap)
+## welded on where a cell of the outer wall is worn makes that cell and those beside it whole again. A bot goes
+## out for worn armour too, and moves from one worn place to the next while it has patches.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
@@ -52,10 +56,22 @@ func tick() -> void:
 
 func can_mend(p: Player, cell: int) -> bool:
 	## Is the character out in space, facing a whole cell of our hull, with a
-	## patch, and the hull short of full?
+	## patch, and the hull short of full (or (v93) its armour worn there)?
 	var map = server.map
-	return cell >= 0 and server.ship.hull < server.ship.hull_max and (p.count(Net.ITEM_PATCH) > 0 or p.count(Net.ITEM_SCRAP) > 0) and map.floats(p.st.x, p.st.y) \
-		and not server.air.holes.has(cell) and not map.is_other(cell) and map.hull.has(cell)
+	return cell >= 0 and (p.count(Net.ITEM_PATCH) > 0 or p.count(Net.ITEM_SCRAP) > 0) and map.floats(p.st.x, p.st.y) \
+		and not server.air.holes.has(cell) and not map.is_other(cell) and map.hull.has(cell) \
+		and (server.ship.hull < server.ship.hull_max or not _worn_at(cell).is_empty())
+
+
+func _worn_at(cell: int) -> PackedInt32Array:
+	## (v93) The worn cells of our armour at that cell of the hull and beside it.
+	var ship: int = server.fleet.of_cell(cell)
+	return server.arena.worn_near(maxi(ship, 0), cell)
+
+
+func worn_cells() -> int:
+	## (v93) How many cells of the armour of the ship in place are worn.
+	return server.ship.worn.size()
 
 
 func mend_ticks(p: Player) -> int:
@@ -67,8 +83,18 @@ func mended(p: Player) -> void:
 	var patch := p.count(Net.ITEM_PATCH) > 0
 	p.remove(Net.ITEM_PATCH if patch else Net.ITEM_SCRAP)
 	p.train(Net.SKILL_REPAIR)
+	var cell: int = server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
+	var worn := _worn_at(cell) if cell >= 0 else PackedInt32Array()
+	for i in worn:
+		server.ship.worn.erase(i)
+	if not worn.is_empty():
+		server.arena.armour_mended_at(maxi(server.fleet.of_cell(cell), 0), worn)
+	var hull_was: int = server.ship.hull
 	server.ship.hull = mini(server.ship.hull + (HULL_PER_PATCH if patch else HULL_PER_SCRAP), server.ship.hull_max)
-	server.chat.say("%s латает обшивку снаружи: прочность %d из %d." % [p.name, server.ship.hull, server.ship.hull_max])
+	if server.ship.hull > hull_was or worn.is_empty():
+		server.chat.say("%s латает обшивку снаружи: прочность %d из %d." % [p.name, server.ship.hull, server.ship.hull_max])
+	else:
+		server.chat.say("%s наваривает броню снаружи: стёсанных мест осталось %d." % [p.name, server.ship.worn.size()])
 
 
 # ------------------------------------------------------------------ a bot going out
@@ -86,7 +112,7 @@ func _wants(p: Player) -> bool:
 	## Should this bot set off to mend the hull from outside now?
 	if p.order != Net.POST_REPAIR or p.bot_healing or server.tick < _rest_until or _threat() or not server.powered():
 		return false
-	if server.ship.hull >= roundi(server.ship.hull_max * BOT_GOES_BELOW) or not trips.is_empty():
+	if server.ship.hull >= roundi(server.ship.hull_max * BOT_GOES_BELOW) and server.ship.worn.is_empty() or not trips.is_empty():
 		return false
 	if _pump() < 0 or not server.stations._repair_jobs(p).is_empty() or server.stations._carried_gun(p) >= 0:
 		return false
@@ -110,7 +136,7 @@ func drive(p: Player) -> bool:
 		if not _wants(p):
 			return false
 		trips[p.slot] = {"phase": PREP, "pump": _pump(), "goal": -1, "face": 0, "step": 0, "from": -1, "plan": -1000}
-		server.chat.say("%s идёт латать обшивку снаружи." % p.name)
+		server.chat.say("%s идёт %s снаружи." % [p.name, "латать обшивку" if server.ship.hull < roundi(server.ship.hull_max * BOT_GOES_BELOW) else "наваривать броню"])
 	var t: Dictionary = trips[p.slot]
 	var pump: int = t["pump"]
 	var chamber: PackedInt32Array = server.map.lock_pump[pump]["chamber"]
@@ -147,7 +173,9 @@ func drive(p: Player) -> bool:
 		MEND:
 			var cell: int = server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
 			if not outside or not can_mend(p, cell):
-				_phase(t, GO_BACK)
+				# (v93) on to the next worn place while there are patches, else back in
+				var more: bool = outside and (p.count(Net.ITEM_PATCH) > 0 or p.count(Net.ITEM_SCRAP) > 0) and not _hull_spots().is_empty()
+				_phase(t, GO_OUT if more else GO_BACK)
 				return true
 			p.using = true
 			p.doing = Net.DOING_WORK
@@ -236,9 +264,12 @@ func _hull_spots() -> Dictionary:
 	var map = server.map
 	var w: int = map.width
 	var out := {}
+	var hull_short: bool = server.ship.hull < server.ship.hull_max
 	for c: int in map.hull:
-		if server.air.holes.has(c) or map.is_other(c):
+		if server.air.holes.has(c) or map.is_other(c) or not server.fleet.mine(c):
 			continue
+		if not hull_short and _worn_at(c).is_empty():
+			continue                         # (v93) only the hull's worn places are left to mend
 		for d in range(1, 5):
 			var x: int = c % w - Net.DX[d]
 			var y: int = c / w - Net.DY[d]

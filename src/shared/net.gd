@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 66
+const PROTOCOL := 67
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -123,10 +123,11 @@ const SLOTS := 12                   # slots for things: BASE_SLOTS always, POCKE
 const BASE_SLOTS := 6
 const POCKETS := 2                  # slots BASE_SLOTS .. BASE_SLOTS + POCKETS - 1
 const PACK_SLOTS := 4               # the last ones
-const WORN := 3                     # what is worn, one thing each:
+const WORN := 4                     # what is worn, one thing each:
 const WEAR_SUIT := 0                #   a spacesuit (helmet and oxygen tank): without it there is no supply
 const WEAR_JUMPSUIT := 1            #   a jumpsuit: its pockets
 const WEAR_PACK := 2                #   a backpack
+const WEAR_EYES := 3                #   (v93, the author's O1) goggles: night vision or thermal
 const VITALS_BYTES := 7 + SLOTS + WORN  # (v71) then u8 the meal at work (ITEM_STEW.. or 0), u8 its seconds left / 5
 # how a character looks (S_OUTFIT): outfit * 2 + 1 with a backpack; a row of assets/chars.png per colour and look
 const OUTFIT_SUIT := 0
@@ -165,6 +166,8 @@ const ITEM_GUN_PARTS := 84          # (v58) parts of a gun's kind: ITEM_GUN_PART
 const ITEM_GUN_FX := 100            # (v58) a tier 3 gun with its effect: see Weapons.item_of (100..134; cargo)
 const ITEM_GUN_DAMAGED := 140       # (v58) a damaged gun, mended at the workbench: ITEM_GUN_DAMAGED + Weapons.* (cargo)
 const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gear.* (171..190; carried, kept in the locker)
+const ITEM_NVG := 191               # (v93, the author's O1) night vision goggles: the dark is seen as if lit, in green
+const ITEM_THERMAL := 192           # (v93) thermal goggles: living people show through walls nearby, as heat
 const ITEM_ROBOT := 195             # (v62) a security robot in its crate: set down on the floor, it switches on and guards
 const ITEM_GUN_LATE := 200          # (v62) weapons from Weapons.HORNET on: ITEM_GUN_LATE + (w - Weapons.HORNET) (200..203; cargo)
 const ITEM_SEED := 204              # (v63) a packet of seeds: ITEM_SEED + Plants.seed_item (204..227; carried, kept in the locker)
@@ -257,9 +260,13 @@ const S_ARENA_SHOT := 51            # (v92) a shot there: u8 ARENA_SHOT_*, then 
 const ARENA_THRUST := 1             # its engines push now
 const ARENA_GLUED := 2              # docked: it rides alongside the ship it boards
 const ARENA_PILOTED := 4            # a player steers it
+const ARENA_ARC_SHIFT := 3           # (v93) bits 3..5: the shield's shape, 0 a bubble, 1..4 an arc on the bow, starboard, stern, port
+const ALL_GUNS := 255                # (v93) C_TURRET's gun: every gun of the ship nobody aims by hand (the pilot, the gun console)
 const ARENA_SHOT_FLY := 0
 const ARENA_SHOT_END := 1
 const ARENA_SHOT_BEAM := 2
+const ARENA_ARMOUR := 3             # (v93) worn armour: u8 body, u8 count, per cell u16 the shape's cell, u8 left, u8 most
+                                    # (sent for every cell that changed, and every ARMOUR_EVERY ticks for all worn ones)
 const SHUTTLE_BOARD := 0            # get in, at a dock console with the shuttle there
 const SHUTTLE_CALL := 1             # call the empty shuttle to this dock
 const SHUTTLE_FLY := 2              # (a passenger) fly to that ship's dock
@@ -480,6 +487,7 @@ const LANDED := 1
 const MISSED := 2
 const RICOCHET := 3                 # (v58) a kinetic shell turned aside by armour: it does nothing
 const SHOT_DOWN := 4                # (v58) a rocket shot down by point defence on its way
+const HELD := 5                     # (v93) a shot the armour held: it wore the plating and did nothing inside
 const S_VOLLEY := 36                # (v56) a ship's shot, to all, for the gun console's plan: u8 whose (VOLLEY_*),
                                     # u8 kind (SHOT_*), u8 how it ends (0 shield, LANDED, MISSED), u8 room of the
                                     # enemy's drawing (ours: where it lands; theirs: where it was fired from;

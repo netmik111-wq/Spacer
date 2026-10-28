@@ -44,7 +44,7 @@ const SLOT_GAP := 4.0
 const BIG_SLOT_PX := 60.0            # and in the search panel
 const BIG_SLOT_GAP := 8.0
 const WORN_GAP := 12.0               # between what is worn (on the left) and the slots
-const WORN_MARKS := ["С", "К", "Р"]  # an empty place for a suit, a jumpsuit, a backpack
+const WORN_MARKS := ["С", "К", "Р", "О"]  # an empty place for a suit, a jumpsuit, a backpack, (v93) goggles
 const HINT_LEFT := 550.0             # the hint line keeps clear of the chat (this far from the left edge)
 const HINT_RIGHT := 250.0            # and of the instruments (this far from the right edge)
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
@@ -125,6 +125,7 @@ var _space_view: SpaceView           # (v92) the fight in space: at the ship's c
 var _space_small: SpaceView          # (v92) and small in a corner for anyone, by V
 var _turret_sent := 0                # (v92) msec the gun's aim was last sent
 var _turret_fire := false
+var _guns_panel := false             # (v93) at the gun console in a fight: Tab shows the console's own panel instead of space
 var _space_wanted := false           # (v92) V was pressed for the small view
 var _slots_view: Control             # what our character carries, slot by slot
 var _slots_shown := PackedByteArray()
@@ -837,6 +838,8 @@ func _open_console(kind: int) -> void:
 	_shuttle_view.visible = kind == 46
 	_space_view.visible = kind == 49
 	_space_view.mode = SpaceView.TURRET if kind == 49 else SpaceView.PILOT
+	_guns_panel = false
+	_turret_fire = false
 	_space_view.gun = client.turret_here(client.use_cell()) if kind == 49 else -1
 	_space_view.firing = false
 	_chart.visible = not own_view
@@ -901,6 +904,18 @@ func _update_console() -> void:
 			_store_view.refresh()
 		return
 	if _console_kind == 17:
+		# (v93, the author's P1 note) in a fight in space the gun console shows the fight, and its gunner aims and
+		# fires every gun nobody aims by hand; Tab turns to the console's own panel (power, targets) and back
+		var space := client.arena_on() and not _guns_panel
+		if _space_view.visible != space:
+			_space_view.visible = space
+			_space_view.mode = SpaceView.ALL
+			_space_view.gun = -1
+			_guns_view.visible = not space
+			_console.reset_size()
+		if space:
+			_aim_all()
+			return
 		_guns_view.refresh(get_process_delta_time())
 		return
 	if _console_kind == 20:
@@ -938,7 +953,8 @@ func _update_console() -> void:
 			_console_shut.text = "Отойти от пульта (Esc)" if flying else Options.keyed("Отойти от пульта (E или Esc)")
 			_console.reset_size()
 		if flying:
-			_console_text.text = "Бой: ведите корабль сами. Орудия стреляют по тем, кто в их секторе обстрела."
+			_console_text.text = "Бой: ведите корабль сами. Мышь и левая кнопка — огонь всеми орудиями, у которых нет своего стрелка."
+			_aim_all()
 			return
 		_bridge.update_helm()
 		return
@@ -958,6 +974,17 @@ func _aim_turret() -> void:
 		_turret_fire = _space_view.firing
 		_turret_sent = now
 		client.send_turret(_space_view.gun, _space_view.aim_point(), _space_view.firing)
+
+
+func _aim_all() -> void:
+	## (v93, the author's P1 note) At the ship's controls or the gun console in a fight: while the button is held,
+	## every gun nobody aims by hand turns to the mouse and fires when it can (Arena.ALL_GUNS).
+	var now := Time.get_ticks_msec()
+	if _space_view.firing or _space_view.firing != _turret_fire:
+		if _space_view.firing != _turret_fire or now - _turret_sent >= 100:
+			_turret_fire = _space_view.firing
+			_turret_sent = now
+			client.send_turret(Net.ALL_GUNS, _space_view.aim_point(), _space_view.firing)
 
 
 func _space_small_shown() -> void:
@@ -1630,6 +1657,9 @@ func _console_key(key: InputEventKey) -> bool:
 	var n := -1
 	if key.physical_keycode >= KEY_1 and key.physical_keycode <= KEY_9:
 		n = key.physical_keycode - KEY_1
+	if _console_kind == 17 and key.physical_keycode == KEY_TAB and client.arena_on():
+		_guns_panel = not _guns_panel        # (v93) the fight in space or the console's own panel
+		return true
 	if _console_kind == 17 and _guns_view.visible:
 		if key.physical_keycode == KEY_SPACE:
 			client.send_guns(255)
@@ -2221,6 +2251,8 @@ func _process(delta: float) -> void:
 		_hint.text = "Голокарта обесточена: %s" % why if no_power else "E: голокарта корабля (воздух, пробоины, поломки)"
 	elif target == 19:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
+	elif target == 50:
+		_hint.text = "E: форма щита — пузырь вокруг корабля или крепкая дуга на одну сторону (по кругу)"
 	elif target == 47 or target == 48:
 		# (v91, the author's M7) the boxes on the wall hand out the supply locker's stock
 		var kit := Net.ITEM_MEDKIT + Net.MEDKIT_USES if target == 47 else Net.ITEM_PART

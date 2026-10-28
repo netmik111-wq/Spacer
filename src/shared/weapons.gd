@@ -392,6 +392,33 @@ static func pierce(w: int) -> int:
 	return int(INFO[w].get("pierce", 0)) if INFO.has(w) else 0
 
 
+# (v93, the author's plan 0.2: armour, penetration, ricochet) How much armour a shot of each gun goes through
+# head-on (Arena.armour_of). Guns not listed pass armour by (ion, EMP, neural, beams, tractor, siphon, bombs: they
+# put out systems, stun people or are teleported, and never strike the plating)
+const PENETRATION := {LASER: 2, RAPID: 1, HEAVY: 3, SIEGE: 4, PHOENIX: 4, NOVA: 6, BLASTER: 1, ROCKET: 4, DEVASTATOR: 6,
+	AUTOCANNON: 3, RAILGUN: 5, HAMMER: 5, SHRAPNEL: 2}
+# the share of shots that glance off armour met at a slant (Arena.RICOCHET_COS), by class
+const BOUNCE := {CLASS_KINETIC: 0.7, CLASS_LASER: 0.3, CLASS_BLASTER: 0.3, CLASS_ROCKET: 0.15}
+
+
+static func meets_armour(w: int) -> bool:
+	## (v93) Does a shot of this gun strike the armour (rather than pass it by)?
+	return PENETRATION.has(w)
+
+
+static func penetration(w: int) -> int:
+	return int(PENETRATION.get(w, 0))
+
+
+static func armour_wear(w: int) -> int:
+	## (v93) How many points of armour a hit of it wears off where it strikes, through or not.
+	return 2 if penetration(w) >= 4 else 1
+
+
+static func bounce_chance(w: int) -> float:
+	return float(BOUNCE.get(klass(w), 0.0))
+
+
 static func can_fx(w: int) -> bool:
 	return FX_GUNS.has(w)
 

@@ -77,6 +77,10 @@ var guard := 0                        # (v58) the point defence in its own mount
 var guard_armed := false              # it draws power and charges
 var cut := []                         # (v89, his note) what a power shortage switched off (mount numbers; CUT_GUARD, CUT_SHIELD): back on by itself
 var armour := 0.0                     # (v58) the share of kinetic shells its armour turns aside (ours: by its armour plating, see Outfit)
+var shield_arc := -1                 # (v93, the author's D3 C) ours: -1 the shield is a bubble round the whole ship; 0..3 an
+                                     # arc on one side, stronger (0 the bow, 1 starboard, 2 the stern, 3 port), set at the generator
+var worn := {}                       # (v93, ours) the fight's armour worn off its outer wall: the cell of its shape from above
+                                     # (ArenaShape, Arena.our_shape) -> points worn; mended from outside (Outside.mended)
 # (v59) its gear (see Gear, Outfit)
 var gear := PackedByteArray([1, 1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)
 var modules := PackedByteArray([0, 0])      # per slot of the module bay: the crate in it (Gear.*; NONE = empty)

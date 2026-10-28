@@ -47,6 +47,11 @@ const SUIT_ABOUT := "Шлем и баллон с кислородом. Без н
 const BASE := {
 	Net.ITEM_JUMPSUIT: {"name": "Комбинезон", "about": "Два кармана. Z: надеть.", "price": 8, "stock": 2, "wear": Net.WEAR_JUMPSUIT},
 	Net.ITEM_BACKPACK: {"name": "Рюкзак", "about": "Четыре места для вещей. Z: надеть.", "price": 15, "stock": 2, "wear": Net.WEAR_PACK},
+	# (v93, the author's O1) goggles, worn over the eyes (with a suit too); bought from traders
+	Net.ITEM_NVG: {"name": "Прибор ночного видения", "about": "В темноте видно всё, как при свете, только в зелёном. Z: надеть.",
+		"price": 30, "keep": true, "wear": Net.WEAR_EYES},
+	Net.ITEM_THERMAL: {"name": "Тепловизор", "about": "Живых людей видно сквозь стены в нескольких клетках вокруг, пятнами тепла. Роботы и тела холодные. Z: надеть.",
+		"price": 45, "keep": true, "wear": Net.WEAR_EYES},
 	Net.ITEM_PATCH: {"name": "Заплатка", "about": "Лист обшивки: заделывает пробоину.",
 		"price": 5, "stock": 8},
 	Net.ITEM_FUEL: {"name": "Топливо", "about": "Канистра на 100 единиц топлива. Чтобы заправить корабль, поднесите её к двигателю и держите E: топливо уйдёт в бак.",
@@ -359,7 +364,7 @@ static func kept_in_locker() -> PackedInt32Array:
 # The kinds of thing, as the supply locker and the trader show them: caption, the things in it.
 static var CATEGORIES: Array = [
 	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_BOARD, Net.ITEM_TOOLBOX, Net.ITEM_FUEL]],
-	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO]],
+	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_NVG, Net.ITEM_THERMAL]],
 	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES, Net.ITEM_SPLINT]],
 	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON, Net.ITEM_SHOTGUN, Net.ITEM_SHELLS, Net.ITEM_STUNNER,
 		Net.ITEM_FLASHBANG, Net.ITEM_WELDER, Net.ITEM_CUFFS]],

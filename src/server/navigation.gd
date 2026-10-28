@@ -88,8 +88,10 @@ func update() -> void:
 					server.ship.store_air = Net.STORE_AIR_FULL
 					topped = topped or server.ship.tank < Net.STATION_FUEL
 					server.ship.tank = maxf(server.ship.tank, Net.STATION_FUEL)
-					patched = patched or server.ship.hull < server.ship.hull_max
+					patched = patched or server.ship.hull < server.ship.hull_max or not server.ship.worn.is_empty()
 					server.ship.hull = server.ship.hull_max
+					server.ship.worn.clear()         # (v93) and its armour made whole
+					server.arena.armour_mended()
 					server.supplies.tell_store()
 				server.fleet.use(0)
 				server.chat.say("Стыковка со станцией снабжения. Воздух в отсеках и запас воздушной установки восполнены%s%s." %

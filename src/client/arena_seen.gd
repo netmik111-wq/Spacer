@@ -16,6 +16,7 @@ var bodies := {}                     # body id -> {"layout", "snaps": [{tick, po
 var shots := {}                      # shot id -> {"kind", "side", "tick", "pos", "vel", "ends"}
 var bursts: Array = []               # {"at", "how", "kind", "born"} (msec)
 var beams: Array = []                # {"from", "to", "kind", "until"} (msec)
+var armour := {}                     # (v93) body id -> {the shape's cell: Vector2i(points left, most)} where worn
 var changes := 0                     # counts packets (for a redraw)
 var _shapes := {}                    # "f<ship>" / "o<layout>" -> ArenaShape
 var _guns := {}                      # the same keys -> PackedInt32Array, the drawing's cells of its guns
@@ -30,6 +31,7 @@ func reset() -> void:
 	shots.clear()
 	bursts.clear()
 	beams.clear()
+	armour.clear()
 	_shapes.clear()
 	_guns.clear()
 
@@ -65,6 +67,8 @@ func read(pkt: PackedByteArray) -> void:
 		if b.is_empty() or int(b["layout"]) != layout:
 			b = {"layout": layout, "snaps": []}
 			bodies[id] = b
+			if layout >= 0:
+				armour.erase(id)             # a new pirate: its armour whole
 		var snaps: Array = b["snaps"]
 		snaps.append({"tick": tick, "pos": pos, "vel": vel, "rot": rot, "spin": spin, "shield": shield, "flags": flags,
 			"aims": aims, "gunf": gunf})
@@ -73,6 +77,7 @@ func read(pkt: PackedByteArray) -> void:
 	for id: int in bodies.keys():
 		if not seen.has(id):
 			bodies.erase(id)
+			armour.erase(id)
 	if bodies.is_empty():
 		shots.clear()
 
@@ -98,6 +103,25 @@ func shot(pkt: PackedByteArray, now_ms: int) -> void:
 			var kind: int = int((shots.get(id, {}) as Dictionary).get("kind", 0))
 			shots.erase(id)
 			bursts.append({"at": at, "how": pkt[4], "kind": kind, "born": now_ms})
+		Net.ARENA_ARMOUR:
+			if pkt.size() < 4:
+				return
+			var id: int = pkt[2]
+			var n: int = pkt[3]
+			if n == 255:
+				armour.erase(id)             # made whole
+				return
+			var worn: Dictionary = armour.get(id, {})
+			for k in n:
+				var o := 4 + k * 4
+				if o + 4 > pkt.size():
+					break
+				var i := pkt.decode_u16(o)
+				if pkt[o + 2] >= pkt[o + 3]:
+					worn.erase(i)
+				else:
+					worn[i] = Vector2i(pkt[o + 2], pkt[o + 3])
+			armour[id] = worn
 		Net.ARENA_SHOT_BEAM:
 			if pkt.size() < 15:
 				return

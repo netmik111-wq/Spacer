@@ -1102,7 +1102,8 @@ func use_target(facing: int = -1) -> int:
 	## 43 = a welded door (nothing to do without a welder), 44 = (v71) the galley's stove,
 	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console,
 	## 47 = (v91) a first-aid box, 48 = a spare parts box, 49 = (v92) a gun mount in a fight in real time
-	## (no gun or round for it in hand): its controls (aim with the mouse, fire with the button).
+	## (no gun or round for it in hand): its controls (aim with the mouse, fire with the button),
+	## 50 = (v93) our shield generator in working order: a press turns the shield's shape (a bubble or an arc).
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1170,6 +1171,8 @@ func use_target(facing: int = -1) -> int:
 			return 31
 		if map.cryo.has(cell):
 			return 32
+		if map.shield.has(map.machine_of(cell)) and not map.is_other(cell):
+			return 50                        # (v93) the shield's shape
 		if map.med_box.has(cell):
 			return 47
 		if map.tech_box.has(cell):

@@ -200,6 +200,14 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 2) * u), Color(0.5, 0.6, 0.78))
 			canvas.draw_rect(Rect2(at + Vector2(8, 6) * u, Vector2(1, 7) * u), Color(0.2, 0.26, 0.38))
 			canvas.draw_rect(Rect2(at + Vector2(10, 8) * u, Vector2(2, 2) * u), Color(0.2, 0.26, 0.38))
+		Net.ITEM_NVG, Net.ITEM_THERMAL:
+			# (v93) goggles: a strap and two lenses, green for night vision, orange for heat
+			var lens := Color(0.35, 1.0, 0.4) if item == Net.ITEM_NVG else Color(1.0, 0.5, 0.15)
+			canvas.draw_rect(Rect2(at + Vector2(1.5, 7.5) * u, Vector2(14, 2) * u), Color(0.2, 0.2, 0.22))
+			for x: float in [5.0, 12.0]:
+				canvas.draw_circle(at + Vector2(x, 8.5) * u, 3.4 * u, Color(0.1, 0.1, 0.12))
+				canvas.draw_circle(at + Vector2(x, 8.5) * u, 2.3 * u, lens)
+				canvas.draw_circle(at + Vector2(x - 0.8, 7.6) * u, 0.7 * u, Color(1, 1, 1, 0.7))
 		Net.ITEM_BACKPACK:
 			# a backpack with a flap and two straps
 			canvas.draw_rect(Rect2(at + Vector2(4, 3) * u, Vector2(9, 12) * u), Color(0.2, 0.15, 0.1))

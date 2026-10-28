@@ -271,6 +271,9 @@ func press(p: Player) -> void:
 		server.chat.tell(p, server.garden.can(p, ahead))     # (v63) how the plant is doing, or why nothing can be planted
 	elif ahead >= 0 and not server.supplies.box_kinds(ahead).is_empty():
 		server.supplies.box(p, ahead)        # (v91) a first-aid box or a spare parts box on the wall
+	elif ahead >= 0 and server.map.shield.has(server.map.machine_of(ahead)) and not server.ship.broken.has(server.map.machine_of(ahead)) \
+			and gear_why == server.outfit.NOT_HERE and not server.map.is_other(ahead):
+		server.gunnery.turn_shield(p)        # (v93, the author's D3 C) the shield's shape: a bubble or an arc to one side
 	elif ahead >= 0 and server.map.cryo.has(ahead):
 		server.chat.tell(p, "Криокапсула. Резерв экипажа спит здесь и не ест: %d чел. Замена погибшему выходит отсюда." % server.reserve)
 	elif usable_ahead(p) or _lying_near(p):

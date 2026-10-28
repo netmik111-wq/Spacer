@@ -25,6 +25,12 @@ extends RefCounted
 ## author's P3 A); a pirate that runs past it is gone. A boarding ship's docking clock runs
 ## only while it is close (DOCK_NEAR): a pilot who keeps away keeps it off (the author's B1).
 ## Ships that meet push each other off and both take a little damage (the author's P4 A).
+## (v93, the author's plan 0.2) Armour: every cell of a ship's outer wall from above holds points of armour (ours
+## ARMOUR_OURS and the plating's tier, a pirate's by its class, a window PANE_ARMOUR). A shot that strikes it goes
+## through if its gun's penetration (Weapons.PENETRATION) is at least what is left there, counted thicker the more
+## slanting it meets the wall; met past RICOCHET_COS it may glance off instead (Weapons.BOUNCE) and fly on harmless.
+## Either way it wears points off (Weapons.armour_wear). Ours stays worn after the fight (Ship.worn) until mended
+## from outside (Outside), at a station or at the trader's yard.
 ## Everything here is for the ship fight only: while no pirate fights, nothing exists.
 ## Part of the server: GameServer keeps one of these and calls into it.
 
@@ -56,6 +62,18 @@ const GUARD_RANGE := 16.0            # cells off the hull the point defence meet
 const HIT_NEAR := 3.0                # a pirate shot this near the thing it aimed at puts that thing out
 const BEAM_RANGE := 90.0             # cells a beam, a tractor or a siphon reaches (bombs too)
 const DT := 1.0 / Net.TICK_HZ
+const ARMOUR_OURS := 2               # (v93, my A1 pick) points of armour on each cell of our outer wall, before the plating
+const PANE_ARMOUR := 1               # and on a window
+# a pirate's, by its class
+const ARMOUR_OF := {Net.ECLASS_CUTTER: 1, Net.ECLASS_RAIDER: 1, Net.ECLASS_GUNSHIP: 2, Net.ECLASS_CRUISER: 3,
+	Net.ECLASS_BATTLESHIP: 4, Net.ECLASS_CARRIER: 4, Net.ECLASS_DRONE: 1}
+const RICOCHET_COS := 0.5            # a shot meeting the wall more than 60° off straight on may glance off
+const SLANT_MOST := 2.0              # the most a slant thickens the armour a shot must pass
+const SLANT_SLACK := 0.1             # a shot nearly head-on (within some 18°) counts as head-on
+const ARMOUR_EVERY := 2 * Net.TICK_HZ   # ticks between two whole lists of worn armour to the clients
+const BOUNCE_SLOW := 0.7             # a shot that glanced off keeps this share of its speed
+const BOUNCE_LIFE := 1.2             # and flies this long (seconds) before it is spent
+const ARC_HALF := PI * 0.4           # (v93) a shield squeezed into an arc covers 72° either side of its middle
 # speed (cells a second), thrust (cells a second, a second), turn (radians a second), per pirate class; -1: ours
 const STATS := {-1: [6.0, 1.6, 0.35], Net.ECLASS_CUTTER: [9.0, 2.6, 0.6], Net.ECLASS_RAIDER: [7.5, 2.0, 0.45],
 	Net.ECLASS_GUNSHIP: [6.0, 1.5, 0.32], Net.ECLASS_CRUISER: [5.0, 1.2, 0.26], Net.ECLASS_BATTLESHIP: [4.5, 1.0, 0.22],
@@ -91,6 +109,8 @@ class Body:
 	var glued := false               # docked: it rides alongside the ship it boards
 	var leave := 0
 	var thrusting := false
+	var plates := 0                  # (v93) points of armour on a wall cell of its outer hull
+	var worn := {}                   # (v93) the shape's cell -> points worn off there (ours: the Ship's own, kept)
 
 	func world(local: Vector2) -> Vector2:
 		return pos + local.rotated(rot)
@@ -102,6 +122,7 @@ class Body:
 var server: GameServer
 var enabled := true                  # (tests that want the fight as it was before v92 switch it off)
 var hold_pirates := false            # (tests: pirates hold where they are put)
+var pane_armour := PANE_ARMOUR       # (v93; tests that want every hit held raise it)
 var bodies: Array = []
 var shots: Array = []                # each: {"id", "side" 0 ours / 1 theirs, "from" body, "pos", "vel", "ends" tick, "w", "kind",
                                      # "meta" what Gunnery needs when it lands, "seen" bodies whose bubble it met, "guard"}
@@ -112,6 +133,8 @@ var _next_id := 1
 var _bumped := {}                    # "a:b" -> the tick those two last met
 var _rng := RandomNumberGenerator.new()
 var _was_on := false
+var _worn_now := {}                  # (v93) body -> {shape cell: true} worn since the last ARENA_ARMOUR
+var _our_shapes := {}                # (v93) ship of our fleet -> its ArenaShape, out of a fight too (mending from outside)
 
 
 func setup(p_server: GameServer) -> void:
@@ -126,6 +149,8 @@ func setup(p_server: GameServer) -> void:
 	pilots = [{}, {}]
 	turrets = [{}, {}]
 	_was_on = false
+	_worn_now = {}
+	_our_shapes = {}
 	_rng.randomize()
 
 
@@ -184,6 +209,7 @@ func tick() -> void:
 	_edges()
 	if server.tick % SEND_EVERY == 0:
 		server.to_all(packet())
+	_tell_armour(server.tick % ARMOUR_EVERY == 0)
 
 
 func _start() -> void:
@@ -206,10 +232,15 @@ func _start() -> void:
 		b.glued = false
 		b.stats = STATS[-1]
 		b.guns = []
+		_our_shapes[i] = b.shape
 		server.fleet.use(i)
 		for cell: int in map.guns:
 			b.guns.append(_gun(b, cell))
+		b.plates = ARMOUR_OURS + server.outfit.armour_tier()
+		b.worn = server.ship.worn
 		server.fleet.use(0)
+	_worn_now = {}
+	_tell_armour(true)
 
 
 func _stop() -> void:
@@ -265,6 +296,9 @@ func _enemy_body(i: int, fights: bool, layout: int) -> void:
 	var their: PackedInt32Array = server.map.others[layout].guns
 	for cell: int in their:
 		b.guns.append(_gun(b, cell))
+	var heavy = server.wing.value(i - LEAD, "enemy_armour")    # (v58) a hull rolled with armour: one point more
+	b.plates = int(ARMOUR_OF.get(klass, 1)) + (1 if heavy != null and float(heavy) > 0.0 else 0)
+	b.worn = {}
 
 
 func _enemy_target(i: int) -> Body:
@@ -585,9 +619,36 @@ func _broke_away() -> void:
 func turret_asked(p: Player, gun: int, aim: Vector2, fire: bool) -> void:
 	## (C_TURRET) The gunner at a mount aims its gun at a point of the fight's space, and holds the trigger or not.
 	var i: int = server.fleet.on
+	if gun == Net.ALL_GUNS:
+		_all_asked(p, aim, fire)
+		return
 	if not _was_on or i >= turrets.size() or gun < 0 or gun >= server.map.guns.size() or server.mounts.gunner(gun) != p:
 		return
 	(turrets[i] as Dictionary)[gun] = {"aim": aim, "fire": fire, "until": server.tick + TURRET_HOLD, "by": p}
+
+
+func _all_asked(p: Player, aim: Vector2, fire: bool) -> void:
+	## (v93, the author's P1 note: "one player steers and shoots; one who joins takes every gun not taken")
+	## At the ship's controls or the gun console: every gun nobody aims by hand at its mount takes this mark;
+	## the gun console's gunner comes before the pilot. Let go (fire false), they go back to their bots at once.
+	var i: int = server.fleet.on
+	var map = server.map
+	var console: bool = server.systems.at_console(p, map.gun_console)
+	if not _was_on or i >= turrets.size() or not (console or server.systems.at_console(p, map.helm)):
+		return
+	var mine: Dictionary = turrets[i]
+	if fire and not mine.values().any(func(t: Dictionary) -> bool: return t.get("by") == p):
+		server.usage.note(p, "aim_all")      # (once a burst: the mark comes again ten times a second)
+	for k in map.guns.size():
+		var t: Dictionary = mine.get(k, {})
+		var taken: bool = not t.is_empty() and server.tick < int(t["until"]) and t["by"] != p
+		if taken and (not t.get("all", false) or bool(t.get("console", false)) and not console):
+			continue                         # a gunner at its mount, or the gun console over the pilot
+		if not fire:
+			if not t.is_empty() and t["by"] == p:
+				mine.erase(k)
+			continue
+		mine[k] = {"aim": aim, "fire": true, "until": server.tick + TURRET_HOLD, "by": p, "all": true, "console": console}
 
 
 func manned_by_hand(ship: int, gun: int) -> bool:
@@ -808,7 +869,11 @@ func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Di
 		p["foe"] = from - LEAD
 	_next_id = (_next_id % 65535) + 1
 	shots.append(p)
-	var msg := PackedByteArray([Net.S_ARENA_SHOT, Net.ARENA_SHOT_FLY, 0, 0, int(p["kind"]), side, 0, 0, 0, 0])
+	_tell_fly(p)
+
+
+func _tell_fly(p: Dictionary) -> void:
+	var msg := PackedByteArray([Net.S_ARENA_SHOT, Net.ARENA_SHOT_FLY, 0, 0, int(p["kind"]), int(p["side"]), 0, 0, 0, 0])
 	msg.encode_u16(2, int(p["id"]))
 	msg.encode_u32(6, server.tick)
 	_put_point(msg, p["pos"])
@@ -883,6 +948,23 @@ func _shielded(b: Body) -> bool:
 	return up2
 
 
+func arc_of(b: Body) -> int:
+	## (v93, the author's D3 C) Ours: -1 the shield is a bubble, 0..3 an arc on the bow, starboard, stern, port.
+	if b == null or b.id >= LEAD or b.id >= server.fleet.size():
+		return -1
+	return server.fleet.ships[b.id].shield_arc
+
+
+func _covers(b: Body, l: Vector2) -> bool:
+	## Does the shield of b stand at that point of its bubble (all round, or within its arc)?
+	var arc := arc_of(b)
+	if arc < 0:
+		return true
+	var r: Vector2 = b.shape.bubble()
+	var way := Vector2(l.x / r.x, l.y / r.y).angle()
+	return absf(wrapf(way - arc * PI / 2.0, -PI, PI)) <= ARC_HALF
+
+
 func _fly_shots() -> void:
 	var g = server.gunnery
 	var still: Array = []
@@ -893,7 +975,7 @@ func _fly_shots() -> void:
 		for b: Body in bodies:
 			if done:
 				break
-			if not b.on or (int(p["side"]) == 0) == (b.id < LEAD):
+			if not b.on or (int(p["side"]) == 0) == (b.id < LEAD) or int(p.get("off", -1)) == b.id:
 				continue
 			if b.pos.distance_to(from) > b.shape.radius + 6.0 + from.distance_to(to) + (GUARD_RANGE if p["guard"] else 0.0):
 				continue
@@ -909,26 +991,176 @@ func _fly_shots() -> void:
 						_ended(p, Net.SHOT_DOWN, at)
 						done = true
 						break
-				if shield and not (p["seen"] as Dictionary).has(b.id) and Vector2(l.x / r.x, l.y / r.y).length_squared() <= 1.0:
+				if shield and not (p["seen"] as Dictionary).has(b.id) and Vector2(l.x / r.x, l.y / r.y).length_squared() <= 1.0 \
+						and _covers(b, l):
 					(p["seen"] as Dictionary)[b.id] = true
 					if g.arena_bubble(p, b.id, at):
 						_ended(p, 0, at)
 						done = true
 						break
 				if b.shape.solid(l):
+					var met := _armour(p, b, l, to - from)
+					if met != Net.LANDED:
+						p["armour"] = met           # Gunnery: it did nothing inside
 					var how: int = g.arena_hit(p, b.id, l, _grid_cells(b, l), at)
-					_ended(p, how, at)
+					_ended(p, met if met != Net.LANDED else how, at)
+					if met == Net.RICOCHET:
+						_glance(p, b, l, at)
 					done = true
 					break
 		if done:
 			continue
 		p["pos"] = to
 		if server.tick >= int(p["ends"]):
-			g.arena_miss(p, to)
+			if not p.has("off"):
+				g.arena_miss(p, to)          # (a shot that glanced off and found nothing more says nothing)
 			_ended(p, Net.MISSED, to)
 			continue
 		still.append(p)
 	shots = still
+
+
+# ---------------------------------------------------------------- armour (v93)
+
+func armour_most(b: Body, i: int) -> int:
+	## The points of armour that cell of the body's shape holds when whole (0: none, inside or not the outer wall).
+	if b == null or not b.shape.armoured(i):
+		return 0
+	return mini(pane_armour, b.plates) if b.shape.kind[i] == ArenaShape.PANE else b.plates
+
+
+func armour_left(b: Body, i: int) -> int:
+	return maxi(armour_most(b, i) - int(b.worn.get(i, 0)), 0)
+
+
+func _armour(p: Dictionary, b: Body, l: Vector2, way: Vector2) -> int:
+	## A shot meets the hull of body b at l, flying that way: Net.LANDED (it goes through to Gunnery's hit),
+	## Net.HELD (the armour stopped it) or Net.RICOCHET (it glanced off). Wears the armour it met.
+	var w: int = p["w"]
+	if not Weapons.meets_armour(w):
+		return Net.LANDED
+	var c: Vector2i = b.shape.cell_at(l)
+	var i: int = b.shape.index(c)
+	var left := armour_left(b, i)
+	if left <= 0:
+		return Net.LANDED
+	var dir := (way.rotated(-b.rot)).normalized()
+	var straight := clampf(-dir.dot(b.shape.normal(c)), 0.0, 1.0)     # cos of the angle off straight on
+	var met := Net.LANDED
+	if straight < RICOCHET_COS and _rng.randf() < Weapons.bounce_chance(w):
+		met = Net.RICOCHET
+	elif float(Weapons.penetration(w)) < float(left) * minf(1.0 / maxf(straight, 0.01), SLANT_MOST) - SLANT_SLACK:
+		met = Net.HELD
+	if met != Net.RICOCHET:
+		_wear(b, i, Weapons.armour_wear(w))
+	return met
+
+
+func _wear(b: Body, i: int, n: int) -> void:
+	var most := armour_most(b, i)
+	if most <= 0:
+		return
+	b.worn[i] = mini(int(b.worn.get(i, 0)) + n, most)
+	if not _worn_now.has(b.id):
+		_worn_now[b.id] = {}
+	(_worn_now[b.id] as Dictionary)[i] = true
+
+
+func _glance(p: Dictionary, b: Body, l: Vector2, at: Vector2) -> void:
+	## A shot that glanced off flies on from where it met the wall, mirrored by it, slower; it may still strike
+	## another ship of that side (the author's A3 A), never the one it glanced off.
+	var n: Vector2 = b.shape.normal(b.shape.cell_at(l)).rotated(b.rot)
+	var vel: Vector2 = (p["vel"] as Vector2) - b.vel
+	if vel.dot(n) < 0.0:
+		vel -= 2.0 * vel.dot(n) * n
+	vel = vel * BOUNCE_SLOW + b.vel
+	var meta: Dictionary = (p["meta"] as Dictionary).duplicate()
+	var was: Dictionary = meta.get("log", {})
+	meta["log"] = {"w": p["w"], "fx": was.get("fx", 0), "left": 1, "misses": 0, "stopped": 0, "down": 0, "ricochet": 0,
+		"hits": PackedStringArray(), "said": PackedStringArray(), "gun": was.get("gun", 0), "focus": false, "ship": was.get("ship", 0)}
+	meta["target"] = -1                  # it hits wherever it meets
+	meta["cell"] = -1
+	var q := {"id": _next_id, "side": p["side"], "from": p["from"], "pos": at + n * 0.6, "vel": vel,
+		"ends": server.tick + roundi(BOUNCE_LIFE * Net.TICK_HZ), "w": p["w"], "kind": p["kind"], "meta": meta, "seen": {},
+		"guard": Weapons.guard_chance(int(p["w"])) > 0.0, "off": b.id}
+	if p.has("foe"):
+		q["foe"] = p["foe"]
+	_next_id = (_next_id % 65535) + 1
+	shots.append(q)
+	_tell_fly(q)
+
+
+func _tell_armour(all: bool) -> void:
+	## ARENA_ARMOUR: the cells worn since the last time, or (all) every worn cell of every body.
+	for b: Body in bodies:
+		if not b.on:
+			continue
+		var cells: Array = b.worn.keys() if all else (_worn_now.get(b.id, {}) as Dictionary).keys()
+		if cells.is_empty() and not all:
+			continue
+		var msg := PackedByteArray([Net.S_ARENA_SHOT, Net.ARENA_ARMOUR, b.id, 0])
+		var n := 0
+		for i: int in cells:
+			if n >= 255:
+				break
+			var o := msg.size()
+			msg.resize(o + 4)
+			msg.encode_u16(o, i)
+			msg[o + 2] = armour_left(b, i)
+			msg[o + 3] = armour_most(b, i)
+			n += 1
+		msg[3] = n
+		if n > 0:
+			server.to_all(msg)
+	_worn_now = {}
+
+
+func our_shape(ship: int) -> RefCounted:
+	## The ArenaShape of a ship of our fleet, kept (for mending its armour from outside, out of a fight too).
+	if not _our_shapes.has(ship):
+		_our_shapes[ship] = ArenaShape.of_fleet(server.map, ship)
+	return _our_shapes[ship]
+
+
+func worn_near(ship: int, cell: int) -> PackedInt32Array:
+	## (Outside) The worn cells of our ship's shape at that cell of the grid and beside it (within one).
+	var out := PackedInt32Array()
+	var worn: Dictionary = server.fleet.ships[ship].worn
+	if worn.is_empty():
+		return out
+	var s: RefCounted = our_shape(ship)
+	var c: Vector2i = s.cell_at(s.local_of(cell))
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var i: int = s.index(c + Vector2i(dx, dy))
+			if i >= 0 and int(worn.get(i, 0)) > 0:
+				out.append(i)
+	return out
+
+
+func armour_mended() -> void:
+	## Our armour was made whole outside the fight's own code (a station, the trader, the admin): tell the clients.
+	if _was_on:
+		_tell_armour_whole()
+
+
+func armour_mended_at(ship: int, cells: PackedInt32Array) -> void:
+	## (Outside) Those cells of a ship of ours were mended: told with the next ARENA_ARMOUR.
+	if not _was_on or body(ship) == null:
+		return
+	if not _worn_now.has(ship):
+		_worn_now[ship] = {}
+	for i in cells:
+		(_worn_now[ship] as Dictionary)[i] = true
+
+
+func _tell_armour_whole() -> void:
+	for ship in mini(server.fleet.size(), LEAD):
+		var b := body(ship)
+		if b == null:
+			continue
+		var msg := PackedByteArray([Net.S_ARENA_SHOT, Net.ARENA_ARMOUR, b.id, 255])
+		server.to_all(msg)                   # 255 cells: all whole again
 
 
 func _grid_cells(b: Body, l: Vector2) -> PackedInt32Array:
@@ -989,6 +1221,7 @@ func packet() -> PackedByteArray:
 			flags |= Net.ARENA_THRUST
 		if b.glued:
 			flags |= Net.ARENA_GLUED
+		flags |= (arc_of(b) + 1) << Net.ARENA_ARC_SHIFT       # (v93) the shield's arc (0: a bubble)
 		if b.id < LEAD and not (pilots[b.id] as Dictionary).is_empty():
 			flags |= Net.ARENA_PILOTED
 		var o := msg.size()
