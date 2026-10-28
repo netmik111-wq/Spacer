@@ -29,7 +29,8 @@ const KINDS := ["ship", "pirate", "derelict", "asteroid"]
 ## anywhere else it is a thing on the floor, the floor going on under it. Old drawings move their machines out
 ## of the wall onto the floor in front of them (to_floor), where there is room.
 const MACHINE_SIGNS := "1345678MZBUYXSQKGCP"
-const DOOR_LOOKS := ["base", "tech", "cargo", "herm"]   # (v91, the author's D1) the kinds of door a "&" line gives
+const DOOR_LOOKS := ["base", "tech", "cargo", "herm"]
+const GUN_KINDS := ["hard", "side", "roof"]   # (v94, the author's G1 note) the kinds of gun mount a "^" line gives   # (v91, the author's D1) the kinds of door a "&" line gives
 
 static var _tiles := {}              # tile name -> id (from assets/tiles.json)
 static var _kinds := PackedStringArray()
@@ -74,7 +75,7 @@ static func read(text: String) -> Dictionary:
 		var l: String = raw
 		if l.begins_with(";"):
 			continue
-		if l.begins_with("@") or l.begins_with("%") or l.begins_with("&"):
+		if l.begins_with("@") or l.begins_with("%") or l.begins_with("&") or l.begins_with("^"):
 			marks.append(l)
 			continue
 		if l.begins_with("="):
@@ -213,8 +214,20 @@ static func build(name: String, text: String) -> Dictionary:
 	var brig_rooms := []
 	var zones := []
 	var door_looks := []
+	var gun_kinds := []
 	for l: String in parts["marks"]:
 		var bits := l.substr(1).split(" ", false)
+		if l.begins_with("^"):
+			# (v94, the author's G1 note) a gun mount of a chosen kind: fixed in the bow, a side turret, a roof turret
+			var fine := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
+				and GUN_KINDS.has(bits[3]) and int(bits[0]) >= 1 and int(bits[0]) <= decks.size()
+			if not fine:
+				problems.append(_problem(-1, 0, 0, "Неверная строка «%s»." % l))
+			elif _at(grids[int(bits[0]) - 1], int(bits[1]), int(bits[2]), w, h) != "T":
+				problems.append(_problem(int(bits[0]) - 1, int(bits[1]), int(bits[2]), "Метка вида орудия стоит не на орудии."))
+			else:
+				gun_kinds.append([int(bits[1]), int(bits[2]) + (int(bits[0]) - 1) * stride, bits[3]])
+			continue
 		if l.begins_with("&"):
 			# (v91, the author's D1) a door of another kind's look
 			var right := bits.size() == 4 and bits[0].is_valid_int() and bits[1].is_valid_int() and bits[2].is_valid_int() \
@@ -276,14 +289,15 @@ static func build(name: String, text: String) -> Dictionary:
 	var data := {"name": name, "width": w, "height": total, "deck_height": h, "deck_stride": stride,
 		"decks": names, "cells": Array(cells), "spawns": spawns, "doors": doors,
 		"door_access": door_access, "access_rooms": access_rooms, "brig_rooms": brig_rooms, "zones": zones,
-		"things": things, "door_looks": door_looks}
+		"things": things, "door_looks": door_looks, "gun_kinds": gun_kinds}
 	return {"data": data, "problems": problems, "kind": kind}
 
 
 static func _mark_name(what: String) -> String:
 	return {"bridge": "мостик", "engine": "машинное", "medbay": "медотсек", "armory": "оружейная", "guns": "орудия",
 		"brig": "камера", "weapons": "оружие", "helm": "управление", "crew": "каюты", "jump": "прыжковый двигатель",
-		"shields": "щиты", "base": "обычная", "tech": "техн.", "cargo": "грузовая", "herm": "герм."}.get(what, what)
+		"shields": "щиты", "base": "обычная", "tech": "техн.", "cargo": "грузовая", "herm": "герм.",
+		"hard": "нос.", "side": "борт.", "roof": "крыша"}.get(what, what)
 
 
 static func _problem(deck: int, x: int, y: int, text: String) -> Dictionary:
@@ -369,7 +383,7 @@ static func to_floor(text: String) -> String:
 				spans.append([deck, start, i])
 			deck += 1
 			start = i + 1
-		elif deck < 0 and not l.begins_with(";") and not l.begins_with("@") and not l.begins_with("%") and l.strip_edges() != "":
+		elif deck < 0 and not _meta_line(l) and l.strip_edges() != "":
 			deck = 0
 			start = i
 	if deck >= 0:
@@ -378,7 +392,7 @@ static func to_floor(text: String) -> String:
 		var rows := PackedStringArray()
 		var w := 1
 		for i in range(span[1], span[2]):
-			if lines[i].begins_with(";") or lines[i].begins_with("@") or lines[i].begins_with("%"):
+			if _meta_line(lines[i]):
 				continue
 			rows.append(lines[i])
 			w = maxi(w, lines[i].length())
@@ -389,11 +403,16 @@ static func to_floor(text: String) -> String:
 			continue
 		var k := 0
 		for i in range(span[1], span[2]):
-			if lines[i].begins_with(";") or lines[i].begins_with("@") or lines[i].begins_with("%"):
+			if _meta_line(lines[i]):
 				continue
 			lines[i] = (g[k] as String).rstrip(" ")
 			k += 1
 	return "\n".join(lines)
+
+
+static func _meta_line(l: String) -> bool:
+	## A line of a drawing that is not a row of a deck: a comment or a mark (@ % & ^).
+	return l.begins_with(";") or l.begins_with("@") or l.begins_with("%") or l.begins_with("&") or l.begins_with("^")
 
 
 static func _move_out(g: Array, w: int, h: int, avoid: Dictionary) -> bool:

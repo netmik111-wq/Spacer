@@ -94,6 +94,7 @@ var door_partner := PackedInt32Array() # per door: the other door of its airlock
 var door_vent := PackedByteArray()   # per door: 1 = it opens straight into space (an airlock's outer door)
 var door_access := PackedByteArray() # per door: the access it asks for (Net.ACCESS_* bits), 0 = anybody
 var door_look := PackedStringArray() # (v91, the author's D1) per door: the kind it is drawn as ("" = by its rooms)
+var gun_kind := {}                   # (v94, the author's G1 note) gun cell -> "hard", "side" or "roof" ("^" lines; else by its wall)
 var vents := PackedInt32Array()     # (v69) floor cells with a room's air vent, one per room (see _place_vents)
 var access_in := PackedByteArray()   # (v69) per cell: the access of the restricted room it lies in (0 = none):
                                      # its doors open for anybody leaving it (see leaving)
@@ -428,6 +429,9 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		var d := door_of[int(l[1]) * width + int(l[0])]
 		if d >= 0:
 			door_look[d] = str(l[2])
+	gun_kind = {}
+	for l: Array in data.get("gun_kinds", []):
+		gun_kind[int(l[1]) * width + int(l[0])] = str(l[2])
 	door_sides = PackedInt32Array()
 	for d in doors.size():
 		var at: Vector2i = doors[d]

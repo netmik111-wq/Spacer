@@ -82,7 +82,7 @@ func _initialize() -> void:
 
 	# guns bear only inside their arc
 	_hold(Vector2(0, 0), 0.0, Vector2(0, -70), 0.0)
-	_run(1)
+	_run(Net.TICK_HZ * 2)                   # (v94) turrets turn at their own pace
 	var up := 0
 	var down_bear := 0
 	for k in b.guns.size():
@@ -95,19 +95,20 @@ func _initialize() -> void:
 
 	# our shots fly and wear the pirate
 	var gunner = _at(map.gun_console.keys()[0], "Канонир")
-	var hull: int = g.enemy_hull
+	a.pirate_shields = false
+	var hull: float = a.hull_points(a.body(Arena.LEAD)).x
 	var shots_seen := 0
 	for i in 12:
 		_hold(Vector2(0, 0), 0.0, Vector2(0, -50), 0.0)
-		g.enemy_shield = 0.0
 		g.charge.fill(1.0)
 		g.fire(gunner, 255)
 		shots_seen = maxi(shots_seen, a.shots.size() + a._later.size())
 		_run(40)
-		if g.enemy_hull < hull:
+		if a.hull_points(a.body(Arena.LEAD)).x < hull:
 			break
 	_expect(shots_seen > 0, "a volley sends shots flying (%d)" % shots_seen)
-	_expect(g.enemy_hull < hull, "and they strike the pirate (hull %d -> %d)" % [hull, g.enemy_hull])
+	_expect(a.hull_points(a.body(Arena.LEAD)).x < hull, "and they strike the pirate (hull %d -> %d)" % [hull, a.hull_points(a.body(Arena.LEAD)).x])
+	a.pirate_shields = true
 
 	# its shots fly and strike our hull where they land
 	g.enemy_hull = g.hull_full()
@@ -173,12 +174,15 @@ func _initialize() -> void:
 		var mark := Vector2(-30.0, -60.0)
 		g.charge.fill(1.0)
 		var flying: int = a.shots.size()
-		a.turret_asked(hand, k_top, mark, true)
-		_run(1)
 		var fired: Dictionary = {}
-		for p: Dictionary in a.shots:
-			if int(p["side"]) == 0:
-				fired = p
+		for i in Net.TICK_HZ * 2:         # (v94) the turret turns to the mark first
+			a.turret_asked(hand, k_top, mark, true)
+			_run(1)
+			for p: Dictionary in a.shots:
+				if int(p["side"]) == 0:
+					fired = p
+			if not fired.is_empty():
+				break
 		_expect(not fired.is_empty() and a.manned_by_hand(0, k_top), "the trigger fires it (%d in flight)" % (a.shots.size() - flying))
 		if not fired.is_empty():
 			var muzzle: Vector2 = b.world(b.guns[k_top]["at"])
@@ -201,8 +205,8 @@ func _initialize() -> void:
 	var n: int = pkt[5]
 	var at := 6
 	for i in n:
-		var guns: int = pkt[at + 4 + 8 + 5]
-		at += 4 + 8 + 6 + guns * 3
+		var guns: int = pkt[at + 4 + 8 + 6 + 12]
+		at += 4 + 8 + 6 + 12 + 1 + guns * 4
 	_expect(n == 2 and at == pkt.size(), "S_ARENA holds %d ships and ends where it should (%d / %d)" % [n, at, pkt.size()])
 
 	# our ship out past the edge with the pirate far behind: out of the fight

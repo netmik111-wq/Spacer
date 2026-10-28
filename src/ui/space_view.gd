@@ -17,7 +17,6 @@ const TURRET := 2
 const ALL := 3                       # (v93) at the gun console: the mouse aims every gun nobody aims by hand
 
 const RADIUS := 170.0                # as Arena.RADIUS: the fight's edge
-const GUN_ARC := PI / 2.0            # as Arena.GUN_ARC
 const ARC_HALF := PI * 0.4           # as Arena.ARC_HALF
 const OURS := {ArenaShape.FLOOR: Color(0.2, 0.24, 0.27), ArenaShape.WALL: Color(0.5, 0.6, 0.62),
 	ArenaShape.PANE: Color(0.45, 0.75, 0.95), ArenaShape.GUN: Color(0.95, 0.82, 0.4)}
@@ -35,6 +34,9 @@ var mode := WATCH
 var gun := -1                        # (TURRET) the number of our gun at the mount we stand at
 var zoom := 3.5                      # pixels a cell
 var firing := false                  # (TURRET) the mouse button held
+var shield_up := true                # (v94, PILOT) the right mouse button raises and lowers the shield
+var shield_touched := false          # the pilot has used it this fight (else bots hold the shield)
+var vent_asked := false              # V pressed: sent once
 var _mouse := Vector2.ZERO
 var _stars := PackedVector3Array()
 
@@ -90,6 +92,9 @@ func _on_input(event: InputEvent) -> void:
 		_mouse = b.position
 		if b.button_index == MOUSE_BUTTON_LEFT:
 			firing = b.pressed and mode != WATCH     # (v93, the author's P1 note) the pilot fires the free guns too
+		elif b.pressed and b.button_index == MOUSE_BUTTON_RIGHT and mode == PILOT:
+			shield_up = not shield_up if shield_touched else false   # (v94) Starsector's: the pilot raises the shield
+			shield_touched = true
 		elif b.pressed and b.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom = minf(zoom * 1.2, 14.0)
 		elif b.pressed and b.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -106,6 +111,12 @@ func _draw() -> void:
 	for s: Vector3 in _stars:
 		var p := Vector2(posmod(s.x * size.x - c.x * zoom * s.z, size.x), posmod(s.y * size.y - c.y * zoom * s.z, size.y))
 		draw_rect(Rect2(p, Vector2(1.5, 1.5)), Color(0.8, 0.85, 1.0, s.z))
+	if client.arena.bodies.is_empty():
+		# (v94) the gun console out of a fight: space stays on its screen, empty
+		draw_string(ThemeDB.fallback_font, Vector2(0, size.y / 2.0), "Целей нет. Когда придёт враг, бой будет здесь.",
+			HORIZONTAL_ALIGNMENT_CENTER, size.x, 15, Color(0.6, 0.68, 0.72))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.35, 0.5, 0.6, 0.8), false, 1.0)
+		return
 	draw_arc(to_screen(Vector2.ZERO), RADIUS * zoom, 0.0, TAU, 96, Color(0.5, 0.3, 0.3, 0.5), 1.5)
 	for id: int in client.arena.bodies.keys():
 		_draw_ship(id, t)
@@ -130,6 +141,7 @@ func _draw() -> void:
 	if mode != WATCH:
 		_draw_sight(t)
 	_draw_words(t)
+	_draw_hud(t)
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0.35, 0.5, 0.6, 0.8), false, 1.0)
 
 
@@ -167,19 +179,42 @@ func _draw_ship(id: int, t: float) -> void:
 		var col := Color(1.0, 0.9, 0.5) if lit else Color(0.7, 0.7, 0.7)
 		if ours and id == mine() and k == gun and mode == TURRET:
 			col = Color(0.5, 1.0, 0.6)
-		draw_line(to_screen(at), to_screen(at + Vector2.from_angle(rot + aims[k]) * 2.2), col, maxf(zoom * 0.35, 1.5))
+		var kind: int = client.arena.gun_kind(id, k)
+		if ours and id == mine() and mode != WATCH and zoom >= 2.0:
+			# (v94) each gun's arc: a narrow wedge for a fixed one, half a circle at the side, a whole ring on the roof
+			var out := rot + client.arena.gun_out(id, k)
+			var arc: float = ArenaShape.MOUNT_ARC[kind]
+			var reach := 9.0 * zoom
+			if kind == ArenaShape.MOUNT_ROOF:
+				draw_arc(to_screen(at), reach * 0.6, 0.0, TAU, 32, Color(0.45, 0.7, 1.0, 0.18), 1.0)
+			else:
+				draw_arc(to_screen(at), reach, out - arc, out + arc, 24, Color(col, 0.22), 1.0)
+				draw_line(to_screen(at), to_screen(at) + Vector2.from_angle(out - arc) * reach, Color(col, 0.16), 1.0)
+				draw_line(to_screen(at), to_screen(at) + Vector2.from_angle(out + arc) * reach, Color(col, 0.16), 1.0)
+		var long := 3.2 if kind == ArenaShape.MOUNT_HARD else 2.2
+		draw_line(to_screen(at), to_screen(at + Vector2.from_angle(rot + aims[k]) * long), col, maxf(zoom * (0.45 if kind == ArenaShape.MOUNT_HARD else 0.35), 1.5))
+		if kind == ArenaShape.MOUNT_ROOF:
+			draw_circle(to_screen(at), maxf(zoom * 0.45, 2.0), Color(col, 0.8))
 	var shield: int = s["shield"]
 	if shield > 0:
 		var r: Vector2 = shape.bubble()
 		var pts := PackedVector2Array()
 		var arc := (int(s["flags"]) >> Net.ARENA_ARC_SHIFT) & 7      # (v93) 0 a bubble, 1..4 an arc to one side
-		var from := 0.0 if arc == 0 else (arc - 1) * PI / 2.0 - ARC_HALF
+		var from := 0.0 if arc == 0 else float(s.get("sdir", (arc - 1) * PI / 2.0)) - ARC_HALF      # (v94) the pilot turns it
 		var span := TAU if arc == 0 else ARC_HALF * 2.0
 		for k in 41:
 			var a := from + span * k / 40.0
 			pts.append(to_screen(pos + Vector2(cos(a) * r.x, sin(a) * r.y).rotated(rot)))
-		var full := clampf(shield / 100.0, 0.0, 1.0)          # (Weapons.SHIELD_FULL)
-		draw_polyline(pts, Color(FightFx.SHIELD, 0.3 + 0.5 * full), (1.5 + 1.5 * full) * (1.0 if arc == 0 else 1.8))
+		var full := clampf(shield / 100.0, 0.0, 1.0)          # (Weapons.SHIELD_FULL) what its heat leaves it
+		var tint: Color = FightFx.SHIELD.lerp(Color(1.0, 0.55, 0.3), 1.0 - full)
+		draw_polyline(pts, Color(tint, 0.35 + 0.45 * full), (1.5 + 1.5 * full) * (1.0 if arc == 0 else 1.8))
+	elif int(s.get("sstate", 0)) & Net.ARENA_OVERLOAD:
+		# (v94) overloaded: sparks round the hull, blinking
+		if (Time.get_ticks_msec() / 150) % 2 == 0:
+			var r2: Vector2 = shape.bubble()
+			for k in 10:
+				var a := TAU * k / 10.0 + t * 0.3
+				draw_circle(to_screen(pos + Vector2(cos(a) * r2.x, sin(a) * r2.y).rotated(rot)), 1.6, Color(1.0, 0.75, 0.35, 0.9))
 
 
 func _draw_marks(t: float) -> void:
@@ -217,11 +252,12 @@ func _draw_sight(t: float) -> void:
 	var rot: float = s["rot"]
 	var at: Vector2 = to_screen((s["pos"] as Vector2) + client.arena.gun_spot(mine(), gun).rotated(rot))
 	var out: float = rot + client.arena.gun_out(mine(), gun)
-	draw_arc(at, 120.0, out - GUN_ARC, out + GUN_ARC, 32, Color(0.5, 1.0, 0.6, 0.25), 1.0)
-	draw_line(at, at + Vector2.from_angle(out - GUN_ARC) * 40.0, Color(0.5, 1.0, 0.6, 0.35), 1.0)
-	draw_line(at, at + Vector2.from_angle(out + GUN_ARC) * 40.0, Color(0.5, 1.0, 0.6, 0.35), 1.0)
+	var arc: float = ArenaShape.MOUNT_ARC[client.arena.gun_kind(mine(), gun)]      # (v94) its own mount's arc
+	draw_arc(at, 120.0, out - arc, out + arc, 32, Color(0.5, 1.0, 0.6, 0.25), 1.0)
+	draw_line(at, at + Vector2.from_angle(out - arc) * 40.0, Color(0.5, 1.0, 0.6, 0.35), 1.0)
+	draw_line(at, at + Vector2.from_angle(out + arc) * 40.0, Color(0.5, 1.0, 0.6, 0.35), 1.0)
 	var rel := wrapf((_mouse - at).angle() - out, -PI, PI)
-	var col := Color(1.0, 0.4, 0.3) if absf(rel) > GUN_ARC else (Color(1.0, 0.9, 0.4) if firing else Color(0.6, 1.0, 0.7))
+	var col := Color(1.0, 0.4, 0.3) if absf(rel) > arc else (Color(1.0, 0.9, 0.4) if firing else Color(0.6, 1.0, 0.7))
 	draw_arc(_mouse, 9.0, 0.0, TAU, 20, col, 1.5)
 	draw_line(_mouse - Vector2(14, 0), _mouse - Vector2(5, 0), col, 1.5)
 	draw_line(_mouse + Vector2(5, 0), _mouse + Vector2(14, 0), col, 1.5)
@@ -238,9 +274,9 @@ func _draw_words(t: float) -> void:
 		lines.append("Скорость: %.1f" % speed)
 	if mode == PILOT:
 		lines.append("W/S — ход, A/D — поворот, Q/E — вбок, Пробел — уклонение, Esc — отойти")
-		lines.append("Мышь — прицел, левая кнопка — огонь орудиями без своего стрелка")
+		lines.append("Мышь — прицел, левая — огонь орудиями без стрелка, правая — щит, V — сброс нагрева")
 	elif mode == ALL:
-		lines.append("Мышь — прицел, левая кнопка — огонь орудиями без своего стрелка, Tab — пульт орудий")
+		lines.append("Мышь — прицел, левая кнопка — огонь орудиями без своего стрелка")
 	elif mode == TURRET:
 		lines.append("Мышь — прицел, левая кнопка — огонь, колесо — масштаб, E или Esc — отойти")
 	var y := 18.0
@@ -248,3 +284,74 @@ func _draw_words(t: float) -> void:
 		draw_string(font, Vector2(10, y), line, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.75, 0.85, 0.8))
 		y += 17.0
 
+
+
+const HUD_HULL := Color(0.45, 0.85, 0.55)
+const HUD_HEAT := Color(1.0, 0.62, 0.3)
+const HUD_HARD := Color(0.85, 0.35, 0.2)
+const HUD_INK := Color(0.82, 0.88, 0.9)
+const HUD_DIM := Color(0.5, 0.56, 0.6)
+
+
+func _bar(at: Vector2, width: float, share: float, col: Color, under := -1.0, under_col := Color.BLACK) -> void:
+	draw_rect(Rect2(at, Vector2(width, 7)), Color(0.12, 0.15, 0.18, 0.9))
+	draw_rect(Rect2(at, Vector2(width * clampf(share, 0.0, 1.0), 7)), col)
+	if under >= 0.0:
+		draw_rect(Rect2(at, Vector2(width * clampf(under, 0.0, 1.0), 7)), under_col)
+	draw_rect(Rect2(at, Vector2(width, 7)), Color(0.4, 0.5, 0.55, 0.6), false, 1.0)
+
+
+func _ship_bars(s: Dictionary, at: Vector2, width: float, name: String) -> void:
+	## Hull points, heat (the shield's part darker), the shield's state: as Starsector's ship panel.
+	var font := ThemeDB.fallback_font
+	var hp: Vector2 = s.get("hp", Vector2.ZERO)
+	var heat: Vector2 = s.get("heat", Vector2.ZERO)
+	var state: int = s.get("sstate", 0)
+	draw_string(font, at, name, HORIZONTAL_ALIGNMENT_LEFT, width, 12, HUD_INK)
+	draw_string(font, at + Vector2(0, 14), "Корпус %d / %d" % [roundi(hp.x), roundi(hp.y)], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, HUD_DIM)
+	_bar(at + Vector2(0, 18), width, hp.x / maxf(hp.y, 1.0), HUD_HULL)
+	var heat_share := heat.x / maxf(heat.y, 1.0)
+	var word := "перегрузка!" if state & Net.ARENA_OVERLOAD else ("сброс нагрева" if state & Net.ARENA_VENT else
+		("щит поднят" if state & Net.ARENA_RAISED else "щит опущен"))
+	var hot := Color(1.0, 0.4, 0.3) if state & (Net.ARENA_OVERLOAD | Net.ARENA_VENT) else HUD_DIM
+	draw_string(font, at + Vector2(0, 40), "Нагрев %d%%  ·  %s" % [roundi(heat_share * 100.0), word], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, hot)
+	_bar(at + Vector2(0, 44), width, heat_share, HUD_HEAT, float(s.get("hard", 0.0)) * heat.y / maxf(heat.y, 1.0), HUD_HARD)
+
+
+func _draw_hud(t: float) -> void:
+	## (v94, my U1 pick: Starsector's panels) Ours at the bottom left with our guns' charge; the target's at the bottom right.
+	if size.y < 200:
+		return
+	var font := ThemeDB.fallback_font
+	var s: Dictionary = client.arena.state(mine(), t)
+	if not s.is_empty():
+		var w := 170.0
+		var at := Vector2(10, size.y - 64)
+		var charge: PackedFloat32Array = s.get("charge", PackedFloat32Array())
+		var gunf: PackedByteArray = s.get("gunf", PackedByteArray())
+		# the guns above the bars, one short row each
+		var rows := charge.size()
+		var y := at.y - 14.0 * rows - 6.0
+		for k in rows:
+			var kind: int = client.arena.gun_kind(mine(), k)
+			var ready := charge[k] >= 0.999
+			var name := "%d %s" % [k + 1, ArenaShape.MOUNT_NAMES[kind]]
+			draw_string(font, Vector2(10, y + 9), name, HORIZONTAL_ALIGNMENT_LEFT, 90, 10,
+				HUD_INK if k < gunf.size() and gunf[k] & 1 else HUD_DIM)
+			_bar(Vector2(102, y + 2), 78, charge[k], Color(1.0, 0.9, 0.45) if ready else Color(0.55, 0.65, 0.7))
+			y += 14.0
+		_ship_bars(s, at, w, "Наш корабль")
+	# the nearest pirate
+	var best := -1
+	var best_d := INF
+	var me: Vector2 = s.get("pos", Vector2.ZERO) if not s.is_empty() else Vector2.ZERO
+	for id: int in client.arena.bodies.keys():
+		if id < 2:
+			continue
+		var o: Dictionary = client.arena.state(id, t)
+		if not o.is_empty() and (o["pos"] as Vector2).distance_to(me) < best_d:
+			best_d = (o["pos"] as Vector2).distance_to(me)
+			best = id
+	if best >= 0:
+		var o: Dictionary = client.arena.state(best, t)
+		_ship_bars(o, Vector2(size.x - 180, size.y - 64), 170.0, "Цель: %d клеток" % roundi(best_d))

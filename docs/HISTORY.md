@@ -781,3 +781,19 @@ but O1 B) and on the v92 page (D3 C, the P1 note, P5 A), and one Notebook note w
   windows are his v2 pane with shutters, inner ones v1 without.
 - `tools/armourtest.gd`, `tools/eyestest.gd` (30/30 each). Protocol 67, 48 test scripts. Mount kinds and choosing the
   enemy deck moved to v94.
+
+## v94: the fight like Starsector; three mount kinds; his notes
+
+The author: "make all guns work properly and rework the whole damage/shield/hull/armour system more like in Starsector,
+so fights feel more alive". Questions `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC` (19, built on my picks).
+- Every gun has numbers in space (`Weapons.SPACE`: damage, shots, pace 0.3-12 s, heat, kind, clip) and fires on its own
+  clock; Starsector's damage kinds against shields and armour.
+- Heat (flux) per ship (`Arena.Body.heat`, `hard`, `FLUX_OF`): firing heats, the shield stops shots and heats, overload
+  5 s, V vents; the pilot holds the shield with the right mouse button, the arc follows the mouse (`C_SHIELD`).
+- Starsector's armour per outer cell (ours 150), hull points (ours shown 4000; every 100 through = a hit inside).
+- Mount kinds: fixed, side, roof (`ArenaShape.MOUNT_*`, `^` lines, the editor's mark menu); turrets turn at a pace.
+  Our ship has a fourth mount, a fixed laser in the lower deck's bow, switched off at the start.
+- Ammunition rounds feed clips (`Mounts.clip`); beams, the siphon and the tractor work in space.
+- The gun console always shows space (his note), Starsector-like bars for hull, heat and charges.
+- His bugs: thermal goggles only in the view cone; a side wall's joint by the airlock looked broken off.
+- `tools/fluxtest.gd` (every gun hits, heat, overload, vent, mount kinds, clips). Protocol 68, 49 test scripts.

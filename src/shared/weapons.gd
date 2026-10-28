@@ -392,27 +392,106 @@ static func pierce(w: int) -> int:
 	return int(INFO[w].get("pierce", 0)) if INFO.has(w) else 0
 
 
-# (v93, the author's plan 0.2: armour, penetration, ricochet) How much armour a shot of each gun goes through
-# head-on (Arena.armour_of). Guns not listed pass armour by (ion, EMP, neural, beams, tractor, siphon, bombs: they
-# put out systems, stun people or are teleported, and never strike the plating)
-const PENETRATION := {LASER: 2, RAPID: 1, HEAVY: 3, SIEGE: 4, PHOENIX: 4, NOVA: 6, BLASTER: 1, ROCKET: 4, DEVASTATOR: 6,
-	AUTOCANNON: 3, RAILGUN: 5, HAMMER: 5, SHRAPNEL: 2}
-# the share of shots that glance off armour met at a slant (Arena.RICOCHET_COS), by class
+# (v94, the author: "rework the whole damage, shield, hull and armour system like in Starsector") In the fight in
+# space a gun fires much more often and each shot does tens or hundreds of points: SPACE per gun. "d" is the damage of
+# one shot (one pellet), "n" the shots of a burst, "every" the seconds from one burst to the next, "heat" what each
+# shot heats its own ship (Starsector's soft flux), "type" its damage type (DMG_*), "clip" (guns that use ammunition)
+# the bursts one round from the locker feeds, "emp" (ion) what it heats a shield beyond its damage and "jam" the
+# chance a hit on the hull puts the system there out (its "disable" seconds). A beam's "d" and "heat" are per second.
+# Guns with no entry (bombs, the tractor, the neural emitter, point defence) keep their charge and do what they did.
+# Damage reaching the hull counts towards hits inside (Arena.INSIDE_UNIT points each, the old point of "damage").
+const DMG_ENERGY := 0
+const DMG_KINETIC := 1                # Starsector's kinetic: hard on shields, soft on armour
+const DMG_EXPLOSIVE := 2              # high explosive: soft on shields, hard on armour
+const DMG_FRAG := 3                   # fragments: little to shields and armour, full to a bare hull
+const DMG_ION := 4                    # energy that heats a shield more and puts systems out
+const SHIELD_MULT: Array[float] = [1.0, 2.0, 0.5, 0.25, 1.0]
+const ARMOUR_MULT: Array[float] = [1.0, 0.5, 2.0, 0.25, 1.0]
+const DMG_NAMES: Array[String] = ["энерг.", "кинет.", "взрывной", "осколки", "ион"]
+const SPACE := {
+	LASER: {"d": 30.0, "n": 1, "every": 0.8, "heat": 20.0, "type": DMG_ENERGY},
+	RAPID: {"d": 12.0, "n": 3, "every": 1.0, "heat": 8.0, "type": DMG_ENERGY},
+	HEAVY: {"d": 90.0, "n": 1, "every": 1.8, "heat": 65.0, "type": DMG_ENERGY},
+	SIEGE: {"d": 300.0, "n": 1, "every": 4.0, "heat": 220.0, "type": DMG_ENERGY},
+	PHOENIX: {"d": 120.0, "n": 2, "every": 2.5, "heat": 85.0, "type": DMG_ENERGY},
+	BLASTER: {"d": 25.0, "n": 4, "every": 1.6, "heat": 18.0, "type": DMG_ENERGY},
+	NOVA: {"d": 1500.0, "n": 1, "every": 10.0, "heat": 0.0, "type": DMG_ENERGY},
+	ION: {"d": 10.0, "n": 1, "every": 1.2, "heat": 8.0, "type": DMG_ION, "emp": 150.0, "jam": 0.35},
+	ION_CANNON: {"d": 20.0, "n": 1, "every": 2.0, "heat": 15.0, "type": DMG_ION, "emp": 300.0, "jam": 0.5},
+	STORM: {"d": 25.0, "n": 2, "every": 2.5, "heat": 18.0, "type": DMG_ION, "emp": 250.0, "jam": 0.6},
+	ROCKET: {"d": 200.0, "n": 2, "every": 8.0, "heat": 0.0, "type": DMG_EXPLOSIVE, "clip": 1},
+	EMP: {"d": 0.0, "n": 1, "every": 10.0, "heat": 0.0, "type": DMG_ION, "emp": 400.0, "jam": 1.0, "clip": 1},
+	DEVASTATOR: {"d": 800.0, "n": 1, "every": 12.0, "heat": 0.0, "type": DMG_EXPLOSIVE, "clip": 1},
+	AUTOCANNON: {"d": 40.0, "n": 3, "every": 1.5, "heat": 15.0, "type": DMG_KINETIC, "clip": 4},
+	RAILGUN: {"d": 400.0, "n": 1, "every": 6.0, "heat": 150.0, "type": DMG_KINETIC},
+	HAMMER: {"d": 500.0, "n": 1, "every": 6.0, "heat": 100.0, "type": DMG_KINETIC, "clip": 2},
+	SHRAPNEL: {"d": 50.0, "n": 6, "every": 3.0, "heat": 0.0, "type": DMG_FRAG, "clip": 3},
+	BEAM: {"d": 60.0, "n": 1, "every": 8.0, "heat": 40.0, "type": DMG_ENERGY},
+	REAPER: {"d": 80.0, "n": 1, "every": 9.0, "heat": 50.0, "type": DMG_ENERGY},
+	SIPHON: {"d": 120.0, "n": 1, "every": 12.0, "heat": 0.0, "type": DMG_ENERGY},
+	TRACTOR: {"d": 0.0, "n": 1, "every": 10.0, "heat": 30.0, "type": DMG_ENERGY},
+	NEURAL: {"d": 0.0, "n": 1, "every": 6.0, "heat": 0.0, "type": DMG_ENERGY},
+}
+const GUARD_SPACE_EVERY := 1.5        # (v94) point defence charges this quickly in space
+const BLASTER_SLIP_SPACE := 0.5       # the share of a blaster's pellets that pass a raised shield
+
+# the share of shots that glance off armour met at a slant (Arena.RICOCHET_COS), by class (v93)
 const BOUNCE := {CLASS_KINETIC: 0.7, CLASS_LASER: 0.3, CLASS_BLASTER: 0.3, CLASS_ROCKET: 0.15}
 
 
+static func in_space(w: int) -> bool:
+	## (v94) Has that gun its own numbers in the fight in space?
+	return SPACE.has(w)
+
+
+static func space(w: int) -> Dictionary:
+	return SPACE.get(w, {})
+
+
+static func space_ticks(w: int) -> int:
+	## (v94) Ticks between two bursts in space (its old charge for a gun with no space numbers).
+	if w == GUARD:
+		return roundi(GUARD_SPACE_EVERY * Net.TICK_HZ)
+	return maxi(roundi(float(SPACE[w]["every"]) * Net.TICK_HZ), 1) if SPACE.has(w) else charge_ticks(w)
+
+
+static func space_shots(w: int) -> int:
+	return int(SPACE[w]["n"]) if SPACE.has(w) else int(INFO[w]["shots"]) if INFO.has(w) else 1
+
+
+static func space_damage(w: int) -> float:
+	return float(SPACE[w]["d"]) if SPACE.has(w) else 0.0
+
+
+static func space_heat(w: int) -> float:
+	## (v94) What one shot (a second of a beam) of it heats our own ship.
+	return float(SPACE[w]["heat"]) if SPACE.has(w) else 0.0
+
+
+static func burst_heat(w: int) -> float:
+	return space_heat(w) * (1 if klass(w) == CLASS_BEAM else space_shots(w))
+
+
+static func damage_type(w: int) -> int:
+	return int(SPACE[w]["type"]) if SPACE.has(w) else DMG_ENERGY
+
+
+static func emp(w: int) -> float:
+	return float(SPACE[w].get("emp", 0.0)) if SPACE.has(w) else 0.0
+
+
+static func jam_chance(w: int) -> float:
+	return float(SPACE[w].get("jam", 0.0)) if SPACE.has(w) else 0.0
+
+
+static func clip(w: int) -> int:
+	## (v94) Bursts one round from the locker feeds in space (1: one each, as before).
+	return int(SPACE[w].get("clip", 1)) if SPACE.has(w) else 1
+
+
 static func meets_armour(w: int) -> bool:
-	## (v93) Does a shot of this gun strike the armour (rather than pass it by)?
-	return PENETRATION.has(w)
-
-
-static func penetration(w: int) -> int:
-	return int(PENETRATION.get(w, 0))
-
-
-static func armour_wear(w: int) -> int:
-	## (v93) How many points of armour a hit of it wears off where it strikes, through or not.
-	return 2 if penetration(w) >= 4 else 1
+	## Does a shot of this gun strike the plating (rather than pass it by: the neural emitter, bombs, the tractor)?
+	return SPACE.has(w) and w != NEURAL and w != SIPHON and w != TRACTOR
 
 
 static func bounce_chance(w: int) -> float:

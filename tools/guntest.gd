@@ -48,7 +48,10 @@ func _initialize() -> void:
 	g.ransom_chance = 0.0                    # (the old checks below are about a ship that runs when beaten)
 	g.loadout_for_test = PackedByteArray([Weapons.LASER])
 	var d: Derelict = server.derelict
-	_expect(map.guns.size() == 3 and map.gun_console.size() == 1, "the ship has three guns and a gun console")
+	_expect(map.guns.size() == 4 and map.gun_console.size() == 1, "the ship has four guns (v94: one fixed in the bow) and a gun console")
+	server.ship.mounts[3] = Weapons.NONE        # (the power checks below count the first three's lasers)
+	server.ship.armed[3] = 0
+	server.ship.armed[2] = 1                    # (v94: gun 3 is the fixed bow gun, off at the start)
 
 	var p := server.crew.new_player("Канонир")
 	var console: int = map.gun_console.keys()[0]

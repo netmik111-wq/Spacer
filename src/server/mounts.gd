@@ -45,6 +45,7 @@ var server: GameServer
 var gunners: Array = []              # per mount: the Player at it now, or null
 var wanted := PackedByteArray()      # per mount: the gun (a thing) the console ordered onto it, WANT_NONE or WANT_DOWN
 var loaded := PackedByteArray()      # (v68) per mount: rounds loaded into its breech by hand
+var clip := PackedInt32Array()       # (v94) per mount: bursts left of the round in use (in space a round feeds Weapons.clip bursts)
 var _told := PackedByteArray()
 
 
@@ -56,6 +57,8 @@ func setup(p_server: GameServer) -> void:
 	wanted.resize(server.map.guns.size())
 	loaded = PackedByteArray()
 	loaded.resize(server.map.guns.size())
+	clip = PackedInt32Array()
+	clip.resize(server.map.guns.size())
 	_told = PackedByteArray()
 
 
@@ -99,19 +102,27 @@ func take_round(i: int) -> bool:
 	var ammo := ammo_of(i)
 	if ammo == 0:
 		return true
+	if i < clip.size() and clip[i] > 0 and server.arena.on():
+		clip[i] -= 1                         # (v94) the round in use still feeds bursts
+		return true
+	var space_clip: int = Weapons.clip(ship.mounts[i]) - 1 if server.arena.on() else 0
 	if loaded[i] > 0:
 		loaded[i] -= 1
+		if i < clip.size():
+			clip[i] = space_clip
 		return true
 	if int(ship.store.get(ammo, 0)) <= 0:
 		return false
 	ship.store[ammo] -= 1
+	if i < clip.size():
+		clip[i] = space_clip
 	server.supplies.tell_store()
 	return true
 
 
 func has_round(i: int) -> bool:
 	var ammo := ammo_of(i)
-	return ammo == 0 or loaded[i] > 0 or int(server.ship.store.get(ammo, 0)) > 0
+	return ammo == 0 or loaded[i] > 0 or int(server.ship.store.get(ammo, 0)) > 0 or (i < clip.size() and clip[i] > 0 and server.arena.on())
 
 
 func unload(i: int) -> void:
@@ -120,6 +131,8 @@ func unload(i: int) -> void:
 	if ammo != 0 and loaded[i] > 0:
 		server.ship.store[ammo] = int(server.ship.store.get(ammo, 0)) + loaded[i]
 	loaded[i] = 0
+	if i < clip.size():
+		clip[i] = 0                          # (v94) what was left of the round in use is spent
 
 
 func fired(i: int) -> void:

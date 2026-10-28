@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v93 (version 0.86).
+Last updated: build v94 (version 0.87).
 
 Contents:
 
@@ -53,6 +53,7 @@ Contents:
 43. [The Notebook's 18 notes (v89)](#43-the-notebooks-18-notes-v89)
 44. [The author's tile set (v90)](#44-the-authors-tile-set-v90)
 45. [Machines on the floor, doors, windows, wall boxes (v91)](#45-machines-on-the-floor-doors-windows-wall-boxes-v91)
+46. [The fight like Starsector: heat, armour, hull points, mount kinds (v94)](#46-the-fight-like-starsector-heat-armour-hull-points-mount-kinds-v94)
 
 ---
 
@@ -738,6 +739,8 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 
 ### The fight in space (v92)
 
+(v94: guns, shields and damage in space changed, see section 46.)
+
 Since v92 (the author's roadmap, item 0) a ship fight happens in real time in space, like Starsector, but every gun
 is worked by a person. Inside, the ship is the same grid it always was and never turns; outside, each ship is a
 **body** built from its drawing (all decks laid over each other, seen from above) that flies and turns.
@@ -796,6 +799,9 @@ is worked by a person. Inside, the ship is the same grid it always was and never
 - Fights whose shots land at once (tests, the parting volley) still roll the old dice.
 
 ### Armour, penetration and ricochet (v93)
+
+(v94: the points, penetration and wear below were replaced by Starsector's armour, see section 46; the ricochet,
+the outer wall and mending stay.)
 
 The author's roadmap item 0.2. Every cell of a ship's **outer wall** (a wall, window or door with open space among
 its 8 neighbours) carries points of **armour**; inner walls carry none.
@@ -2561,3 +2567,112 @@ machines standing in front of the bottom wall; my plan and picks on "Spacer v91 
 - **Our ship has one flight**, in the small room at the stern on the upper deck (by the ladder) down to the room by the
   supply locker. In the ship editor it is the sign `/`, two in a row on a deck and the same two on the deck below: the upper
   flight must end at a wall, the lower one must come out into a room at one end with a wall at the other.
+
+## 46. The fight like Starsector: heat, armour, hull points, mount kinds (v94)
+
+The author: "make all guns work properly and rework the whole damage, shield, hull and armour system more like in
+Starsector, so fights feel more alive". In space every gun now fires on its own clock and every hit counts.
+
+### Mount kinds (his G1 note)
+
+- **Fixed (носовое)**: points straight along the bow and turns only **±5°**; the ship must point at the target.
+  Damage **x1.25**, scatter **x0.5**. A gun in the front fifth of the ship (or in a bow wall) is fixed by itself.
+- **Side turret (бортовое)**: turns **90°** either side of straight out of its wall (180° in all), at **90°** a second.
+  Damage x1. Every other gun is one by itself.
+- **Roof turret (на крыше)**: turns all round (360°) at **60°** a second. Damage **x0.8**, scatter **x1.3**.
+- A turret turns to its target at its own pace and fires only once it points there.
+- **Our ship** now has a fourth mount: a fixed laser in the bow's wall on the lower deck (its gunner stands in the
+  corridor in front of it). It starts **switched off** (the power panel turns it on), so the power at the start is what
+  it was. The first three guns are side turrets.
+- In the **ship editor**, the mark tool on a gun offers «Орудие: носовое / бортовое / на крыше / по месту»; it is the
+  line `^ deck x y hard|side|roof` in the drawing.
+
+### Damage per gun
+
+Each gun has its own damage, shots, pace and heat in space (its charge time on the console is this pace):
+
+| Gun | Damage x shots | Every | Heat | Kind |
+|---|---|---|---|---|
+| Laser | 30 | 0.8 s | 20 | energy |
+| Rapid laser | 12 x 3 | 1.0 s | 8 a shot | energy |
+| Heavy laser | 90 | 1.8 s | 65 | energy |
+| Siege laser | 300 | 4 s | 220 | energy |
+| «Феникс» | 120 x 2 | 2.5 s | 85 a shot | energy |
+| Blaster | 25 x 4 | 1.6 s | 18 a shot | energy, half its pellets slip through a shield |
+| «Сверхновая» (the flagship's) | 1500 | 10 s | 0 | energy, passes shields |
+| Ion gun | 10 | 1.2 s | 8 | ion: +150 on a shield, puts a system out 35% |
+| Ion cannon | 20 | 2 s | 15 | ion: +300, 50% |
+| «Буря» | 25 x 2 | 2.5 s | 18 a shot | ion: +250, 60% |
+| EMP launcher | 0 | 10 s | 0 | ion: +400, always puts a system out; 1 rocket a shot |
+| Rocket launcher | 200 x 2 | 8 s | 0 | explosive; 1 rocket a volley |
+| «Опустошитель» | 800 | 12 s | 0 | explosive; 1 rocket a shot |
+| Autocannon | 40 x 3 | 1.5 s | 15 a shot | kinetic; a shell feeds **4** bursts |
+| Railgun | 400 | 6 s | 150 | kinetic, passes shields |
+| «Молот» | 500 | 6 s | 100 | kinetic; a shell feeds **2** shots |
+| «Шрапнель» | 50 x 6 | 3 s | 0 | fragments; a round feeds **3** volleys |
+| Cutting beam | 60 a second | 8 s | 40 | energy |
+| «Жнец» | 80 a second | 9 s | 50 | energy |
+| Siphon | 120 a second of heat moved | 12 s | 0 | takes heat off our shield and puts it on theirs |
+| Tractor | 0 | 10 s | 30 | holds the enemy |
+| Point defence | | 1.5 s | | |
+
+Bombs keep their old pace and effects (teleported in, past shields).
+
+- **Damage kinds** (Starsector's): against a **shield** kinetic counts **x2**, explosive **x0.5**, fragments **x0.25**,
+  energy and ion x1. Against **armour** explosive counts **x2**, kinetic **x0.5**, fragments **x0.25**, the rest x1.
+- **Ammunition**: one round from the locker (or loaded by hand) feeds the bursts listed above; then the next round.
+
+### Heat and the shield (Starsector's flux)
+
+- Every ship has **heat** it can hold and heat it sheds a second: ours **3000** / **150** (more with a better shield
+  generator); pirates: cutter 800/50, raider 1500/70, gunship 2000/90, cruiser 3000/120, battleship 5000/180,
+  carrier 4000/150, drone ship 1200/60.
+- **Firing heats** the ship by the gun's heat. A gun waits while one more burst would not fit
+  («Корабль перегрет: орудия ждут…»).
+- **A raised shield stops every shot** (but the railgun, «Сверхновая», bombs and half a blaster's pellets): the shot
+  is gone and the ship heats by its damage (by kind, above). That heat is the shield's own: it goes away **only while
+  the shield is down**. An arc heats **0.7x**, the hardened shield **0.8x**, cutters **1.2x**, cruisers 0.9x,
+  carriers 0.8x, battleships 0.7x.
+- **Overload**: at full heat the shield drops for **5 s**: no shield and no guns; the heat goes twice as fast then.
+  «Щит перегружен!» for ours; on the bridge for theirs.
+- **Venting**: **V** at the ship's controls (or the bots and pirates by themselves at **75%** heat when nothing is
+  coming): the shield drops and the guns stop while the heat goes **5x** as fast, until none is left.
+- **Who holds the shield**: the pilot at the ship's controls with the **right mouse button** (up or down); the arc
+  then follows the mouse. With nobody holding it, it goes up when a shot is **1.2 s** away and down again to cool.
+  The shield generator switches bubble or arc as in v93; the old shield points (and their regeneration) are not used
+  in space: the shield screens show how much heat it can still take.
+
+### Armour (Starsector's)
+
+- Every outer wall cell holds armour: ours **150**, plus **50** per tier of the armour module; a window **34%** of that.
+  Pirates: cutter 50, raider 100, gunship 150, cruiser 200, battleship 300, carrier 250, drone ship 80 (x1.25 with
+  the old rules' armour).
+- A hit at a place: the armour counted is half that cell's and half the average of the 8 round it (never below
+  **5%** of the whole), thickened by the slant up to **2x**. Of the hit's strength against armour **s**, the hull takes
+  damage x s / (s + armour), never less than **15%**.
+- **Wear**: the armour wears by s: half on that cell, half shared by its neighbours. A ricochet wears a quarter.
+- Mending outside, docking and the hull bought make it whole as in v93.
+
+### Hull points
+
+- What gets through goes to the **hull points**: ours are the old hull strength x **20** (**4000** whole); a pirate's
+  its hull x **100**.
+- **Every 100** points that got through is **one hit inside**, as the old fight's: a breach, a system worn, the crew
+  hurt, at the cell the shot met. Below that the ship only shakes. (The hull strength in the old units stays what saves,
+  repairs and prices use.)
+- Ion: a hit puts a system out with its chance (lower through thick armour), whatever the hull points.
+
+### The screens
+
+- **The gun console** always shows the fight in space now (his note), with the guns' list beside it in one column: each
+  gun's power, charge and orders, the target. The mouse there fires every free gun.
+- **Bars** in space (like Starsector's): bottom left our hull, heat (the shield's own part darker) and each gun's charge;
+  bottom right the target's hull and heat. The shield is drawn by its heat (bluer when cool, white-hot near full);
+  overloaded ships give off sparks. Each of our guns shows its arc; fixed guns' barrels are long, roof guns have a dot.
+- The chat is quiet in space: only hits that get inside, an overload and what goes wrong are told.
+
+### Fixes from the Notebook (v94)
+
+- **Thermal goggles** show people through walls only inside the field of view, never behind one's back.
+- **A side wall's joint** (├ ┤ by an airlock or door): the wall seen going on above and below the joint is shown for half
+  a cell more, so it no longer looks broken off at the edge of sight.

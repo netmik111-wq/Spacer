@@ -170,7 +170,8 @@ func cut_in() -> Vector2i:
 		var y: int = cell / map.width
 		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			# ((v91) never onto the stairs' far end: one standing there is on the other deck at once)
-			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0 and map.stair_to[(y + d.y) * map.width + x + d.x] < 0:
+			if map.walkable(x + d.x, y + d.y) and map.door_at(x + d.x, y + d.y) < 0 and map.stair_to[(y + d.y) * map.width + x + d.x] < 0 \
+					and _way_on(x + d.x, y + d.y):
 				ways.append([cell, Vector2i(x + d.x, y + d.y)])
 				break
 	if ways.is_empty():
@@ -178,6 +179,15 @@ func cut_in() -> Vector2i:
 	var way: Array = ways[_rng.randi_range(0, ways.size() - 1)]
 	server.systems.breach(way[0])
 	return way[1]
+
+
+func _way_on(x: int, y: int) -> bool:
+	## (v94) A cell a boarder can walk on from: never a nook walled in by machines
+	## (ship02's beside the helm), where one cut in stands forever.
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if server.map.walkable(x + d.x, y + d.y):
+			return true
+	return false
 
 
 func foe(p, q) -> bool:

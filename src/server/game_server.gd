@@ -523,6 +523,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_PILOT:
 		if pkt.size() > 1:
 			arena.pilot_asked(p, pkt[1])
+	elif kind == Net.C_SHIELD:
+		if pkt.size() > 3:
+			arena.shield_asked(p, pkt[1] & 1 != 0, pkt.decode_s16(2) / 1000.0, pkt[1] & 2 != 0)
 	elif kind == Net.C_TURRET:
 		if pkt.size() > 6:
 			arena.turret_asked(p, pkt[1], Vector2(pkt.decode_s16(2), pkt.decode_s16(4)) / 8.0, pkt[6] != 0)

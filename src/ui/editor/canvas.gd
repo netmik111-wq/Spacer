@@ -220,8 +220,8 @@ func _draw_marks(cs: float) -> void:
 		if int(m["deck"]) != deck:
 			continue
 		var what := str(m["what"])
-		if str(m["type"]) == "&":
-			# (v91) a door's kind: a word on the door (its picture is drawn in that kind)
+		if str(m["type"]) == "&" or str(m["type"]) == "^":
+			# (v91) a door's kind, (v94) a gun's: a word on it (a door's picture is drawn in that kind)
 			var spot := view + (Vector2(int(m["x"]), int(m["y"])) + Vector2(0.05, 0.3)) * cs
 			var word := MapBuilder._mark_name(what)
 			draw_string_outline(font, spot, word, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(int(10 * zoom), 8), 3, Color(0, 0, 0, 0.8))

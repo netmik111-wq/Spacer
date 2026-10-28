@@ -735,6 +735,15 @@ func send_turret(gun: int, aim: Vector2, fire: bool) -> void:
 	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+func send_shield(up: bool, dir: float, vent: bool) -> void:
+	## (v94) The pilot's shield (Arena.shield_asked): up or down, its arc to that heading, and venting now.
+	if _peer == null:
+		return
+	var msg := PackedByteArray([Net.C_SHIELD, (1 if up else 0) | (2 if vent else 0), 0, 0])
+	msg.encode_s16(2, clampi(roundi(wrapf(dir, -PI, PI) * 1000.0), -32768, 32767))
+	_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_evade() -> void:
 	## (v68) The pilot's evade; only from the ship's controls in a fight.
 	if _peer != null:

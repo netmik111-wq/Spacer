@@ -19,7 +19,7 @@ const Player := preload("res://src/server/player.gd")
 const OWN := {
 	"power": ["units", "_told", "_was_on", "breaker", "engines", "over_until", "over_rest_until"],
 	"outfit": ["_told"],
-	"mounts": ["gunners", "wanted", "loaded", "_told"],
+	"mounts": ["gunners", "wanted", "loaded", "clip", "_told"],
 	"gunnery": ["charge", "beam_left", "_beam_next", "_beam_room", "_beam_log", "guard_charge", "aim", "_told", "foe"],
 	"stations": ["position", "goal", "manoeuvre_until", "spots", "_at", "_lapse", "_sabotage", "_told", "evade_until",
 		"evade_ready", "meteor_at", "meteor_tried", "meteor_missed", "alert", "_alert_auto", "_fight_seen"],
