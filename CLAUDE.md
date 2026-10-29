@@ -650,7 +650,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   teleporter's crate is `Net.ITEM_TELEPORTER` (253), not `ITEM_GEAR + Gear.TELEPORT` (191 is the goggles): always go through
   `Gear.item_of`/`of_item`; it goes into the pad (`ShipMap.teleporter`, wall -> front), not the bay, and sets
   `Ship.teleporter`. Whoever it put over there is `Teleporter.went`; `Derelict._leave` sends them home first. Use target 52
-  is the pad. C_TELEPORT, S_TELEPORT (protocol 71). `derelict.layout_for_test` picks the drawing the next derelict comes in.
+  is the pad. C_TELEPORT, S_TELEPORT (protocol 71). `derelict.layout_for_test` picks the drawing the next derelict comes in; a test that boards a derelict for another reason sets `derelict.made = {}` after it comes, or its robots may wake and fight (airlocktest went red so).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
