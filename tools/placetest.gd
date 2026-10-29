@@ -313,9 +313,10 @@ func _teleporter() -> void:
 	_expect(p.st.y * map.width + p.st.x != bot.st.y * map.width + bot.st.x, "each where it lands on its own")
 	t.asked(p, Net.TELE_HOME)
 	_expect(t.hums.is_empty(), "it does not beam again before its recharge")
-	_run(roundi(Gear.TELEPORT_SECONDS * Net.TICK_HZ))
+	var landed := Vector2i(bot.st.x, bot.st.y)
+	_hold(bot, landed, roundi(Gear.TELEPORT_SECONDS * Net.TICK_HZ))
 	t.asked(p, Net.TELE_HOME)
-	_run(roundi(Gear.TELEPORT_HUM * Net.TICK_HZ) + 1)
+	_hold(bot, landed, roundi(Gear.TELEPORT_HUM * Net.TICK_HZ) + 1)
 	_expect(map.on_ship(p.st.y * map.width + p.st.x) and not map.is_other(p.st.y * map.width + p.st.x), "after it, the player is beamed home")
 	_expect(map.is_other(bot.st.y * map.width + bot.st.x), "the bot stays to fight while robots are aboard")
 	for r in _dwellers(1) + _dwellers(2):
@@ -338,6 +339,16 @@ func _teleporter() -> void:
 	der._arrive()
 	t.asked(p, Net.TELE_SEND)
 	_expect(t.hums.is_empty() and t._charged(0) != "", "without power it does not beam")
+
+
+func _hold(q, at: Vector2i, ticks: int) -> void:
+	## Runs the game with one bot kept where it stands: it would walk home through the airlock to its post, and
+	## the check is about what the teleporter does with it, not its own errands.
+	for i in ticks:
+		server._tick()
+		if server.map.is_other(at.y * server.map.width + at.x):
+			q.st.place(at.x, at.y)
+			q.st.dir = Net.DIR_NONE
 
 
 func _run(ticks: int) -> void:
