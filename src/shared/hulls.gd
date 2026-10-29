@@ -34,6 +34,7 @@ extends RefCounted
 ##   loot      [fewest, most] things lying about aboard it
 ##   boss      (v57) the flagship's kind (1 battleship, 2 carrier): never rolled by chance
 ##   teleport  (v62) the chance it carries a teleporter, from TELEPORT_FROM jumps out (the author's E5)
+##   pods      (v95, his P2 note "not every ship; it needs a bay") the chance it carries a pod bay (Arena's boarding pods)
 ##   drone     (v62) a crewless drone ship: its "crew" are guard robots, it fights by itself (see Gunnery.crewless)
 
 const Net := preload("res://src/shared/net.gd")
@@ -48,17 +49,17 @@ const CLASSES := {
 	Net.ECLASS_RAIDER: {"name": "пиратский рейдер", "layouts": [1, 3], "hull": 12, "strength": 3, "guns": [2, 3], "more_from": 5,
 		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ION, Weapons.ROCKET, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
 		Weapons.RAILGUN, Weapons.PHOENIX, Weapons.HAMMER], "shield": 0.7,
-		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4], "armour": 0.1, "guard": 0.15, "teleport": 0.25},
+		"regen": 1.0, "slower": 1.3, "dodge": 0.0, "crew": [2, 4], "from": 0, "weight": 4, "reward": 40, "loot": [2, 4], "armour": 0.1, "guard": 0.15, "teleport": 0.25, "pods": 0.4},
 	Net.ECLASS_GUNSHIP: {"name": "пиратская канонерка", "layouts": [4, 7], "hull": 14, "strength": 3, "guns": [3, 4], "more_from": 8,
 		"pool": [Weapons.LASER, Weapons.RAPID, Weapons.ROCKET, Weapons.ION, Weapons.AUTOCANNON, Weapons.HEAVY, Weapons.BLASTER,
 		Weapons.EMP, Weapons.RAILGUN, Weapons.DEVASTATOR, Weapons.HAMMER, Weapons.SIEGE, Weapons.HORNET, Weapons.SHRAPNEL, Weapons.THERMITE],
 		"shield": 0.6, "regen": 1.0, "slower": 1.5, "dodge": 0.0, "crew": [3, 4], "from": 2, "weight": 3, "reward": 55, "loot": [3, 5], "armour": 0.2, "guard": 0.35,
-		"teleport": 0.4},
+		"teleport": 0.4, "pods": 0.5},
 	Net.ECLASS_CRUISER: {"name": "пиратский крейсер", "layouts": [5], "hull": 20, "strength": 4, "guns": [3, 4], "more_from": 7,
 		"pool": [Weapons.LASER, Weapons.ION, Weapons.ROCKET, Weapons.HEAVY, Weapons.ION_CANNON, Weapons.EMP, Weapons.RAILGUN,
 		Weapons.SIEGE, Weapons.STORM, Weapons.HAMMER, Weapons.DAMPER, Weapons.HORNET, Weapons.THERMITE],
 		"shield": 1.0, "regen": 1.4, "slower": 1.7, "dodge": -0.1, "crew": [4, 6], "from": 4, "weight": 2, "reward": 80, "loot": [4, 6], "armour": 0.3, "guard": 0.5,
-		"teleport": 0.6},
+		"teleport": 0.6, "pods": 0.6},
 	# (v62, the author's E1) a crewless drone ship: no air inside, nobody to fly it or mend it but its own
 	# drones, and two guard robots to wake when somebody boards. It never runs and never bargains; it
 	# sends assault drones across (Assault). It takes the cutters' and raiders' hulls.

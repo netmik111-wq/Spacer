@@ -2011,3 +2011,42 @@ Questions on `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`; built on my pi
   from its own. The mount kind outside the arena comes from `ArenaShape.kind_in_fleet` (a shape cached per map and ship).
 - His N1 comment (fire with no enemies near) waits for v95: the arena runs only in a fight now, and v95's WASD flight
   keeps space on all the time, which is where firing at nothing belongs.
+
+## v95: flying round the system in space
+
+His Notebook note (the old helm map gone, fly with WASD as in a fight) and his N1 comment (fire with no enemy near).
+Page "Spacer v95" (https://claude.ai/artifact/Y5SD56y9aj1rZMF9KFEJGa), all answered A.
+
+- **One space for flight and fight** (mine, F1 A): the arena keeps our bodies all the time (`Arena._cruise`, `flying()`);
+  `on()` still means a fight. **4 cells to a unit** (`Arena.SCALE`): the old helm's 1.5 units/s is exactly our top
+  speed of 6 cells/s, so crossing a system takes as long as before, and a fight's 70-cell approach is 17 units, a short
+  way on the chart. The body's place is written back to `Ship.pos` each tick, so places, meteors, the station, saves and
+  the chart all keep reading `Ship.pos` as before.
+- **The autopilot** (F2 A): a click on the small map flies there even with nobody at the helm, as the old course did;
+  any key takes over. Old tests and saves that set `Ship.dest`/`moving` by hand still give a course (`_told_dest`), and
+  setting `Ship.pos` by hand places the fleet there (`_told_pos`); moving a body by hand (arena tests) stays put.
+- **Fuel only while pushing** (F3 A): the old helm burned by distance; coasting now is free, which is what a player
+  flying by keys expects. The rate per unit is the same (his R3 numbers).
+- **The edge is a wall** (F4 A): a system is the cluster's square; leaving it is a jump.
+- **The ship alongside** (F5 A) is drawn glued where it lies; while it holds the ship (docked, somebody outside, our
+  people aboard) the engines do not push, as the old helm refused a course. His comment: later every object (stations,
+  places) should be drawn, dockable and landable, but drawn only when near, for speed. Left for the places build.
+- **The second ship** (F6 A) holds formation 14 cells behind out of a fight (`Body.formed`), flies itself in a fight and
+  goes back after. "Ships flying apart" stays for later.
+- **Firing at nothing** (N1 A, N2 A): practice shots (`"practice"`) meet nothing and never tell Gunnery; rounds are spent
+  through `Mounts.take_round` as in a fight. Out of a fight empty hands at a mount still take the gun down, so firing
+  by hand there needs something else in hand (a tool), as in a fight before v92's change. Meteors and asteroids as
+  targets come with the places build.
+- **No circle** (B1 A): a fight is wherever the ship is; breaking off is 170 cells from every pirate for 3 s. The old
+  "out past the edge with no pirate within 60" made sense only for a circle.
+- **Ambushes come out of their place** (B2 A, `Arena.come_from`).
+- **Boarding pods** (P1 A, P2 A): they make keeping range no longer safe and give point defence a second job. His P2
+  note: "not every ship can do it; it needs a bay or module", so a pod bay is rolled per class like the teleporter
+  (raider 0.4, gunship 0.5, cruiser 0.6; cutters and drone ships none; `Hulls` "pods", `Gunnery.pods`). Pods pass the
+  shield (they are slow and fly under it), meet point defence once and break after 2 of our hits. Where one strikes it
+  breaches the nearest whole hull cell with a floor behind it (`Pirates.cut_in_near`).
+- **Assault drones in space** (P3 A): the same flight as pods with a robot inside; outside a fight in space (old tests)
+  they keep the old 3 s unseen flight.
+- His P1 comment: "improve our bots' AI, or guard bots that fight boarders". The guard bot (v79, the «К оружию» order
+  and the guard's job) already fetches a gun and fights; better bot fighting is a question for a later build.
+- **Our pods and teleport** (P4 A): with the places build (how ours come back, what stays on the enemy ship).

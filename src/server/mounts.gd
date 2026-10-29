@@ -103,10 +103,10 @@ func take_round(i: int) -> bool:
 	var ammo := ammo_of(i)
 	if ammo == 0:
 		return true
-	if i < clip.size() and clip[i] > 0 and server.arena.on():
+	if i < clip.size() and clip[i] > 0 and server.arena.flying():
 		clip[i] -= 1                         # (v94) the round in use still feeds bursts
 		return true
-	var space_clip: int = Weapons.clip(ship.mounts[i]) - 1 if server.arena.on() else 0
+	var space_clip: int = Weapons.clip(ship.mounts[i]) - 1 if server.arena.flying() else 0   # (v95) firing with no enemy too
 	if loaded[i] > 0:
 		loaded[i] -= 1
 		if i < clip.size():
@@ -123,7 +123,7 @@ func take_round(i: int) -> bool:
 
 func has_round(i: int) -> bool:
 	var ammo := ammo_of(i)
-	return ammo == 0 or loaded[i] > 0 or int(server.ship.store.get(ammo, 0)) > 0 or (i < clip.size() and clip[i] > 0 and server.arena.on())
+	return ammo == 0 or loaded[i] > 0 or int(server.ship.store.get(ammo, 0)) > 0 or (i < clip.size() and clip[i] > 0 and server.arena.flying())
 
 
 func unload(i: int) -> void:

@@ -29,6 +29,7 @@ var server: Node
 var classic := false                 # (tests) always the old raider: its first hull, its rooms as drawn, its old numbers
 var force_class := -1                # (tests, admin) this class only, if it may come at all
 var force_temper := -1               # (v60.1, admin) this temper, not a rolled one
+var force_pods := false              # (v95, tests) every rolled pirate carries a pod bay
 var force_teleport := false          # (v62, tests) a teleporter wherever it fits, however near the start
 var _rng := RandomNumberGenerator.new()
 
@@ -123,11 +124,13 @@ func make(party: int, raid: bool, fits: Array, harder: int = 0, temper_of: int =
 	teleport = teleport or (force_teleport and not drone)
 	if teleport and server.map.others[layout].rooms.size() < Net.ESYS_TELEPORT + (1 if shielded else 0):
 		teleport = false                     # (no room to spare for it in this hull)
+	# (v95, his P2 note) a pod bay for boarding pods, by class
+	var pods: bool = not drone and (force_pods or _rng.randf() < float(info.get("pods", 0.0)))
 	var title := "%s «%s»" % [_cap(str(info["name"])), Hulls.NAMES[_rng.randi_range(0, Hulls.NAMES.size() - 1)]]
 	if drone:
 		title = "%s «%s»" % [_cap(str(info["name"])), Hulls.DRONE_NAMES[_rng.randi_range(0, Hulls.DRONE_NAMES.size() - 1)]]
 	return {
-		"klass": klass, "layout": layout, "temper": temper, "drone": drone, "teleport": teleport,
+		"klass": klass, "layout": layout, "temper": temper, "drone": drone, "teleport": teleport, "pods": pods,
 		"name": title,
 		"hull": int(info["hull"]), "strength": int(info["strength"]), "shield": shielded, "regen": float(info["regen"]),
 		"slower": float(info["slower"]), "dodge": float(info["dodge"]), "weapons": weapons, "crew": maxi(crew, 1),

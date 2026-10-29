@@ -266,6 +266,7 @@ func _places_tick() -> void:
 				_dirty = true
 				server.chat.say("Засада! Пиратский корабль выходит из тени.")
 				server.gunnery.goal_next = true          # (v68) it may come with a goal
+				server.arena.come_from = (pl[1] as Vector2) * server.arena.SCALE   # (v95, my B2 pick) from where it lay
 				server.derelict.pirates_come(server.director._party(), true)
 		elif kind >= Sectors.P_ANOMALY:
 			_work_tick(i, kind, d)

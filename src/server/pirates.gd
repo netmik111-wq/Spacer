@@ -181,6 +181,34 @@ func cut_in() -> Vector2i:
 	return way[1]
 
 
+func cut_in_near(cell: int) -> Vector2i:
+	## (v95) As cut_in, but through the whole hull cell nearest that cell of the grid (where a pod struck).
+	var map = server.map
+	var w: int = map.width
+	var best := Vector2i(-1, -1)
+	var best_hull := -1
+	var best_d := INF
+	for h: int in map.hull:
+		if server.air.holes.has(h):
+			continue
+		var d := Vector2(h % w - cell % w, h / w - cell / w).length()
+		if d >= best_d:
+			continue
+		var x: int = h % w
+		var y: int = h / w
+		for dv: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if map.walkable(x + dv.x, y + dv.y) and map.door_at(x + dv.x, y + dv.y) < 0 and map.stair_to[(y + dv.y) * w + x + dv.x] < 0 \
+					and _way_on(x + dv.x, y + dv.y):
+				best = Vector2i(x + dv.x, y + dv.y)
+				best_hull = h
+				best_d = d
+				break
+	if best_hull < 0:
+		return cut_in()
+	server.systems.breach(best_hull)
+	return best
+
+
 func _way_on(x: int, y: int) -> bool:
 	## (v94) A cell a boarder can walk on from: never a nook walled in by machines
 	## (ship02's beside the helm), where one cut in stands forever.

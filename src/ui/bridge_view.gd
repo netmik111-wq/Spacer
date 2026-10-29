@@ -197,7 +197,17 @@ func update_helm() -> void:
 	var at := client.ship_pos()
 	var lines := PackedStringArray()
 	var leaving := client.jump_to != Net.NO_SECTOR
-	if leaving:
+	if client.space_on():
+		# (v95, the author's note) the ship flies with WASD; the small map's click sets the autopilot's course
+		if leaving:
+			lines.append("Корабль уходит в прыжок. Пока заряжается привод, им можно править.")
+		elif client.arena.course:
+			lines.append("Автопилот ведёт корабль, осталось %d. Любая клавиша WASD — взять управление." % int(ceil(at.distance_to(client.ship_dest))))
+		elif client.ship_under_way():
+			lines.append("Корабль идёт сам по себе (дрейф гасится). W/S — ход, A/D — поворот, Q/E — вбок; щелчок по карте в углу — автопилот.")
+		else:
+			lines.append("Корабль стоит. W/S — ход, A/D — поворот, Q/E — вбок; щелчок по карте в углу — автопилот. Мышь и левая кнопка — проба орудий.")
+	elif leaving:
 		# the ship is going into the jump: there is no course inside the sector any more
 		lines.append("Корабль уходит в прыжок%s. Курс внутри сектора не действует." % (" и идёт по инерции" if client.ship_under_way() else ""))
 	elif client.ship_under_way():
@@ -338,7 +348,7 @@ func update_helm() -> void:
 	for b in buttons.get_children():
 		if b is Button:
 			(b as Button).focus_mode = Control.FOCUS_NONE   # (v68) the space bar is the evade, not "press the focused button"
-			(b as Button).disabled = leaving
+			(b as Button).disabled = leaving and not client.space_on()
 			if b.has_meta("pos"):
 				var pos: int = b.get_meta("pos")
 				(b as Button).disabled = pos == (client.battle_goal if client.battle_goal != Net.POS_NONE else client.battle_pos) \

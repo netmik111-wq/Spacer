@@ -710,6 +710,9 @@ func send_order(id: int, post: int) -> void:
 		_peer.send(0, msg, ENetPacketPeer.FLAG_RELIABLE)
 
 
+const SPACE_SCALE := 4.0             # (v95) as Arena.SCALE: cells of space per unit of the system's map
+
+
 func arena_on() -> bool:
 	## (v92) Is a fight going on in real time (the ships flying in space)?
 	return arena.on()
@@ -957,14 +960,27 @@ func send_helm(go: bool, to: Vector2 = Vector2.ZERO) -> void:
 
 
 func ship_pos() -> Vector2:
-	## Where the ship is inside its sector right now: it moves in a straight line at a fixed speed.
+	## Where the ship is inside its sector right now: (v95) where the first ship of our fleet flies in space
+	## (Arena.SCALE cells to a unit); with no space (an old server's way) in a straight line at a fixed speed.
+	if arena.flying():
+		var s: Dictionary = arena.state(0, render_tick())
+		if not s.is_empty():
+			return (s["pos"] as Vector2) / SPACE_SCALE
 	if not ship_moving:
 		return ship_from
 	return ship_from.move_toward(ship_dest, Sectors.SHIP_SPEED * maxf(server_now() - ship_tick, 0.0) / Net.TICK_HZ)
 
 
 func ship_under_way() -> bool:
+	if arena.flying():
+		var s: Dictionary = arena.state(0, render_tick())
+		return arena.course or (not s.is_empty() and (s["vel"] as Vector2).length() > 0.05)
 	return ship_moving and not ship_pos().is_equal_approx(ship_dest)
+
+
+func space_on() -> bool:
+	## (v95) Our ships are bodies in space (the helm flies them with WASD, the guns fire with no enemy near).
+	return arena.flying()
 
 
 func server_now() -> float:
@@ -1292,9 +1308,11 @@ func turret_here(cell: int) -> int:
 	## (v92) The number of the gun at that mount, if "use" there takes its controls in a fight (anything
 	## in hand but a gun or a round for it; Mounts.can refuses to take the gun down then), else -1.
 	var i := map.guns.find(cell)
-	if i < 0 or not arena_on() or broken.has(cell):
+	if i < 0 or not space_on() or broken.has(cell):
 		return -1
 	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
+	if item == Net.ITEM_NONE and not arena_on():
+		return -1                            # (v95) out of a fight empty hands take the gun down, as before
 	var on: int = gun_weapon[i] if i < gun_weapon.size() else Weapons.NONE
 	if on == Weapons.NONE or (item != Net.ITEM_NONE and (Weapons.of_item(item) != Weapons.NONE or item == Weapons.ammo(on))):
 		return -1                            # (a gun in hand goes up, a round goes into the breech, as before)
@@ -2118,7 +2136,7 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				board_changes += 1
 				ship_changes += 1
 		Net.S_ARENA:
-			if pkt.size() >= 6:
+			if pkt.size() >= 7:
 				arena.read(pkt)
 		Net.S_ARENA_SHOT:
 			if pkt.size() >= 2:

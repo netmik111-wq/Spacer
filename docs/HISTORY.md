@@ -809,3 +809,21 @@ He answered the 19 questions of `https://claude.ai/artifact/RFiT641SPv4FoHqLDujH
 - N1's comment ("so one can fire with no enemies near"): moved to v95 with the WASD system flight, where the space view
   is always on.
 - Also: `Pirates.cut_in` never cuts in onto a walled-in nook (CI's rare peopletest failure after v94).
+
+## v95 (0.88): flying round the system in space
+
+His Notebook note ("the old control of the ship needs to be gone, so people see the ship as in the battle and can move
+towards it by WASD around the map") with his N1 comment (fire with no enemies near). Questions on "Spacer v95"
+(`https://claude.ai/artifact/Y5SD56y9aj1rZMF9KFEJGa`), built on my picks; he answered all A, with three comments.
+- Our ships are bodies in space all the time (4 cells to a unit of the system's map). The ship control console shows
+  space: WASD/QE fly, a click on the small map of the system sets an autopilot, any key takes over. Fuel burns only
+  while the engines push; the system's edge is a wall; somebody outside or a ship docked holds the engines; the second
+  ship keeps formation out of a fight.
+- Guns fire with no enemy near (by hand, with the mouse at the controls or the gun console); shots meet nothing yet.
+- No fight circle: a fight is where the ship is; breaking off is 170 cells from every pirate for 3 s; an ambush comes
+  out of its place.
+- Pirates' boarding pods: a boarding ship with a pod bay (his P2 note: "not every ship"; raider 40%, gunship 50%,
+  cruiser 60%) kept away sends slow pods that pass the shield, meet point defence and our shots, and breach the hull
+  where they strike, with 2 boarders. Assault drones fly in space the same way.
+- His other comments for later: places drawn, dockable and landable, drawn only when near (F5); better bot fighting
+  (P1). New test `tools/flighttest.gd` (50 scripts); protocol 69.

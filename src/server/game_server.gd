@@ -772,6 +772,7 @@ func _tick() -> void:
 	gunnery.tick_enemy()
 	wing.tick()                   # (v86) the wingman, if one fights
 	arena.tick()                  # (v92) the fight's space: ships flying, shots on their way
+	fleet.follow()                # (v95) the fleet's other ships are where the first flew this tick
 	shuttle.tick()                # (v86) the fleet's shuttle
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight

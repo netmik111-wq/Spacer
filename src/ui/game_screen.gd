@@ -124,6 +124,7 @@ var _power_view: PowerView           # (v61) an SMES's terminal, set up when fir
 var _comms_view: CommsView           # (v63) the comms console, set up when first shown
 var _shuttle_view: ShuttleView       # (v86) the shuttle's dock console (and the shuttle's own screen aboard)
 var _space_view: SpaceView           # (v92) the fight in space: at the ship's controls (steering) and at a gun mount (aiming)
+var _helm_look := -1                 # (v95) what the ship's controls show: 0 the old map, 1 the system in space, 2 a fight
 var _space_small: SpaceView          # (v92) and small in a corner for anyone, by V
 var _turret_sent := 0                # (v92) msec the gun's aim was last sent
 var _turret_fire := false
@@ -857,6 +858,7 @@ func _open_console(kind: int) -> void:
 	_shuttle_view.visible = kind == 46
 	_space_view.visible = kind == 49
 	_space_view.mode = SpaceView.TURRET if kind == 49 else SpaceView.PILOT
+	_helm_look = -1
 	_turret_fire = false
 	_space_view.gun = client.turret_here(client.use_cell()) if kind == 49 else -1
 	_space_view.firing = false
@@ -927,8 +929,8 @@ func _update_console() -> void:
 		# (v93, the author's P1 note) in a fight in space the gun console shows the fight, and its gunner aims and
 		# fires every gun nobody aims by hand; Tab turns to the console's own panel (power, targets) and back
 		# (v94, the author's note) the console always shows space beside its guns; its mouse aims every free gun
-		if client.arena_on():
-			_aim_all(_gun_space)
+		if client.space_on():
+			_aim_all(_gun_space)             # (v95) with no enemy near too: practice
 		_guns_view.refresh(get_process_delta_time())
 		return
 	if _console_kind == 20:
@@ -957,20 +959,29 @@ func _update_console() -> void:
 		return
 	_update_needs()
 	if _console_kind == 4:
-		# (v92) in a fight in real time the ship's controls show the fight in space and steer the ship
-		var flying := client.arena_on()
-		if _space_view.visible != flying:
+		# (v92) in a fight in real time the ship's controls show the fight in space and steer the ship;
+		# (v95, the author's note) out of a fight too: the system round the ship, flown with WASD
+		var flying := client.space_on()
+		var fight := client.arena_on()
+		var look := (2 if fight else 1) if flying else 0
+		if look != _helm_look:
+			_helm_look = look
 			_space_view.visible = flying
+			_space_view.custom_minimum_size = Vector2(900, 500) if fight else Vector2(900, 400)
 			_chart.visible = not flying
-			_jump_box.visible = not flying
+			_jump_box.visible = not fight
 			_console_shut.text = "Отойти от пульта (Esc)" if flying else Options.keyed("Отойти от пульта (E или Esc)")
+			_bridge.buttons_for = -1
 			_console.reset_size()
-		if flying:
+		if fight:
 			_console_text.text = "Бой: ведите корабль сами. Мышь и левая кнопка — огонь орудиями без своего стрелка, правая — щит."
 			_aim_all(_space_view)
 			_pilot_shield()
 			return
 		_bridge.update_helm()
+		if flying:
+			_aim_all(_space_view)        # (v95, the author's N1 comment) firing with no enemy near
+			_pilot_shield()
 		return
 	_bridge.update_chart()
 
@@ -980,7 +991,7 @@ const NEED_COLOURS := [Color(0.45, 0.85, 0.5), Color(0.98, 0.8, 0.3), Color(1.0,
 
 func _aim_turret() -> void:
 	## (v92) At a gun mount in a fight: the gun turns to the mouse and fires while the button is held.
-	if not client.arena_on() or _space_view.gun < 0:
+	if not client.space_on() or _space_view.gun < 0:
 		_open_console(0)
 		return
 	var now := Time.get_ticks_msec()
@@ -1016,12 +1027,12 @@ func _pilot_shield() -> void:
 
 
 func _space_small_shown() -> void:
-	_space_small.visible = _space_wanted and client.arena_on() and not _console.visible
+	_space_small.visible = _space_wanted and client.space_on() and not _console.visible   # (v95) out of a fight too
 
 
 func _pilot_keys() -> void:
 	## (v92) At the ship's controls in a fight: W/S thrust, A/D turn, Q/E slide (Arena.KEY_*).
-	if _console_kind != 4 or not _console.visible or not client.arena_on():
+	if _console_kind != 4 or not _console.visible or not client.space_on():
 		return
 	var keys := 0
 	if Options.held("move_up"):
@@ -1611,14 +1622,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		client.send_respawn()
 	elif _pause.visible:
 		done = false
-	elif Options.pressed(event, "use") and _console.visible and _console_kind == 4 and client.arena_on():
+	elif Options.pressed(event, "use") and _console.visible and _console_kind == 4 and client.space_on():
 		pass                                            # (v92) the pilot's E slides the ship; Esc steps away
 	elif Options.pressed(event, "use") and _console.visible:
 		_open_console(0)                                # the key closes a screen it opened
 	elif _console_kind == 4 and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and (event as InputEventKey).physical_keycode == KEY_SPACE:
 		client.send_evade()                             # (v68) the pilot's evade, timed by hand
-	elif _console_kind == 4 and client.arena_on() and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
+	elif _console_kind == 4 and client.space_on() and (event as InputEventKey).pressed and not (event as InputEventKey).echo \
 			and (event as InputEventKey).physical_keycode == KEY_V:
 		_space_view.vent_asked = true                   # (v94) dump the heat: sent with the next shield word
 	elif _console.visible and _console_key(event as InputEventKey):
@@ -1651,9 +1662,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_crew_panel().toggle()
 	elif Options.pressed(event, "space"):
 		_space_wanted = not _space_wanted                   # (v92) the fight in space, small, in a corner
-		if not client.arena_on():
-			_say("[color=#9fc3ff]%s[/color]" % ("Окно боя в космосе откроется, когда начнётся бой (V)." if _space_wanted
-				else "Окно боя в космосе выключено."), TAB_SHIP, "space")
+		if not client.space_on():
+			_say("[color=#9fc3ff]%s[/color]" % ("Окно космоса откроется, когда корабль будет в космосе (V)." if _space_wanted
+				else "Окно космоса выключено."), TAB_SHIP, "space")
 	elif Options.pressed(event, "help"):
 		_help_book().toggle()
 		_shift.mark(FirstShift.HELP)

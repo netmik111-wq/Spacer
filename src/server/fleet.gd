@@ -217,11 +217,12 @@ func follow() -> void:
 		var s: Ship = ships[i]
 		var nav := s.sector != lead.sector or s.jump_to != lead.jump_to or s.jump_tick != lead.jump_tick or s.drive_ready != lead.drive_ready
 		var helm := s.moving != lead.moving or s.dest != lead.dest or (not lead.moving and s.pos != lead.pos)
-		if lead.moving and lead.jump_to == Net.NO_SECTOR and not is_lost(i):
+		if lead.moving and lead.jump_to == Net.NO_SECTOR and not is_lost(i) and (not server.arena.flying() or server.arena.pushing()):
 			s.tank = maxf(s.tank - s.pos.distance_to(lead.pos) * Net.FLIGHT_FUEL, 0.0)
 			if s.tank <= 0.0:
 				lead.dest = lead.pos
 				lead.moving = false
+				server.arena.course = false
 				server.to_all(lead.helm_packet(server.tick))
 				server.chat.say("Баки корабля %s опустели: флотилия легла в дрейф. Залейте канистру топлива у его двигателя." % name_of(i))
 				helm = true
