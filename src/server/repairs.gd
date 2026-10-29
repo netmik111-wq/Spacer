@@ -271,6 +271,8 @@ func press(p: Player) -> void:
 		server.chat.tell(p, server.garden.can(p, ahead))     # (v63) how the plant is doing, or why nothing can be planted
 	elif ahead >= 0 and server.pods.press(p, ahead):
 		pass                                 # (v96) our boarding pod: at its bay, or stuck in the pirate's hull
+	elif ahead >= 0 and server.map.teleporter.has(ahead) and gear_why == server.outfit.NOT_HERE:
+		server.teleporter.asked(p, Net.TELE_SEND)   # (v97) the teleporter's pad
 	elif ahead >= 0 and not server.supplies.box_kinds(ahead).is_empty():
 		server.supplies.box(p, ahead)        # (v91) a first-aid box or a spare parts box on the wall
 	elif ahead >= 0 and server.map.shield.has(server.map.machine_of(ahead)) and not server.ship.broken.has(server.map.machine_of(ahead)) \

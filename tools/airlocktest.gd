@@ -226,6 +226,7 @@ func _follow_onto_docked() -> void:
 	server.ship.dest = server.ship.pos
 	_wait(1, func(): return false)
 	_expect(d.here and d.dock(true) == "" and d.docked, "a derelict docks at the airlock")
+	d.made = {}                 # (v97) no rogue robots waking: this is about the bot and the air
 	for c in map.other_cells:
 		if map.walk[c] == 1:
 			server.air.air[c] = 0.85

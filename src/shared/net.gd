@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 70
+const PROTOCOL := 71
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -194,6 +194,7 @@ const ITEM_BOARD := 249             # a circuit board: the spare part of console
 const ITEM_STEW := 250              # a hot stew from the galley: eaten, wounds close slowly for a while
 const ITEM_COFFEE := 251            # strong coffee from the galley: drunk, all work by hand goes quicker for a while
 const ITEM_BROTH := 252             # a herb broth from the galley: stops bleeding, eases a concussion, closes some wounds
+const ITEM_TELEPORTER := 253        # (v97) the teleporter's crate (Gear.TELEPORT: ITEM_GEAR + 21 is the night vision goggles)
 const PISTOL_ROUNDS := 8
 const NOBODY := 65535               # "no character" where an id is expected
 
@@ -279,6 +280,15 @@ const POD_STUCK := 3                # in the pirate ship's hull: E there flies w
 const POD_HOME := 4                 # flying home
 const POD_MENDING := 5              # shot down on its way: back at its bay, being made good
 const POD_SEATS := 2
+const C_TELEPORT := 41              # (v97) our teleporter: u8 TELE_SEND (at the module bay), TELE_HOME (on the ship alongside), TELE_ALL (at the bay)
+const S_TELEPORT := 53              # (v97) to each player: u8 TELE_NONE/READY/CHARGING/HUMMING of the teleporter that serves them, u8 seconds to ready
+const TELE_SEND := 0
+const TELE_HOME := 1
+const TELE_ALL := 2
+const TELE_NONE := 0
+const TELE_READY := 1
+const TELE_CHARGING := 2
+const TELE_HUMMING := 3
 const ALL_GUNS := 255                # (v93) C_TURRET's gun: every gun of the ship nobody aims by hand (the pilot, the gun console)
 const ARENA_SHOT_FLY := 0
 const ARENA_SHOT_END := 1

@@ -842,3 +842,17 @@ picks (all A).
   the second seat and fights over there.
 - Bots fight together: radio, falling back when hurt, the shotgun first, one target.
 - New test `tools/podtest.gd` (51 scripts); protocol 70.
+
+## v97 (0.90): derelicts made from pieces, their robots and vaults, our teleporter
+
+He wrote "next build"; his roadmap's item 1 (procedural places, 1.1 inhabitants and minibosses) and 3.2 (the teleporter
+as a rare find). Questions `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`: all A except T1 C.
+- Every campaign makes 8 derelicts of its own from pieces (rooms, corridor, windows, dead machines, a tall room, a
+  name), kept in the save and sent to guests (`src/shared/place_maker.gd`).
+- Half have rogue robots that wake when one of ours comes aboard and hold their places; some have a welded vault with a
+  keeper robot and a prize: the teleporter (40% while none was found), or a gun or crate a tier up.
+- Our teleporter: a pad machine (`t`, his T1 C; ship02 has an empty one), the found crate installed in it; E sends
+  you and up to two armed bots to the ship alongside; home from the menu on yourself; 20 s recharge.
+- machinetest's trading check fixed (broken since v96's stop-to-dock rule). New test `tools/placetest.gd` (52 scripts);
+  protocol 71.
+

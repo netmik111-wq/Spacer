@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v96 (version 0.89).
+Last updated: build v97 (version 0.90).
 
 Contents:
 
@@ -56,6 +56,7 @@ Contents:
 46. [The fight like Starsector: heat, armour, hull points, mount kinds (v94)](#46-the-fight-like-starsector-heat-armour-hull-points-mount-kinds-v94)
 47. [Flying round the system in space (v95)](#47-flying-round-the-system-in-space-v95)
 48. [Places seen in space, meteors, our boarding pod, bots in a fight (v96)](#48-places-seen-in-space-meteors-our-boarding-pod-bots-in-a-fight-v96)
+49. [Derelicts made from pieces, their robots, vaults, our teleporter (v97)](#49-derelicts-made-from-pieces-their-robots-vaults-our-teleporter-v97)
 
 ---
 
@@ -1336,7 +1337,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
 - While anyone alive is outside our ship (on the derelict or in space) or the ships
   are docked, the ship **doesn't move or jump**; if someone went out while a jump was charging,
   the jump is aborted.
-- There are no pirates on derelict ships yet.
+- (v97) Derelicts made from pieces may have rogue robots and a vault aboard: section 49.
 
 ## 19. Space, sectors and jumps
 
@@ -2781,7 +2782,7 @@ N2: meteors as targets; P1: better bot fighting). Questions on the page "Spacer 
 - **Bots** (B3): when one of ours sits in, the nearest bot told «К оружию» (or a guard) of that ship comes to the
   second seat (fetching a gun first); the pod waits up to **15** s for it. Over there it fights; with no pirates left
   it goes back to the pod and rides home.
-- The teleporter (B4) comes later, as a rare find.
+- The teleporter (B4) came in v97 as a rare find (section 49).
 
 ### Bots in a fight (D1-D4)
 
@@ -2792,4 +2793,55 @@ N2: meteors as targets; P1: better bot fighting). Questions on the page "Spacer 
 - **The locker** (D3): a fighter takes the shotgun first, else a pistol, **2** magazines and a medical patch.
 - **One target** (D4): a fighter within **6** cells of another one already shooting shoots the same pirate.
 - The packet: S_POD, C_POD, the meteor shot kind, five bytes a place (protocol **70**).
+
+## 49. Derelicts made from pieces, their robots, vaults, our teleporter (v97)
+
+He wrote "next build": item 1 of his roadmap (procedural derelicts, 1.1 inhabitants, minibosses, unique things) and
+the teleporter as a rare find (3.2, his v96 B4). Questions on the page "Spacer v97: места и телепорт"
+(https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX): he answered all A except T1 C (the teleporter is a machine of
+its own).
+
+### Derelicts made from pieces (P1, P2)
+
+- Every new campaign makes **8** derelicts of its own from pieces; the old drawn derelict stays among them (**9** in
+  all). Each place in a system is always the same one of them. The save keeps them; guests are sent them.
+- One deck, **7** rows tall (what fits over our airlock): a row of rooms (**3–7** cells wide, two tall) over a
+  corridor, the outer door at the bottom; doors between rooms now and then (**35%**), windows, dead machines
+  (consoles, cryopods, trays, an engine, an air plant), sometimes (**40%**) a tall room at one end. Each has a name of
+  its own («Брошенный рудовоз «Вега»», «Брошенный ковчег «Ладога»»...). Width **16–30** cells.
+- Air, holes and loot are as on any derelict (section 18).
+
+### Who lives there (I1, I2)
+
+- Half of them (**50%**) have rogue robots aboard: **1–3**, one more for each cluster down the road, at most **4**.
+  The sensors say so on arrival («на борту движение»).
+- They appear when the first of ours sets foot aboard, in the rooms farthest from the way in, and **hold their
+  places** until they see one of ours (or hear and go to look, or are hurt); then they fight like the pirates' assault
+  drones (a built-in pistol, **3** spare magazines, no air needed).
+- Flying off and coming back: the dead lie as bodies, the living robots are there again, a vault cut open stays open.
+
+### The vault and its keeper (V1, V2)
+
+- Half of the made derelicts with **3** rooms or more have a vault: the room at the far end from the way in, with
+  one hermetic door **welded shut** (the sensors say so). Cut the weld with the welder (hold E **4** s).
+- Inside stands **the vault's keeper** («Страж хранилища»), a big robot: it takes **35%** of every wound and has **6**
+  magazines. It does not come out until it sees us.
+- What the vault holds: the **teleporter** (**40%** of vaults while none lay in one this campaign; only one a
+  campaign), else a crate of ship gear or a ship's gun **one tier above** what lies about that far out; and **2–4**
+  useful things.
+
+### Our teleporter (T1 C, T2-T4)
+
+- **The pad** is a new machine (sign `t` in the ship editor, «Платформа телепорта»), in a wall, used from the floor in
+  front. Our ship02 has one, empty, in the workshop's top wall on the lower deck.
+- **The teleporter** («Телепорт «Шаг»») is a crate found only in vaults; never sold (T4 A), a trader pays **400** for
+  it. An engineer installs it into the pad (hold E, **10** s).
+- **Sending** (E at the pad, or the right-click menu there): after a **2** s hum whoever pressed it and up to **2**
+  armed bots told «К оружию» (or guards) within **4** cells of the pad stand on the ship alongside (a pirate ship in a
+  fight, a derelict, a wreck; never an asteroid), each in a room of its own. Their shield does not stop it (T3 A).
+- **Home** (T2 A): the right-click menu on yourself over there, «Телепорт домой»; at the pad, «Телепорт: вернуть всех
+  наших». Bots come home by themselves when no foe is left aboard. A ship that leaves with ours aboard sends them
+  home first.
+- It needs the ship's power and recharges **20** s after every beam. The hint at the pad and the menu show its state.
+- The packet: C_TELEPORT, S_TELEPORT (protocol **71**); the crate is thing 253.
 

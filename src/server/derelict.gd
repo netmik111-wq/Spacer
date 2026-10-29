@@ -28,6 +28,8 @@ const ShipMap := preload("res://src/shared/ship_map.gd")
 const Ship := preload("res://src/server/ship.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Player := preload("res://src/server/player.gd")
+const PlaceMaker := preload("res://src/shared/place_maker.gd")
+const Gear := preload("res://src/shared/gear.gd")
 
 const PIRATE_WARNING_TICKS := 90 * Net.TICK_HZ    # from showing up to docking by force: the time to fight it off
 const RAID_BOARD_TICKS := 30 * Net.TICK_HZ    # (v54) a raider that sees us helpless closes in and boards after this
@@ -80,6 +82,19 @@ var sos := false                     # (v77, the author's S1) the derelict along
 var sos_at := Vector2.ZERO           # where it lies: it stays alongside while our ship stays near
 const SOS_BODIES := 3                # its dead crew, with what they carried
 const SOS_POCKETS: Array[int] = [Net.ITEM_MEDPATCH, Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_FOOD, Net.ITEM_MAG]
+# (v97, the author's roadmap 1.1: inhabitants, minibosses, unique things) a derelict made from pieces (PlaceMaker)
+const DWELLERS_MAX := 4              # (my I1 pick) rogue robots aboard at most (one more each cluster down the road)
+const KEEPER_TOUGHNESS := 0.35       # (my V1 pick) the vault's keeper takes about a third of every wound
+const KEEPER_MAGS := 6
+const TELEPORTER_SHARE := 0.4        # (my V2 pick) a vault holds the teleporter while none lay in one this campaign
+const VAULT_THINGS := [2, 4]
+var teleporter_found := false        # the teleporter lay in a vault this campaign (kept in the save)
+var teleporter_chance := TELEPORTER_SHARE   # (tests set it)
+var layout_for_test := -1            # (tests) the drawing the next derelict comes in
+var made := {}                       # PlaceMaker.info of the made derelict alongside ({}: any other)
+var vault_door := -1                 # its vault's door (-1: none)
+var _homes := {}                     # sector key -> {"robots": n, "keeper": bool, "opened": bool}: who lives there still
+var _woken := false                  # its robots are in the world (the first of ours came aboard)
 var trial := false                   # (v81) laid by the ship editor's «Попробовать»: it never leaves by itself
 var _rng := RandomNumberGenerator.new()
 
@@ -92,6 +107,10 @@ func setup(p_server: Node) -> void:
 	ship = null
 	_left.clear()
 	_left_bodies.clear()
+	_homes.clear()
+	made = {}
+	vault_door = -1
+	_woken = false
 	_rng.randomize()
 	_spots = {}
 	_pirates_dock_at = -1
@@ -329,6 +348,8 @@ func update() -> void:
 		return
 	if trial:
 		return                               # (v81) the ship editor's «Попробовать»: it stays as it was laid
+	if here and kind == Net.OTHER_DERELICT:
+		_watch_dwellers()                    # (v97)
 	if here and kind == Net.OTHER_ROCK:
 		# (v81) an asteroid stays while the ship holds still by it
 		if (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR or not server.road.at_asteroid()) and holds_ship() == "":
@@ -588,7 +609,16 @@ func sos_ship() -> bool:
 func _arrive(called := "Брошенный корабль") -> void:
 	var key := Sectors.key(server.sectors.cell[server.ship.sector])
 	var drawn := _derelict_spots()           # (v84) the same drawing every time in a place (what was left on it fits)
-	_comes(Net.OTHER_DERELICT, drawn[absi(key) % drawn.size()], called)
+	var k: int = drawn[absi(key) % drawn.size()] if not drawn.has(layout_for_test) else layout_for_test
+	var drawn_name: String = map.others[k].map_name
+	made = {}
+	vault_door = -1
+	_woken = false
+	if drawn_name.begins_with(ShipMap.MADE_PREFIX) and not sos:
+		made = PlaceMaker.info(str(ShipMap.drawings.get(drawn_name, "")))   # (v97) made from pieces: its name, who lives there
+		if not (map.others[k].deck_names as PackedStringArray).is_empty():
+			called = map.others[k].deck_names[0]
+	_comes(Net.OTHER_DERELICT, k, called)
 	_place(_spots[layout][0])
 	var cells := _floor_cells()
 	# air: room by room, some empty, the rest thin
@@ -622,8 +652,10 @@ func _arrive(called := "Брошенный корабль") -> void:
 				item = server.outfit.loot(far, _rng)     # (v59) or a crate of ship gear
 			server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], item)
 	server.story.derelict_arrived(cells)     # (v63) a quest's black box
+	var note := _settle_home(key) if not made.is_empty() else ""
 	server.air.wake()
-	server.chat.say("Рядом брошенный корабль. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.")
+	server.chat.say("Рядом %s. До него можно добраться через шлюз в открытом космосе или пристыковаться с пульта управления.%s" % [
+		"брошенный корабль" if made.is_empty() else ship.name.substr(0, 1).to_lower() + ship.name.substr(1), note])
 
 
 func _rock_arrives() -> void:
@@ -707,6 +739,7 @@ func _hulk_leaves() -> void:
 
 
 func _leave(quiet: bool = false) -> void:
+	server.teleporter.ship_leaves()          # (v97) whoever our teleporter sent there comes home first
 	var was_wreck := wreck
 	# what is left on a derelict is remembered for this sector
 	if kind == Net.OTHER_DERELICT and not sos and not trial:
@@ -717,6 +750,7 @@ func _leave(quiet: bool = false) -> void:
 				kept.append([_local(c, map.other_at), (server.floor_things[c] as PackedByteArray).duplicate()])
 		_left[key] = kept
 		_left_bodies[key] = _bodies_aboard()
+		_home_left(key)
 	# whoever lies on it (pirates struck down on their own ship) goes with it
 	for p in server.players:
 		if p != null and map.is_other(p.st.y * map.width + p.st.x) and (p.corpse or p.pirate):
@@ -791,8 +825,14 @@ func _move(from: Vector2i, to: Vector2i) -> void:
 	for p in server.players:
 		if p != null and map.is_other(p.st.y * map.width + p.st.x):
 			aboard.append(p)
+	var welded := {}                         # (v97) a vault welded shut stays shut when it docks
+	for d in range(map.other_first_door, map.doors.size()):
+		if server.doors.welded[d] == 1:
+			welded[d] = true
 	_clear_region()
 	_place(to)
+	for d: int in welded:
+		server.doors.welded[d] = 1
 	for k: int in air_of.keys():
 		var c := _cell(to, k)
 		if map.walk[c] == 1:
@@ -964,3 +1004,137 @@ func _anyone_in_way(from: Vector2i, to: Vector2i) -> bool:
 				and o.cells[local.y * o.width + local.x] >= 0:
 			return true
 	return false
+
+
+# ---------------------------------------------------------------- (v97) who lives on a made derelict
+
+func _settle_home(key: int) -> String:
+	## A made derelict came alongside: its vault (welded shut until somebody cut it once) and, the first
+	## time, who lives there and what the vault holds. Returns what the sensors say of it.
+	var v: Vector2i = made["vault"]
+	if v.x >= 0:
+		vault_door = map.door_at(map.other_at.x + v.x, map.other_at.y + v.y)
+	if not _homes.has(key):
+		var n := int(made["dwellers"])
+		if n > 0:
+			n = mini(n + server.road.depth, DWELLERS_MAX)
+		_homes[key] = {"robots": n, "keeper": vault_door >= 0, "opened": false}
+		if vault_door >= 0:
+			_fill_vault()
+	var h: Dictionary = _homes[key]
+	if vault_door >= 0 and not bool(h["opened"]):
+		server.doors.welded[vault_door] = 1
+	var note := ""
+	if int(h["robots"]) > 0 or bool(h["keeper"]):
+		note += " Сенсоры: на борту движение."
+	if vault_door >= 0 and not bool(h["opened"]):
+		note += " Один отсек заварен наглухо: срезать шов можно сварочным аппаратом."
+	return note
+
+
+func vault_cells() -> Array:
+	## The floor of the vault alongside (empty: none).
+	if vault_door < 0:
+		return []
+	var inside: int = map.doors[vault_door].y * map.width + map.doors[vault_door].x - map.width
+	for room: Array in _rooms():
+		if room.has(inside):
+			return room
+	return []
+
+
+func _fill_vault() -> void:
+	## (my V2 pick) The teleporter now and then, else a gun or a crate of gear a tier above what lies about
+	## this far out; and some useful things.
+	var cells := PackedInt32Array(vault_cells())
+	if cells.is_empty():
+		return
+	var far: int = server.sectors.far_from_start(server.ship.sector)
+	var prize := Net.ITEM_NONE
+	if not teleporter_found and _rng.randf() < teleporter_chance:
+		prize = Gear.item_of(Gear.TELEPORT)
+		teleporter_found = true
+	elif _rng.randf() < 0.5:
+		prize = Gear.item_of(Gear.roll(far, _rng, true))
+	else:
+		var t: int = mini(Weapons.tiers_for(far, 1, _rng)[0] + 1, 3)
+		var choice: Array = Weapons.OURS.filter(func(w: int) -> bool: return Weapons.tier(w) == t and w != Weapons.GUARD)
+		var w: int = choice[_rng.randi_range(0, choice.size() - 1)]
+		prize = Weapons.item_of(w, Weapons.roll_fx(w, _rng), false)
+	server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], prize)
+	for i in _rng.randi_range(VAULT_THINGS[0], VAULT_THINGS[1]):
+		_drop(cells, LOOT)
+
+
+func _watch_dwellers() -> void:
+	## The first of ours to set foot on a made derelict wakes who lives there: rogue robots in the rooms
+	## farthest from the way in, the keeper deep in its vault. They hold their places until they see us.
+	if _woken or made.is_empty() or not _homes.has(_came_in):
+		return
+	var first: Player = null
+	for p: Player in server.players:
+		if p != null and not p.pirate and not p.ally and not p.corpse and not p.in_shuttle and p.cond != Net.COND_DEAD \
+				and map.is_other(p.st.y * map.width + p.st.x):
+			first = p
+			break
+	if first == null:
+		return
+	_woken = true
+	var h: Dictionary = _homes[_came_in]
+	var vault := vault_cells()
+	var way_in := Vector2(first.st.x, first.st.y)
+	for d in range(map.other_first_door, map.doors.size()):
+		if map.doors[d] != ShipMap.NO_OTHER and map.other.door_vent[d - map.other_first_door] == 1:
+			way_in = Vector2(map.doors[d])
+	var far_first := func(a: int, b: int) -> bool:
+		return Vector2(a % map.width, a / map.width).distance_squared_to(way_in) > Vector2(b % map.width, b / map.width).distance_squared_to(way_in)
+	var rooms: Array = _rooms().filter(func(r: Array) -> bool: return not r.has(vault[0] if not vault.is_empty() else -1))
+	rooms.sort_custom(func(a: Array, b: Array) -> bool: return far_first.call(a[0], b[0]))
+	var taken := {}
+	for i in int(h["robots"]):
+		if rooms.is_empty():
+			break
+		var room: Array = rooms[i % mini(rooms.size(), 3)]
+		var c: int = room[_rng.randi_range(0, room.size() - 1)]
+		for tries in 6:
+			if not taken.has(c):
+				break
+			c = room[_rng.randi_range(0, room.size() - 1)]
+		taken[c] = true
+		var r = server.pirates.spawn_robot(c % map.width, c / map.width, "Одичавший робот")
+		r.dweller = 1
+		r.stays = true
+	if bool(h["keeper"]) and not vault.is_empty():
+		var deep: Array = vault.duplicate()
+		var door_at := Vector2(map.doors[vault_door])
+		deep.sort_custom(func(a: int, b: int) -> bool:
+			return Vector2(a % map.width, a / map.width).distance_squared_to(door_at) > Vector2(b % map.width, b / map.width).distance_squared_to(door_at))
+		var c: int = deep[0]
+		var k = server.pirates.spawn_robot(c % map.width, c / map.width, "Страж хранилища")
+		k.dweller = 2
+		k.stays = true
+		k.toughness = KEEPER_TOUGHNESS
+		for i in KEEPER_MAGS - server.pirates.ROBOT_MAGS:
+			k.add(Net.ITEM_MAG)
+	server.replication.sight_changed()
+
+
+func _home_left(key: int) -> void:
+	## Leaving a made derelict: who of its own is alive aboard stays there for next time; a vault cut open stays open.
+	if made.is_empty() or not _homes.has(key):
+		return
+	var h: Dictionary = _homes[key]
+	if vault_door >= 0 and server.doors.welded[vault_door] == 0:
+		h["opened"] = true
+	if not _woken:
+		return
+	var robots := 0
+	var keeper := false
+	for p: Player in server.players:
+		if p != null and p.dweller > 0 and not p.corpse and p.cond != Net.COND_DEAD and map.is_other(p.st.y * map.width + p.st.x):
+			if p.dweller == 2:
+				keeper = true
+			else:
+				robots += 1
+	h["robots"] = robots
+	h["keeper"] = keeper

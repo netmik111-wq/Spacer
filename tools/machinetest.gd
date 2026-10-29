@@ -333,6 +333,9 @@ func _initialize() -> void:
 
 	# a trader sells, a station restocks
 	var here := server.ship.sector
+	server.arena.course = false                # (v96: docking waits for a stopped ship) the helm's course ends here
+	server.arena.body(0).vel = Vector2.ZERO
+	server.ship.moving = false
 	server.supplies.store_asked(q, Net.STORE_BUY, Net.ITEM_PATCH)
 	_expect(server.ship.store[Net.ITEM_PATCH] == had_patches, "nothing can be bought with no trader alongside")
 	server.sectors.kind[here] = Sectors.TRADER

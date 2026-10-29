@@ -83,6 +83,7 @@ var worn := {}                       # (v93, ours) the fight's armour worn off i
                                      # (ArenaShape, Arena.our_shape) -> points worn; mended from outside (Outside.mended)
 # (v59) its gear (see Gear, Outfit)
 var gear := PackedByteArray([1, 1, 1, 1, 1])   # per Gear.SYS_*: the tier of that system (1 = built in)
+var teleporter := false              # (v97) the teleporter is installed in the ship's pad ('t')
 var modules := PackedByteArray([0, 0])      # per slot of the module bay: the crate in it (Gear.*; NONE = empty)
 var phase_ready := 0                  # the tick its phase drive is charged again
 

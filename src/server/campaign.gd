@@ -122,7 +122,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
 		"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(), "usage": server.usage.used,
 		"bought": _keyed(server.supplies.bought), "sold": _keyed(server.supplies.sold),
-		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules),
+		"gear": Array(server.ship.gear), "modules": Array(server.ship.modules), "teleporter": server.ship.teleporter,
 		"smes": server.power.save(),
 		"mode": server.mode, "hull_max": server.ship.hull_max,               # (v63)
 		"complex": server.complex_repairs,                                      # (v71)
@@ -130,6 +130,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"road": server.road.save(),                                          # (v64)
 		# (v84, the author's H4) the drawings of one's own it is played with, as they were: the files may change since
 		"drawings": ShipMap.drawings_in_use(map.map_name), "own_others": ShipMap.own_others,
+		"made_others": ShipMap.made_others, "teleporter_found": server.derelict.teleporter_found,   # (v97)
 		"fleet": _fleet_of(server),                                          # (v85)
 	}
 
@@ -153,7 +154,7 @@ static func _fleet_of(server: Node) -> Array:
 			"mounts": Array(s.mounts), "armed": Array(s.armed), "shield_on": s.shield_on, "hardened": s.hardened,
 			"mount_fx": Array(s.mount_fx), "guard": s.guard, "guard_armed": s.guard_armed,
 			"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(),
-			"gear": Array(s.gear), "modules": Array(s.modules), "smes": server.power.save(), "garden": server.garden.save(),
+			"gear": Array(s.gear), "modules": Array(s.modules), "teleporter": s.teleporter, "smes": server.power.save(), "garden": server.garden.save(),
 		})
 	server.fleet.use(0)
 	return out
@@ -199,6 +200,7 @@ static func _fleet_back(server: Node, saved: Array, redrawn: bool = false) -> vo
 		var modules := PackedByteArray(d["modules"])
 		if modules.size() >= Gear.MODULE_SLOTS and modules.size() <= Gear.MODULE_SLOTS_MAX:
 			s.modules = modules
+		s.teleporter = bool(d.get("teleporter", false))   # (v97)
 		s.phase_ready = 0
 		server.outfit.refresh()
 		server.garden.load_from(d["garden"])
@@ -255,6 +257,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 		for k in data["been"]:
 			server.been[int(k)] = true
 		server.road.load_from(data["road"])
+	server.derelict.teleporter_found = bool(data.get("teleporter_found", false))   # (v97)
 	server.been[Sectors.key(at)] = true
 	server.road.build(at)
 	server.ship.sector = server.sectors.here
@@ -321,6 +324,7 @@ static func restore(server: Node, data: Dictionary) -> String:
 	var modules := PackedByteArray(data.get("modules", []))
 	server.ship.modules = modules if modules.size() >= Gear.MODULE_SLOTS and modules.size() <= Gear.MODULE_SLOTS_MAX \
 		else PackedByteArray([0, 0])         # (v62) three with the bay's extender
+	server.ship.teleporter = bool(data.get("teleporter", false))   # (v97) the teleporter in its pad
 	server.ship.phase_ready = 0
 	server.outfit.refresh()
 	server.story.load_from(data.get("story", {}))

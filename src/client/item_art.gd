@@ -388,6 +388,10 @@ static func _crate(canvas: CanvasItem, at: Vector2, u: float, g: int) -> void:
 		Gear.SYS_COILS:
 			for k in 3:                              # (v61) copper turns of a coil
 				canvas.draw_line(mid + Vector2(-1.8, -1.4 + k * 1.4) * u, mid + Vector2(1.8, -1.4 + k * 1.4) * u, Color(0.95, 0.65, 0.25), 0.7 * u)
+	if g == Gear.TELEPORT:                           # (v97) the teleporter: rings round a bright point
+		canvas.draw_arc(mid, 2.2 * u, 0.0, TAU, 12, Color(0.4, 0.95, 1.0), 0.6 * u)
+		canvas.draw_arc(mid, 1.3 * u, 0.0, TAU, 10, Color(0.6, 0.85, 1.0), 0.5 * u)
+		canvas.draw_circle(mid, 0.6 * u, Color(1.0, 1.0, 1.0))
 	match Gear.module_of(g):
 		Gear.MOD_ARMOUR:
 			for k in 3:

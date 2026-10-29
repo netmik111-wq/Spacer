@@ -3,6 +3,7 @@
 ; against their walls, the bridge four times its old size with the star chart's holo table in its middle.
 ; (v94) a fixed gun in the bow's lower deck wall (the author's three mount kinds: a hardpoint fires along the bow).
 ; (v96) our boarding pod's bay ('k') in the lower deck's hull, by the gun room.
+; (v97, the author's T1 C) the teleporter's pad ('t') in the workshop's wall, empty until a teleporter is found.
 ; Restricted-access compartments (deck, x, y of a floor cell, access):
 @ 1 35 15 bridge
 @ 1 3 11 armory
@@ -50,7 +51,7 @@
 
 
 
- ###WJ##########W#######VFFFF###
+ ###WJ##########W#t#####VFFFF###
  #SS..MM.U.#.B.....Z..#........#
  #.........#..........#........#
  #....6....#..7.......#........#

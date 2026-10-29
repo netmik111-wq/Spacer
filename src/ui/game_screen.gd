@@ -2025,6 +2025,15 @@ func _open_menu(at: Vector2) -> void:
 				add.call("Взять: %s" % Items.name_of(pile[k]), func() -> void: client.send_take(cell, at_k))
 	if client.dragging():
 		add.call("Отпустить  [%s]" % Options.key_text("drag"), func() -> void: client.send_drag(Net.NOBODY))
+	if client.tele_state != Net.TELE_NONE:
+		# (v97) our teleporter: from its pad, or home from the ship alongside
+		var wait := "" if client.tele_state == Net.TELE_READY else ("  (гудит)" if client.tele_state == Net.TELE_HUMMING else "  (ещё %d с)" % client.tele_secs)
+		var mine := Vector2i(client.pred.x, client.pred.y)
+		if map.teleporter.has(cell) and maxi(absi(c.x - me.x), absi(c.y - me.y)) <= 2:
+			add.call("Телепорт на корабль у борта" + wait, func() -> void: client.send_teleport(Net.TELE_SEND))
+			add.call("Телепорт: вернуть всех наших" + wait, func() -> void: client.send_teleport(Net.TELE_ALL))
+		elif c == mine and map.is_other(mine.y * map.width + mine.x):
+			add.call("Телепорт домой" + wait, func() -> void: client.send_teleport(Net.TELE_HOME))
 	if title != "":
 		add.call("Осмотреть", func() -> void: _say("[color=#9aa3b5]%s[/color]" % _escape(title.replace("\n", ". "))))
 	if _menu_acts.is_empty():
@@ -2328,6 +2337,16 @@ func _process(delta: float) -> void:
 			_hint.text = "Абордажная капсула: летит только к пиратскому кораблю у борта, в бою"
 		else:
 			_hint.text = "E: сесть в абордажную капсулу (мест: %d) — она пробьёт обшивку пирата" % (Net.POD_SEATS - aboard)
+	elif target == 52:
+		# (v97, his T1 C) the teleporter's pad
+		if client.tele_state == Net.TELE_NONE:
+			_hint.text = "Платформа телепорта: пуста. Телепорт — редкая находка в хранилищах брошенных кораблей"
+		elif client.tele_state == Net.TELE_CHARGING:
+			_hint.text = "Телепорт перезаряжается: ещё %d с" % client.tele_secs
+		elif client.tele_state == Net.TELE_HUMMING:
+			_hint.text = "Телепорт гудит"
+		else:
+			_hint.text = "E: телепорт на корабль у борта (вы и до двух ботов «К оружию» рядом). ПКМ: вернуть всех"
 	elif target == 47 or target == 48:
 		# (v91, the author's M7) the boxes on the wall hand out the supply locker's stock
 		var kit := Net.ITEM_MEDKIT + Net.MEDKIT_USES if target == 47 else Net.ITEM_PART

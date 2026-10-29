@@ -40,7 +40,7 @@ func _initialize() -> void:
 	var yard: Shipyard = server.shipyard
 
 	# the hulls
-	_expect(map.others.size() == Net.OTHER_MAPS.size(), "every other ship's drawing loads (%d)" % map.others.size())
+	_expect(map.others.size() == ShipMap.other_maps().size(), "every other ship's drawing loads (%d)" % map.others.size())
 	for k in map.others_of("pirate"):
 		var o = map.others[k]
 		# (v57: only the carrier is sure to have a teleporter; v62: only a drone ship has a control core,

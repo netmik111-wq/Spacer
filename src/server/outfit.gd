@@ -274,7 +274,13 @@ func can(p: Player, cell: int) -> String:
 		return NOT_HERE
 	var g := Items.gear_of(p.in_hand())
 	var ship = server.ship
-	if g != Gear.NONE:
+	if g == Gear.TELEPORT:
+		# (v97, his T1 C) the teleporter goes into its pad
+		if not server.map.teleporter.has(cell):
+			return NOT_HERE
+		if ship.teleporter:
+			return "Телепорт уже стоит в платформе."
+	elif g != Gear.NONE:
 		var sys := Gear.system_of(g)
 		if sys >= 0:
 			if not _machines(sys).has(cell):
@@ -313,7 +319,11 @@ func finish(p: Player, cell: int) -> void:
 	var ship = server.ship
 	var g := Items.gear_of(p.in_hand())
 	p.train(Net.SKILL_REPAIR)
-	if g == Gear.NONE:
+	if g == Gear.TELEPORT:
+		ship.teleporter = true
+		p.slots[p.hand] = Net.ITEM_NONE
+		server.chat.say("%s устанавливает телепорт в платформу. E у платформы — отправить тех, кто рядом, на корабль у борта." % p.name)
+	elif g == Gear.NONE:
 		var at := _last_module()
 		var out: int = ship.modules[at]
 		ship.modules[at] = Gear.NONE

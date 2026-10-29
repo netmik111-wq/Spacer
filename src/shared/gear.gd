@@ -55,7 +55,8 @@ const WELDER := 17                   # the welding drone: mends the hull after e
 const SALVAGE := 18                  # the salvage arm: wrecks and captures pay more
 const LOADER := 19                   # the auto-loader: guns with nobody at them charge faster
 const BAY_SLOT := 20                 # (v62, K3) the bay's extender: a third slot, for good (sold only at stations)
-const COUNT := 21                    # every crate's number is below this
+const TELEPORT := 21                 # (v97, the author's 3.2: "the teleporter as a late tech") a rare find in derelicts' vaults
+const COUNT := 22                    # every crate's number is below this (TELEPORT's thing is Net.ITEM_TELEPORTER)
 
 const MOD_ARMOUR := 0                # the sorts of module: one of each sort may be in the bay
 const MOD_FOCUS := 1
@@ -92,6 +93,12 @@ const WELDER_HULL := 5               # hull strength mended after every jump
 const SALVAGE_SHARE := 1.3           # wrecks and captures pay this much of their reward...
 const SALVAGE_PARTS := 1             # ... and give this many spare parts more
 const LOADER_PACE := 1.1             # a gun with no gunner charges this much faster
+# --- (v97) the teleporter (his T1 C: a machine of its own, the pad 't'; my T2-T3 picks): it sends whoever stands
+# by its pad to the ship alongside and back
+const TELEPORT_SECONDS := 20.0       # its recharge
+const TELEPORT_HUM := 2.0            # the hum before a beam
+const TELEPORT_REACH := 4            # cells from the pad's front: who stands this close goes along (bots told «К оружию»)
+const TELEPORT_PARTY := 3            # at most, the sender included
 const INSTALL_SECONDS := 10.0        # an engineer installs a crate (skill: up to twice as quick)
 const REMOVE_SECONDS := 5.0          # and takes a module out of the bay
 
@@ -137,20 +144,25 @@ const INFO := {
 		"about": "Модуль. Орудия, у которых никто не стоит, заряжаются на 10% быстрее."},
 	BAY_SLOT: {"name": "Расширитель стойки", "mod": MOD_EXTENDER, "tier": 0, "price": 150,
 		"about": "Третья ячейка модульной стойки, навсегда. Продаётся только на станциях. Ставится в модульную стойку, ячейку не занимает."},
+	TELEPORT: {"name": "Телепорт «Шаг»", "pad": true, "tier": 0, "price": 400,
+		"about": "Редкая находка из хранилищ брошенных кораблей. E у платформы телепорта: через 2 с вы и до двух ботов «К оружию» рядом с ней оказываетесь на корабле у нашего борта. Назад: правая кнопка мыши по себе там. Перезарядка 20 с, нужна энергия."},
 }
 const WHERE_ABOUT: Array[String] = ["Ставится у генератора щита.", "Ставится у двигателя.", "Ставится у двигателя.",
 	"Ставится у голокарты.", "Ставится в СМЭС в машинном отделении."]
 const BAY_ABOUT := "Ставится в модульную стойку в машинном отделении."
+const PAD_ABOUT := "Ставится в платформу телепорта («t» в редакторе кораблей)."
 
 
 static func of_item(item: int) -> int:
 	## The crate that thing is, or NONE.
+	if item == Net.ITEM_TELEPORTER:
+		return TELEPORT
 	var g := item - Net.ITEM_GEAR
-	return g if g > NONE and g < COUNT else NONE
+	return g if g > NONE and g < TELEPORT else NONE
 
 
 static func item_of(g: int) -> int:
-	return Net.ITEM_GEAR + g
+	return Net.ITEM_TELEPORTER if g == TELEPORT else Net.ITEM_GEAR + g   # (v97: the things after 190 were taken)
 
 
 static func info(g: int) -> Dictionary:
@@ -190,7 +202,7 @@ static func for_system(sys: int, t: int) -> int:
 static func about(g: int) -> String:
 	if not INFO.has(g):
 		return ""
-	var where := WHERE_ABOUT[system_of(g)] if system_of(g) >= 0 else BAY_ABOUT
+	var where := WHERE_ABOUT[system_of(g)] if system_of(g) >= 0 else (PAD_ABOUT if g == TELEPORT else BAY_ABOUT)
 	return "%s %s Ставит инженер (держать E)." % [str(INFO[g]["about"]), where]
 
 

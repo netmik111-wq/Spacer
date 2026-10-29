@@ -353,6 +353,11 @@ func think(p) -> void:
 			if now >= p.ready_tick and Items.INFO.has(p.in_hand()) and Items.INFO[p.in_hand()].has("blow"):
 				server.combat.use_at(p, now, there)
 			return
+	# (v97) a derelict's robot holds its place until it has somebody to go after
+	if p.stays and target == null and (p.ai_goal.x < 0 or p.ai_goal == Vector2i(p.st.x, p.st.y)):
+		p.ai_goal = Vector2i(-1, -1)
+		_stop(p)
+		return
 	# (v70) a pirate with a goal goes about it
 	if target == null and has_goal(p) and _pursue(p):
 		return

@@ -37,6 +37,8 @@ func _go() -> void:
 	get_root().add_child(server)
 	ShipMap.drawings = {}
 	ShipMap.own_others = ShipMap.coming_in_run()
+	ShipMap.places_on = false                 # (v97: no derelicts made from pieces: the checks count one's own drawings)
+	ShipMap.made_others = []
 	var problem := server.start(PORT, "ships:mine", 0)
 	_expect(problem == "", "a game starts on a drawing of one's own (%s)" % problem)
 	if problem != "":
