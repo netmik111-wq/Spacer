@@ -432,6 +432,20 @@ const SPACE := {
 	TRACTOR: {"d": 0.0, "n": 1, "every": 10.0, "heat": 30.0, "type": DMG_ENERGY},
 	NEURAL: {"d": 0.0, "n": 1, "every": 6.0, "heat": 0.0, "type": DMG_ENERGY},
 }
+# (v94.1, the author's M2 note: "better tie the weapon types to the points than give the points modifiers") a gun
+# says which mount kinds it goes on (bits by ArenaShape.MOUNT_*: 1 the fixed bow mount, 2 a side turret, 4 a roof
+# turret); the mount gives only its arc. The heaviest guns need the bow's hardpoint, the heavy ones the bow or a side;
+# the rest fit anywhere. Like Starsector, a gun turns at its own speed: light ones fast, heavy ones slowly.
+const FIT_HARD := 1
+const FIT_SIDE := 2
+const FIT_ROOF := 4
+const FIT_ANY := 7
+const FITS := {SIEGE: FIT_HARD, RAILGUN: FIT_HARD, DEVASTATOR: FIT_HARD, NOVA: FIT_HARD,
+	HEAVY: FIT_HARD | FIT_SIDE, PHOENIX: FIT_HARD | FIT_SIDE, ION_CANNON: FIT_HARD | FIT_SIDE, STORM: FIT_HARD | FIT_SIDE,
+	HAMMER: FIT_HARD | FIT_SIDE, REAPER: FIT_HARD | FIT_SIDE}
+const TURN_LIGHT := PI * 2.0 / 3.0    # radians a second a light gun turns (120°)
+const TURN_HEAVY := PI / 3.0          # and a heavy one (60°)
+const SHOTS_HEAT := false               # (v94.1) his S4 B: firing does not heat the ship (the "heat" numbers wait)
 const GUARD_SPACE_EVERY := 1.5        # (v94) point defence charges this quickly in space
 const BLASTER_SLIP_SPACE := 0.5       # the share of a blaster's pellets that pass a raised shield
 
@@ -469,7 +483,30 @@ static func space_heat(w: int) -> float:
 
 
 static func burst_heat(w: int) -> float:
+	## (v94.1, his S4 B: "only the shield heats") our own shots heat nothing while SHOTS_HEAT is off.
+	if not SHOTS_HEAT:
+		return 0.0
 	return space_heat(w) * (1 if klass(w) == CLASS_BEAM else space_shots(w))
+
+
+static func fits(w: int, kind: int) -> bool:
+	## (v94.1) Does that gun go on a mount of that kind (ArenaShape.MOUNT_*)?
+	return (int(FITS.get(w, FIT_ANY)) >> kind) & 1 == 1
+
+
+static func fit_words(w: int) -> String:
+	## (v94.1) Which mounts it goes on, in the player's words.
+	match int(FITS.get(w, FIT_ANY)):
+		FIT_HARD:
+			return "Ставится только в носовое неподвижное гнездо."
+		FIT_HARD | FIT_SIDE:
+			return "Ставится в носовое или бортовое гнездо, не на крышу."
+	return "Ставится в любое гнездо."
+
+
+static func turn_speed(w: int) -> float:
+	## (v94.1) Radians a second a turret with this gun turns.
+	return TURN_LIGHT if int(FITS.get(w, FIT_ANY)) == FIT_ANY else TURN_HEAVY
 
 
 static func damage_type(w: int) -> int:

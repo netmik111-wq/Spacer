@@ -797,3 +797,15 @@ so fights feel more alive". Questions `https://claude.ai/artifact/RFiT641SPv4FoH
 - The gun console always shows space (his note), Starsector-like bars for hull, heat and charges.
 - His bugs: thermal goggles only in the view cone; a side wall's joint by the airlock looked broken off.
 - `tools/fluxtest.gd` (every gun hits, heat, overload, vent, mount kinds, clips). Protocol 68, 49 test scripts.
+
+## v94.1: his answers on the v94 page
+
+He answered the 19 questions of `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`: all as built but three.
+- S4 B ("only the shield heats"): our own shots heat nothing now (`Weapons.SHOTS_HEAT` off; the heat numbers are kept).
+- M2, his note "better tie the weapon types to the points than give the points modifiers": a mount gives only its arc;
+  each gun lists the mount kinds it goes on (`Weapons.FITS`: the biggest only the bow's fixed mount, the heavy ones
+  the bow or a side), and turns at its own pace (light 120°/s, heavy 60°/s). Hand mounting, the gun console's orders
+  and its list refuse a misfit; pirates fire each gun from a mount it fits.
+- N1's comment ("so one can fire with no enemies near"): moved to v95 with the WASD system flight, where the space view
+  is always on.
+- Also: `Pirates.cut_in` never cuts in onto a walled-in nook (CI's rare peopletest failure after v94).

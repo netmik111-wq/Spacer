@@ -1088,7 +1088,7 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 	if wide > 0 and fired == 0 and not at_mount and not p.bot:
 		server.chat.tell(p, "Цель вне сектора обстрела: орудия стреляют только в свою сторону. Пилоту нужно развернуть корабль бортом.")
 	elif hot > 0 and fired == 0 and not at_mount and not p.bot:
-		server.chat.tell(p, "Корабль перегрет: орудия ждут, пока сойдёт нагрев (или сбросьте его: V у пульта управления).")
+		server.chat.tell(p, "Щит перегружен или идёт сброс нагрева: орудия молчат, пока это не кончится.")
 	if fired > 0:
 		p.train(Net.SKILL_GUNS)
 		if ransom > 0 and engaged():

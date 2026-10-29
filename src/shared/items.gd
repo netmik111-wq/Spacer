@@ -305,7 +305,7 @@ static func about(item: int) -> String:
 		if INFO[item].has("damaged"):
 			return "Повреждено: прежде чем ставить, его чинит инженер на верстаке (одна запчасть). " + str(Weapons.info(w)["about"])
 		var fx := int(INFO[item].get("fx", 0))
-		return str(Weapons.info(w)["about"]) + " Энергия: %d." % Weapons.power(w) + ("" if fx == 0 else " " + Weapons.about_fx(fx))
+		return str(Weapons.info(w)["about"]) + " Энергия: %d. " % Weapons.power(w) + Weapons.fit_words(w) + ("" if fx == 0 else " " + Weapons.about_fx(fx))
 	if INFO.has(item) and INFO[item].has("gear"):
 		return Gear.about(int(INFO[item]["gear"]))
 	if INFO.has(item) and INFO[item].has("seed"):

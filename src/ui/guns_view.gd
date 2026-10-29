@@ -502,9 +502,12 @@ func _update_guns(fighting: bool) -> void:
 			change.clear()
 			# (v60) the console gives the order; somebody carries the gun from the locker and puts it up by hand
 			change.add_item("Приказ: сменить оружие…", -1)
+			var kind := ArenaShape.kind_in_fleet(client.map, client.map.guns[i]) if i < client.map.guns.size() else ArenaShape.MOUNT_SIDE
 			for k: Array in cargo:
 				var kw := Weapons.of_item(k[0])
 				var gun_name := Weapons.full_name(kw, Weapons.fx_of(k[0]))
+				if not Weapons.fits(kw, kind) and want != k[0]:
+					continue                 # (v94.1, his M2 note) it does not go on this kind of mount
 				change.add_item("Отменить приказ: %s" % gun_name if want == k[0]
 					else "Принести и поставить: %s (в шкафу %d, %d эн.)" % [gun_name, k[1], Weapons.power(kw)], k[0])
 			if w != Weapons.NONE:

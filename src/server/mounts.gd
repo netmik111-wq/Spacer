@@ -29,6 +29,7 @@ const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Player := preload("res://src/server/player.gd")
+const ArenaShape := preload("res://src/shared/arena_shape.gd")
 
 const MOUNT_PACE := 0.25             # a gun with a gunner at it charges this much faster (the author's W1)...
 const MOUNT_SKILL_PACE := 0.25       # ... and this much more again with the best gunnery skill
@@ -171,6 +172,9 @@ func can(p: Player, cell: int) -> String:
 			return "«Заслон» ставят в его собственное гнездо с пульта орудий."
 		if Weapons.damaged(item):
 			return "Орудие повреждено: сначала его чинят на верстаке."
+		var why := misfit(w, cell)
+		if why != "":
+			return why                       # (v94.1, his M2 note) it does not go on that kind of mount
 		if server.ship.broken.has(cell):
 			return NOT_HERE                  # (mended first: holding "use" on it mends it)
 		if p.bot and wanted[i] != item:
@@ -189,6 +193,18 @@ func can(p: Player, cell: int) -> String:
 			return NOT_HERE                  # (v92) in a fight "use" at a gun takes its controls (Arena), not the gun down
 		return ""
 	return NOT_HERE
+
+
+static func misfit_of(w: int, kind: int) -> String:
+	## (v94.1) "" if that gun goes on a mount of that kind, else why not, in the player's words. GameClient.mount_here
+	## and the gun console ask the same.
+	if Weapons.fits(w, kind):
+		return ""
+	return "%s не встаёт в гнездо «%s». %s" % [Weapons.name_of(w), ArenaShape.MOUNT_NAMES_OF[kind], Weapons.fit_words(w)]
+
+
+func misfit(w: int, cell: int) -> String:
+	return misfit_of(w, ArenaShape.kind_in_fleet(server.map, cell))
 
 
 func ticks(p: Player) -> int:
@@ -261,6 +277,10 @@ func order(p: Player, i: int, item: int) -> void:
 		return
 	if item == on:
 		wanted[i] = WANT_NONE
+		return
+	var why := misfit(w, server.map.guns[i])
+	if why != "":
+		server.chat.tell(p, "Орудие %d: %s" % [i + 1, why])
 		return
 	if wanted[i] == item:
 		wanted[i] = WANT_NONE                # the same order again takes it back

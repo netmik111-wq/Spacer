@@ -1997,3 +1997,17 @@ Questions on `https://claude.ai/artifact/RFiT641SPv4FoHqLDujHRC`; built on my pi
 - (v94, after the build, mine) `Pirates.cut_in` never cuts in onto a cell with no walkable neighbour. ship02's
   cell 39,13 (between the helm and the drone monitor, against the hull) is such a nook since v91: a boarder cut in
   there stood forever (peopletest's robber failed 1 run in 16). The fix reaches players with the next build.
+
+## v94.1: his answers on the v94 page
+
+- His S4 B: firing does not heat the ship; only the shield does. `Weapons.SHOTS_HEAT` is a switch rather than deleting
+  the heat numbers, in case his play says otherwise. With it off a gun waits only for an overload or venting.
+- His M2 note ("better tie the weapon types to the points than give the points modifiers"). My reading, which he picked on a
+  decision card (2026-10-29): each gun says which mount kinds it fits; the mount's damage x1.25/x0.8 and scatter are gone.
+  Fits: siege laser, railgun, Devastator, Nova only the fixed bow mount (they need the whole ship pointed); heavy laser,
+  Phoenix, ion cannon, Storm, Hammer, Reaper the bow or a side; everything else anywhere. Turning is the gun's (as in
+  Starsector): 120°/s light, 60°/s heavy. A gun already on a misfit mount (old saves, tests) stays and works: only putting
+  one up checks. Pirates' weapons pick a fitting mount (`Arena._their_gun`); a pirate drawing with no fitting mount fires
+  from its own. The mount kind outside the arena comes from `ArenaShape.kind_in_fleet` (a shape cached per map and ship).
+- His N1 comment (fire with no enemies near) waits for v95: the arena runs only in a fight now, and v95's WASD flight
+  keeps space on all the time, which is where firing at nothing belongs.
