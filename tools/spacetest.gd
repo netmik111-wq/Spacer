@@ -142,18 +142,22 @@ func _initialize() -> void:
 	server.director.auto = false
 	server.story.auto = false                             # (no comms calls: their outcomes may pay credits)
 	server.story.m1_next = 1 << 30        # (the chapter's mission and SOS sectors call even so; those are kept off below)
-	# a ship under way when the jump is set coasts straight on, whatever point it was making for
+	# (v95) a ship under way when the jump is set: the autopilot lets go, and it drifts on until the jump takes it
+	server._tick()
 	var from: Vector2 = server.ship.pos
-	server.ship.dest = from + Vector2(20, 0)
-	server.ship.moving = true
+	server.arena.course_asked(true, from + Vector2(40, 0))
+	for t in 4 * Net.TICK_HZ:
+		server._tick()
+	var under_way: float = server.arena.body(0).vel.length()
+	var at_jump: Vector2 = server.ship.pos
 	server.story.sos_done[Sectors.key(server.sectors.cell[server.sectors.neighbours(server.ship.sector)[0]])] = true
 	server.navigation.start_jump(server.sectors.neighbours(server.ship.sector)[0], "Проверка")
-	_expect(server.ship.moving and server.ship.dest == Vector2(Sectors.SPAN, from.y), "set for a jump, a moving ship coasts on to the edge of the sector instead of its old course")
+	_expect(under_way > 2.0 and not server.arena.course, "set for a jump, a ship under way (%.1f cells/s) lets go of its course" % under_way)
 	for t in Net.JUMP_TICKS - 2:
 		server._tick()
-	var went: float = server.ship.pos.x - from.x
-	_expect(absf(went - Sectors.SHIP_SPEED * (Net.JUMP_TICKS - 2) / Net.TICK_HZ) < 0.2 and server.ship.pos.y == from.y,
-		"and keeps its speed and heading until the jump (%.1f units in %.0f s)" % [went, (Net.JUMP_TICKS - 2) / float(Net.TICK_HZ)])
+	var went: float = server.ship.pos.x - at_jump.x
+	_expect(went > 1.0 and absf(server.ship.pos.y - at_jump.y) < 1.0,
+		"and drifts on until the jump (%.1f units in %.0f s)" % [went, (Net.JUMP_TICKS - 2) / float(Net.TICK_HZ)])
 	for t in 4:
 		server._tick()
 	_expect(not server.ship.moving and server.ship.pos == server.sectors.entry[server.ship.sector], "it comes out of the jump standing still at its place of arrival")

@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v94.1 (version 0.87.1).
+Last updated: build v95 (version 0.88).
 
 Contents:
 
@@ -54,6 +54,7 @@ Contents:
 44. [The author's tile set (v90)](#44-the-authors-tile-set-v90)
 45. [Machines on the floor, doors, windows, wall boxes (v91)](#45-machines-on-the-floor-doors-windows-wall-boxes-v91)
 46. [The fight like Starsector: heat, armour, hull points, mount kinds (v94)](#46-the-fight-like-starsector-heat-armour-hull-points-mount-kinds-v94)
+47. [Flying round the system in space (v95)](#47-flying-round-the-system-in-space-v95)
 
 ---
 
@@ -739,7 +740,8 @@ what is only **worn**, then one to its **guns**, one to its **shield generator**
 
 ### The fight in space (v92)
 
-(v94: guns, shields and damage in space changed, see section 46.)
+(v94: guns, shields and damage in space changed, see section 46. v95: the ship is in space all the time, there is
+no circle, and breaking off is distance from the pirates; see section 47.)
 
 Since v92 (the author's roadmap, item 0) a ship fight happens in real time in space, like Starsector, but every gun
 is worked by a person. Inside, the ship is the same grid it always was and never turns; outside, each ship is a
@@ -1300,6 +1302,9 @@ The author's road plan, part 3. New kinds of enemy and new ways for them to get 
   of the time; rockets still 60%. A railgun's slug is too quick for it. This works for us and for pirates alike.
 
 ## 18. Bridge and flight within a sector
+
+(v95: the ship control console no longer shows the sector map: the ship is flown in space with WASD or by a click
+on the small map; see section 47. The sector map console and jumps are as below.)
 
 - The bridge has two consoles (power needed):
   - **sector map** (green screen): the cluster (section 19, "The chart") and jumping. At the bottom of the map there is a legend:
@@ -2684,3 +2689,48 @@ Bombs keep their old pace and effects (teleported in, past shields).
 - **Thermal goggles** show people through walls only inside the field of view, never behind one's back.
 - **A side wall's joint** (├ ┤ by an airlock or door): the wall seen going on above and below the joint is shown for half
   a cell more, so it no longer looks broken off at the edge of sight.
+
+## 47. Flying round the system in space (v95)
+
+His Notebook note: "the old control of the ship needs to be gone, so people see the ship as in the battle and can move
+towards things with WASD round the map". Questions on the page "Spacer v95" (https://claude.ai/artifact/Y5SD56y9aj1rZMF9KFEJGa),
+all answered A; his P2 note added the pod bay.
+
+- **Always in space**: our ships are bodies in space all the time, not only in a fight. One unit of the system's map is
+  **4** cells of space, so a system (200 x 200) is **800** cells across. Where the ship is in space is where it is on
+  the chart: places, the station, the trader and meteors are reached by flying there.
+- **The ship control console** shows space (as in a fight): **W/S** ahead and back, **A/D** turn, **Q/E** sideways, as
+  in a fight. Top speed **6** cells/s (1.5 units/s, the old helm's pace), push **1.6**; let go and the ship coasts
+  on, its dampers taking **25%** of the speed a second until it stops.
+- **The small map** (top right of the space view, **150** px) shows the whole system: its edge, places, the station,
+  traders, meteor streams, the ship and pirates. A **click** on it sets the autopilot: the ship turns and flies there
+  by itself and stops within **1.5** cells, even with nobody at the controls. Any key of the pilot takes over.
+  «Стоп» brakes it to a stop.
+- **Space round the ship** shows what is near: places with their rings and names, the station, the meteor stream, the
+  ship alongside drawn where it lies.
+- **Fuel**: only while the engines push, **0.1** a unit of the system's map (as before). Coasting is free. An empty tank:
+  no push, the ship drifts.
+- **The system's edge is a wall**: the only way out of a system is a jump.
+- **Held still**: while somebody is outside, a ship is docked alongside or our people are aboard it, the engines do not push (the console says
+  why). No engine or no power: it drifts.
+- **A jump**: the ship goes on flying until the jump; then it stands at its place of arrival. The autopilot stops at
+  a jump.
+- **Our second ship** keeps its place in formation behind the first (**14** cells gap) out of a fight; either helm
+  flies both. In a fight it flies by itself, after the fight it goes back into formation.
+- **Firing with no enemy** (his N1 A): a gun can be fired at any time: by hand at the mount (hold anything but a
+  gun or a round for it; empty hands still take the gun down out of a fight), with the mouse at the controls or at
+  the gun console. Shots fly off and are gone; they hit nothing yet (meteors and asteroids later). Rounds are spent as
+  in a fight, lasers cost nothing.
+- **A fight** starts where the ship is; a raider comes out of the dark about **70** cells off; an ambush comes out
+  of the place where it lay (his B2 A). There is no circle any more.
+- **Breaking off** (his B1 A): our first ship **170** cells from every pirate for **3** s: the pirates are left
+  behind. A fleeing pirate that gets **1.15 x 170** cells from all our ships is gone.
+- **Boarding pods** (his P1 and P2): a pirate ship may carry a **pod bay** (raider **40%**, gunship **50%**, cruiser
+  **60%**; cutters and drone ships none). A boarding ship with one, kept farther than **40** cells (plus our size),
+  sends a pod with **2** of its crew: the first after **25** s, then every **50** s, at most **2** a fight, and only
+  while it keeps **2** of its crew at home. A pod flies **16** cells/s for up to **12** s and turns after our ship;
+  it passes the shield. Our point defence fires at it once as it comes (its usual chance), and **2** hits of our
+  shots break it. One that strikes breaches the hull where it hits and puts its people in there.
+- **Assault drones** (his P3 A; the drone ship, the flagship) fly the same way: seen, shot down by point defence
+  and our guns, and cut in where they strike, with a robot.
+- **The packet** says whether a fight goes on and whether the autopilot flies (protocol **69**).

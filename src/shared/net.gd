@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 68
+const PROTOCOL := 69
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -250,7 +250,7 @@ const C_SHUTTLE := 36               # (v86) u8 SHUTTLE_*, u8 the ship of our fle
 const C_PILOT := 37                 # (v92) u8 the pilot's keys (Arena.KEY_*): from the ship's controls in the fight's space
 const C_TURRET := 38                # (v92) u8 gun, s16 x*8, s16 y*8 (the point aimed at, in the fight's space), u8 1 = the
                                     # trigger held: from a gun's mount, by the one who took its controls
-const S_ARENA := 50                 # (v92) the fight's space, to all (Arena.packet): u32 tick, u8 count, then per ship
+const S_ARENA := 50                 # (v92) the fight's space, to all (Arena.packet): u32 tick, (v95) u8 ARENA_FIGHT|COURSE, u8 count, then per ship
                                     # u8 body, u8 ARENA_*, s16 drawing (-1 ours), s16 x*8, y*8, vx*8, vy*8, u16 heading,
                                     # s16 spin*1000, u8 shield, u8 guns, per gun s16 aim*1000, u8 1 bears | 2 by hand
 const S_ARENA_SHOT := 51            # (v92) a shot there: u8 ARENA_SHOT_*, then FLY: u16 id, u8 SHOT_*, u8 side (0 ours),
@@ -261,6 +261,8 @@ const ARENA_THRUST := 1             # its engines push now
 const ARENA_GLUED := 2              # docked: it rides alongside the ship it boards
 const ARENA_PILOTED := 4            # a player steers it
 const ARENA_ARC_SHIFT := 3           # (v93) bits 3..5: the shield's shape, 0 a bubble, 1..4 an arc on the bow, starboard, stern, port
+const ARENA_FIGHT := 1              # (v95) S_ARENA's head: a fight goes on (else our ships fly round the system)
+const ARENA_COURSE := 2             # (v95) the autopilot flies the fleet to its course (S_HELM's dest)
 const ARENA_RAISED := 1             # (v94) S_ARENA's shield state: the shield is up
 const ARENA_OVERLOAD := 2           # it is overloaded
 const ARENA_VENT := 4               # its ship vents its heat
@@ -486,6 +488,8 @@ const SHOT_HAMMER := 19             # the «Молот»: a heavy glowing slug
 const SHOT_BOMB := 20               # (v62) a bomb: no flight across, a shimmer where it is teleported in, then its burst
 const SHOT_SHRAPNEL := 21           # (v62) «Шрапнель»: a cloud of small glowing fragments
 const SHOT_FLASH := 22              # (v70) a flashbang or a boarder's bomb bursting: a white flash at `to`
+const SHOT_POD := 23                # (v95) a pirates' boarding pod flying in space (S_ARENA_SHOT only)
+const SHOT_DRONE := 24              # (v95) an assault drone flying in space (S_ARENA_SHOT only)
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2

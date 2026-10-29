@@ -114,8 +114,9 @@ func _fuel() -> void:
 	var was: float = ship.tank
 	_run(Net.TICK_HZ * 10)
 	var went: float = ship.pos.x - 50.0
-	_expect(went > 5.0 and absf((was - ship.tank) - went * Net.FLIGHT_FUEL) < 0.05,
-		"flying %.1f units of distance burns %.2f fuel" % [went, was - ship.tank])
+	# (v95) only while the engines push: a stretch it coasts on costs nothing
+	_expect(went > 5.0 and was - ship.tank <= went * Net.FLIGHT_FUEL + 0.05 and was - ship.tank >= went * Net.FLIGHT_FUEL * 0.5,
+		"flying %.1f units of distance burns %.2f fuel (at most %.2f)" % [went, was - ship.tank, went * Net.FLIGHT_FUEL])
 	ship.tank = 0.5
 	ship.dest = Vector2(190, 50)
 	ship.moving = true

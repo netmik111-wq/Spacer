@@ -175,6 +175,7 @@ var boss := 0                        # (v57) the flagship at the goal point: 1 b
 const STUN_FLOOR := -10.0           # (v57) a neural shot takes health no lower than this: down for a while, not dead
 const BOSS_AIM := 0.8                # (v57) the battleship's shots go for what it means to hit this often (else the hull near the crew)
 var crewless := false                # (v62) a drone ship: no crew at its posts, a machine fights
+var pods := false                    # (v95, his P2 note) it carries a pod bay (Arena sends boarding pods)
 var teleport := false                # (v62) it carries a teleporter (an ordinary pirate's: see Assault)
 var target := 0                      # (v85, the author's FS5) the ship of our fleet it fights and boards (Fleet.target)
 var foe := 0                         # (v86, the author's E1) the enemy our guns aim at: 0 the ship alongside, 1 its wingman (Wing)
@@ -239,6 +240,7 @@ func enemy_arrives(design: Dictionary, p_raid: bool = false, wingman: bool = fal
 	boss = int(design.get("boss", 0))
 	crewless = bool(design.get("drone", false))
 	teleport = bool(design.get("teleport", false))
+	pods = bool(design.get("pods", false))
 	phase2 = false
 	raid = p_raid
 	flee = -1.0
@@ -783,7 +785,7 @@ func tick() -> void:
 	for cell: int in ship.jammed.keys():
 		if server.tick >= int(ship.jammed[cell]):
 			ship.jammed.erase(cell)
-	var space: bool = server.arena.on()
+	var space: bool = server.arena.flying()    # (v95) guns keep their space pace out of a fight too (firing with no enemy)
 	for i in charge.size():
 		var w: int = ship.mounts[i]
 		if w == Weapons.NONE or ship.armed[i] == 0:
@@ -798,7 +800,7 @@ func tick() -> void:
 	# our shield: it falls without power, its generator or when switched off; it holds while ionised
 	# ((v94) in space its strength is what its heat leaves, set by Arena)
 	var gen := shield_cell()
-	if space:
+	if server.arena.on():
 		pass
 	elif gen < 0 or not ship.shield_on or not server.powered() or ship.broken.has(gen):
 		ship.shield = 0.0
@@ -1012,6 +1014,27 @@ func _escaped() -> void:
 	goal_lost = true
 
 
+func _practice(i: int) -> void:
+	## (v95, the author's N1 comment "so one can fire with no enemies near") Gun i fired by hand (at its mount, or by the
+	## helm's or the gun console's mouse) out of a fight: its burst flies off and is gone. Rounds and rockets are spent as
+	## in a fight (a clip), lasers cost nothing; beams, the tractor, the siphon and bombs need a target.
+	var map = server.map
+	var ship = server.ship
+	if i < 0 or i >= charge.size() or charge[i] < 1.0 or ship.armed[i] != 1 or ship.broken.has(map.guns[i]) or jammed(map.guns[i]) \
+			or beam_left[i] > 0:
+		return
+	var w: int = ship.mounts[i]
+	if w == Weapons.NONE or _instant(w) or not server.arena.bears(server.fleet.on, i):
+		return
+	if not server.mounts.take_round(i):
+		return
+	charge[i] = 0.0
+	server.mounts.fired(i)
+	var cell: int = map.guns[i]
+	server.combat.jolt(Net.JOLT_FIRE, w, Vector2(cell % map.width, cell / map.width))
+	server.arena.practice(server.fleet.on, i, w)
+
+
 func fire(p, which: int) -> void:
 	## Somebody at the gun console fires one gun, or every gun that is ready (which = 255),
 	## (v86) at the enemy the console picked (foe).
@@ -1033,7 +1056,9 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 	if not at_mount and not server.systems.at_console(p, map.gun_console):
 		return
 	if not engaged():
-		if not at_mount:
+		if at_mount and server.arena.flying() and not server.arena.on():
+			_practice(which)                 # (v95, the author's N1 comment) firing with no enemy near
+		elif not at_mount:
 			server.chat.say("Стрелять не по кому: целей нет.")
 		return
 	var arena = server.arena

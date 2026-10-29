@@ -32,7 +32,9 @@ func danger_kind() -> int:
 
 func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 	## A player at the ship's controls sets a course inside the sector, or stops the ship.
-	if not server.systems.at_console(p, server.map.helm) or server.ship.jump_to != Net.NO_SECTOR or server.engine_down():
+	if not server.systems.at_console(p, server.map.helm):
+		return
+	if go and (server.ship.jump_to != Net.NO_SECTOR and not server.arena.flying() or server.engine_down()):
 		return
 	var held := server.derelict.holds_ship()
 	if go and held != "":
@@ -42,12 +44,21 @@ func helm_asked(p: Player, go: bool, to: Vector2) -> void:
 		server.chat.say("Баки пусты: своим ходом корабль не пойдёт. Залейте канистру топлива у двигателя.")   # (v67)
 		return
 	server.fleet.use(0)                  # (v85, the author's FS4) either ship's helm moves the whole fleet: the first leads
+	if server.arena.flying():
+		server.arena.course_asked(go, to)    # (v95) the helm's small map: the autopilot flies there
+		return
 	server.ship.moving = go
 	server.ship.dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else server.ship.pos
 	server.to_all(server.ship.helm_packet(server.tick))
 
 
 func update() -> void:
+	if not server.arena.flying():
+		_old_flight()                        # (v95: only with the fight's space switched off, as some tests do)
+	_reach()
+
+
+func _old_flight() -> void:
 	if server.ship.moving and server.ship.jump_to == Net.NO_SECTOR and server.tick % 10 == 0 and server.derelict.someone_outside():
 		# (v80, the author's note: "if people are outside they are left behind and die") somebody went out
 		# while the ship was flying in the system: it stops for them
@@ -67,6 +78,9 @@ func update() -> void:
 		if server.ship.pos.is_equal_approx(server.ship.dest):
 			server.ship.moving = false
 			server.to_all(server.ship.helm_packet(server.tick))
+
+
+func _reach() -> void:
 	var now_in := server.sectors.within_reach(server.ship.sector, server.ship.pos)
 	if now_in == server.ship.in_reach:
 		return
@@ -169,7 +183,9 @@ func start_jump(target: int, by: String) -> void:
 	server.ship.jump_tick = server.tick + charge
 	tell_nav()
 	server.chat.say("%s задаёт курс: %s. Прыжок через %d секунд." % [by, server.sectors.describe(target), charge / Net.TICK_HZ])
-	if server.ship.moving and not server.ship.pos.is_equal_approx(server.ship.dest):
+	if server.arena.flying():
+		server.arena.course = false          # (v95) the autopilot lets go: the ship flies on as the pilot keeps it
+	elif server.ship.moving and not server.ship.pos.is_equal_approx(server.ship.dest):
 		# The ship is leaving for the jump: the course it was on no longer counts.
 		# It coasts straight on, on its inertia, until the jump takes it.
 		var way := (server.ship.dest - server.ship.pos).normalized()
@@ -249,6 +265,7 @@ func landed() -> void:
 	server.ship.pos = server.sectors.entry[server.ship.sector]
 	server.ship.dest = server.ship.pos
 	server.ship.moving = false
+	server.arena.placed()                    # (v95) the fleet comes out of the jump standing still
 	server.ship.in_reach = server.sectors.within_reach(server.ship.sector, server.ship.pos)
 	tell_nav()
 	server.to_all(server.ship.helm_packet(server.tick))

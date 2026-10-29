@@ -207,8 +207,10 @@ func robots_aboard() -> int:
 func launch() -> bool:
 	## One assault drone sets off for us. False if none went (enough aboard), or it was shot down.
 	var g = server.gunnery
-	if robots_aboard() + _landing.size() >= DRONES_ABOARD:
+	if robots_aboard() + _landing.size() + server.arena.drones_flying() >= DRONES_ABOARD:
 		return false
+	if server.arena.on() and server.arena.of_enemy(0) != null:
+		return server.arena.launch_pod(0, true)   # (v95, my P3 pick) it flies in space, seen, and can be shot down
 	if g.guard_ready():
 		g.guard_charge = 0.0
 		var map = server.map

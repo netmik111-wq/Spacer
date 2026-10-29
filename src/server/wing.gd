@@ -19,7 +19,7 @@ const ENEMY: Array[String] = ["held_until", "enemy_hull", "systems", "systems_fu
 	"enemy_weapons", "enemy_fx", "enemy_charge", "enemy_guard", "_enemy_guard_ready", "enemy_armour", "raid", "enemy_full",
 	"klass", "temper", "temper_known", "room_sys", "revealed", "reward", "_regen", "_slower", "_dodge", "_scan_next", "flee",
 	"_mend_next", "_mend_part", "ransom", "ransom_until", "_offered", "_over", "goal", "goal_lost", "goal_pay", "cargo_room",
-	"boss", "crewless", "teleport", "target", "phase2", "_flying"]
+	"boss", "crewless", "teleport", "pods", "target", "phase2", "_flying"]
 const CHANCE := [0.25, 0.1, 0.4]     # per mode (Net.MODE_NORMAL, EASY, HARD): the share of fights that get a wingman
 const JOIN_SECONDS := Vector2(25.0, 50.0)   # it comes this long into the fight
 const LAST_RUN := 12.0               # seconds it takes to charge its jump once the ship alongside is beaten

@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v94.1 (version 0.87.1: his v94 answers, guns fit mount kinds, no heat from firing) is the latest. Plans one to four are done except the darkness front (the
+Build v95 (version 0.88: flying round the system in space with WASD, firing with no enemy, boarding pods) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -142,9 +142,13 @@ through = one hit inside), three mount kinds (fixed, side 180°, roof 360°; `^`
 off), ammunition clips, the gun console always in space; his notes: thermal only in the view cone, a side wall's joint.
 v94.1 (his answers on that page, all A but S4 B: firing heats nothing; his M2 note: a mount gives only its arc, each gun
 fits certain mount kinds, `Weapons.FITS`, and turns at its own pace).
-Next: v95 his note "fly the ship round the system with WASD instead of the old helm map" (needs questions; with it his N1
-comment: firing with no enemy near), then docking
-and boarding pods, choosing the enemy deck, places, arsenal, races.
+v95 (his Notebook note "fly with WASD instead of the old helm map" and N1; answers on `https://claude.ai/artifact/Y5SD56y9aj1rZMF9KFEJGa`,
+all A): our ships are bodies in space always (4 cells a unit), WASD and an autopilot by a click on the small map, fuel only
+while pushing, the edge a wall, practice fire, no fight circle (break off at 170 cells from every pirate), ambushes from
+their place, pirates' boarding pods (only ships with a pod bay, his P2 note) and assault drones flying in space.
+Next: places (stations and places drawn, dockable and landable, drawn only when near: his F5 comment), our pods and
+teleport (P4), meteors and asteroids as targets (N2), better bot fighting (his P1 comment), choosing the enemy deck,
+arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -175,7 +179,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 49 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 50 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -225,6 +229,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/armourtest.gd (since v93: armour, penetration, slant, wear, ricochet, mending outside, all guns from the helm, the shield's arc)
     godot --headless --path . --script res://tools/eyestest.gd (since v93: goggles, night vision, thermal through walls)
     godot --headless --path . --script res://tools/fluxtest.gd (since v94: every gun in space, heat, overload, vent, the pilot's shield, mount kinds, clips)
+    godot --headless --path . --script res://tools/flighttest.gd (since v95: flying the system, autopilot, edge, held, jump, practice fire, break-off, ambush, pods)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -249,7 +254,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 49 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 50 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -610,6 +615,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
   a mount kind outside the arena comes from `kind_in_fleet`, never a new `of_fleet` per call. A turret's pace is
   `Arena._turn` (its gun's `Weapons.turn_speed`); a pirate's weapon fires from `Arena._their_gun`, not `weapon % guns`.
   Firing heats nothing while `Weapons.SHOTS_HEAT` is off (his S4 B).
+- (v95) The arena runs always (`arena.flying()`: our bodies exist; `arena.on()`: a fight). Our first body's place is written
+  to `Ship.pos` each tick (`Arena.SCALE` cells a unit): setting `Ship.pos` by hand re-places the fleet (`_told_pos`), setting
+  a body's `pos` by hand keeps it; `Ship.dest`/`moving` set by hand become the autopilot's course (`_told_dest`). With
+  `arena.enabled = false` the old `Navigation._old_flight` flies instead. The system's edge clamps our body (tests that
+  put our ship at negative coordinates get it pushed back in). Fuel burns only while `Body.thrusting`. Pods and drones are
+  shot dictionaries with `"pod"`; practice shots carry `"practice"` (never notify Gunnery). Pods need `Gunnery.pods` (the
+  pod bay, in `Wing.ENEMY`; `shipyard.force_pods` for tests) and `arena.pods_on`; `arena.launch_pod` sends one at once.
+  `S_ARENA`'s byte 5 is flags (`ARENA_FIGHT`, `ARENA_COURSE`), the count is byte 6, records from 7 (protocol 69).
+  `fleet.follow()` runs again after `arena.tick()`.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

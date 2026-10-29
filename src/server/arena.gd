@@ -39,13 +39,19 @@ extends RefCounted
 ## INSIDE_UNIT of it is one hit inside (Gunnery's old point of damage: a breach, a system worn, the wounded).
 ## The pilot raises the shield with the right mouse button and turns its arc with the mouse (C_SHIELD); with nobody
 ## holding it, the shield goes up when a shot comes and down to cool (the bots, and the pirates).
-## Everything here is for the ship fight only: while no pirate fights, nothing exists.
+## (v95, the author's note: "the old ship control must go: people see the ship as in a fight and fly to things with
+## WASD round the map") Our ships are bodies here always, in the system's own space (Ship.pos x SCALE): the pilot
+## flies them with the same keys in and out of a fight, a click on the helm's small map sets a course the autopilot
+## flies (`course`, Ship.dest), and a fight starts wherever the ship is. Out of a fight our second ship rides in
+## formation behind the first. Breaking off is getting RADIUS from every pirate. Guns fire by hand with no enemy near
+## (`practice`): the shots fly off and are gone. Pirates' boarding pods and assault drones fly here (`launch_pod`).
 ## Part of the server: GameServer keeps one of these and calls into it.
 
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const ArenaShape := preload("res://src/shared/arena_shape.gd")
 const Player := preload("res://src/server/player.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
 
 const LEAD := 2                      # the body of the ship alongside (0 and 1: the ships of our fleet)
 const WING := 3                      # and of its wingman
@@ -53,8 +59,7 @@ const BODIES := 4
 const RADIUS := 170.0                # cells from the fight's middle to its edge
 const START_RANGE := 70.0            # a pirate comes out of the dark this far off
 const WING_RANGE := 95.0
-const LEAVE_SECONDS := 3.0           # our ship out past the edge this long, with no pirate near, is out of the fight
-const LEAVE_GAP := 60.0              # how far the nearest pirate must be for that
+const LEAVE_SECONDS := 3.0           # (v95) our ship RADIUS from every pirate this long is out of the fight
 const DOCK_NEAR := 24.0              # a boarding ship's docking clock runs only this close
 const BUMP_REST := 2 * Net.TICK_HZ   # ticks between two blows of the same two ships meeting
 const BUMP_SPEED := 2.0              # cells a second they must close at for a blow
@@ -69,6 +74,15 @@ const GUARD_RANGE := 16.0            # cells off the hull the point defence meet
 const HIT_NEAR := 3.0                # a pirate shot this near the thing it aimed at puts that thing out
 const BEAM_RANGE := 90.0             # cells a beam, a tractor or a siphon reaches (bombs too)
 const DT := 1.0 / Net.TICK_HZ
+const SCALE := 4.0                   # (v95) cells of space per unit of the system's map (Sectors.SPAN): 800 cells across
+const CRUISE_EVERY := 4              # (v95) ticks between two S_ARENA out of a fight
+const STILL := 0.4                   # (v95) cells a second: a ship with no thrust this slow stops (its dampers)
+const NEAR_GOAL := 1.5               # (v95) cells: a course this near its mark is done
+const FORM_GAP := 14.0               # (v95) cells between our two ships in formation (as they stood in v92's fight)
+const FORM_SNAP := 3.0               # the second ship this near its place in formation takes it
+const HELD_SAY := 5 * Net.TICK_HZ    # ticks between two "the ship is held" lines
+const POD_SPEED := 16.0              # (v95, my P1 pick) cells a second a boarding pod or an assault drone flies
+const POD_LIFE := 12.0               # seconds it flies before it is lost
 const ARMOUR_OURS := 150.0           # (v94, my A1 pick) points of armour on each cell of our outer wall, before the plating
 const ARMOUR_TIER := 50.0            # and what each tier of the plating adds
 const PANE_SHARE := 0.34             # a window holds this share of its ship's plating
@@ -147,6 +161,7 @@ class Body:
 	var auto_until := 0              # (nobody holds the shield) it stays up until this tick
 	var debt := 0.0                  # hull points taken that have not made a hit inside yet
 	var shield_dir := 0.0            # the middle of an arc, in the body's frame (ours: the pilot's mouse)
+	var formed := false              # (v95) our second ship riding in formation behind the first
 
 	func overloaded(now: int) -> bool:
 		return now < over_until
@@ -176,6 +191,13 @@ var _rng := RandomNumberGenerator.new()
 var _was_on := false
 var _worn_now := {}                  # (v93) body -> {shape cell: true} worn since the last ARENA_ARMOUR
 var _our_shapes := {}                # (v93) ship of our fleet -> its ArenaShape, out of a fight too (mending from outside)
+var come_from := Vector2.INF         # (v95) where the next pirate comes into the fight from (an ambush's place), INF: the dark
+var course := false                  # (v95) the autopilot flies the fleet to Ship.dest (a click on the helm's small map)
+var _cruise := false                 # (v95) our ships are bodies in space (always, unless switched off or the run is over)
+var _told_dest := Vector2.INF        # the Ship.dest the autopilot last saw (a test or the old helm may set it by hand)
+var _told_pos := Vector2.INF         # the Ship.pos last written back (a jump, a save or a test may set it by hand)
+var _held_said := -HELD_SAY          # the tick "the ship is held" was last said
+var _burned := 0.0                   # fuel units burned since the store was last told
 
 
 func setup(p_server: GameServer) -> void:
@@ -193,12 +215,26 @@ func setup(p_server: GameServer) -> void:
 	_was_on = false
 	_worn_now = {}
 	_our_shapes = {}
+	course = false
+	_cruise = false
+	_told_dest = Vector2.INF
+	_held_said = -HELD_SAY
 	_rng.randomize()
 
 
 func on() -> bool:
 	## Is the fight in space going on now?
 	return _was_on
+
+
+func flying() -> bool:
+	## (v95) Are our ships bodies in space now, in a fight or not?
+	return _cruise
+
+
+func pushing() -> bool:
+	## (v95) Do the first ship's engines push now (flying in the system burns fuel only then)?
+	return _cruise and (bodies[0] as Body).on and (bodies[0] as Body).thrusting
 
 
 func body(i: int) -> Body:
@@ -227,34 +263,116 @@ func _wing_fights() -> bool:
 
 func tick() -> void:
 	var g = server.gunnery
-	var want: bool = enabled and g.flies and server.over == Net.OVER_NONE and (_lead_fights() or _wing_fights())
-	if not want:
-		if _was_on:
-			_stop()
+	var cruise: bool = enabled and server.over == Net.OVER_NONE
+	var want: bool = cruise and g.flies and (_lead_fights() or _wing_fights())
+	if not want and _was_on:
+		_stop()
+	if not cruise:
+		if _cruise:
+			_cruise = false
+			for b: Body in bodies:
+				b.on = false
+			server.to_all(packet())
 		return
-	if not _was_on:
+	_cruise = true
+	_ours_now()
+	if want and not _was_on:
 		_start()
-	_bodies_now()
+	if want:
+		_bodies_now()
 	for b: Body in bodies:
 		if b.on:
 			_steer(b)
 	for b: Body in bodies:
 		if b.on:
 			_move(b)
+	_formation()
 	_glue()
-	_bump()
-	for b: Body in bodies:
-		if b.on:
-			_heat_tick(b)
+	if want:
+		_bump()
+		for b: Body in bodies:
+			if b.on:
+				_heat_tick(b)
 	_aim_turrets()
 	_triggers()
 	_run_later()
 	_fly_shots()
-	_docking()
-	_edges()
-	if server.tick % SEND_EVERY == 0:
+	if want:
+		_pods_tick()
+		_docking()
+		_edges()
+	_write_back()
+	if server.tick % (SEND_EVERY if _was_on else CRUISE_EVERY) == 0:
 		server.to_all(packet())
-	_tell_armour(server.tick % ARMOUR_EVERY == 0)
+	_tell_armour(server.tick % ARMOUR_EVERY == 0)     # (v95) out of a fight too: our worn armour shows while mended
+
+
+func _ours_now() -> void:
+	## (v95) Our ships are bodies in space: made when first needed, put where Ship.pos says when something moved
+	## the ship by hand (a jump, a save, a test), and their place written back to Ship.pos (_write_back).
+	var map = server.map
+	for i in BODIES:
+		var b: Body = bodies[i]
+		if i >= LEAD:
+			break
+		if i >= map.fleet_size():
+			b.on = false
+			continue
+		if not b.on:
+			_our_body(i)
+			b.pos = server.ship.pos * SCALE + (Vector2(0.0, (bodies[0] as Body).shape.h + FORM_GAP) if i > 0 else Vector2.ZERO)
+			b.vel = Vector2.ZERO
+			b.rot = 0.0
+			b.spin = 0.0
+			b.formed = i > 0
+	if server.ship.pos != _told_pos:
+		placed()                             # Ship.pos moved by hand (a body moved by hand stays where it was put)
+	if server.ship.dest != _told_dest:
+		# a course set by hand (the old way: Ship.moving and Ship.dest, as tests and saves do)
+		course = server.ship.moving and server.ship.dest.distance_to(server.ship.pos) * SCALE > NEAR_GOAL
+		_told_dest = server.ship.dest
+	elif course and not server.ship.moving:
+		course = false
+
+
+func placed() -> void:
+	## (v95) The fleet is put where Ship.pos says (out of a jump, a save, a test), standing still, in formation.
+	var lead: Body = bodies[0]
+	if not lead.on:
+		return
+	lead.pos = server.ship.pos * SCALE
+	_told_pos = server.ship.pos
+	lead.vel = Vector2.ZERO
+	lead.spin = 0.0
+	course = false                           # (a course set by hand with it comes back through _ours_now)
+	for i in range(1, LEAD):
+		var b: Body = bodies[i]
+		if b.on and not _was_on:
+			b.formed = true
+			_form(b)
+
+
+func _our_body(i: int) -> void:
+	## A ship of our fleet as a body: its shape, guns, armour and heat, from its drawing and its gear.
+	var map = server.map
+	var b: Body = bodies[i]
+	b.on = true
+	b.layout = -1
+	b.shape = ArenaShape.of_fleet(map, i)
+	b.glued = false
+	b.stats = STATS[-1]
+	b.guns = []
+	_our_shapes[i] = b.shape
+	server.fleet.use(i)
+	for cell: int in map.guns:
+		b.guns.append(_gun(b, cell))
+	b.plates = ARMOUR_OURS + ARMOUR_TIER * server.outfit.armour_tier()
+	b.worn = server.ship.worn
+	_flux_of(b, FLUX_OF[-1])
+	b.cool *= server.outfit.shield_regen() / Weapons.SHIELD_REGEN
+	if server.outfit.hardened():
+		b.eff *= HARDENED_EFF
+	server.fleet.use(0)
 
 
 func _start() -> void:
@@ -263,31 +381,20 @@ func _start() -> void:
 	_later = []
 	_bumped = {}
 	for b: Body in bodies:
-		b.on = false
+		if b.id >= LEAD:
+			b.on = false
 	var map = server.map
 	for i in map.fleet_size():
 		var b: Body = bodies[i]
-		b.on = true
-		b.layout = -1
-		b.shape = ArenaShape.of_fleet(map, i)
-		b.pos = Vector2(0.0, 0.0 if i == 0 else (bodies[0] as Body).shape.h + 14.0)
-		b.vel = Vector2.ZERO
-		b.rot = 0.0
-		b.spin = 0.0
-		b.glued = false
-		b.stats = STATS[-1]
-		b.guns = []
-		_our_shapes[i] = b.shape
-		server.fleet.use(i)
-		for cell: int in map.guns:
-			b.guns.append(_gun(b, cell))
-		b.plates = ARMOUR_OURS + ARMOUR_TIER * server.outfit.armour_tier()
-		b.worn = server.ship.worn
-		_flux_of(b, FLUX_OF[-1])
-		b.cool *= server.outfit.shield_regen() / Weapons.SHIELD_REGEN
-		if server.outfit.hardened():
-			b.eff *= HARDENED_EFF
-		server.fleet.use(0)
+		var keep := [b.pos, b.vel, b.rot, b.spin]
+		_our_body(i)                         # (gear may have changed since: the plating, the shield's regen)
+		b.pos = keep[0]
+		b.vel = keep[1]
+		b.rot = keep[2]
+		b.spin = keep[3]
+		b.formed = false                     # (v95) in a fight each ship of ours flies on its own
+	_pod_next = -1
+	_pods_sent = 0
 	_worn_now = {}
 	_tell_armour(true)
 
@@ -295,15 +402,118 @@ func _start() -> void:
 func _stop() -> void:
 	_was_on = false
 	for p: Dictionary in shots:
-		_ended(p, Net.MISSED, p["pos"])
+		if not p.has("practice"):
+			_ended(p, Net.MISSED, p["pos"])
 	shots = []
 	_later = []
 	for b: Body in bodies:
-		b.on = false
-	pilots = [{}, {}]
+		if b.id >= LEAD:
+			b.on = false
+		else:
+			b.heat = 0.0                     # (v95) our ships stay in space: out of the fight they are cool again
+			b.hard = 0.0
+			b.over_until = 0
+			b.venting = false
+			b.raised = false
+			b.debt = 0.0
 	turrets = [{}, {}]
 	shields = [{}, {}]
+	for i in server.fleet.size():
+		(server.fleet.ships[i]).shield = 0.0
 	server.to_all(packet())
+
+
+func _formation() -> void:
+	## (v95, my F6 pick) Out of a fight our second ship keeps its place behind the first (either helm flies both, as the
+	## author's FS4); after a fight it flies back to it first.
+	if _was_on:
+		return
+	var lead: Body = bodies[0]
+	for i in range(1, LEAD):
+		var b: Body = bodies[i]
+		if not b.on or not lead.on:
+			continue
+		var slot := lead.world(Vector2(0.0, lead.shape.h + FORM_GAP))
+		if b.formed or b.pos.distance_to(slot) <= FORM_SNAP:
+			b.formed = true
+			_form(b)
+
+
+func _form(b: Body) -> void:
+	var lead: Body = bodies[0]
+	b.pos = lead.world(Vector2(0.0, lead.shape.h + FORM_GAP))
+	b.rot = lead.rot
+	b.vel = lead.vel
+	b.spin = lead.spin
+	b.thrusting = lead.thrusting
+
+
+func _write_back() -> void:
+	## (v95) Where the first ship of ours is goes back to Ship.pos (the system's units): the places, the station,
+	## the meteor stream and the chart read it there. A ship under way burns fuel by the distance it was pushed.
+	var lead: Body = bodies[0]
+	if not lead.on:
+		return
+	var side := Sectors.SPAN * SCALE
+	var was: Vector2 = server.ship.pos
+	if lead.pos.x < 0.0 or lead.pos.x > side or lead.pos.y < 0.0 or lead.pos.y > side:
+		# the system's edge is a wall: out of it only by a jump
+		if lead.pos.x < 0.0 or lead.pos.x > side:
+			lead.vel.x = 0.0
+		if lead.pos.y < 0.0 or lead.pos.y > side:
+			lead.vel.y = 0.0
+		lead.pos = lead.pos.clamp(Vector2.ZERO, Vector2(side, side))
+	server.ship.pos = lead.pos / SCALE
+	_told_pos = server.ship.pos
+	if lead.thrusting and server.ship.jump_to == Net.NO_SECTOR and not server.fleet.is_lost():
+		# (v67, the author's R3) flying inside a system burns fuel by the distance it was pushed (v95: not drifting)
+		var burn: float = was.distance_to(server.ship.pos) * Net.FLIGHT_FUEL
+		server.ship.tank = maxf(server.ship.tank - burn, 0.0)
+		_burned += burn
+		if server.ship.tank <= 0.0:
+			course = false
+			server.chat.say("Баки опустели: корабль лёг в дрейф. Залейте канистру топлива у двигателя.")
+		if _burned >= 1.0 or server.ship.tank <= 0.0:
+			_burned = 0.0
+			server.supplies.tell_store()
+	var moving: bool = course or lead.vel.length() > 0.0
+	var told: bool = moving != server.ship.moving or (course and server.ship.dest != _told_dest)
+	server.ship.moving = moving
+	if not course:
+		server.ship.dest = server.ship.pos
+	_told_dest = server.ship.dest
+	if told or (moving and server.tick % (2 * Net.TICK_HZ) == 0):
+		server.to_all(server.ship.helm_packet(server.tick))
+
+
+func course_asked(go: bool, to: Vector2) -> void:
+	## (v95, my F2 pick) A click on the helm's small map: the autopilot flies there (even with nobody at the helm, as
+	## the old course did); go false ("stop"): it brakes to a stop. Any key of the pilot takes over.
+	server.ship.dest = to.clamp(Vector2.ZERO, Vector2(Sectors.SPAN, Sectors.SPAN)) if go else server.ship.pos
+	_told_dest = server.ship.dest
+	course = go
+	if not go:
+		pilots[0] = {}
+		var lead := body(0)
+		if lead != null and lead.vel.length() > 0.0:
+			course = true                    # braking to a stop where it is now
+	server.ship.moving = course
+	server.to_all(server.ship.helm_packet(server.tick))
+
+
+func holds() -> String:
+	## (v95) Why the fleet may not move now ("" if it may): somebody outside, a ship docked or our people aboard it,
+	## the drive taking the ship. (The old helm refused a course for the same reasons.)
+	var held: String = server.derelict.holds_ship()
+	if held == "" and server.derelict.someone_outside():
+		held = "Кто-то снаружи: корабль не тронется, пока все не вернутся на борт."
+	return held
+
+
+func _held_say(why: String) -> void:
+	if server.tick - _held_said >= HELD_SAY:
+		_held_said = server.tick
+		server.chat.say(why)
 
 
 func _gun(b: Body, cell: int) -> Dictionary:
@@ -395,6 +605,9 @@ func _enemy_body(i: int, fights: bool, layout: int) -> void:
 	if i == WING and body(LEAD) != null:
 		side = -signf((body(LEAD).pos - from).y) if absf((body(LEAD).pos - from).y) > 1.0 else side
 	b.pos = from + Vector2(_rng.randf_range(-25.0, 25.0), side * (WING_RANGE if i == WING else START_RANGE))
+	if i == LEAD and come_from.is_finite():
+		b.pos = come_from                    # (v95, my B2 pick) an ambush comes out of where it lay
+	come_from = Vector2.INF
 	b.vel = Vector2.ZERO
 	b.rot = (from - b.pos).angle() + PI / 2.0 * side   # broadside on, more or less
 	b.guns = []
@@ -419,9 +632,15 @@ func _enemy_target(i: int) -> Body:
 func pilot_asked(p: Player, keys: int) -> void:
 	## (C_PILOT) The pilot at the ship's controls holds these keys (KEY_* bits).
 	var i: int = server.fleet.on
-	if not _was_on or not server.systems.at_console(p, server.map.helm) or i >= pilots.size():
+	if not _cruise or not server.systems.at_console(p, server.map.helm) or i >= pilots.size():
 		return
+	if not _was_on and keys != 0:
+		var why := holds()
+		if why != "":
+			_held_say(why)               # (v95) the old helm's refusals: somebody outside, a ship docked
 	pilots[i] = {"keys": keys, "until": server.tick + PILOT_HOLD, "by": p}
+	if not _was_on and i > 0:
+		pilots[0] = pilots[i]            # (v95, the author's FS4) either helm flies the fleet in formation
 
 
 func dash(ship: int, way: float) -> bool:
@@ -461,13 +680,22 @@ func _steer_ours(b: Body) -> void:
 		server.fleet.use(b.id)
 		var still: bool = server.systems.at_console(pilot["by"], server.map.helm)
 		server.fleet.use(0)
-		if still:
-			var k: int = pilot["keys"]
+		var k: int = pilot["keys"]
+		if still and (k != 0 or _was_on or not course):
+			# (v95) out of a fight any key takes the ship off the autopilot; with none held the course flies on
+			if k != 0 and b.id == 0:
+				course = false
 			b.thrust = (1.0 if k & KEY_AHEAD else 0.0) - (1.0 if k & KEY_BACK else 0.0)
 			b.turn = (1.0 if k & KEY_RIGHT else 0.0) - (1.0 if k & KEY_LEFT else 0.0)
 			b.slide = (1.0 if k & SLIDE_RIGHT else 0.0) - (1.0 if k & SLIDE_LEFT else 0.0)
 			return
-	pilots[b.id] = {}
+		if not still:
+			pilots[b.id] = {}
+	else:
+		pilots[b.id] = {}
+	if not _was_on:
+		_fly_course(b)
+		return
 	server.fleet.use(b.id)
 	var at_helm: bool = server.stations.manned(Net.POST_HELM)
 	var pos: int = server.stations.position
@@ -477,7 +705,8 @@ func _steer_ours(b: Body) -> void:
 	if enemy == null:
 		enemy = of_enemy(0) if of_enemy(0) != null else of_enemy(1)
 	if not at_helm or enemy == null or server.fleet.is_lost(b.id):
-		return                               # nobody flies it: it drifts to a stop
+		_fly_course(b)                       # (v95) the autopilot's course, or nobody flies it: it drifts to a stop
+		return
 	# a bot (or a player standing idle) at the helm flies to the battle position the console set
 	var range := 30.0
 	var off := (b.pos - enemy.pos).normalized() if b.pos != enemy.pos else Vector2.UP
@@ -493,6 +722,19 @@ func _steer_ours(b: Body) -> void:
 			off = Vector2(-1.0, 0.0).rotated(enemy.rot)
 			range = 28.0
 	_fly_to(b, enemy.pos + off * range, _facing(b, enemy.pos), 1.0)
+
+
+func _fly_course(b: Body) -> void:
+	## (v95) The autopilot flies the first ship of ours to Ship.dest, turning its bow the way it goes, and stops there.
+	if b.id != 0 or not course:
+		return
+	var goal: Vector2 = server.ship.dest * SCALE
+	if b.pos.distance_to(goal) <= NEAR_GOAL and b.vel.length() <= STILL * 2.0:
+		course = false
+		b.vel = Vector2.ZERO
+		return
+	var face := (goal - b.pos).angle() if b.pos.distance_to(goal) > 8.0 else b.rot
+	_fly_to(b, goal, face, 1.0)
 
 
 func _steer_theirs(b: Body) -> void:
@@ -573,10 +815,26 @@ func _fly_to(b: Body, goal: Vector2, face: float, pace: float, blind: bool = fal
 
 
 func _move(b: Body) -> void:
-	if b.glued:
+	if b.glued or b.formed:
 		return
 	var can := true
-	if b.id < LEAD:
+	var brake := false
+	if b.id < LEAD and not _was_on:
+		# (v95) out of a fight the fleet flies as one: any ship of it with an engine and power pushes it; it holds
+		# still while somebody is outside or a ship is docked, and goes nowhere on an empty tank
+		can = false
+		for i in server.fleet.size():
+			server.fleet.use(i)
+			can = can or (not server.engine_down() and server.powered() and not server.fleet.is_lost(i))
+			server.fleet.use(0)
+		var why := holds()
+		if why != "" or server.ship.tank <= 0.0:
+			if (b.thrust != 0.0 or b.slide != 0.0 or b.turn != 0.0) and why != "" and course:
+				_held_say(why)
+				course = false
+			can = false
+			brake = why != ""
+	elif b.id < LEAD:
 		server.fleet.use(b.id)
 		can = not server.engine_down() and server.powered() and not server.fleet.is_lost(b.id)
 		server.fleet.use(0)
@@ -590,6 +848,10 @@ func _move(b: Body) -> void:
 	b.vel += push * DT
 	if not b.thrusting:
 		b.vel *= 1.0 - DRAG * DT
+		if brake:
+			b.vel = b.vel.move_toward(Vector2.ZERO, b.stats[1] * DT)
+		if b.vel.length() < STILL:
+			b.vel = Vector2.ZERO             # (v95) its dampers stop a slow drift
 	var v := b.vel.length()
 	if v > speed:
 		b.vel = b.vel * (maxf(speed, v - accel * 2.0 * DT) / v)    # past its top speed (a dash): it eases back
@@ -684,27 +946,32 @@ func _docking() -> void:
 
 
 func _edges() -> void:
-	## Out past the edge: our ship leaves the fight (no pirate near), a pirate that runs is gone.
+	## Breaking off: (v95, my B1 pick) our first ship RADIUS from every pirate for LEAVE_SECONDS leaves the fight (the
+	## fight is wherever the ship is now, there is no circle); a pirate that runs that far is gone.
 	var lead_ours := body(0)
 	if lead_ours != null:
-		if lead_ours.pos.length() > RADIUS:
-			var nearest := INF
-			for i in [LEAD, WING]:
-				var e := body(i)
-				if e != null:
-					nearest = minf(nearest, e.pos.distance_to(lead_ours.pos))
-			if nearest > LEAVE_GAP:
-				lead_ours.leave += 1
-				if lead_ours.leave >= roundi(LEAVE_SECONDS * Net.TICK_HZ):
-					_broke_away()
-					return
-			else:
-				lead_ours.leave = 0
+		var nearest := INF
+		for i in [LEAD, WING]:
+			var e := body(i)
+			if e != null:
+				nearest = minf(nearest, e.pos.distance_to(lead_ours.pos))
+		if nearest > RADIUS:
+			lead_ours.leave += 1
+			if lead_ours.leave >= roundi(LEAVE_SECONDS * Net.TICK_HZ):
+				_broke_away()
+				return
 		else:
 			lead_ours.leave = 0
 	for i in [LEAD, WING]:
 		var e := body(i)
-		if e == null or e.glued or e.pos.length() <= RADIUS * 1.15:
+		if e == null or e.glued:
+			continue
+		var far := INF
+		for k in LEAD:
+			var o := body(k)
+			if o != null:
+				far = minf(far, o.pos.distance_to(e.pos))
+		if far <= RADIUS * 1.15:
 			continue
 		var g = server.gunnery
 		server.wing.use(i - LEAD)
@@ -735,7 +1002,7 @@ func turret_asked(p: Player, gun: int, aim: Vector2, fire: bool) -> void:
 	if gun == Net.ALL_GUNS:
 		_all_asked(p, aim, fire)
 		return
-	if not _was_on or i >= turrets.size() or gun < 0 or gun >= server.map.guns.size() or server.mounts.gunner(gun) != p:
+	if not _cruise or i >= turrets.size() or gun < 0 or gun >= server.map.guns.size() or server.mounts.gunner(gun) != p:
 		return
 	(turrets[i] as Dictionary)[gun] = {"aim": aim, "fire": fire, "until": server.tick + TURRET_HOLD, "by": p}
 
@@ -747,7 +1014,7 @@ func _all_asked(p: Player, aim: Vector2, fire: bool) -> void:
 	var i: int = server.fleet.on
 	var map = server.map
 	var console: bool = server.systems.at_console(p, map.gun_console)
-	if not _was_on or i >= turrets.size() or not (console or server.systems.at_console(p, map.helm)):
+	if not _cruise or i >= turrets.size() or not (console or server.systems.at_console(p, map.helm)):
 		return
 	var mine: Dictionary = turrets[i]
 	if fire and not mine.values().any(func(t: Dictionary) -> bool: return t.get("by") == p):
@@ -999,7 +1266,29 @@ func _shoot_theirs(foe: int, weapon: int, w: int, target_cell: int, miss: float,
 	_launch(1, LEAD + foe, muzzle, dir, w, meta)
 
 
-func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Dictionary) -> void:
+func practice(ship: int, gun: int, w: int) -> void:
+	## (v95, the author's N1 comment "so one can fire with no enemies near") A gun of ours fired by hand out of a
+	## fight: its burst flies off where it was aimed and is gone (it meets nothing; Gunnery is never told).
+	var b := body(ship)
+	if b == null or gun >= b.guns.size():
+		return
+	var t: Dictionary = (turrets[ship] as Dictionary).get(gun, {}) if ship < turrets.size() else {}
+	var at: Vector2 = t.get("aim", Vector2.INF)
+	for k in Weapons.space_shots(w):
+		_after(k * Weapons.BURST_GAP_TICKS, _practice_shot.bind(ship, gun, w, at))
+
+
+func _practice_shot(ship: int, gun: int, w: int, at: Vector2) -> void:
+	var b := body(ship)
+	if b == null or gun >= b.guns.size():
+		return
+	var muzzle := b.world(b.guns[gun]["at"])
+	var dir := _barrel(b, b.guns[gun], at, muzzle) + _rng.randfn(0.0, _spread(w))
+	var p := _launch(0, ship, muzzle, dir, w, {})
+	p["practice"] = true
+
+
+func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Dictionary) -> Dictionary:
 	var b: Body = bodies[from]
 	var speed := shot_speed(w)
 	var p := {"id": _next_id, "side": side, "from": from, "pos": muzzle, "vel": Vector2.RIGHT.rotated(dir) * speed + b.vel,
@@ -1011,6 +1300,7 @@ func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Di
 	_next_id = (_next_id % 65535) + 1
 	shots.append(p)
 	_tell_fly(p)
+	return p
 
 
 func _tell_fly(p: Dictionary) -> void:
@@ -1080,7 +1370,7 @@ func shield_asked(p: Player, up: bool, dir: float, vent: bool) -> void:
 	## (C_SHIELD) The pilot at the ship's controls holds the shield up or down and turns its arc to that heading
 	## (radians in the fight's space); `vent`: dump the heat now.
 	var i: int = server.fleet.on
-	if not _was_on or i >= shields.size() or not server.systems.at_console(p, server.map.helm):
+	if not _cruise or i >= shields.size() or not server.systems.at_console(p, server.map.helm):
 		return
 	shields[i] = {"up": up, "dir": dir, "until": server.tick + SHIELD_HOLD, "by": p}
 	var b := body(i)
@@ -1325,8 +1615,21 @@ func _fly_shots() -> void:
 		var from: Vector2 = p["pos"]
 		var to: Vector2 = from + (p["vel"] as Vector2) * DT
 		var done := false
+		if p.has("pod"):
+			done = int(p.get("hp", 1)) <= 0 or _fly_pod(p, from, to)
+		elif int(p["side"]) == 0 and not p.has("practice"):
+			var pod := _pod_shot(p, from, to)
+			if not pod.is_empty():
+				# (v95) a shot of ours meets a pod on its way: it breaks it (POD_HP shots) and is spent
+				pod["hp"] = int(pod["hp"]) - 1
+				g.arena_miss(p, to)
+				_ended(p, Net.SHOT_DOWN, pod["pos"])
+				done = true
+				if int(pod["hp"]) <= 0:
+					_ended(pod, Net.SHOT_DOWN, pod["pos"])
+					server.chat.say("Орудия сбили %s." % ("штурмовой дрон" if pod["pod"] == "drone" else "абордажную капсулу"))
 		for b: Body in bodies:
-			if done:
+			if done or p.has("practice") or p.has("pod"):
 				break
 			if not b.on or (int(p["side"]) == 0) == (b.id < LEAD) or int(p.get("off", -1)) == b.id:
 				continue
@@ -1372,7 +1675,7 @@ func _fly_shots() -> void:
 			continue
 		p["pos"] = to
 		if server.tick >= int(p["ends"]):
-			if not p.has("off"):
+			if not p.has("off") and not p.has("practice") and not p.has("pod"):
 				g.arena_miss(p, to)          # (a shot that glanced off and found nothing more says nothing)
 			_ended(p, Net.MISSED, to)
 			continue
@@ -1552,13 +1855,13 @@ func worn_near(ship: int, cell: int) -> PackedInt32Array:
 
 func armour_mended() -> void:
 	## Our armour was made whole outside the fight's own code (a station, the trader, the admin): tell the clients.
-	if _was_on:
+	if _cruise:
 		_tell_armour_whole()
 
 
 func armour_mended_at(ship: int, cells: PackedInt32Array) -> void:
 	## (Outside) Those cells of a ship of ours were mended: told with the next ARENA_ARMOUR.
-	if not _was_on or body(ship) == null:
+	if not _cruise or body(ship) == null:
 		return
 	if not _worn_now.has(ship):
 		_worn_now[ship] = {}
@@ -1598,6 +1901,184 @@ func in_flight() -> int:
 	return shots.size() + _later.size()
 
 
+# ---------------------------------------------------------------- (v95) boarding pods and assault drones
+
+const POD_FIRST := 25.0              # (my P2 pick) seconds into a fight before a boarding ship's first pod
+const POD_EVERY := 50.0              # and between two
+const POD_MOST := 2                  # pods a fight
+const POD_FAR := 40.0                # cells: only a boarding ship kept further off than this sends one
+const POD_PARTY := 2
+const POD_KEEP := 2                  # it keeps this many of its crew at home
+const POD_TURN := 0.5                # radians a second a pod turns after the ship it flies at
+const POD_HP := 2                    # shots of ours that break one
+
+var pods_on := true                  # (tests: false keeps the pirates' pods home)
+var _pod_next := -1                  # the tick the ship alongside may send its next pod
+var _pods_sent := 0
+
+
+func _pods_tick() -> void:
+	## (v95, his P1/P2) A boarding ship (not a raider) with a pod bay that our pilot keeps away sends a pod with some of its crew.
+	var lead := body(LEAD)
+	var g = server.gunnery
+	if lead == null or not pods_on or not g.pods or g.raid or lead.glued or server.derelict.docked or _pods_sent >= POD_MOST:
+		return
+	if _pod_next < 0:
+		_pod_next = server.tick + roundi(POD_FIRST * Net.TICK_HZ)
+		return
+	if server.tick < _pod_next:
+		return
+	var whom := _enemy_target(LEAD)
+	if whom == null or lead.pos.distance_to(whom.pos) <= POD_FAR + whom.shape.radius:
+		return
+	_pod_next = server.tick + roundi(POD_EVERY * Net.TICK_HZ)
+	if g.fleeing() or g.ransom > 0 or g.down(Net.ESYS_ENGINE) or _pod_party() <= 0:
+		return
+	if launch_pod(0, false):
+		_pods_sent += 1
+
+
+func _pod_party() -> int:
+	var g = server.gunnery
+	return mini(mini(POD_PARTY, g.boarders_left() - POD_KEEP), server.pirates.MAX_ABOARD - server.pirates.aboard())
+
+
+func launch_pod(foe: int, drone: bool) -> bool:
+	## A pirate sends a boarding pod (drone false) or an assault drone at the ship of ours it fights: a slow thing in
+	## flight that turns after it, passes the shield, meets our point defence and our shots, and cuts in where it strikes.
+	var e := of_enemy(foe)
+	var whom := _enemy_target(LEAD + foe)
+	if e == null or whom == null:
+		return false
+	var dir := (whom.pos - e.pos).normalized()
+	var muzzle: Vector2 = e.pos + dir * float(e.shape.radius)
+	var t: float = muzzle.distance_to(whom.pos) / POD_SPEED
+	var aim: Vector2 = whom.pos + (whom.vel - e.vel) * t
+	var p := {"id": _next_id, "side": 1, "from": LEAD + foe, "pos": muzzle,
+		"vel": Vector2.RIGHT.rotated((aim - muzzle).angle()) * POD_SPEED + e.vel,
+		"ends": server.tick + roundi(POD_LIFE * Net.TICK_HZ), "w": Weapons.NONE, "kind": Net.SHOT_DRONE if drone else Net.SHOT_POD,
+		"meta": {}, "seen": {}, "guard": true, "d": 0.0, "type": 0, "pod": "drone" if drone else "crew", "whom": whom.id,
+		"foe": foe, "hp": POD_HP}
+	_next_id = (_next_id % 65535) + 1
+	shots.append(p)
+	_tell_fly(p)
+	if drone:
+		server.chat.say("Враг выпустил штурмовой дрон: он идёт к нашей обшивке! Его собьют «Заслон» и наши орудия.")
+	else:
+		server.chat.alarm("Пираты выпустили абордажную капсулу! Она пройдёт сквозь щит; сбить её могут «Заслон» и орудия, увернуться — пилот.")
+	return true
+
+
+func pods_flying() -> int:
+	var n := 0
+	for p: Dictionary in shots:
+		if p.has("pod") and p["pod"] == "crew":
+			n += 1
+	return n
+
+
+func drones_flying() -> int:
+	var n := 0
+	for p: Dictionary in shots:
+		if p.has("pod") and p["pod"] == "drone":
+			n += 1
+	return n
+
+
+func _fly_pod(p: Dictionary, from: Vector2, to: Vector2) -> bool:
+	## One tick of a pod's flight: it turns after its ship, meets the point defence once, and strikes the hull.
+	var whom := body(int(p["whom"]))
+	if whom == null:
+		_ended(p, Net.MISSED, from)
+		return true
+	var v: Vector2 = p["vel"]
+	var rel := v - whom.vel
+	var want := (whom.pos - from).angle()
+	var now := rel.angle()
+	rel = Vector2.from_angle(now + clampf(wrapf(want - now, -PI, PI), -POD_TURN * DT, POD_TURN * DT)) * rel.length()
+	p["vel"] = rel + whom.vel
+	var r: Vector2 = whom.shape.bubble()
+	var steps := maxi(ceili(from.distance_to(to) / 0.4), 1)
+	for s in steps + 1:
+		var at := from.lerp(to, float(s) / steps)
+		var l := whom.local(at)
+		if p["guard"] and Vector2(l.x / (r.x + GUARD_RANGE), l.y / (r.y + GUARD_RANGE)).length_squared() <= 1.0:
+			p["guard"] = false
+			if _pod_guard(whom, at):
+				_ended(p, Net.SHOT_DOWN, at)
+				server.chat.say("«Заслон» сбил %s на подлёте." % ("штурмовой дрон" if p["pod"] == "drone" else "абордажную капсулу"))
+				return true
+		if whom.shape.solid(l):
+			_pod_lands(p, whom, l)
+			_ended(p, Net.LANDED, at)
+			return true
+	return false
+
+
+func _pod_guard(whom: Body, at: Vector2) -> bool:
+	## Our point defence fires at a pod coming: true if it is shot down.
+	server.fleet.use(whom.id)
+	var g = server.gunnery
+	var down := false
+	if g.guard_ready():
+		g.guard_charge = 0.0
+		var map = server.map
+		if map.guns.size() > 0:
+			server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.guns[0] % map.width, map.guns[0] / map.width))
+		down = _rng.randf() < Weapons.GUARD_HIT
+	server.fleet.use(0)
+	return down
+
+
+func _pod_shot(p: Dictionary, from: Vector2, to: Vector2) -> Dictionary:
+	## A shot of ours flying from..to: the pod it meets on the way (empty: none).
+	for q: Dictionary in shots:
+		if not q.has("pod") or int(q.get("hp", 0)) <= 0:
+			continue
+		var at: Vector2 = q["pos"]
+		var seg := to - from
+		var t := clampf((at - from).dot(seg) / maxf(seg.length_squared(), 0.0001), 0.0, 1.0)
+		if (from + seg * t).distance_to(at) <= 1.6:
+			return q
+	return {}
+
+
+func _pod_lands(p: Dictionary, whom: Body, l: Vector2) -> void:
+	## A pod strikes our hull: a breach there and its people (or the drone) come in through it.
+	var cells := _grid_cells(whom, l)
+	if cells.is_empty():
+		return
+	server.fleet.use(whom.id)
+	var inside: Vector2i = server.pirates.cut_in_near(cells[_rng.randi_range(0, cells.size() - 1)])
+	var deck := "" if inside.x < 0 else String(server.map.deck_names[server.map.deck_of(inside.y)]).to_lower()
+	if inside.x >= 0:
+		server.combat.jolt(Net.JOLT_HEAVY, Net.SHOT_SHELL, Vector2(inside))
+	if p["pod"] == "drone":
+		if inside.x >= 0:
+			server.pirates.spawn_robot(inside.x, inside.y)
+			server.chat.alarm("Штурмовой дрон прорезал обшивку и ворвался на борт (%s)! Он вооружён, воздух ему не нужен." % deck)
+		server.fleet.use(0)
+		return
+	var foe := int(p["foe"])
+	server.wing.use(foe)
+	var g = server.gunnery
+	var n := _pod_party()
+	if inside.x >= 0 and n > 0:
+		g.crew_sent(n, -1)
+		var map = server.map
+		var spots: Array[Vector2i] = [inside]
+		for dv: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]:
+			var c := inside + dv
+			if map.walkable(c.x, c.y) and map.door_at(c.x, c.y) < 0 and map.stair_to[c.y * map.width + c.x] < 0:
+				spots.append(c)
+		for i in n:
+			var at: Vector2i = spots[mini(i, spots.size() - 1)]
+			server.pirates.spawn_boarder(at.x, at.y, _rng.randf() < 0.6, -1, false)
+		server.chat.alarm("Абордажная капсула пробила обшивку (%s)! Пираты на борту: %d. У них осталось %d человек." % [deck, n, g.boarders_left()])
+	server.wing.use(0)
+	server.fleet.use(0)
+
+
 # ---------------------------------------------------------------- what clients are told
 
 static func _put_point(msg: PackedByteArray, v: Vector2) -> void:
@@ -1608,13 +2089,14 @@ static func _put_point(msg: PackedByteArray, v: Vector2) -> void:
 
 
 func packet() -> PackedByteArray:
-	## S_ARENA: u32 tick, u8 count, then per body on: u8 id, u8 flags (ARENA_*), s16 drawing (-1: ours),
+	## S_ARENA: u32 tick, (v95) u8 ARENA_FIGHT|ARENA_COURSE, u8 count, then per body on: u8 id, u8 flags (ARENA_*), s16 drawing (-1: ours),
 	## s16 x*8, s16 y*8, s16 vx*8, s16 vy*8, u16 heading (0..65535 for a full turn), s16 spin*1000,
 	## u8 shield (0..100, 0: not raised), u8 spare, (v94) u16 hull points, u16 when whole, u16 heat, u16 its top,
 	## u8 the shield's share of it (of 200), u8 ARENA_RAISED|OVERLOAD|VENT, s16 the arc's middle*1000 (body's frame),
 	## u8 guns, per gun s16 aim*1000 (the body's frame), u8 GUNF bits, u8 charge (of 200).
-	var msg := PackedByteArray([Net.S_ARENA, 0, 0, 0, 0, 0])
+	var msg := PackedByteArray([Net.S_ARENA, 0, 0, 0, 0, 0, 0])
 	msg.encode_u32(1, server.tick)
+	msg[5] = (Net.ARENA_FIGHT if _was_on else 0) | (Net.ARENA_COURSE if course else 0)
 	var n := 0
 	var g = server.gunnery
 	for b: Body in bodies:
@@ -1680,5 +2162,5 @@ func packet() -> PackedByteArray:
 			msg[o + 2] = gf
 			var ch := charges[k % charges.size()] if not charges.is_empty() else 0.0
 			msg[o + 3] = clampi(roundi(ch * 200.0), 0, 200)
-	msg[5] = n
+	msg[6] = n
 	return msg

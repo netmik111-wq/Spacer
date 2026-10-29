@@ -3,6 +3,8 @@ extends RefCounted
 ## in space (Net.S_ARENA, every other tick, drawn a little in the past between two of them) and the
 ## shots flying (Net.S_ARENA_SHOT: each is told once, as it leaves its gun, and flies on by itself
 ## here until the server says where it ended). SpaceView draws it.
+## (v95) Our own ships are bodies there always, flying round the system (Arena.SCALE cells to a unit of
+## the system's map); `fight` says whether a fight goes on.
 
 const Net := preload("res://src/shared/net.gd")
 const ArenaShape := preload("res://src/shared/arena_shape.gd")
@@ -22,11 +24,23 @@ var _shapes := {}                    # "f<ship>" / "o<layout>" -> ArenaShape
 var _guns := {}                      # the same keys -> PackedInt32Array, the drawing's cells of its guns
 
 
+var fight := false                   # (v95) a fight goes on (S_ARENA's ARENA_FIGHT): else our ships fly round the system
+var course := false                  # (v95) the autopilot flies our fleet to its course
+
+
 func on() -> bool:
+	## A fight in real time goes on.
+	return fight and not bodies.is_empty()
+
+
+func flying() -> bool:
+	## (v95) Our ships are in space (always while the server's Arena runs).
 	return not bodies.is_empty()
 
 
 func reset() -> void:
+	fight = false
+	course = false
 	bodies.clear()
 	shots.clear()
 	bursts.clear()
@@ -40,8 +54,10 @@ func read(pkt: PackedByteArray) -> void:
 	## S_ARENA (Arena.packet).
 	changes += 1
 	var tick := pkt.decode_u32(1)
-	var n: int = pkt[5]
-	var at := 6
+	fight = pkt[5] & Net.ARENA_FIGHT != 0
+	course = pkt[5] & Net.ARENA_COURSE != 0
+	var n: int = pkt[6]
+	var at := 7
 	var seen := {}
 	for i in n:
 		if at + 31 > pkt.size():

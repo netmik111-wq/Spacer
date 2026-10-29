@@ -202,8 +202,8 @@ func _initialize() -> void:
 
 	# the packet reads back
 	var pkt: PackedByteArray = a.packet()
-	var n: int = pkt[5]
-	var at := 6
+	var n: int = pkt[6]
+	var at := 7                               # (v95: a byte of the fight's state after the tick)
 	for i in n:
 		var guns: int = pkt[at + 4 + 8 + 6 + 12]
 		at += 4 + 8 + 6 + 12 + 1 + guns * 4
