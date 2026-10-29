@@ -801,6 +801,10 @@ func _opens_panel(target: int) -> bool:
 
 
 func _open_console(kind: int) -> void:
+	if client.in_pod() >= 0 and kind != 51:
+		if kind == 0:
+			client.send_pod(Net.POD_LEAVE)   # (v96) stepping away from the pod's screen gets one out while it waits
+		return
 	if client.riding() and kind != 46:
 		if kind == 0 and client.shuttle_to < 0:
 			client.send_shuttle(Net.SHUTTLE_LEAVE)   # (v86) stepping away from the shuttle's screen gets one out
@@ -826,7 +830,8 @@ func _open_console(kind: int) -> void:
 		_shift.mark(FirstShift.LOCKER if kind == 12 else FirstShift.HELM)
 	_close_chat()
 	_bridge.buttons_for = -1
-	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44 or kind == 46 or kind == 49
+	var own_view := kind == 12 or kind == 17 or kind == 20 or kind == 21 or kind == 22 or kind == 28 or kind == 30 or kind == 44 or kind == 46 or kind == 49 \
+		or kind == 51
 	_trading = false
 	if kind == 17 and _guns_view.client == null:
 		_guns_view.setup(client)
@@ -856,8 +861,8 @@ func _open_console(kind: int) -> void:
 	_power_view.visible = kind == 28
 	_comms_view.visible = kind == 30
 	_shuttle_view.visible = kind == 46
-	_space_view.visible = kind == 49
-	_space_view.mode = SpaceView.TURRET if kind == 49 else SpaceView.PILOT
+	_space_view.visible = kind == 49 or kind == 51
+	_space_view.mode = SpaceView.TURRET if kind == 49 else (SpaceView.WATCH if kind == 51 else SpaceView.PILOT)
 	_helm_look = -1
 	_turret_fire = false
 	_space_view.gun = client.turret_here(client.use_cell()) if kind == 49 else -1
@@ -875,13 +880,13 @@ func _open_console(kind: int) -> void:
 	_console_title.text = {3: "Карта сектора", 4: "Управление кораблём", 17: "Пульт орудий", 12: "Склад корабля: шкаф снабжения",
 		13: "Обыск", 20: "Голокарта корабля", 21: "Монитор дрона-разведчика", 22: "Верстак: орудия из шкафа снабжения",
 		28: _power_view.title() if kind == 28 else "", 30: "Пульт связи", 44: "Камбуз: плита", 46: "Челнок флотилии",
-		49: "Орудие %d: ручное наведение" % (_space_view.gun + 1)}.get(kind, "")
+		49: "Орудие %d: ручное наведение" % (_space_view.gun + 1), 51: "Абордажная капсула"}.get(kind, "")
 	if kind == 20:
 		_holo_view.opened()
 		client.send_holo(true)
 	if kind == 21:
 		_drone_view.opened()
-	_console_shut.text = Options.keyed("Выйти из челнока (E или Esc)") if client.riding() else Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else ("Отойти от орудия (E или Esc)" if kind == 49 else "Отойти от пульта (E или Esc)")))))
+	_console_shut.text = Options.keyed("Выйти из капсулы (E или Esc)") if kind == 51 else Options.keyed("Выйти из челнока (E или Esc)") if client.riding() else Options.keyed("Отойти от верстака (E или Esc)" if kind == 22 else ("Отойти от плиты (E или Esc)" if kind == 44 else ("Закрыть шкаф (E или Esc)" if kind == 12 else ("Закончить обыск (E или Esc)" if kind == 13 else ("Отойти от орудия (E или Esc)" if kind == 49 else "Отойти от пульта (E или Esc)")))))
 
 
 func _show_trade(on: bool) -> void:
@@ -900,7 +905,22 @@ func _update_console() -> void:
 		_open_console(13)                    # the server let us search somebody: show their pockets
 	if client.riding() and _console_kind != 46:
 		_open_console(46)                    # (v86) in the shuttle: its screen, whatever we faced
+	if client.in_pod() >= 0 and _console_kind != 51:
+		_open_console(51)                    # (v96) in our boarding pod: space, whatever we faced
 	if not _console.visible:
+		return
+	if _console_kind == 51:
+		var bay := client.in_pod()
+		if bay < 0:
+			_console_kind = 0
+			_open_console(0)
+			return
+		var pod: Dictionary = client.pods[bay]
+		var st: int = pod["state"]
+		_console_shut.disabled = not (st == Net.POD_WAITING or st == Net.POD_STUCK)
+		_console_title.text = {Net.POD_WAITING: "Абордажная капсула: взлёт через %d с" % int(pod["secs"]),
+			Net.POD_OUT: "Абордажная капсула: летим к пиратскому кораблю", Net.POD_HOME: "Абордажная капсула: летим домой, %d с" % int(pod["secs"]),
+			Net.POD_STUCK: "Абордажная капсула: взлёт домой через %d с" % int(pod["secs"])}.get(st, "Абордажная капсула")
 		return
 	if _console_kind == 46 and client.riding():
 		_shuttle_view.refresh()
@@ -2135,7 +2155,7 @@ func _process(delta: float) -> void:
 			want = _step_dir
 	if forced_dir >= 0:
 		want = forced_dir
-	client.want_dir = 0 if client.riding() else want   # (v86) nobody walks in the shuttle
+	client.want_dir = 0 if client.riding() or client.in_pod() >= 0 else want   # (v86) nobody walks in the shuttle (v96) or a pod
 	if _menu_hold:
 		# "work, until done" from the menu: held as the key would be, until the job ends,
 		# a key of our own is pressed or the character moves
@@ -2292,6 +2312,22 @@ func _process(delta: float) -> void:
 		_hint.text = "Интерком обесточен: %s" % why if no_power else "E: сказать в интерком (услышат у всех панелей)"
 	elif target == 50:
 		_hint.text = "E: форма щита — пузырь вокруг корабля или крепкая дуга на одну сторону (по кругу)"
+	elif target == 51:
+		# (v96, the author's P4) our boarding pod
+		var bay := client.pod_at(client.use_cell())
+		var pod: Dictionary = client.pods.get(bay, {})
+		var st: int = pod.get("state", Net.POD_READY)
+		var aboard := (pod.get("riders", []) as Array).size()
+		if bay != client.use_cell():
+			_hint.text = "Наша абордажная капсула в обшивке пирата: E — сесть и лететь домой (мест: %d)" % (Net.POD_SEATS - aboard)
+		elif st == Net.POD_MENDING:
+			_hint.text = "Абордажная капсула: ремонт после попадания, %d с" % int(pod.get("secs", 0))
+		elif st == Net.POD_OUT or st == Net.POD_STUCK or st == Net.POD_HOME:
+			_hint.text = "Абордажная капсула: её нет на месте (у пиратского корабля или в полёте)"
+		elif not client.arena.on():
+			_hint.text = "Абордажная капсула: летит только к пиратскому кораблю у борта, в бою"
+		else:
+			_hint.text = "E: сесть в абордажную капсулу (мест: %d) — она пробьёт обшивку пирата" % (Net.POD_SEATS - aboard)
 	elif target == 47 or target == 48:
 		# (v91, the author's M7) the boxes on the wall hand out the supply locker's stock
 		var kit := Net.ITEM_MEDKIT + Net.MEDKIT_USES if target == 47 else Net.ITEM_PART

@@ -13,7 +13,7 @@ extends RefCounted
 
 const ACCESS_BITS := {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 const SYSTEMS := ["weapons", "helm", "engine", "crew", "jump", "shields"]              # as Net.ESYS_*
-const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFVEJNL"
+const BAND_CHARS := "#DW<>123456789TIMZBUYXSQKPCGFVEJNLk"
 const FLOOR_CHARS := ".sgcH/"
 const ROCK_CHARS := "RO,"
 const COVER_OF := {"g": "glass", "c": "grate"}
@@ -22,7 +22,8 @@ const SPECIAL := {"D": "door_open", "W": "window", "<": "window_l", ">": "window
 	"7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield",
 	"B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms",
 	"P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
-	"E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}       # (v91) the author's wall boxes
+	"E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light",       # (v91) the author's wall boxes
+	"k": "pod"}                                                                # (v96) our boarding pod's bay
 const KINDS := ["ship", "pirate", "derelict", "asteroid"]
 ## (v91, the author: "it's not walls, it's on the ground") Machines stand on the floor. A machine sign is in the
 ## wall only in a row of machines between two pieces of wall with nothing solid above or below it (the old way);

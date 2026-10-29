@@ -239,6 +239,7 @@ func _concussion() -> void:
 func _meteors() -> void:
 	print("  -- steering round meteors")
 	_clear()
+	server.arena.enabled = false             # (v96: meteors flying in space are podtest's; this is the old lot)
 	var spot: Array = server.stations.spots[Net.POST_HELM][0]
 	var pilot := server.crew.new_player("Пилот")
 	pilot.take_job(Net.JOB_PILOT)
@@ -272,6 +273,7 @@ func _meteors() -> void:
 	_run(roundi(Stations.METEOR_WARN * Net.TICK_HZ) + 2)
 	_expect(not server.stations.meteor_missed, "but only half as often as a person (a lot of 0.31 hits)")
 	server.stations.meteor_roll = -1.0
+	server.arena.enabled = true
 	_clear()
 
 

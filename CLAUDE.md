@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v95 (version 0.88: flying round the system in space with WASD, firing with no enemy, boarding pods) is the latest. Plans one to four are done except the darkness front (the
+Build v96 (version 0.89: places drawn in space, meteors as rocks, our boarding pod, bots fighting together) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -146,9 +146,11 @@ v95 (his Notebook note "fly with WASD instead of the old helm map" and N1; answe
 all A): our ships are bodies in space always (4 cells a unit), WASD and an autopilot by a click on the small map, fuel only
 while pushing, the edge a wall, practice fire, no fight circle (break off at 170 cells from every pirate), ambushes from
 their place, pirates' boarding pods (only ships with a pod bay, his P2 note) and assault drones flying in space.
-Next: places (stations and places drawn, dockable and landable, drawn only when near: his F5 comment), our pods and
-teleport (P4), meteors and asteroids as targets (N2), better bot fighting (his P1 comment), choosing the enemy deck,
-arsenal, races.
+v96 ("next build"; questions `https://claude.ai/artifact/1PD8wL3crt6FGhEEHQ21sx`, built on my picks, all A): places drawn
+in space only when near (his F5), a derelict/wreck/rock glides to the airlock, stations and traders dock only once stopped;
+meteors are rocks flying in space (evade early, shoot, shield); our boarding pod (`k`, `pods.gd`: 2 seats, flies to the pirate
+alongside, sticks, E takes riders home, bots called); bots' radio, falling back, shotgun first, one target.
+Next: the teleporter as a rare find with procedural places, choosing the enemy deck, arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -179,7 +181,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 50 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 51 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -230,6 +232,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/eyestest.gd (since v93: goggles, night vision, thermal through walls)
     godot --headless --path . --script res://tools/fluxtest.gd (since v94: every gun in space, heat, overload, vent, the pilot's shield, mount kinds, clips)
     godot --headless --path . --script res://tools/flighttest.gd (since v95: flying the system, autopilot, edge, held, jump, practice fire, break-off, ambush, pods)
+    godot --headless --path . --script res://tools/podtest.gd (since v96: places' drawings, meteors in space, our boarding pod, bots' radio, falling back, shotgun, one target)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -254,7 +257,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 50 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 51 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -288,7 +291,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   things floating outside; since v70 `prisons`: pirates in our handcuffs, the brig, selling, questioning, the swap;
   since v71 `galley`: the stove, its dishes and their effects; since v79 `defence`: bots against armed boarders; since v85
   `fleet`: our ships, and which one's state is in place; since v86 `wing`: a second pirate ship fighting from afar,
-  `shuttle`: the fleet's shuttle between the hangars; since v92 `arena`: the fight in real time, ships as bodies in space).
+  `shuttle`: the fleet's shuttle between the hangars; since v92 `arena`: the fight in real time, ships as bodies in space;
+  since v96 `pods`: our boarding pod).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -624,6 +628,14 @@ The parameters for these checks are described in the header of `src/main.gd`.
   pod bay, in `Wing.ENEMY`; `shipyard.force_pods` for tests) and `arena.pods_on`; `arena.launch_pod` sends one at once.
   `S_ARENA`'s byte 5 is flags (`ARENA_FIGHT`, `ARENA_COURSE`), the count is byte 6, records from 7 (protocol 69).
   `fleet.follow()` runs again after `arena.tick()`.
+- (v96) Our boarding pod is `server.pods` (`Pods`): riders are `Player.in_pod` (the bay) with `in_shuttle` set, so they are
+  out of the world as the shuttle's are; a bot called to a seat is `Player.pod_call`. The flight is an arena shot with
+  `"pod": "ours"` (`launch_our_pod`); `"home"` is drawing only. Meteors in space are shots with `"pod": "rock"` (side 1,
+  `Arena.launch_meteor`); `Stations.meteor_seen` launches one while `arena.flying()` and its end calls `meteor_over`
+  (tests of the old lot set `arena.enabled = false`). Out of a fight our shield's heat tick runs while rocks fly. A new map
+  sign `k` (wall band, `ShipMap.pod`: wall cell -> front). S_ROAD's place record is 5 bytes (the drawing it is seen by) plus
+  the system's own drawing at the end; S_POD, C_POD, `SHOT_ROCK` (protocol 70). Use target 51 is the pod bay. `Defence.radio`
+  (D1) and `Player.falling_back` (D2) are new; `defence.spotted()` is cached per tick.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -674,4 +686,4 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
   `K` comms console, `P` hydroponic tray, `C` cryopod (v63), `G` the galley's stove (v71). A line `% deck x y system` names the room of an enemy ship's system (used only by
   the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked. (v91) `E` first-aid box, `J` spare parts box, `N` fire box, `L` wall light (wall things); a line
   `& deck x y base|tech|cargo|herm` gives a door its look; machine signs outside a wall band are machines on the floor;
-  `/` stairs, two in a row on a deck over the same two on the deck below.
+  `/` stairs, two in a row on a deck over the same two on the deck below. (v96) `k` our boarding pod's bay (in an outer wall band).

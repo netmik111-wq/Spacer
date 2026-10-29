@@ -248,6 +248,8 @@ TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in STAIRS]
 GLOBE = [("holo_globe_%d" % _i, None, "floor") for _i in range(2)]
 TILES += GLOBE
 TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in GLOBE]
+# (v96, the author's P4) our boarding pod's bay, set into the hull wall ('k'); last, as above
+TILES += [("pod", None, "wall"), (PIRATE + "pod", None, "wall")]
 ATLAS_COLS = 8
 
 
@@ -836,6 +838,20 @@ def make_machine(wall, what):
         for k, kx in enumerate((7, 12, 17, 22)):
             rect(kx, 19, kx + 3, 21, (70, 150, 230, 255) if k == 1 else dark)                 # the answer keys
         rect(23, 9, 24, 10, (90, 220, 110, 255))                                              # the link lamp
+    elif what == "pod":
+        # (v96) the boarding pod's bay: a round hatch in the hull with the pod's nose behind its glass, two seat lamps
+        rect(3, 3, 28, 25, body); rect(3, 3, 28, 4, cap); rect(3, 25, 28, 25, mid)
+        for y in range(5, 24):
+            for x in range(6, 26):
+                d = ((x - 15.5) ** 2 + (y - 14.0) ** 2) ** 0.5
+                if d < 6.0:
+                    o[x, y] = (150, 170, 190, 255) if d < 3.5 else (95, 110, 130, 255)
+                elif d < 8.0:
+                    o[x, y] = (230, 170, 60, 255)
+                elif d < 9.0:
+                    o[x, y] = dark
+        rect(14, 12, 17, 13, (200, 230, 255, 255))                                            # the pod's window
+        rect(4, 6, 5, 7, (90, 220, 110, 255)); rect(26, 6, 27, 7, (90, 220, 110, 255))        # its two seats' lamps
     elif what == "dock":
         # (v86) the shuttle's dock console: a screen with the shuttle's outline, a lamp and a call key
         rect(4, 4, 27, 24, body); rect(4, 4, 27, 5, cap); rect(4, 24, 27, 24, mid)
@@ -990,6 +1006,7 @@ def build_tiles():
         "cryo": lambda: make_machine(images["wall_h"], "cryo"),
         "stove": lambda: make_machine(images["wall_h"], "stove"),
         "dock": lambda: make_machine(images["wall_h"], "dock"),
+        "pod": lambda: make_machine(images["wall_h"], "pod"),
         "window_field": lambda: make_field(images["wall_h"]),
         "floor_l_m": lambda: make_middle(images["floor_l_b"]),
         "floor_m_m": lambda: make_middle(images["floor_m_b"]),
@@ -1051,6 +1068,7 @@ def build_tiles():
 #   'G'  (v71) wall with the galley's stove: meals are cooked there from rations
 #   'F'  (v86) a force field in the hull: air stays in, light and sight pass; the shuttle parks outside it
 #   'V'  (v86) wall with the shuttle's dock console: board the shuttle here or call it (a fleet's ships)
+#   'k'  (v96) wall with our boarding pod's bay: sit in (E) and the pod flies at the pirate ship alongside
 #   'E'  (v91) wall with a first-aid box: E takes a first-aid kit the supply locker keeps (or puts one back)
 #   'J'  (v91) wall with a spare parts box: the same with spare parts (and circuit boards)
 #   'N'  (v91) wall with a fire box (a picture until there is fire)   'L'  (v91) a wall light
@@ -1087,7 +1105,7 @@ def build_tiles():
 # The tile art is made for rooms two tiles tall separated by horizontal wall
 # bands, so maps follow that pattern and the script refuses anything else.
 
-BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFVEJNL")
+BAND_CHARS = set("#DW<>123456789TIMZBUYXSQKPCGFVEJNLk")
 ACCESS_BITS = {"bridge": 1, "engine": 2, "medbay": 4, "armory": 8, "guns": 16}   # as Net.ACCESS_*
 SYSTEMS = ["weapons", "helm", "engine", "crew", "jump", "shields"]                                  # as Net.ESYS_*
 FLOOR_CHARS = set(".sgcH/")
@@ -1102,7 +1120,7 @@ ROCK_CHARS = set("RO,")
 MACHINE_OF = {"D": "door_open", "W": "window", "<": "window_l", ">": "window_r",
               "1": "console_1", "2": "console_2", "3": "console_3",
               "4": "console_4", "5": "console_5", "6": "engine", "7": "air_plant", "8": "locker", "9": "lock_pump", "T": "gun", "I": "intercom", "M": "holo", "Z": "shield", "B": "bench", "U": "bay", "Y": "autodoc", "X": "scanner", "S": "smes", "Q": "smes_small", "K": "comms", "P": "tray", "C": "cryo", "G": "stove", "F": "window_field", "V": "dock",
-              "E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light"}
+              "E": "med_box", "J": "tech_box", "N": "fire_box", "L": "wall_light", "k": "pod"}
 
 
 class MapError(Exception):

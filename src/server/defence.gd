@@ -32,11 +32,18 @@ const CREW_NEAR := 2.0               # ... and, if it can, this close to one of 
 const CREW_SAFE := 6.0               # (one of ours at least this far from the pirates)
 const PLAN_TICKS := 10               # how often a running bot looks again at where to go
 const AMMO_TAKEN := 2                # magazines (or boxes of shells) a guard takes with its gun
+# (v96, the author's P1 comment: "improve our bots' AI, or guard bots that fight the boarders")
+const HURT_BELOW := 40.0             # (my D2 pick) a fighter this hurt falls back to our people...
+const BACK_ABOVE := 70.0             # ... and goes back into the fight once healed past this
+const FOCUS_NEAR := 6.0              # (my D4 pick) cells: fighters this close shoot the one their friend shoots
 
 var server: GameServer
 var on := true                       # tests: false = bots take no notice of pirates (as before v79)
 var _known := {}                     # bot slot -> {pirate slot: [last cell seen, tick]}
 var _since := {}                     # bot slot -> the tick it first took notice (for the log)
+var radio := true                    # (v96, my D1 pick; tests: false = each fighter knows only what it saw itself)
+var _spotted := []                   # (v96) armed pirates aboard any of ours sees now, worked out once per look
+var _spotted_tick := -1
 
 
 func setup(p_server: GameServer) -> void:
@@ -80,6 +87,9 @@ func think(p: Player) -> bool:
 		return false
 	if (server.tick + p.slot) % LOOK_EVERY == 0:
 		_look(p)
+		if radio and (p.job == Net.JOB_GUARD or p.defends):
+			for q: Player in spotted():
+				_note(p, q)          # (my D1 pick) what any of ours sees, the fighters know of (and go to)
 	var known: Dictionary = _known.get(p.slot, {})
 	var calm := roundi(CALM_SECONDS * Net.TICK_HZ)
 	var lost := roundi(LOST_SECONDS * Net.TICK_HZ)
@@ -127,6 +137,28 @@ func _look(p: Player) -> void:
 			continue
 		if server.pirates._sees(p, q) or d <= NEAR and Sight.clear_cached(map, server.doors, Vector2i(p.st.x, p.st.y), Vector2i(q.st.x, q.st.y), server.replication.lines):
 			_note(p, q)
+
+
+func spotted() -> Array:
+	## (v96, my D1 pick) The armed pirates on our ship that one of ours (a person, a bot, a robot) sees now.
+	if _spotted_tick == server.tick:
+		return _spotted
+	_spotted_tick = server.tick
+	_spotted = []
+	var map := server.map
+	var ours: Array = []
+	for o: Player in server.players:
+		if o != null and not o.pirate and not o.corpse and not o.in_shuttle and o.cond == Net.COND_OK:
+			ours.append(o)
+	for q: Player in server.players:
+		if not armed(q) or not map.on_ship(q.st.y * map.width + q.st.x):
+			continue
+		for o: Player in ours:
+			if map.deck_of(o.st.y) == map.deck_of(q.st.y) and Vector2(o.st.x, o.st.y).distance_to(Vector2(q.st.x, q.st.y)) <= Sight.SIGHT_REACH \
+					and server.pirates._sees(o, q):
+				_spotted.append(q)
+				break
+	return _spotted
 
 
 func _forget(p: Player) -> void:
@@ -226,9 +258,24 @@ func gun_slot(p: Player) -> int:
 	return -1
 
 
+func _focus(p: Player) -> void:
+	## (v96, my D4 pick) A fighter near another one already shooting at a pirate it can see shoots that one too.
+	var map := server.map
+	for f: Player in server.players:
+		if f == null or f == p or not f.bot or f.pirate or f.cond != Net.COND_OK or f.doing != Net.DOING_FIGHT or f.ai_target < 0:
+			continue
+		if map.deck_of(f.st.y) != map.deck_of(p.st.y) or Vector2(f.st.x, f.st.y).distance_to(Vector2(p.st.x, p.st.y)) > FOCUS_NEAR:
+			continue
+		var t: Player = server.players[f.ai_target] if f.ai_target < server.players.size() else null
+		if t != null and t.slot != p.ai_target and armed(t) and server.pirates._sees(p, t):
+			p.ai_target = t.slot
+			p.ai_goal = Vector2i(t.st.x, t.st.y)
+		return
+
+
 func _locker_gun() -> int:
 	var store: Dictionary = server.ship.store
-	for kind: int in [Net.ITEM_PISTOL, Net.ITEM_SHOTGUN]:
+	for kind: int in [Net.ITEM_SHOTGUN, Net.ITEM_PISTOL]:     # (v96, my D3 pick) the shotgun first
 		if int(store.get(kind, 0)) > 0:
 			return kind
 	return Net.ITEM_NONE
@@ -238,9 +285,24 @@ func _guard(p: Player, known: Dictionary) -> bool:
 	## A guard bot fights when it has a gun, or fetches one from the locker. False: no gun
 	## to be had (it runs like the others).
 	var k := gun_slot(p)
+	# (v96, my D2 pick) badly hurt: back to our people (a medical patch on the way if it has one), and in again once whole
+	if p.health < HURT_BELOW and not p.falling_back:
+		p.falling_back = true
+		server.chat.bot_log(p, "ранен: отхожу к своим.")
+	elif p.health > BACK_ABOVE and p.falling_back:
+		p.falling_back = false
+		server.chat.bot_log(p, "подлатался: возвращаюсь в бой.")
+	if p.falling_back:
+		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
+		if patch >= 0 and p.wounds > 0.0 and server.tick >= p.ready_tick and p.st.cd == 0:
+			p.hand = patch
+			server.combat.use_at(p, server.tick, Vector2(p.st.x, p.st.y))
+			return true
+		return false                         # it runs like the others (and lies low by our people)
 	if k >= 0:
 		p.st.prone = false
 		p.hand = k
+		_focus(p)
 		if p.doing != Net.DOING_FIGHT:
 			server.chat.bot_log(p, "иду на пиратов с оружием.")
 		p.doing = Net.DOING_FIGHT
@@ -269,6 +331,8 @@ func _guard(p: Player, known: Dictionary) -> bool:
 		for n in AMMO_TAKEN:
 			if p.count(Net.ITEM_NONE) > 0:
 				sup.store_asked(p, Net.STORE_TAKE, Items.ammo_of(kind))
+		if p.count(Net.ITEM_NONE) > 0 and not p.slots.has(Net.ITEM_MEDPATCH) and int(server.ship.store.get(Net.ITEM_MEDPATCH, 0)) > 0:
+			sup.store_asked(p, Net.STORE_TAKE, Net.ITEM_MEDPATCH)   # (v96, my D3 pick) and a medical patch
 		server.chat.bot_log(p, "беру %s из шкафчика." % Items.name_of(kind).to_lower())
 		p.bot_plan_tick = -1000
 		return true

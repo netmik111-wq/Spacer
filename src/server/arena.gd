@@ -293,6 +293,12 @@ func tick() -> void:
 		for b: Body in bodies:
 			if b.on:
 				_heat_tick(b)
+	else:
+		# (v96) out of a fight our shield still rises at a meteor coming (and falls once it is gone)
+		var rocks := rocks_flying() > 0
+		for b: Body in bodies:
+			if b.on and b.id < LEAD and (rocks or b.raised):
+				_heat_tick(b)
 	_aim_turrets()
 	_triggers()
 	_run_later()
@@ -377,7 +383,7 @@ func _our_body(i: int) -> void:
 
 func _start() -> void:
 	_was_on = true
-	shots = []
+	shots = shots.filter(func(p: Dictionary) -> bool: return p.get("pod", "") == "rock")   # (v96) a meteor flies on
 	_later = []
 	_bumped = {}
 	for b: Body in bodies:
@@ -404,6 +410,10 @@ func _stop() -> void:
 	for p: Dictionary in shots:
 		if not p.has("practice"):
 			_ended(p, Net.MISSED, p["pos"])
+		if p.get("pod", "") == "ours":
+			server.pods.lost(int(p["bay"]), false)     # (v96) the fight is over before our pod got there
+		elif p.get("pod", "") == "rock":
+			_meteor_over(int(p["whom"]))
 	shots = []
 	_later = []
 	for b: Body in bodies:
@@ -659,6 +669,11 @@ func dash(ship: int, way: float) -> bool:
 				best = d
 				way = -1.0 if b.local(p["pos"]).y > 0.0 else 1.0
 	b.vel += Vector2(0.0, way * DASH).rotated(b.rot)
+	# (v96, my R1 pick) a meteor still far enough off is steered round: it passes by
+	for p: Dictionary in shots:
+		if p.get("pod", "") == "rock" and int(p["whom"]) == ship and not p.has("dodged") \
+				and (p["pos"] as Vector2).distance_to(b.pos) - b.shape.radius >= ROCK_DODGE_EARLY * ROCK_SPEED:
+			p["dodged"] = true
 	return true
 
 
@@ -1617,17 +1632,23 @@ func _fly_shots() -> void:
 		var done := false
 		if p.has("pod"):
 			done = int(p.get("hp", 1)) <= 0 or _fly_pod(p, from, to)
-		elif int(p["side"]) == 0 and not p.has("practice"):
+		elif int(p["side"]) == 0:
 			var pod := _pod_shot(p, from, to)
 			if not pod.is_empty():
-				# (v95) a shot of ours meets a pod on its way: it breaks it (POD_HP shots) and is spent
+				# (v95) a shot of ours meets a pod on its way: it breaks it (POD_HP shots) and is spent;
+				# (v96, my R1 pick) a meteor too, practice shots included
 				pod["hp"] = int(pod["hp"]) - 1
-				g.arena_miss(p, to)
+				if not p.has("practice"):
+					g.arena_miss(p, to)
 				_ended(p, Net.SHOT_DOWN, pod["pos"])
 				done = true
 				if int(pod["hp"]) <= 0:
 					_ended(pod, Net.SHOT_DOWN, pod["pos"])
-					server.chat.say("Орудия сбили %s." % ("штурмовой дрон" if pod["pod"] == "drone" else "абордажную капсулу"))
+					if pod["pod"] == "rock":
+						server.chat.say_bridge("Метеор разбит выстрелом.")
+						_meteor_over(int(pod["whom"]))
+					else:
+						server.chat.say("Орудия сбили %s." % ("штурмовой дрон" if pod["pod"] == "drone" else "абордажную капсулу"))
 		for b: Body in bodies:
 			if done or p.has("practice") or p.has("pod"):
 				break
@@ -1677,6 +1698,11 @@ func _fly_shots() -> void:
 		if server.tick >= int(p["ends"]):
 			if not p.has("off") and not p.has("practice") and not p.has("pod"):
 				g.arena_miss(p, to)          # (a shot that glanced off and found nothing more says nothing)
+			if p.get("pod", "") == "rock":
+				server.chat.say_bridge("Метеор прошёл мимо: корабль увернулся." if p.has("dodged") else "Метеор прошёл мимо.")
+				_meteor_over(int(p["whom"]))
+			elif p.get("pod", "") == "ours":
+				server.pods.lost(int(p["bay"]), false)
 			_ended(p, Net.MISSED, to)
 			continue
 		still.append(p)
@@ -1988,28 +2014,68 @@ func drones_flying() -> int:
 func _fly_pod(p: Dictionary, from: Vector2, to: Vector2) -> bool:
 	## One tick of a pod's flight: it turns after its ship, meets the point defence once, and strikes the hull.
 	var whom := body(int(p["whom"]))
-	if whom == null:
+	if whom == null or not whom.on:
 		_ended(p, Net.MISSED, from)
+		if p["pod"] == "ours":
+			server.pods.lost(int(p["bay"]), false)
+		elif p["pod"] == "rock":
+			_meteor_over(int(p["whom"]))
 		return true
-	var v: Vector2 = p["vel"]
-	var rel := v - whom.vel
-	var want := (whom.pos - from).angle()
-	var now := rel.angle()
-	rel = Vector2.from_angle(now + clampf(wrapf(want - now, -PI, PI), -POD_TURN * DT, POD_TURN * DT)) * rel.length()
-	p["vel"] = rel + whom.vel
+	if p["pod"] == "home":
+		# (v96) our pod flying home from the pirate's hull: only drawn (Pods counts its time)
+		var at_home: bool = from.distance_to(whom.pos) <= float(whom.shape.radius) * 0.5
+		if at_home:
+			_ended(p, Net.LANDED, from)
+			return true
+		p["vel"] = (whom.pos - from).normalized() * POD_SPEED + whom.vel
+		return false
+	var rock: bool = p["pod"] == "rock"
+	if not rock:
+		var v: Vector2 = p["vel"]
+		var rel := v - whom.vel
+		var want := (whom.pos - from).angle()
+		var now := rel.angle()
+		rel = Vector2.from_angle(now + clampf(wrapf(want - now, -PI, PI), -POD_TURN * DT, POD_TURN * DT)) * rel.length()
+		p["vel"] = rel + whom.vel
+	elif not p.has("tried") and from.distance_to(whom.pos) - whom.shape.radius <= ROCK_BOT_AT * ROCK_SPEED:
+		p["tried"] = true
+		server.fleet.use(whom.id)
+		var steers: bool = server.stations.bot_steers_round(whom.id)
+		server.fleet.use(0)
+		if steers:
+			dash(whom.id, 0.0)               # (my R2 pick) a bot at the controls throws the ship aside, by the old lot
 	var r: Vector2 = whom.shape.bubble()
 	var steps := maxi(ceili(from.distance_to(to) / 0.4), 1)
+	var mine: bool = int(p["side"]) == 0
 	for s in steps + 1:
 		var at := from.lerp(to, float(s) / steps)
 		var l := whom.local(at)
 		if p["guard"] and Vector2(l.x / (r.x + GUARD_RANGE), l.y / (r.y + GUARD_RANGE)).length_squared() <= 1.0:
 			p["guard"] = false
-			if _pod_guard(whom, at):
+			if (_their_guard(p, whom) if mine else _pod_guard(whom, at)):
 				_ended(p, Net.SHOT_DOWN, at)
-				server.chat.say("«Заслон» сбил %s на подлёте." % ("штурмовой дрон" if p["pod"] == "drone" else "абордажную капсулу"))
+				if rock:
+					server.chat.say_bridge("«Заслон» разбил метеор на подлёте.")
+					_meteor_over(int(p["whom"]))
+				elif mine:
+					server.pods.lost(int(p["bay"]), true)
+				else:
+					server.chat.say("«Заслон» сбил %s на подлёте." % ("штурмовой дрон" if p["pod"] == "drone" else "абордажную капсулу"))
 				return true
-		if whom.shape.solid(l):
-			_pod_lands(p, whom, l)
+		# (a hull corner pokes out of the bubble: a meteor at one is stopped there)
+		if rock and _shielded(whom) and (Vector2(l.x / r.x, l.y / r.y).length_squared() <= 1.0 or whom.shape.solid(l)) and _covers(whom, l):
+			_on_shield(whom, ROCK_HEAT, true)        # (my R1 pick) a raised shield stops a meteor and heats
+			_ended(p, 0, at)
+			server.chat.say_bridge("Щит остановил метеор.")
+			_meteor_over(int(p["whom"]))
+			return true
+		if whom.shape.solid(l) and not p.has("dodged"):
+			if rock:
+				_rock_lands(whom, l)
+			elif mine:
+				_our_pod_lands(p, whom, l)
+			else:
+				_pod_lands(p, whom, l)
 			_ended(p, Net.LANDED, at)
 			return true
 	return false
@@ -2033,7 +2099,7 @@ func _pod_guard(whom: Body, at: Vector2) -> bool:
 func _pod_shot(p: Dictionary, from: Vector2, to: Vector2) -> Dictionary:
 	## A shot of ours flying from..to: the pod it meets on the way (empty: none).
 	for q: Dictionary in shots:
-		if not q.has("pod") or int(q.get("hp", 0)) <= 0:
+		if not q.has("pod") or int(q.get("hp", 0)) <= 0 or int(q["side"]) == 0:
 			continue
 		var at: Vector2 = q["pos"]
 		var seg := to - from
@@ -2076,6 +2142,126 @@ func _pod_lands(p: Dictionary, whom: Body, l: Vector2) -> void:
 			server.pirates.spawn_boarder(at.x, at.y, _rng.randf() < 0.6, -1, false)
 		server.chat.alarm("Абордажная капсула пробила обшивку (%s)! Пираты на борту: %d. У них осталось %d человек." % [deck, n, g.boarders_left()])
 	server.wing.use(0)
+	server.fleet.use(0)
+
+
+# ---------------------------------------------------------------- (v96, the author's P4) our boarding pods
+
+func launch_our_pod(ship: int, bay: int) -> bool:
+	## Our pod leaves its bay (a cell of that ship of ours) for the pirate ship alongside.
+	var b := body(ship)
+	var lead := body(LEAD)
+	if b == null or lead == null or not lead.on:
+		return false
+	var muzzle: Vector2 = b.pos + b.shape.local_of(bay).rotated(b.rot)
+	var t: float = muzzle.distance_to(lead.pos) / POD_SPEED
+	var aim: Vector2 = lead.pos + (lead.vel - b.vel) * t
+	var p := {"id": _next_id, "side": 0, "from": ship, "pos": muzzle,
+		"vel": Vector2.RIGHT.rotated((aim - muzzle).angle()) * POD_SPEED + b.vel,
+		"ends": server.tick + roundi(POD_LIFE * Net.TICK_HZ), "w": Weapons.NONE, "kind": Net.SHOT_POD,
+		"meta": {}, "seen": {}, "guard": true, "d": 0.0, "type": 0, "pod": "ours", "whom": LEAD, "foe": 0, "hp": POD_HP, "bay": bay}
+	_next_id = (_next_id % 65535) + 1
+	shots.append(p)
+	_tell_fly(p)
+	return true
+
+
+func pod_home(ship: int) -> void:
+	## Our pod leaves the pirate's hull for home: drawn flying back to that ship of ours.
+	var lead := body(LEAD)
+	var b := body(ship)
+	if lead == null or b == null or not lead.on:
+		return
+	var from: Vector2 = lead.pos
+	var p := {"id": _next_id, "side": 0, "from": LEAD, "pos": from, "vel": (b.pos - from).normalized() * POD_SPEED,
+		"ends": server.tick + roundi(POD_LIFE * Net.TICK_HZ), "w": Weapons.NONE, "kind": Net.SHOT_POD,
+		"meta": {}, "seen": {}, "guard": false, "d": 0.0, "type": 0, "pod": "home", "whom": ship, "foe": -1, "hp": 99}
+	_next_id = (_next_id % 65535) + 1
+	shots.append(p)
+	_tell_fly(p)
+
+
+func our_pods_flying() -> int:
+	var n := 0
+	for p: Dictionary in shots:
+		if p.get("pod", "") == "ours":
+			n += 1
+	return n
+
+
+func _their_guard(_p: Dictionary, whom: Body) -> bool:
+	## The pirates' point defence fires once at our pod coming: true if it is shot down.
+	server.wing.use(whom.id - LEAD)
+	var g = server.gunnery
+	var down := false
+	if g.enemy_guard and not g.down(Net.ESYS_WEAPONS) and server.tick >= g._enemy_guard_ready:
+		g._enemy_guard_ready = server.tick + Weapons.charge_ticks(Weapons.GUARD)
+		down = _rng.randf() < Weapons.GUARD_HIT
+	server.wing.use(0)
+	return down
+
+
+func _our_pod_lands(p: Dictionary, whom: Body, l: Vector2) -> void:
+	server.pods.landed(int(p["bay"]), _grid_cells(whom, l))
+
+
+# ---------------------------------------------------------------- (v96, the author's N2 A) meteors in space
+
+const ROCK_SPEED := 24.0             # (my R1 pick) cells a second a meteor flies
+const ROCK_WARN := 5.0               # seconds from when it is seen to when it strikes
+const ROCK_HP := 2                   # shots that break one
+const ROCK_HEAT := 300.0             # the heat a meteor stopped by the shield makes
+const ROCK_DODGE_EARLY := 1.0        # seconds: the pilot's evade this early (or earlier) gets the ship out of its way
+const ROCK_BOT_AT := 1.5             # seconds before it strikes a bot at the controls tries
+
+
+func launch_meteor(ship: int) -> bool:
+	## A meteor of the stream comes at that ship of ours: it is seen ROCK_WARN seconds off, flies straight at a
+	## point of the hull where the ship will be, and strikes there unless steered round, shot apart or stopped.
+	var whom := body(ship)
+	if whom == null or whom.shape.outline.is_empty():
+		return false
+	# (a point a little inside the outline: a line at a point on it may only graze the hull)
+	var spot: Vector2 = whom.shape.outline[_rng.randi_range(0, whom.shape.outline.size() - 1)] * 0.7
+	var aim: Vector2 = whom.pos + spot.rotated(whom.rot) + whom.vel * ROCK_WARN
+	var start: Vector2 = aim + Vector2.from_angle(_rng.randf() * TAU) * ROCK_SPEED * ROCK_WARN
+	var p := {"id": _next_id, "side": 1, "from": -1, "pos": start, "vel": (aim - start).normalized() * ROCK_SPEED,
+		"ends": server.tick + roundi((ROCK_WARN + 3.0) * Net.TICK_HZ), "w": Weapons.NONE, "kind": Net.SHOT_ROCK,
+		"meta": {}, "seen": {}, "guard": true, "d": 0.0, "type": 0, "pod": "rock", "whom": ship, "foe": -1, "hp": ROCK_HP}
+	_next_id = (_next_id % 65535) + 1
+	shots.append(p)
+	_tell_fly(p)
+	return true
+
+
+func _meteor_over(ship: int) -> void:
+	server.fleet.use(ship)
+	server.stations.meteor_over()
+	server.fleet.use(0)
+
+
+func rocks_flying() -> int:
+	var n := 0
+	for p: Dictionary in shots:
+		if p.get("pod", "") == "rock":
+			n += 1
+	return n
+
+
+func _rock_lands(whom: Body, l: Vector2) -> void:
+	## A meteor strikes our hull: a hole where it struck (the nearest whole hull cell), the screen shakes.
+	var cells := _grid_cells(whom, l)
+	server.fleet.use(whom.id)
+	if not cells.is_empty():
+		var c: int = cells[0]
+		var x := c % server.map.width
+		var y := c / server.map.width
+		server.combat.jolt(Net.JOLT_HEAVY, 0, Vector2(x, y))
+		server.systems.breach_near(x, y)
+	else:
+		server.systems.breach_random()
+	server.hazards.meteor_on_enemy()
+	server.stations.meteor_over()
 	server.fleet.use(0)
 
 

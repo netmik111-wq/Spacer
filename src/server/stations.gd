@@ -369,12 +369,38 @@ func meteor_seen() -> bool:
 	## METEOR_WARN seconds unless the pilot steers round it. False if one is coming already.
 	if meteor_at > 0:
 		return false
-	meteor_at = server.tick + roundi(METEOR_WARN * Net.TICK_HZ)
+	var rock: bool = server.arena.flying() and server.arena.launch_meteor(server.fleet.on)
+	var warn: float = server.arena.ROCK_WARN if rock else METEOR_WARN
+	meteor_at = server.tick + roundi(warn * Net.TICK_HZ)
 	meteor_tried = false
 	meteor_missed = false
 	for c: int in server.map.helm.keys():
 		server.chat.sound(Net.SOUND_BEEP, c % server.map.width, c / server.map.width)
-	server.chat.say_bridge("Метеор по курсу! Через %.1f с удар: пилот, уклонение (пробел у штурвала)." % METEOR_WARN)
+	if rock:
+		# (v96, the author's N2 A, my R1 pick) a real rock in space: steered round, shot apart or stopped by the shield
+		server.chat.say_bridge("Метеор по курсу! Удар через %.0f с: пилот, уклонение (пробел) заранее, или разбейте его орудиями." % warn)
+	else:
+		server.chat.say_bridge("Метеор по курсу! Через %.1f с удар: пилот, уклонение (пробел у штурвала)." % METEOR_WARN)
+	return true
+
+
+func meteor_over() -> void:
+	## (v96) The meteor in space struck, passed or was broken (Arena): nothing comes now.
+	meteor_at = 0
+
+
+func bot_steers_round(ship: int) -> bool:
+	## (v96, my R2 pick) A meteor in space is near: a bot at the controls (nobody steered yet) throws the ship
+	## aside by the old lot, at half a person's chance. True: it does.
+	if meteor_tried:
+		return false
+	var pilot: Player = _at.get(Net.POST_HELM, null)
+	if pilot == null or not pilot.bot or not server.power.engine_running() or server.engine_down():
+		return false
+	meteor_tried = true
+	if _lot() >= (METEOR_DODGE + METEOR_SKILL * pilot.skill(Net.SKILL_PILOT)) * share(pilot):
+		return false
+	server.chat.say_bridge("%s закладывает вираж." % pilot.name)
 	return true
 
 
@@ -393,6 +419,12 @@ func _steer(p: Player) -> void:
 		server.chat.tell(p, "В СМЭС не хватает заряда на манёвр (нужно %d)." % int(METEOR_COST))
 		return
 	meteor_tried = true
+	if server.arena.rocks_flying() > 0:
+		# (v96) the meteor flies in space: the evade really throws the ship aside; early enough, it passes by
+		server.arena.dash(server.fleet.on, 0.0)
+		p.train(Net.SKILL_PILOT)
+		server.chat.say_bridge("%s закладывает вираж." % p.name)
+		return
 	meteor_missed = _lot() < METEOR_DODGE + METEOR_SKILL * p.skill(Net.SKILL_PILOT)
 	p.train(Net.SKILL_PILOT)
 	server.chat.say_bridge("%s закладывает вираж%s" % [p.name, "." if meteor_missed else ", но не успевает!"])
@@ -401,6 +433,8 @@ func _steer(p: Player) -> void:
 func _meteor_tick() -> void:
 	if meteor_at <= 0 or server.tick < meteor_at:
 		return
+	if server.arena.rocks_flying() > 0:
+		return                               # (v96) it flies in space: it ends there (meteor_over)
 	meteor_at = 0
 	var pilot: Player = _at.get(Net.POST_HELM, null)
 	if not meteor_tried and pilot != null and pilot.bot and server.power.engine_running() and not server.engine_down():
