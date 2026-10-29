@@ -36,11 +36,11 @@ const MOUNT_SIDE := 1
 const MOUNT_ROOF := 2
 const MOUNT_NAMES: Array[String] = ["носовое", "бортовое", "на крыше"]
 const MOUNT_ARC: Array[float] = [PI / 36.0, PI / 2.0, PI]          # how far either side of straight out it turns
-const MOUNT_TURN: Array[float] = [0.0, PI / 2.0, PI / 3.0]          # radians a second it turns (0: fixed, it does not)
-const MOUNT_DAMAGE: Array[float] = [1.25, 1.0, 0.8]
-const MOUNT_SPREAD: Array[float] = [0.5, 1.0, 1.3]                  # its scatter against a side turret's
+const MOUNT_NAMES_OF: Array[String] = ["носовое неподвижное", "бортовое", "на крыше"]   # (v94.1) «гнездо …»
+# (v94.1, his M2 note) a mount gives only its arc: what a gun turns at and how it scatters are the gun's own (Weapons.fits)
 const KIND_OF := {"hard": MOUNT_HARD, "side": MOUNT_SIDE, "roof": MOUNT_ROOF}
 const BOW_SHARE := 0.3                # a gun this far forward of the middle (a share of the length) is fixed by itself
+static var _fleet_kinds := {}        # (v94.1) "map id:crc:ship" -> that ship's shape, for kind_in_fleet
 var _skip_other := false             # (the grid) the ship alongside's cells are not ours
 
 
@@ -52,6 +52,15 @@ static func of_fleet(p_map: RefCounted, ship: int) -> RefCounted:
 	s._skip_other = true
 	s._build(p_map, 0, top, p_map.width, bottom - top)
 	return s
+
+
+static func kind_in_fleet(p_map: RefCounted, cell: int) -> int:
+	## (v94.1) The kind of our fleet's gun mount at that cell, without building its ship's shape every time.
+	var f: int = maxi(p_map.fleet_of(cell), 0)
+	var key := "%d:%d:%d" % [p_map.get_instance_id(), p_map.crc, f]
+	if not _fleet_kinds.has(key):
+		_fleet_kinds[key] = of_fleet(p_map, f)
+	return int(_fleet_kinds[key].mount_kind(cell))
 
 
 static func of_layout(p_map: RefCounted) -> RefCounted:

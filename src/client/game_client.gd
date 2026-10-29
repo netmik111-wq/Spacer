@@ -34,6 +34,7 @@ const Gear := preload("res://src/shared/gear.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Sight := preload("res://src/shared/sight.gd")
 const ArenaSeen := preload("res://src/client/arena_seen.gd")
+const ArenaShape := preload("res://src/shared/arena_shape.gd")
 
 const INTERP_TICKS := 2.0            # others are drawn this far in the past (0.1 s)
 const PRED_MARGIN := 1.5             # safety margin of the predicted clock, in ticks
@@ -1277,6 +1278,10 @@ func mount_here(cell: int) -> String:
 			return "«Заслон» ставят в его собственное гнездо с пульта орудий."
 		if Weapons.damaged(item):
 			return "Орудие повреждено: сначала его чинят на верстаке."
+		var kind := ArenaShape.kind_in_fleet(map, cell)
+		if not Weapons.fits(Weapons.of_item(item), kind):     # (v94.1, as Mounts.misfit_of)
+			return "%s не встаёт в гнездо «%s». %s" % [Weapons.name_of(Weapons.of_item(item)), ArenaShape.MOUNT_NAMES_OF[kind],
+				Weapons.fit_words(Weapons.of_item(item))]
 		return "-" if broken.has(cell) else ""
 	if item == Net.ITEM_NONE and on != Weapons.NONE and not broken.has(cell) and not arena_on():
 		return ""                            # (v92: in a fight, empty hands take the gun's controls instead)

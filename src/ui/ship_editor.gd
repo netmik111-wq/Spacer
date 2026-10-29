@@ -74,8 +74,8 @@ const LOCKS := [["bridge", "Мостик (замок)"], ["engine", "Машин�
 const DOOR_KINDS := [["base", "Дверь: обычная"], ["tech", "Дверь: техническая"], ["cargo", "Дверь: грузовая"],
 	["herm", "Дверь: герметичная"]]
 # (v94, the author's G1 note) a gun mount's kind: the mark on a gun cell ("по месту": by its wall, as the game picks)
-const GUN_KINDS := [["hard", "Орудие: носовое (неподвижное, ±5°, сильнее)"], ["side", "Орудие: бортовое (180°)"],
-	["roof", "Орудие: на крыше (360°, слабее)"]]
+const GUN_KINDS := [["hard", "Орудие: носовое (неподвижное, ±5°; для любых орудий)"], ["side", "Орудие: бортовое (180°)"],
+	["roof", "Орудие: на крыше (360°; не для тяжёлых орудий)"]]
 const SYSTEMS := [["weapons", "Оружие"], ["helm", "Рубка"], ["engine", "Двигатель"], ["crew", "Кубрик"],
 	["jump", "Гипердвигатель"], ["shields", "Щиты"]]
 const TOOLS := [

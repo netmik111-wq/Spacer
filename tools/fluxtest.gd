@@ -2,8 +2,9 @@ extends SceneTree
 ## (v94) Checks the fight in space made like Starsector (the author: "make all guns work properly, rework
 ## damage, shield, hull and armour") on a real server stepped by hand:
 ##   godot --headless --path . --script res://tools/fluxtest.gd
-## Every gun has its numbers in space and, fired at a pirate, does something to it (his G1); firing heats our
-## ship and a gun waits while it is too hot; a raised shield stops a shot and heats, full it overloads for
+## Every gun has its numbers in space and, fired at a pirate, does something to it (his G1); (v94.1, his S4 B)
+## firing heats nothing, only the shield does; (his M2 note) a gun goes only on the mount kinds it fits, a mount gives
+## no damage of its own, a turret turns at its gun's pace; a raised shield stops a shot and heats, full it overloads for
 ## OVERLOAD_SECONDS (no shield, no guns); venting cools fast with the shield down; the shield's own heat goes
 ## only while it is down; the pilot raises and lowers it by hand; the three mount kinds (a "^" line, or by
 ## place: the bow's guns fixed) with their arcs and turning; a round of ammunition feeds a clip of bursts;
@@ -15,6 +16,7 @@ const Weapons := preload("res://src/shared/weapons.gd")
 const Arena := preload("res://src/server/arena.gd")
 const ArenaShape := preload("res://src/shared/arena_shape.gd")
 const MapBuilder := preload("res://src/shared/map_builder.gd")
+const Mounts := preload("res://src/server/mounts.gd")
 
 var failed := 0
 var server: GameServer
@@ -100,6 +102,11 @@ func _initialize() -> void:
 	var b = a.body(0)
 	var e = a.body(Arena.LEAD)
 	_expect(b != null and e != null and b.cap > 0.0 and e.cap > 0.0, "both ships have room for heat (%d, %d)" % [b.cap if b != null else 0, e.cap if e != null else 0])
+	var e_hard := false
+	for k in e.guns.size():
+		e_hard = e_hard or int(e.guns[k]["kind"]) == ArenaShape.MOUNT_HARD
+	var sk: int = a._their_gun(e, 0, Weapons.SIEGE)
+	_expect(not e_hard or e.guns.is_empty() or int(e.guns[sk]["kind"]) == ArenaShape.MOUNT_HARD, "a pirate's siege laser fires from a fixed mount when it has one")
 	var hp: Vector2 = a.hull_points(b)
 	_expect(hp.y == float(ship.hull_max) * Arena.OUR_HP and hp.x == hp.y, "our hull shows %d points" % hp.y)
 
@@ -113,18 +120,49 @@ func _initialize() -> void:
 	b.guns[top]["aim"] = float(b.guns[top]["out"]) + PI / 2.0 - 0.05
 	_run(1)
 	var turned := absf(wrapf(float(b.guns[top]["aim"]) - (float(b.guns[top]["out"]) + PI / 2.0 - 0.05), -PI, PI))
-	_expect(turned > 0.0 and turned <= ArenaShape.MOUNT_TURN[ArenaShape.MOUNT_SIDE] / Net.TICK_HZ + 0.001, "a side turret turns no faster than 90° a second (%.3f rad a tick)" % turned)
+	var pace: float = Weapons.turn_speed(ship.mounts[top])
+	_expect(turned > 0.0 and turned <= pace / Net.TICK_HZ + 0.001, "a turret turns no faster than its gun's %d° a second (%.3f rad a tick)" % [
+		roundi(rad_to_deg(pace)), turned])
+	_expect(Weapons.turn_speed(Weapons.HEAVY) < Weapons.turn_speed(Weapons.LASER), "a heavy gun turns slower than a light one")
 	_run(Net.TICK_HZ * 2)
 	_expect(b.guns[top]["bears"], "and then bears on the pirate above")
 
 	# every gun, fired at the pirate, does something to it
 	var gunner = _at(map.gun_console.keys()[0], "Канонир")
+	# (v94.1, his M2 note) a gun goes only on the mounts it fits; the mount gives no damage of its own
+	var bow := -1
+	var flank := -1
+	for i in map.guns.size():
+		var k: int = ArenaShape.kind_in_fleet(map, map.guns[i])
+		if k == ArenaShape.MOUNT_HARD:
+			bow = i
+		elif k == ArenaShape.MOUNT_SIDE:
+			flank = i
+	_expect(bow >= 0 and flank >= 0, "(a fixed and a side mount)")
+	var m = server.mounts
+	_expect(m.misfit(Weapons.SIEGE, map.guns[bow]) == "" and m.misfit(Weapons.SIEGE, map.guns[flank]) != "",
+		"a siege laser goes only on the bow's fixed mount (%s)" % m.misfit(Weapons.SIEGE, map.guns[flank]))
+	_expect(m.misfit(Weapons.HEAVY, map.guns[flank]) == "" and Mounts.misfit_of(Weapons.HEAVY, ArenaShape.MOUNT_ROOF) != "",
+		"a heavy laser on the bow or a side, never the roof")
+	_expect(m.misfit(Weapons.LASER, map.guns[flank]) == "" and Mounts.misfit_of(Weapons.LASER, ArenaShape.MOUNT_ROOF) == ""
+		and m.misfit(Weapons.LASER, map.guns[bow]) == "", "a laser anywhere")
+	var siege := Weapons.item_of(Weapons.SIEGE)
+	ship.store[siege] = 1
+	m.order(gunner, flank, siege)
+	_expect(int(m.wanted[flank]) != siege, "the gun console's order for a siege laser on a side mount is refused")
+	m.order(gunner, bow, siege)
+	_expect(int(m.wanted[bow]) == siege, "and taken for the bow's")
+	m.order(gunner, bow, siege)
+	ship.store.erase(siege)
+
 	a.pirate_shields = false
 	var dead := PackedStringArray()
 	for w in range(1, Weapons.COUNT):
 		if w == Weapons.GUARD or w == Weapons.NEURAL or w == Weapons.NOVA:
 			continue
-		a.pirate_shields = w != Weapons.SIPHON        # a siphon works on a raised shield only
+		# a siphon works on a raised shield only; an EMP's sure work is heating one (on a bare hull it puts out only
+		# the system of the room it strikes, and may strike an empty one 8 times running)
+		a.pirate_shields = w != Weapons.SIPHON and w != Weapons.EMP
 		var did := false
 		for tries in 8:
 			if a.body(Arena.LEAD) == null:       # (a heavy gun finished it: another comes)
@@ -151,6 +189,7 @@ func _initialize() -> void:
 			b.over_until = 0
 			b.venting = false
 			g.held_until = 0
+			g.enemy_guard = false                 # (its point defence would shoot a launcher's one rocket down now and then)
 			for k in ship.mounts.size():
 				ship.mounts[k] = w
 				ship.mount_fx[k] = Weapons.FX_NONE
@@ -160,7 +199,7 @@ func _initialize() -> void:
 				ship.store[Weapons.ammo(w)] = 50
 			_hold(Vector2(0, 0), 0.0, Vector2(0, -40), 0.0)
 			_run(Net.TICK_HZ * 2)                 # the turrets turn to it
-			if w == Weapons.SIPHON:
+			if w == Weapons.SIPHON or w == Weapons.EMP:
 				b.heat = 500.0
 				e.raised = true
 				e.auto_until = server.tick + 200
@@ -193,17 +232,19 @@ func _initialize() -> void:
 		_run(1)
 	e = a.body(Arena.LEAD)
 
-	# firing heats our ship; a gun waits while it is too hot
+	# (v94.1, his S4 B) firing heats nothing: only the shield heats the ship, and a hot ship still fires
 	_hold(Vector2(0, 0), 0.0, Vector2(0, -40), 0.0)
 	_quiet(Net.TICK_HZ * 2)
 	g.charge.fill(1.0)
-	g.fire(gunner, 255)
-	_expect(b.heat > 0.0, "firing heats our ship (%.0f)" % b.heat)
-	b.heat = b.cap - 1.0
-	g.charge.fill(1.0)
 	var flying: int = a.shots.size()
 	g.fire(gunner, 255)
-	_expect(a.shots.size() == flying and not a.heat_ok(0, Weapons.LASER), "too hot, the guns wait")
+	_expect(a.shots.size() > flying and b.heat == 0.0, "firing heats nothing (%.0f)" % b.heat)
+	_quiet(Net.TICK_HZ * 2)
+	b.heat = b.cap * 0.7                      # (short of the bots' venting at 75%)
+	g.charge.fill(1.0)
+	flying = a.shots.size()
+	g.fire(gunner, 255)
+	_expect(a.shots.size() > flying and a.heat_ok(0, Weapons.LASER), "a hot ship short of overload still fires")
 	b.heat = 0.0
 
 	# our raised shield stops a pirate's shot and heats; the shield's heat goes only while it is down

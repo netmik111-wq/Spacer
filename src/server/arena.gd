@@ -310,8 +310,47 @@ func _gun(b: Body, cell: int) -> Dictionary:
 	var at: Vector2 = b.shape.local_of(cell)
 	var out: float = b.shape.mount_out(cell)
 	var kind: int = b.shape.mount_kind(cell)
-	return {"cell": cell, "at": at, "out": out, "aim": out, "bears": false, "kind": kind, "arc": ArenaShape.MOUNT_ARC[kind],
-		"turn": ArenaShape.MOUNT_TURN[kind]}
+	return {"cell": cell, "at": at, "out": out, "aim": out, "bears": false, "kind": kind, "arc": ArenaShape.MOUNT_ARC[kind]}
+
+
+func _gun_weapon(b: Body, k: int) -> int:
+	## (v94.1) The weapon on that body's gun k: ours from its ship's mounts, a pirate's from its list (weapon j fires
+	## from gun j % guns, so gun k is weapon k's).
+	if b.id < LEAD:
+		var ships: Array = server.fleet.ships
+		var mounts: PackedByteArray = ships[b.id].mounts if b.id < ships.size() else server.ship.mounts
+		return mounts[k] if k < mounts.size() else Weapons.NONE
+	var list: PackedByteArray = _their_weapons(b)
+	for j in list.size():
+		if _their_gun(b, j, list[j]) == k:
+			return list[j]
+	return Weapons.LASER
+
+
+func _their_weapons(b: Body) -> PackedByteArray:
+	var list = server.wing.value(b.id - LEAD, "enemy_weapons")
+	return list if list != null else PackedByteArray()
+
+
+func _their_gun(b: Body, weapon: int, w: int) -> int:
+	## (v94.1, his M2 note) The gun mount a pirate's weapon fires from: its own (weapon % guns) if the gun fits it, else
+	## the next one that does (a pirate's drawing may have no mount for it: then its own).
+	var n := b.guns.size()
+	if n == 0:
+		return 0
+	for j in n:
+		var k := (weapon + j) % n
+		if Weapons.fits(w, int(b.guns[k]["kind"])):
+			return k
+	return weapon % n
+
+
+func _turn(b: Body, k: int) -> float:
+	## (v94.1, his M2 note) Radians a second gun k turns: a fixed gun not at all, a turret at its gun's own pace.
+	if int(b.guns[k]["kind"]) == ArenaShape.MOUNT_HARD:
+		return 0.0
+	var w := _gun_weapon(b, k)
+	return Weapons.turn_speed(w if w != Weapons.NONE else Weapons.LASER)
 
 
 func _flux_of(b: Body, f: Array) -> void:
@@ -750,7 +789,7 @@ func _aim_turrets() -> void:
 			var rel := wrapf((at - muzzle).angle() - b.rot - float(gun["out"]), -PI, PI)
 			var want := clampf(rel, -arc, arc)
 			var now := wrapf(float(gun["aim"]) - float(gun["out"]), -PI, PI)
-			var step: float = float(gun["turn"]) * DT
+			var step: float = _turn(b, k) * DT
 			if step <= 0.0:
 				now = want                       # fixed: it moves only its few degrees
 			elif arc >= PI:
@@ -832,7 +871,8 @@ func enemy_bears(foe: int, weapon: int) -> bool:
 		return false
 	if b.guns.is_empty():
 		return true
-	return bool(b.guns[weapon % b.guns.size()]["bears"])
+	var list := _their_weapons(b)
+	return bool(b.guns[_their_gun(b, weapon, list[weapon] if weapon < list.size() else Weapons.LASER)]["bears"])
 
 
 func _triggers() -> void:
@@ -920,11 +960,11 @@ func _shoot_ours(ship: int, gun: int, w: int, foe: int, room: int, miss: float, 
 		at = _lead_point(b, muzzle, e, _room_point(e, foe, room), w)
 	var g: Dictionary = b.guns[gun]
 	var dir := _barrel(b, g, at, muzzle)
-	var off := _spread(w) * ArenaShape.MOUNT_SPREAD[int(g["kind"])]
+	var off := _spread(w)
 	if not by_hand and at.is_finite():
 		off += miss * BOT_SPREAD * (1.0 + muzzle.distance_to(at) / FAR_SPREAD)
 	dir += _rng.randfn(0.0, off)
-	_launch(0, ship, muzzle, dir, w, meta, ArenaShape.MOUNT_DAMAGE[int(g["kind"])])
+	_launch(0, ship, muzzle, dir, w, meta)
 
 
 func _barrel(b: Body, g: Dictionary, at: Vector2, muzzle: Vector2) -> float:
@@ -947,25 +987,24 @@ func _shoot_theirs(foe: int, weapon: int, w: int, target_cell: int, miss: float,
 	if b == null or whom == null:
 		server.gunnery.arena_miss({"side": 1, "meta": meta, "w": w, "foe": foe}, Vector2(-1, -1))
 		return
-	var gun: Dictionary = b.guns[weapon % b.guns.size()] if not b.guns.is_empty() else {}
+	var gun: Dictionary = b.guns[_their_gun(b, weapon, w)] if not b.guns.is_empty() else {}
 	var muzzle := b.world(gun["at"]) if not gun.is_empty() else b.pos
 	var local: Vector2 = whom.shape.local_of(target_cell) if target_cell >= 0 else Vector2.ZERO
 	var at := _lead_point(b, muzzle, whom, local, w)
 	var dir := (at - muzzle).angle() if gun.is_empty() or miss <= 0.0 else _barrel(b, gun, at, muzzle)
-	var kind: int = int(gun.get("kind", ArenaShape.MOUNT_SIDE))
 	if miss >= 1.0:                          # (tests: its shots always miss, clear of the whole ship)
 		dir = (whom.pos - muzzle).angle() + (1.0 if _rng.randf() < 0.5 else -1.0) * (atan2(whom.shape.radius + 4.0, muzzle.distance_to(whom.pos)) + 0.1)
 	elif miss > 0.0:
-		dir += _rng.randfn(0.0, _spread(w) * ArenaShape.MOUNT_SPREAD[kind] + miss * BOT_SPREAD * (1.0 + muzzle.distance_to(at) / FAR_SPREAD))
-	_launch(1, LEAD + foe, muzzle, dir, w, meta, ArenaShape.MOUNT_DAMAGE[kind])
+		dir += _rng.randfn(0.0, _spread(w) + miss * BOT_SPREAD * (1.0 + muzzle.distance_to(at) / FAR_SPREAD))
+	_launch(1, LEAD + foe, muzzle, dir, w, meta)
 
 
-func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Dictionary, mult: float = 1.0) -> void:
+func _launch(side: int, from: int, muzzle: Vector2, dir: float, w: int, meta: Dictionary) -> void:
 	var b: Body = bodies[from]
 	var speed := shot_speed(w)
 	var p := {"id": _next_id, "side": side, "from": from, "pos": muzzle, "vel": Vector2.RIGHT.rotated(dir) * speed + b.vel,
 		"ends": server.tick + roundi(shot_range(w) / speed * Net.TICK_HZ), "w": w, "kind": server.gunnery._shot_kind(w),
-		"meta": meta, "seen": {}, "guard": Weapons.guard_chance(w) > 0.0, "d": Weapons.space_damage(w) * mult,
+		"meta": meta, "seen": {}, "guard": Weapons.guard_chance(w) > 0.0, "d": Weapons.space_damage(w),
 		"type": Weapons.damage_type(w)}
 	if side == 1:
 		p["foe"] = from - LEAD

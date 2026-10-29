@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v94 (version 0.87: the fight like Starsector, three mount kinds) is the latest. Plans one to four are done except the darkness front (the
+Build v94.1 (version 0.87.1: his v94 answers, guns fit mount kinds, no heat from firing) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -140,7 +140,10 @@ built on my picks): every gun's own numbers in space (`Weapons.SPACE`), Starsect
 stopping shots, overload and venting (V), the pilot's shield on the right mouse, Starsector's armour, hull points (every 100
 through = one hit inside), three mount kinds (fixed, side 180°, roof 360°; `^` lines; our ship's fourth, fixed bow gun starts
 off), ammunition clips, the gun console always in space; his notes: thermal only in the view cone, a side wall's joint.
-Next: v95 his note "fly the ship round the system with WASD instead of the old helm map" (needs questions), then docking
+v94.1 (his answers on that page, all A but S4 B: firing heats nothing; his M2 note: a mount gives only its arc, each gun
+fits certain mount kinds, `Weapons.FITS`, and turns at its own pace).
+Next: v95 his note "fly the ship round the system with WASD instead of the old helm map" (needs questions; with it his N1
+comment: firing with no enemy near), then docking
 and boarding pods, choosing the enemy deck, places, arsenal, races.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
@@ -603,6 +606,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   lines), its straight-out angle `mount_out`. Ammo in space comes through `Mounts.clip` (in `Fleet.OWN`). ship02 has 4 guns;
   guns past `Gunnery.START_ARMED` start switched off. A heavy gun's late hits wait in `Gunnery._flying`: a test that resets
   the pirate between shots clears it. C_SHIELD is new; S_ARENA's body record is 31 bytes + 4 a gun (protocol 68).
+  (v94.1) Whatever puts a gun on a mount asks `Mounts.misfit` (client: `Weapons.fits` with `ArenaShape.kind_in_fleet`);
+  a mount kind outside the arena comes from `kind_in_fleet`, never a new `of_fleet` per call. A turret's pace is
+  `Arena._turn` (its gun's `Weapons.turn_speed`); a pirate's weapon fires from `Arena._their_gun`, not `weapon % guns`.
+  Firing heats nothing while `Weapons.SHOTS_HEAT` is off (his S4 B).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

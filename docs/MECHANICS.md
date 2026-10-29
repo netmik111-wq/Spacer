@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v94 (version 0.87).
+Last updated: build v94.1 (version 0.87.1).
 
 Contents:
 
@@ -2576,11 +2576,18 @@ Starsector, so fights feel more alive". In space every gun now fires on its own 
 ### Mount kinds (his G1 note)
 
 - **Fixed (носовое)**: points straight along the bow and turns only **±5°**; the ship must point at the target.
-  Damage **x1.25**, scatter **x0.5**. A gun in the front fifth of the ship (or in a bow wall) is fixed by itself.
-- **Side turret (бортовое)**: turns **90°** either side of straight out of its wall (180° in all), at **90°** a second.
-  Damage x1. Every other gun is one by itself.
-- **Roof turret (на крыше)**: turns all round (360°) at **60°** a second. Damage **x0.8**, scatter **x1.3**.
-- A turret turns to its target at its own pace and fires only once it points there.
+  A gun in the front fifth of the ship (or in a bow wall) is fixed by itself.
+- **Side turret (бортовое)**: turns **90°** either side of straight out of its wall (180° in all). Every other gun is
+  one by itself.
+- **Roof turret (на крыше)**: turns all round (360°).
+- (v94.1, his M2 note: tie the gun types to the mounts rather than give the mounts modifiers) A mount gives **only its
+  arc**: no damage or scatter of its own. Each gun says which mounts it goes on: the **siege laser, railgun,
+  «Опустошитель» and «Сверхновая»** only on a fixed bow mount; the **heavy laser, «Феникс», ion cannon, «Буря»,
+  «Молот» and «Жнец»** on a fixed or side mount, never the roof; every other gun anywhere. A gun's description says
+  which; the gun console offers only guns that fit a mount, and a gun that does not fit cannot be put up by hand
+  («… не встаёт в гнездо «на крыше»»). A gun already up from an older save stays where it is.
+- A turret turns to its target at its **gun's** pace and fires only once it points there: light guns **120°** a second,
+  the heavy ones (those kept off the roof) **60°**.
 - **Our ship** now has a fourth mount: a fixed laser in the bow's wall on the lower deck (its gunner stands in the
   corridor in front of it). It starts **switched off** (the power panel turns it on), so the power at the start is what
   it was. The first three guns are side turrets.
@@ -2589,9 +2596,10 @@ Starsector, so fights feel more alive". In space every gun now fires on its own 
 
 ### Damage per gun
 
-Each gun has its own damage, shots, pace and heat in space (its charge time on the console is this pace):
+Each gun has its own damage, shots and pace in space (its charge time on the console is this pace). The heat column
+is kept for later: since v94.1 (his S4 B) firing heats nothing.
 
-| Gun | Damage x shots | Every | Heat | Kind |
+| Gun | Damage x shots | Every | Heat (off) | Kind |
 |---|---|---|---|---|
 | Laser | 30 | 0.8 s | 20 | energy |
 | Rapid laser | 12 x 3 | 1.0 s | 8 a shot | energy |
@@ -2627,8 +2635,8 @@ Bombs keep their old pace and effects (teleported in, past shields).
 - Every ship has **heat** it can hold and heat it sheds a second: ours **3000** / **150** (more with a better shield
   generator); pirates: cutter 800/50, raider 1500/70, gunship 2000/90, cruiser 3000/120, battleship 5000/180,
   carrier 4000/150, drone ship 1200/60.
-- **Firing heats** the ship by the gun's heat. A gun waits while one more burst would not fit
-  («Корабль перегрет: орудия ждут…»).
+- (v94.1, his S4 B: "only the shield heats") **Firing heats nothing**: the guns fire whatever the heat, until the
+  shield overloads or the ship vents.
 - **A raised shield stops every shot** (but the railgun, «Сверхновая», bombs and half a blaster's pellets): the shot
   is gone and the ship heats by its damage (by kind, above). That heat is the shield's own: it goes away **only while
   the shield is down**. An arc heats **0.7x**, the hardened shield **0.8x**, cutters **1.2x**, cruisers 0.9x,
