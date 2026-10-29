@@ -3846,6 +3846,16 @@
    "id": 768,
    "name": "pirate_holo_globe_1",
    "kind": "floor"
+  },
+  {
+   "id": 769,
+   "name": "pod",
+   "kind": "wall"
+  },
+  {
+   "id": 770,
+   "name": "pirate_pod",
+   "kind": "wall"
   }
  ]
 }

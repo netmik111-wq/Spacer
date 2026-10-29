@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 69
+const PROTOCOL := 70
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -267,6 +267,18 @@ const ARENA_RAISED := 1             # (v94) S_ARENA's shield state: the shield i
 const ARENA_OVERLOAD := 2           # it is overloaded
 const ARENA_VENT := 4               # its ship vents its heat
 const C_SHIELD := 39                # (v94) the pilot's shield: u8 bits (1 up, 2 vent now), s16 the arc's heading*1000 (the fight's space)
+const C_POD := 40                   # (v96) our boarding pod: u8 POD_LEAVE (step out while it waits at its bay)
+const S_POD := 52                   # (v96, the author's P4) our boarding pods, to all: u8 count, per bay u16 its wall cell, u8 POD_*,
+                                    # u8 seconds (to take-off, or home), u16 the pirate's hull cell it is stuck in (65535: none),
+                                    # u8 riders, per rider u16 id
+const POD_LEAVE := 0
+const POD_READY := 0                # (S_POD states) at its bay, empty
+const POD_WAITING := 1              # at its bay with people in it: it flies when its seats are taken or its wait is over
+const POD_OUT := 2                  # flying at the pirate ship
+const POD_STUCK := 3                # in the pirate ship's hull: E there flies whoever stands by it home
+const POD_HOME := 4                 # flying home
+const POD_MENDING := 5              # shot down on its way: back at its bay, being made good
+const POD_SEATS := 2
 const ALL_GUNS := 255                # (v93) C_TURRET's gun: every gun of the ship nobody aims by hand (the pilot, the gun console)
 const ARENA_SHOT_FLY := 0
 const ARENA_SHOT_END := 1
@@ -490,6 +502,7 @@ const SHOT_SHRAPNEL := 21           # (v62) «Шрапнель»: a cloud of sma
 const SHOT_FLASH := 22              # (v70) a flashbang or a boarder's bomb bursting: a white flash at `to`
 const SHOT_POD := 23                # (v95) a pirates' boarding pod flying in space (S_ARENA_SHOT only)
 const SHOT_DRONE := 24              # (v95) an assault drone flying in space (S_ARENA_SHOT only)
+const SHOT_ROCK := 25               # (v96, my R1 pick) a meteor flying at our ship in a meteor stream (S_ARENA_SHOT only)
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2

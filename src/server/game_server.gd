@@ -38,6 +38,7 @@ extends Node
 ##   robots       (v62) our security robots: set down from their crates, they guard where they stand
 ##   assault      (v62) boarders teleported across by ordinary pirates, and drone ships' assault drones
 ##   road         (v64) the road of clusters, the places inside a system, the pirate hunters
+##   pods         (v96) our boarding pods: sitting in, the flight, the pirate ship's hull, home again
 ##   galley       (v71) the galley's stove, its dishes and what they do
 ##   defence      (v79) bots running from armed boarders, and a guard bot fetching a gun to fight them
 ##   usage        (v82) how often people used each system this run
@@ -104,6 +105,7 @@ const Fleet := preload("res://src/server/fleet.gd")
 const Wing := preload("res://src/server/wing.gd")
 const Arena := preload("res://src/server/arena.gd")
 const Shuttle := preload("res://src/server/shuttle.gd")
+const Pods := preload("res://src/server/pods.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -202,6 +204,7 @@ var usage := Usage.new()               # (v82) what people used this run
 var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
 var wing := Wing.new()                 # (v86, the author's E1) a second pirate ship that joins a fight: see Wing
 var shuttle := Shuttle.new()           # (v86, the author's N1) the fleet's shuttle between the ships' hangars
+var pods := Pods.new()                 # (v96, the author's P4) our boarding pods
 var arena := Arena.new()               # (v92, the author's plan item 0) the ship fight in real time: see Arena
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
@@ -302,6 +305,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	wing.setup(self)
 	arena.setup(self)
 	shuttle.setup(self)
+	pods.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
 	mounts.setup(self)
@@ -451,7 +455,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 		return
 	var p: Player = players[slot_of[peer]]
 	fleet.use_for(p)                     # (v85) what a player does is done for the ship they are in
-	if p.in_shuttle and kind != Net.C_INPUT and kind != Net.C_CHAT and kind != Net.C_SHUTTLE and kind != Net.C_SHUTDOWN \
+	if p.in_shuttle and kind != Net.C_INPUT and kind != Net.C_CHAT and kind != Net.C_SHUTTLE and kind != Net.C_POD and kind != Net.C_SHUTDOWN \
 			and kind != Net.C_ADMIN:
 		return                           # (v86) in the shuttle: nothing to do but talk, fly or get out
 	if kind == Net.C_INPUT:
@@ -602,6 +606,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_SHUTTLE:
 		if pkt.size() > 2:
 			shuttle.asked(p, pkt[1], pkt[2])
+	elif kind == Net.C_POD:
+		if pkt.size() > 1:
+			pods.asked(p, pkt[1])
 	elif kind == Net.C_ADMIN:
 		admin.asked(p, pkt)
 
@@ -774,6 +781,7 @@ func _tick() -> void:
 	arena.tick()                  # (v92) the fight's space: ships flying, shots on their way
 	fleet.follow()                # (v95) the fleet's other ships are where the first flew this tick
 	shuttle.tick()                # (v86) the fleet's shuttle
+	pods.tick()                   # (v96) our boarding pods
 	blast.tick()
 	combat.tick()                 # (v70) flashbangs in flight
 	pirates.tick()                # (v70) the pirates' bombs

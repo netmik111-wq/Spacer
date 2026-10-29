@@ -82,6 +82,8 @@ func _old_flight() -> void:
 
 func _reach() -> void:
 	var now_in := server.sectors.within_reach(server.ship.sector, server.ship.pos)
+	if now_in and (sector_kind() == Sectors.STATION or sector_kind() == Sectors.TRADER) and server.ship.moving:
+		now_in = false                       # (v96, my M3 pick) docked only once stopped by it: flying through does nothing
 	if now_in == server.ship.in_reach:
 		return
 	server.ship.in_reach = now_in
@@ -114,6 +116,8 @@ func _reach() -> void:
 				server.chat.say("Станция продаёт охранных роботов%s: покупки у шкафа снабжения." % (
 					" и расширитель модульной стойки" if server.ship.modules.size() < Gear.MODULE_SLOTS_MAX else ""))
 		Sectors.TRADER:
+			if not now_in:
+				server.chat.say("Корабль отошёл от торговца: торговля прервана.")   # (v96)
 			if now_in:
 				server.chat.say("Торговец на связи. Покупки делаются у шкафа снабжения на нижней палубе.")
 				var w: PackedByteArray = server.supplies.wanted()
@@ -276,9 +280,9 @@ func landed() -> void:
 			server.chat.say("Сектор %s. Корабль внутри ионного шторма: реактор даёт половину энергии, разряды выбивают орудия, щит и СМЭС. Уйти можно своим ходом или прыжком." % server.sectors.describe(server.ship.sector))
 			server.hazards.storm_changed(server.ship.in_reach, true)
 		Sectors.TRADER:
-			server.chat.say("Сектор %s. Торговец где-то рядом: подойдите к нему." % server.sectors.describe(server.ship.sector))
+			server.chat.say("Сектор %s. Торговец где-то рядом: подлетите к нему и остановитесь." % server.sectors.describe(server.ship.sector))
 		Sectors.STATION:
-			server.chat.say("Сектор %s. Подойдите к станции, чтобы восполнить воздух." % server.sectors.describe(server.ship.sector))
+			server.chat.say("Сектор %s. Подлетите к станции и остановитесь у неё, чтобы пристыковаться и восполнить воздух." % server.sectors.describe(server.ship.sector))
 		_:
 			server.chat.say("Сектор %s." % server.sectors.describe(server.ship.sector))
 	server.director.entered_sector()

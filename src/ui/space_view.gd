@@ -35,6 +35,10 @@ const HOW_COLOUR := {Net.LANDED: Color(1.0, 0.6, 0.25), Net.MISSED: Color(0.7, 0
 const HOW_WORD := {Net.LANDED: "пробил", Net.HELD: "броня", Net.RICOCHET: "рикошет"}
 const DARK := {ArenaShape.FLOOR: Color(0.2, 0.2, 0.21), ArenaShape.WALL: Color(0.45, 0.45, 0.47),
 	ArenaShape.PANE: Color(0.4, 0.5, 0.55), ArenaShape.GUN: Color(0.55, 0.5, 0.45)}   # (v95) a ship alongside that is not a foe
+const ROCK := {ArenaShape.FLOOR: Color(0.33, 0.29, 0.25), ArenaShape.WALL: Color(0.5, 0.43, 0.36),
+	ArenaShape.PANE: Color(0.6, 0.55, 0.45), ArenaShape.GUN: Color(0.5, 0.43, 0.36)}   # (v96) an asteroid
+const SEEN_MARGIN := 40.0            # (v96) cells past the screen's edge a place is still drawn
+const GLIDE_MS := 2000               # (v96, my M2 pick) the clamps pull a ship or a rock to our airlock this long
 const WORN_COLOUR := Color(1.0, 0.85, 0.3)        # armour half gone
 const BARE_COLOUR := Color(0.95, 0.25, 0.2)       # no armour left
 
@@ -50,6 +54,14 @@ var _mouse := Vector2.ZERO
 var _stars := PackedVector3Array()
 var _alongside: RefCounted           # (v95) the ArenaShape of the ship alongside, built once per kind
 var _alongside_kind := -1
+# (v96, the author's F5 comment: places seen in space, drawn only when near)
+var _drawings := {}                  # a drawing of ShipMap.others -> its ArenaShape
+var _lay := {}                       # place_key -> [pos, rot]: where a place lay at our airlock when we flew off
+var _beside := ""                    # the place_key of what lies alongside now ("" none, or not one of the places)
+var _was_beside := false
+var _glide := []                     # [from pos, from rot, msec started]: the clamps pull it to our airlock
+var _last_glued := []                # [pos, rot] where the ship alongside was last drawn
+var _pending_lay := []               # a wreck left before its mark came: [pos, rot] for the next new wreck's mark
 
 
 func setup(p_client: GameClient) -> void:
@@ -139,6 +151,7 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER, size.x, 15, Color(0.6, 0.68, 0.72))
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.35, 0.5, 0.6, 0.8), false, 1.0)
 		return
+	_alongside_tick()
 	_draw_system()
 	_draw_alongside(t)
 	for id: int in client.arena.bodies.keys():
@@ -151,6 +164,24 @@ func _draw() -> void:
 		var at: Vector2 = client.arena.shot_at(s, t)
 		var col: Color = FightFx.COLOURS.get(int(s["kind"]), Color.WHITE)
 		var dir := (s["vel"] as Vector2).normalized()
+		if int(s["kind"]) == Net.SHOT_ROCK:
+			# (v96) a meteor of the stream: a tumbling rock with a dusty trail
+			draw_line(to_screen(at - dir * 6.0), to_screen(at), Color(0.8, 0.6, 0.4, 0.25), maxf(zoom * 0.8, 1.5))
+			var rock := PackedVector2Array()
+			var spin := t * 0.05 + float(int(s.get("id", 0)) % 7)
+			for k in 7:
+				rock.append(to_screen(at + Vector2.from_angle(spin + TAU * k / 7.0) * (1.4 if k % 2 == 0 else 1.1)))
+			draw_colored_polygon(rock, Color(0.55, 0.42, 0.3))
+			continue
+		if int(s["kind"]) == Net.SHOT_POD:
+			# (v95, v96) a boarding pod: a small capsule, ours blue, theirs red
+			var pod_col := Color(0.55, 0.75, 1.0) if int(s["side"]) == 0 else Color(1.0, 0.5, 0.4)
+			draw_set_transform(to_screen(at), dir.angle(), Vector2(zoom, zoom))
+			draw_rect(Rect2(Vector2(-1.3, -0.6), Vector2(2.6, 1.2)), pod_col)
+			draw_circle(Vector2(1.3, 0.0), 0.6, pod_col.lightened(0.3))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			draw_line(to_screen(at - dir * 3.0), to_screen(at - dir * 1.3), Color(0.6, 0.8, 1.0, 0.4), 1.5)
+			continue
 		draw_line(to_screen(at - dir * 1.6), to_screen(at), col, 2.0 if FightFx.rocket_like(int(s["kind"])) else 1.5)
 		draw_circle(to_screen(at), 1.8, col.lightened(0.5))
 	for b: Dictionary in client.arena.bursts:
@@ -195,16 +226,19 @@ func _draw_system() -> void:
 			var station := int(sectors.kind[here]) == Sectors.STATION
 			var colour := Color(0.3, 0.85, 0.8) if station else Color(0.95, 0.85, 0.35)
 			draw_arc(to_screen(spot), reach * zoom, 0.0, TAU, 64, Color(colour, 0.6), 1.5)
-			var w := 14.0 if station else 10.0
-			draw_rect(Rect2(to_screen(spot) - Vector2(w, w) * zoom / 2.0, Vector2(w, w) * zoom), Color(colour, 0.85))
+			if _seen(spot, 30.0):
+				if station:
+					_draw_station(spot, colour)
+				else:
+					_draw_trader(spot, colour)
 			_label(spot + Vector2(0.0, reach + 6.0), "станция снабжения" if station else
 				("торговец: " + Sectors.DEAL_NAMES[sectors.deal[here]] if sectors.deal.size() > here else "торговец"), colour)
 		Sectors.DERELICT:
-			if not client.other_here():
-				var grey := Color(0.7, 0.7, 0.72)
-				draw_arc(to_screen(spot), reach * zoom, 0.0, TAU, 64, Color(grey, 0.6), 1.5)
+			var grey := Color(0.7, 0.7, 0.72)
+			draw_arc(to_screen(spot), reach * zoom, 0.0, TAU, 64, Color(grey, 0.6), 1.5)
+			if not _draw_drawing(_place_key(-1, spot), int(client.road.get("main_look", 255)), spot, DARK):
 				draw_rect(Rect2(to_screen(spot) - Vector2(8, 4) * zoom, Vector2(16, 8) * zoom), grey, false, 1.5)
-				_label(spot + Vector2(0.0, reach + 6.0), "брошенный корабль", grey)
+			_label(spot + Vector2(0.0, reach + 6.0), "брошенный корабль", grey)
 	for pl: Array in client.road.get("places", []):
 		var kind: int = pl[0]
 		var at: Vector2 = (pl[1] as Vector2) * SCALE
@@ -220,7 +254,8 @@ func _draw_system() -> void:
 			Sectors.P_ANOMALY, Sectors.P_ASTEROID, Sectors.P_GAS:
 				ring = Sectors.WORK_REACH
 		draw_arc(to_screen(at), ring * SCALE * zoom, 0.0, TAU, 48, Color(colour, 0.5), 1.0)
-		draw_circle(to_screen(at), maxf(2.0 * zoom, 3.0), colour)
+		if not _draw_place(kind, at, int(pl[3]) if pl.size() > 3 else 255, gone):
+			draw_circle(to_screen(at), maxf(2.0 * zoom, 3.0), colour)
 		_label(at + Vector2(0.0, ring * SCALE + 4.0), Sectors.PLACE_NAMES[kind] + (" (пусто)" if gone else ""), colour)
 	if client.arena.course:
 		var me := centre()
@@ -259,13 +294,227 @@ func _draw_alongside(t: float) -> void:
 	var mid := Vector2(ours.x0 + ours.w / 2.0, ours.r0 + ours.h / 2.0)
 	var rot: float = s["rot"]
 	var pos: Vector2 = (s["pos"] as Vector2) + (centre_at - mid).rotated(rot)
-	var colours: Dictionary = THEIRS if client.pirates_alongside() else DARK
+	var colours: Dictionary = THEIRS if client.pirates_alongside() else (ROCK if client.other_rock else DARK)
+	if not _glide.is_empty():
+		# (v96, my M2 pick) the clamps pull it from where it lay to our airlock
+		var k := clampf(float(Time.get_ticks_msec() - int(_glide[2])) / GLIDE_MS, 0.0, 1.0)
+		var e := k * k * (3.0 - 2.0 * k)
+		pos = (_glide[0] as Vector2).lerp(pos, e)
+		rot = lerp_angle(float(_glide[1]), rot, e)
+		if k >= 1.0:
+			_glide = []
+	_last_glued = [pos, rot]
+	_draw_cells(them, pos, rot, colours)
+
+
+# ---------------------------------------------------------------- (v96) places seen in space
+
+func _alongside_tick() -> void:
+	## Which place lies at our airlock now, and the clamps' pull when one comes; where it stays when we fly off.
+	var here: bool = client.other_here() and not client.arena.bodies.has(2) and (not client.pirates_alongside() or client.other_wreck)
+	if here == _was_beside:
+		return
+	_was_beside = here
+	if not here:
+		if not _last_glued.is_empty():
+			if _beside != "":
+				_lay[_beside] = _last_glued
+			elif client.other_wreck:
+				_pending_lay = _last_glued       # a wreck: its mark comes with the next road packet
+		_beside = ""
+		_last_glued = []
+		_glide = []
+		return
+	# the nearest place of its kind to our ship
+	var me := centre()
+	var best := INF
+	_beside = ""
+	var from := []
+	for c: Array in _candidates():
+		var d := me.distance_to(c[1])
+		if d < best:
+			best = d
+			_beside = c[0]
+			from = _lay.get(c[0], [c[1], _rest_rot(c[0])])
+	if _beside != "" and best <= (Sectors.WRECK_REACH + Sectors.WORK_REACH) * SCALE:
+		_glide = [from[0], from[1], Time.get_ticks_msec()]
+	else:
+		_beside = ""
+
+
+func _candidates() -> Array:
+	## [key, where] of the places what lies alongside may be.
+	var out := []
+	var sectors = client.sectors
+	var here: int = client.sector
+	if client.other_derelict and sectors != null and here >= 0 and here < sectors.count and int(sectors.kind[here]) == Sectors.DERELICT:
+		var spot: Vector2 = sectors.spot[here] * SCALE
+		out.append([_place_key(-1, spot), spot])
+	for pl: Array in client.road.get("places", []):
+		var kind: int = pl[0]
+		var fits := (kind == Sectors.P_ASTEROID and client.other_rock) or (kind == Sectors.P_WRECK and client.other_derelict) \
+			or (kind == Sectors.P_HULK and client.other_wreck)
+		if fits:
+			var at: Vector2 = (pl[1] as Vector2) * SCALE
+			out.append([_place_key(kind, at), at])
+	return out
+
+
+func _place_key(kind: int, at: Vector2) -> String:
+	return "%d:%d:%d:%d" % [client.sector, kind, roundi(at.x), roundi(at.y)]
+
+
+func _rest_rot(key: String) -> float:
+	## How a place lies when nobody has moved it: the same every time.
+	return float(absi(hash(key)) % 628) / 100.0
+
+
+func _seen(at: Vector2, r: float) -> bool:
+	## (the author's F5 comment: "render them only when near") on the screen, or just off it
+	return Rect2(to_space(Vector2.ZERO), size / zoom).grow(r + SEEN_MARGIN).has_point(at)
+
+
+func _drawing(look: int) -> RefCounted:
+	var map = client.map
+	if look < 0 or look == 255 or map == null or look >= map.others.size() or map.others[look] == null:
+		return null
+	if not _drawings.has(look):
+		_drawings[look] = ArenaShape.of_layout(map.others[look])
+	return _drawings[look]
+
+
+func _draw_drawing(key: String, look: int, at: Vector2, colours: Dictionary) -> bool:
+	## A place seen by its drawing (a derelict, a wreck, an asteroid): where it lies, or where we left it.
+	if key == _beside:
+		return true                          # it lies at our airlock: _draw_alongside draws it
+	var shape: RefCounted = _drawing(look)
+	if shape == null:
+		return false
+	var lay: Array = _lay.get(key, [at, _rest_rot(key)])
+	if not _seen(lay[0], shape.radius):
+		return true
+	_draw_cells(shape, lay[0], lay[1], colours)
+	return true
+
+
+func _draw_cells(shape: RefCounted, pos: Vector2, rot: float, colours: Dictionary) -> void:
 	draw_set_transform(to_screen(pos), rot, Vector2(zoom, zoom))
-	for y in them.h:
-		for x in them.w:
-			var k: int = them.kind[y * them.w + x]
+	for y in shape.h:
+		for x in shape.w:
+			var k: int = shape.kind[y * shape.w + x]
 			if k != ArenaShape.EMPTY:
-				draw_rect(Rect2(them.middle(x, y) - Vector2(0.5, 0.5), Vector2(1.0, 1.0)), colours.get(k, Color(0.4, 0.4, 0.4)))
+				draw_rect(Rect2(shape.middle(x, y) - Vector2(0.5, 0.5), Vector2(1.0, 1.0)), colours.get(k, Color(0.4, 0.4, 0.4)))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_place(kind: int, at: Vector2, look: int, gone: bool) -> bool:
+	## (v96, my M1 pick) A place drawn where it is. False: not drawn here (the caller puts a dot).
+	var key := _place_key(kind, at)
+	if kind == Sectors.P_HULK and not _pending_lay.is_empty() and not _lay.has(key) and at.distance_to(_pending_lay[0]) <= 3.0 * Sectors.WRECK_REACH * SCALE:
+		_lay[key] = _pending_lay             # the wreck we just left lies where it was, not at its mark
+		_pending_lay = []
+	match kind:
+		Sectors.P_WRECK, Sectors.P_HULK:
+			return _draw_drawing(key, look, at, DARK)
+		Sectors.P_ASTEROID:
+			if _draw_drawing(key, look, at, ROCK):
+				return true
+			if _seen(at, 12.0):
+				_draw_rock(at, 9.0, key)
+			return true
+		Sectors.P_DEBRIS, Sectors.P_CONTAINER, Sectors.P_BODIES, Sectors.P_BATTLEFIELD:
+			if gone:
+				return false                 # picked up: only its ring and name are left
+			if _seen(at, 14.0):
+				_draw_bits(kind, at, key)
+			return true
+		Sectors.P_GAS:
+			if _seen(at, Sectors.WORK_REACH * SCALE):
+				var t := Time.get_ticks_msec() / 1000.0
+				var rng := RandomNumberGenerator.new()
+				rng.seed = hash(key)
+				for i in 9:
+					var off := Vector2(rng.randf_range(-22.0, 22.0), rng.randf_range(-22.0, 22.0)) + Vector2(sin(t * 0.3 + i), cos(t * 0.25 + i)) * 2.0
+					draw_circle(to_screen(at + off), rng.randf_range(8.0, 16.0) * zoom, Color(0.45, 0.85, 0.6, 0.05 if not gone else 0.02))
+			return false
+		Sectors.P_ANOMALY:
+			if _seen(at, 12.0):
+				var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 400.0)
+				draw_circle(to_screen(at), (4.0 + 2.0 * pulse) * zoom, Color(0.75, 0.5, 1.0, 0.12 if not gone else 0.04))
+				draw_arc(to_screen(at), (6.0 + 3.0 * pulse) * zoom, 0.0, TAU, 32, Color(0.85, 0.65, 1.0, 0.5 if not gone else 0.15), 1.5)
+			return false
+	return false
+
+
+func _draw_bits(kind: int, at: Vector2, key: String) -> void:
+	## Debris, a container, bodies, a battlefield: small things afloat, the same every time.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(key)
+	var t := Time.get_ticks_msec() / 1000.0
+	var metal := Color(0.55, 0.57, 0.6)
+	var n := 6
+	match kind:
+		Sectors.P_CONTAINER:
+			var rot := _rest_rot(key) + t * 0.05
+			draw_set_transform(to_screen(at), rot, Vector2(zoom, zoom))
+			draw_rect(Rect2(Vector2(-2.5, -1.5), Vector2(5.0, 3.0)), Color(0.75, 0.55, 0.25))
+			draw_rect(Rect2(Vector2(-2.5, -1.5), Vector2(5.0, 3.0)), Color(0.35, 0.25, 0.12), false, 0.3)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			return
+		Sectors.P_BATTLEFIELD:
+			n = 14
+		Sectors.P_BODIES:
+			n = 4
+	for i in n:
+		var off := Vector2(rng.randf_range(-14.0, 14.0), rng.randf_range(-14.0, 14.0))
+		var a := rng.randf() * TAU + t * rng.randf_range(-0.2, 0.2)
+		var w := rng.randf_range(0.8, 3.0)
+		draw_set_transform(to_screen(at + off), a, Vector2(zoom, zoom))
+		if kind == Sectors.P_BODIES or (kind == Sectors.P_BATTLEFIELD and i % 4 == 0):
+			draw_rect(Rect2(Vector2(-0.8, -0.35), Vector2(1.6, 0.7)), Color(0.75, 0.62, 0.5))   # one of the dead, afloat
+		else:
+			draw_colored_polygon(PackedVector2Array([Vector2(-w, -0.4), Vector2(w * 0.6, -0.7), Vector2(w, 0.5), Vector2(-w * 0.4, 0.6)]),
+				metal.darkened(rng.randf_range(0.0, 0.4)))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_rock(at: Vector2, r: float, key: String) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(key)
+	var pts := PackedVector2Array()
+	for i in 12:
+		pts.append(to_screen(at + Vector2.from_angle(TAU * i / 12.0) * r * rng.randf_range(0.7, 1.15)))
+	draw_colored_polygon(pts, ROCK[ArenaShape.WALL])
+
+
+func _draw_station(at: Vector2, colour: Color) -> void:
+	## The supply station: a slowly turning ring on spokes round a hub, with a docking arm.
+	var rot := Time.get_ticks_msec() / 1000.0 * 0.05
+	var r := 18.0
+	draw_arc(to_screen(at), r * zoom, 0.0, TAU, 64, Color(0.55, 0.62, 0.66), maxf(3.0 * zoom, 2.0))
+	draw_arc(to_screen(at), r * zoom, 0.0, TAU, 64, Color(colour, 0.5), maxf(1.0 * zoom, 1.0))
+	for i in 4:
+		var a := rot + TAU * i / 4.0
+		draw_line(to_screen(at + Vector2.from_angle(a) * 4.0), to_screen(at + Vector2.from_angle(a) * r), Color(0.5, 0.55, 0.6), maxf(0.8 * zoom, 1.0))
+	draw_circle(to_screen(at), 4.5 * zoom, Color(0.42, 0.48, 0.52))
+	draw_circle(to_screen(at), 2.0 * zoom, Color(colour, 0.9))
+	for i in 8:
+		var a := rot + TAU * (i + 0.5) / 8.0
+		draw_circle(to_screen(at + Vector2.from_angle(a) * r), 0.5 * zoom, Color(1.0, 0.95, 0.7, 0.8))   # lit windows
+
+
+func _draw_trader(at: Vector2, colour: Color) -> void:
+	## A trader: a long cargo ship with containers on its back.
+	var rot := 0.35
+	draw_set_transform(to_screen(at), rot, Vector2(zoom, zoom))
+	draw_rect(Rect2(Vector2(-16.0, -4.0), Vector2(30.0, 8.0)), Color(0.42, 0.44, 0.46))
+	draw_colored_polygon(PackedVector2Array([Vector2(14.0, -4.0), Vector2(19.0, 0.0), Vector2(14.0, 4.0)]), Color(0.5, 0.52, 0.55))
+	var boxes := [Color(0.75, 0.35, 0.25), Color(0.3, 0.5, 0.7), Color(0.8, 0.7, 0.3), Color(0.35, 0.6, 0.4)]
+	for i in 6:
+		draw_rect(Rect2(Vector2(-14.0 + i * 4.5, -3.2), Vector2(4.0, 2.9)), boxes[i % 4])
+		draw_rect(Rect2(Vector2(-14.0 + i * 4.5, 0.3), Vector2(4.0, 2.9)), boxes[(i + 2) % 4])
+	draw_rect(Rect2(Vector2(-19.0, -2.0), Vector2(3.0, 4.0)), Color(0.3, 0.3, 0.32))
+	draw_circle(Vector2(-20.0, 0.0), 1.2, Color(colour, 0.6))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

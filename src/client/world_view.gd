@@ -2634,7 +2634,7 @@ func _process(delta: float) -> void:
 		# out of our field of view (or in the dark) nobody is seen
 		# (and the one we haul along behind us is always felt there)
 		var hauled := client.dragging() and id == client.drag_id
-		sprite.visible = id == client.my_id and not client.riding() or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
+		sprite.visible = id == client.my_id and not client.riding() and client.in_pod() < 0 or hauled or ((its_deck > my_deck or seen) and can_see(cell_x, cell_y))
 		if bool(_shown.get(id, false)) and not sprite.visible and id != client.my_id:
 			_leave_afterimage(id, sprite, Vector2i(roundi(sprite.position.x), roundi(sprite.position.y)))
 		_shown[id] = sprite.visible

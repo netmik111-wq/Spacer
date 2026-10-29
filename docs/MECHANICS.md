@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v95 (version 0.88).
+Last updated: build v96 (version 0.89).
 
 Contents:
 
@@ -55,6 +55,7 @@ Contents:
 45. [Machines on the floor, doors, windows, wall boxes (v91)](#45-machines-on-the-floor-doors-windows-wall-boxes-v91)
 46. [The fight like Starsector: heat, armour, hull points, mount kinds (v94)](#46-the-fight-like-starsector-heat-armour-hull-points-mount-kinds-v94)
 47. [Flying round the system in space (v95)](#47-flying-round-the-system-in-space-v95)
+48. [Places seen in space, meteors, our boarding pod, bots in a fight (v96)](#48-places-seen-in-space-meteors-our-boarding-pod-bots-in-a-fight-v96)
 
 ---
 
@@ -2734,3 +2735,61 @@ all answered A; his P2 note added the pod bay.
 - **Assault drones** (his P3 A; the drone ship, the flagship) fly the same way: seen, shot down by point defence
   and our guns, and cut in where they strike, with a robot.
 - **The packet** says whether a fight goes on and whether the autopilot flies (protocol **69**).
+
+## 48. Places seen in space, meteors, our boarding pod, bots in a fight (v96)
+
+He wrote "next build": the roadmap's next items after v95 (his F5 comment: places drawn only when near; P4: our pods;
+N2: meteors as targets; P1: better bot fighting). Questions on the page "Spacer v96: места и абордаж"
+(https://claude.ai/artifact/1PD8wL3crt6FGhEEHQ21sx); built on my picks (all A) while his answers are pending.
+
+### Places drawn in space (M1, M2, M3)
+
+- **Drawn, not marked**: the station is a slowly turning ring, the trader a cargo ship, an abandoned ship and a pirate
+  wreck are drawn from the very drawing that comes alongside, an asteroid from its rock drawing, debris, a container,
+  bodies and a battlefield as small floating bits, a gas cloud as soft glow, an anomaly as a pulsing ring. The names and
+  the small map's marks stay.
+- **Only when near**: a place is drawn only while it is on the screen or within **40** cells of its edge.
+- **Alongside** (M2): a derelict, wreck or asteroid that comes to the airlock is seen gliding from where it lay to the
+  airlock (**2** s). When we fly off it stays where it lay.
+- **Station and trader** (M3): docking (air, fuel, hull, trading) happens only once the ship has **stopped** in reach;
+  flying through does nothing. Flying off breaks off trading («Корабль отошёл от торговца»).
+
+### Meteors in space (R1, R2, R3)
+
+- A meteor of a stream is a real rock flying at the ship: seen **5** s before it strikes, flying **24** cells/s at a
+  point of the hull (where the ship will be).
+- **Steering round**: the pilot's evade (Space) at least **1** s before it would strike, or flying out of its way with
+  WASD. A bot at the controls tries **1.5** s before by the old lot (half a person's chance).
+- **Shooting it**: **2** shots of ours break it (practice fire too); our point defence may break it on the way.
+- **The shield**: raised (it rises by itself at a meteor coming, also out of a fight) it stops the rock and takes
+  **300** heat.
+- **Striking**: a hole in the hull where it struck (the nearest whole hull cell there), the screen shakes.
+- Shots at an asteroid only flash on the rock for now (R3 A): ore is mined by hand.
+
+### Our boarding pod (B1, B2, B3)
+
+- **The pod bay** is a new machine (sign `k` in the ship editor, «Абордажная капсула»), in an outer wall, used from
+  the floor in front. Our ship02 has one, **2** seats.
+- **Sitting in**: E at the bay in a fight with a pirate ship alongside (powered). It leaves **5** s after the first one
+  sits, or at once when both seats are taken; Esc steps out while it waits. While inside you see space.
+- **The flight**: **16** cells/s to the pirate ship, through its shield. Their point defence fires once as it comes:
+  shot down, it is thrown back to its bay, each rider takes **15** damage, and the pod is mended for **30** s. Their
+  guns keep firing at our ship, not at the pod.
+- **Landing**: it sticks in their hull and the riders step out inside, next to it.
+- **Home** (B2): E at the stuck pod takes up to **2** home: it leaves **3** s after the first sits, the flight takes
+  **6** s, and they step out at the bay. After the fight an empty pod comes home by itself.
+- **Bots** (B3): when one of ours sits in, the nearest bot told «К оружию» (or a guard) of that ship comes to the
+  second seat (fetching a gun first); the pod waits up to **15** s for it. Over there it fights; with no pirates left
+  it goes back to the pod and rides home.
+- The teleporter (B4) comes later, as a rare find.
+
+### Bots in a fight (D1-D4)
+
+- **Radio** (D1): fighters (guards and «К оружию») know of every armed pirate aboard that anyone of ours sees, and go
+  for it.
+- **Falling back** (D2): a fighter below **40** health falls back to our people, puts on a medical patch if it has
+  one, and goes back in above **70**.
+- **The locker** (D3): a fighter takes the shotgun first, else a pistol, **2** magazines and a medical patch.
+- **One target** (D4): a fighter within **6** cells of another one already shooting shoots the same pirate.
+- The packet: S_POD, C_POD, the meteor shot kind, five bytes a place (protocol **70**).
+

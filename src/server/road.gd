@@ -686,12 +686,46 @@ func packet() -> PackedByteArray:
 		out.append(roundi((pl[1] as Vector2).x))
 		out.append(roundi((pl[1] as Vector2).y))
 		out.append(1 if taken.has(_key(i)) else 0)
+		out.append(look_of(i))
 	for h: Dictionary in wrecks:
 		out.append(Sectors.P_HULK)
 		out.append(roundi((h["pos"] as Vector2).x))
 		out.append(roundi((h["pos"] as Vector2).y))
 		out.append(0)
+		out.append(int(h["layout"]) if int(h["layout"]) < 255 else 255)
+	out.append(main_look())
 	return out
+
+
+func look_of(i: int) -> int:
+	## (v96, the author's F5 comment) The drawing a place is seen by in space (ShipMap.others), 255: none (drawn by
+	## the client itself). The same drawing that comes alongside: an abandoned ship's (Derelict._arrive), an asteroid's
+	## (Derelict._rock_arrives).
+	var kind: int = int(_here_places[i][0])
+	var list: Array = []
+	var key := 0
+	if kind == Sectors.P_WRECK:
+		list = server.derelict._derelict_spots()
+		key = absi(Sectors.key(server.sectors.cell[server.ship.sector]))
+	elif kind == Sectors.P_ASTEROID:
+		list = server.derelict._rock_spots()
+		key = absi(_key(i))
+	if list.is_empty():
+		return 255
+	var k: int = list[key % list.size()]
+	return k if k < 255 else 255
+
+
+func main_look() -> int:
+	## (v96) The drawing of the system's own derelict, 255: none.
+	var s: Sectors = server.sectors
+	if s.count == 0 or s.kind[server.ship.sector] != Sectors.DERELICT:
+		return 255
+	var list: Array = server.derelict._derelict_spots()
+	if list.is_empty():
+		return 255
+	var k: int = list[absi(Sectors.key(s.cell[server.ship.sector])) % list.size()]
+	return k if k < 255 else 255
 
 
 # --------------------------------------------------------------- (v69) our wrecks

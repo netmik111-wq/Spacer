@@ -79,6 +79,7 @@ var comms := {}                      # (v63) wall cells with the comms console: 
 var trays := PackedInt32Array()      # (v63) wall cells with a hydroponic tray, in the order they are numbered
 var cryo := PackedInt32Array()       # (v63) wall cells with a cryosleep pod: the reserve sleeps in them
 var stove := {}                      # (v71) wall cells with the galley's stove: meals cooked from rations (see Galley)
+var pod := {}                        # (v96, the author's P4) wall cells with our boarding pod's bay -> the floor cell in front
 var dock := {}                       # (v86) wall cells with the shuttle's dock console, all ships of the fleet (see Shuttle)
 var force_field := {}                    # (v86) hull cells with a hangar's force field: air-tight, see-through, never breached
 var backup_rooms := {}               # (v61) the rooms (numbers in `rooms`) the backup SMES faces: it keeps them lit
@@ -156,7 +157,7 @@ const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light"]
+	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light", "pod"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -461,6 +462,7 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	cryo = PackedInt32Array()
 	stove = {}
 	dock = {}
+	pod = {}
 	force_field = {}
 	backup_rooms = {}
 	guns = PackedInt32Array()
@@ -529,6 +531,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			stove[i] = true
 		if cells[i] == tile_ids.get("dock", -1):
 			dock[i] = true
+		if cells[i] == tile_ids.get("pod", -1) or cells[i] == tile_ids.get("pirate_pod", -1):
+			pod[i] = fitting_front(i)
 		if cells[i] == tile_ids.get("window_field", -1):
 			force_field[i] = true
 		if cells[i] == tile_ids.get("smes_small", -1):
@@ -1340,6 +1344,8 @@ func device_name(cell: int) -> String:
 		return "пульт связи"
 	if dock.has(cell):
 		return "пульт челнока"
+	if pod.has(cell):
+		return "абордажная капсула"
 	return ""
 
 

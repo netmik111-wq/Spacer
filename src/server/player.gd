@@ -118,6 +118,9 @@ var way_in := -1                     # the cell it came aboard at: where it goes
 var goal_work := 0                   # ticks of work done at it
 var angry_until := 0                 # it was hurt: it fights back until this tick, goal or not
 var in_shuttle := false              # (v86) a passenger of the fleet's shuttle: out of the world until it lands (Shuttle)
+var in_pod := -1                     # (v96) in our boarding pod of that bay (in_shuttle is set too: out of the world)
+var pod_call := -1                   # (v96) a bot called to take a free seat in the pod of that bay
+var falling_back := false            # (v96, my D2 pick) a fighting bot badly hurt: it falls back to our people until whole enough
 var taken := false                   # (v70) dragged off by pirates: gone, no body left (until it comes back from the reserve)
 # (v71, the author's L1 and L2) hunger and the galley's meals
 var weak := false                    # weak with long hunger: it walks slowly, like with a broken leg (see Garden)

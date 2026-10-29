@@ -187,6 +187,7 @@ var shuttle_at := -1                 # the dock it stands at or left (-1: no shu
 var shuttle_to := -1                 # the dock it flies to (-1: it stands)
 var shuttle_done := 0.0              # the share of the flight done, moved on between the server's word
 var shuttle_riders: Array[int] = []  # the ids of those aboard
+var pods := {}                       # (v96) our boarding pods: the bay's wall cell -> {"state": POD_*, "secs", "stuck": cell or -1, "riders": ids}
 var foes: Array = [PackedByteArray([0, 0, 0, 0, 255]), PackedByteArray([0, 0, 0, 0, 255])]   # per enemy: in the fight 1/0, hull, full, class, drawing
 var goal_flags := 0                  # Net.GOALF_*
 var cargo_room := 255                # the room of the enemy's drawing with its cargo pod (255 = none)
@@ -495,6 +496,29 @@ func shuttle_dock_here() -> int:
 	return -1
 
 
+func in_pod() -> int:
+	## (v96) The bay of the boarding pod we sit in (-1: none).
+	for bay: int in pods.keys():
+		if (pods[bay]["riders"] as Array).has(my_id):
+			return bay
+	return -1
+
+
+func pod_at(cell: int) -> int:
+	## (v96) The bay whose pod is there: its bay in our hull, or stuck in the pirate's hull (-1: none).
+	if pods.has(cell):
+		return cell
+	for bay: int in pods.keys():
+		if int(pods[bay]["stuck"]) == cell:
+			return bay
+	return -1
+
+
+func send_pod(action: int) -> void:
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_POD, action]), ENetPacketPeer.FLAG_RELIABLE)
+
+
 func send_shuttle(action: int, arg: int = 0) -> void:
 	## (v86) Get into the shuttle, call it, fly it to that ship (a passenger), get out (Net.SHUTTLE_*).
 	if phase == PLAYING:
@@ -517,7 +541,7 @@ func turn_to(at: Vector2) -> void:
 
 func face(facing: int) -> void:
 	## Turns our character to face that way (Net.DIR_*), predicted at once.
-	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == facing_soon() or riding():
+	if phase != PLAYING or not _have_self or my_cond != Net.COND_OK or facing == facing_soon() or riding() or in_pod() >= 0:
 		return
 	_send_input(Mover.TURN + facing)
 	_turn_to = facing
@@ -1063,10 +1087,13 @@ func _read_road(pkt: PackedByteArray) -> void:
 	if o >= pkt.size():
 		return
 	for i in pkt[o]:
-		var at := o + 1 + i * 4
-		if at + 4 > pkt.size():
+		var at := o + 1 + i * 5
+		if at + 5 > pkt.size():
 			break
-		got["places"].append([pkt[at], Vector2(pkt[at + 1], pkt[at + 2]), pkt[at + 3] != 0])
+		# (v96) kind, where, taken, the drawing it is seen by in space (255: none)
+		got["places"].append([pkt[at], Vector2(pkt[at + 1], pkt[at + 2]), pkt[at + 3] != 0, pkt[at + 4]])
+	var end := o + 1 + pkt[o] * 5
+	got["main_look"] = pkt[end] if end < pkt.size() else 255
 	road = got
 	ship_changes += 1
 
@@ -1129,7 +1156,8 @@ func use_target(facing: int = -1) -> int:
 	## 45 = (v81) an ore vein of the asteroid alongside (held E digs ore out), 46 = (v86) the shuttle's dock console,
 	## 47 = (v91) a first-aid box, 48 = a spare parts box, 49 = (v92) a gun mount in a fight in real time
 	## (no gun or round for it in hand): its controls (aim with the mouse, fire with the button),
-	## 50 = (v93) our shield generator in working order: a press turns the shield's shape (a bubble or an arc).
+	## 50 = (v93) our shield generator in working order: a press turns the shield's shape (a bubble or an arc),
+	## 51 = (v96) our boarding pod at its bay, or stuck in the pirate's hull: a press sits one in.
 	## `facing`: as if our character faced that way (a click turns it first).
 	if phase != PLAYING or my_cond != Net.COND_OK:
 		return 0
@@ -1193,6 +1221,8 @@ func use_target(facing: int = -1) -> int:
 			return 30
 		if map.dock.has(cell):
 			return 46                        # (v86) the shuttle's dock console
+		if pod_at(cell) >= 0:
+			return 51                        # (v96) our boarding pod: at its bay, or stuck in the pirate's hull
 		if map.trays.has(cell):
 			return 31
 		if map.cryo.has(cell):
@@ -1494,7 +1524,7 @@ func send_store(action: int, item: int = Net.ITEM_NONE) -> void:
 func can_trade() -> bool:
 	## Docked with a trader or (v69) a supply station, with power for the link (the same rule as Supplies.can_trade).
 	return powered() and sectors.count > 0 and (sectors.kind[sector] == Sectors.TRADER or sectors.kind[sector] == Sectors.STATION) \
-		and sectors.within_reach(sector, ship_pos())
+		and sectors.within_reach(sector, ship_pos()) and not ship_moving   # (v96, my M3 pick) once stopped by it
 
 
 func at_station() -> bool:
@@ -2151,6 +2181,23 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				shuttle_riders.clear()
 				for i in pkt[4]:
 					shuttle_riders.append(pkt.decode_u16(5 + i * 2))
+		Net.S_POD:
+			# (v96) our boarding pods (Pods.packet)
+			if pkt.size() >= 2:
+				var got := {}
+				var o := 2
+				for i in pkt[1]:
+					if o + 7 > pkt.size():
+						break
+					var riders: Array[int] = []
+					var n: int = pkt[o + 6]
+					for k in n:
+						if o + 9 + k * 2 <= pkt.size():
+							riders.append(pkt.decode_u16(o + 7 + k * 2))
+					got[pkt.decode_u16(o)] = {"state": pkt[o + 2], "secs": pkt[o + 3],
+						"stuck": -1 if pkt.decode_u16(o + 4) == 0xFFFF else pkt.decode_u16(o + 4), "riders": riders}
+					o += 7 + n * 2
+				pods = got
 		Net.S_SUMMARY:
 			if pkt.size() >= 10:
 				var deaths: Array = []

@@ -142,6 +142,7 @@ func _guard() -> void:
 	print("  -- a guard bot fetches a gun from the locker and shoots the pirate")
 	server.ship.store[Net.ITEM_PISTOL] = 1
 	server.ship.store[Net.ITEM_MAG] = 3
+	server.ship.store[Net.ITEM_SHOTGUN] = 0      # (v96 takes a shotgun first: this check is about the pistol)
 	var at := _open_row(6)
 	var q = _pirate(at)
 	q.health = 100.0

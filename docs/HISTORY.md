@@ -827,3 +827,18 @@ towards it by WASD around the map") with his N1 comment (fire with no enemies ne
   where they strike, with 2 boarders. Assault drones fly in space the same way.
 - His other comments for later: places drawn, dockable and landable, drawn only when near (F5); better bot fighting
   (P1). New test `tools/flighttest.gd` (50 scripts); protocol 69.
+
+## v96 (0.89): places seen in space, meteors, our boarding pod, bots in a fight
+
+He wrote "next build"; the roadmap's next items. Questions `https://claude.ai/artifact/1PD8wL3crt6FGhEEHQ21sx`, built on my
+picks (all A).
+- Places are drawn in space (the station a ring, the trader a cargo ship, derelicts, wrecks and asteroids by their own
+  drawings, bits, gas, the anomaly), only when near the screen. A ship or rock alongside glides to the airlock.
+  Stations and traders dock only once the ship stopped.
+- Meteors fly at the ship as rocks: evade early, shoot them (2 hits), the shield stops them; a strike breaches the hull
+  there. A bot at the controls tries by the old lot.
+- Our boarding pod (a new machine `k`, ship02 has one): 2 seats, flies to the pirate alongside, sticks in its hull and
+  lets its riders out inside; E there takes them home; their point defence may throw it back. A «К оружию» bot takes
+  the second seat and fights over there.
+- Bots fight together: radio, falling back when hurt, the shotgun first, one target.
+- New test `tools/podtest.gd` (51 scripts); protocol 70.

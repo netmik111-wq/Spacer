@@ -93,6 +93,8 @@ func climb(p: Player, on_way: bool = false) -> bool:
 
 func bot_think(p: Player) -> void:
 	server.stations.bot_breathe(p)  # (v60) its suit's supply in thin air
+	if server.pods.bot_think(p):
+		return                       # (v96) called to a pod's seat, or aboard the pirate ship by a pod
 	if server.defence.think(p):
 		return                       # (v79) armed pirates about: it runs, hides or (a guard) fights
 	if server.stations.bot_think(p):

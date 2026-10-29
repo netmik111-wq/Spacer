@@ -2050,3 +2050,35 @@ Page "Spacer v95" (https://claude.ai/artifact/Y5SD56y9aj1rZMF9KFEJGa), all answe
 - His P1 comment: "improve our bots' AI, or guard bots that fight boarders". The guard bot (v79, the «К оружию» order
   and the guard's job) already fetches a gun and fights; better bot fighting is a question for a later build.
 - **Our pods and teleport** (P4 A): with the places build (how ours come back, what stays on the enemy ship).
+
+## v96: places seen in space, meteors, our boarding pod, bots in a fight
+
+He wrote "next build". Questions on `https://claude.ai/artifact/1PD8wL3crt6FGhEEHQ21sx`; built on my picks (all A) while
+his answers are pending.
+- **Places drawn** (M1 A, his F5 comment "drawn only when near, for speed"): each place is drawn by what it is; a derelict,
+  wreck or asteroid from the very drawing that comes alongside (`Road.look_of`, sent in S_ROAD), so what one sees from
+  afar is what docks. Only places within 40 cells of the screen are drawn (`SpaceView._seen`).
+- **Gliding to the airlock** (M2 A): the server still puts the ship alongside at once (the docking code stays as it is);
+  the client draws it gliding from where it lay for 2 s. Cheaper and safer than flying a hulk in the arena.
+- **Docking only when stopped** (M3 A): flying through a station's circle topped everything up, which made a station a
+  drive-through. `Navigation._reach` treats a moving ship as out of reach of a station or trader.
+- **Meteors are rocks** (R1 A): the old lot did not fit a ship one flies by hand. A rock aims a little inside the hull
+  (a line at an outline point may only graze it), leads the ship's speed, and is seen 5 s out (the old warning). An evade
+  1 s or more before it strikes steers round it (`dash` marks it dodged); later is too late. The shield stops it and
+  takes 300 heat; a hull corner pokes out of the shield's ellipse, so a rock at a corner is stopped there too. Out of a
+  fight our shield's heat tick runs while rocks fly (and until it falls), so the shield rises at one.
+- **A bot at the controls** (R2 A) keeps the old lot (half a person's chance) and dashes 1.5 s before.
+- **Asteroids** (R3 A): a shot only flashes; guns cutting ore would undo the suited work at a vein.
+- **Our pod** (B1 A): a machine, not a module, so the editor can place it; one per ship02, 2 seats, 5 s wait (or both
+  seats taken). It passes their shield like theirs pass ours, meets their point defence once (`_their_guard`, their
+  guard's own chance and charge). Shot down it is thrown back (15 to each rider, 30 s mending) rather than killing them:
+  a pod is a chance, not a death trap. Their guns do not aim at it (they aim at ships).
+- **Coming back** (B2 A): the pod stays stuck in their hull; E there takes up to 2 home (3 s, 6 s flight). An empty pod
+  comes home by itself when the fight ends and nobody of ours is left over there.
+- **Bots** (B3 A): one bot (the nearest «К оружию» or guard) takes the second seat; a pod waits up to 15 s for it. Over
+  there it fights with `Pirates.think`, then goes back to the pod. Riders reuse the shuttle's "out of the world"
+  (`in_shuttle`), so targets, sight and the tick skip them with no new checks.
+- **The teleporter** (B4 A): later, a rare find with procedural places.
+- **Bots fighting** (his P1 comment; D1-D4 all A): radio (fighters know what any of ours sees, `Defence.spotted`), falling
+  back below 40 (back above 70, a medical patch on the way), the shotgun first plus a patch from the locker, and one
+  target for fighters within 6 cells. Bots without a patch heal as before (the autodoc when free).
