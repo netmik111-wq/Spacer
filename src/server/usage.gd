@@ -19,6 +19,7 @@ const NAMES := {
 	"shuttle": "челнок флотилии",
 	"shield_arc": "дуга щита", "aim_all": "огонь всеми орудиями", "goggles": "ночное видение и тепловизор",
 	"pod": "абордажная капсула",
+	"teleport": "телепорт",
 }
 
 var server: GameServer

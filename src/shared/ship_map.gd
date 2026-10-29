@@ -20,6 +20,9 @@ static var drawings := {}            # (v84) "ships:NAME" -> its drawing's text,
                                      # server read at start or from the save, what a guest was sent by the server (H1)
 static var own_others: Array[String] = []   # (v84, the author's H5) drawings of one's own that come in the run
                                      # (pirate ships, derelicts, asteroids), after the game's own in `others`
+const MADE_PREFIX := "made:"         # (v97) a derelict the campaign made from pieces (PlaceMaker): its text is in `drawings`
+static var made_others: Array[String] = []   # (v97) the campaign's made derelicts, after own_others in `others`
+static var places_on := true         # (v97) a server starting with none made makes them (tests may turn it off)
 
 const FLEET_JOIN := "|"              # (v85, the author's FS1) "ship02|ship01": our fleet, its ships' drawings one below another
 const FLEET_GAP := 4                 # rows of open space between two ships of the fleet
@@ -80,6 +83,7 @@ var trays := PackedInt32Array()      # (v63) wall cells with a hydroponic tray, 
 var cryo := PackedInt32Array()       # (v63) wall cells with a cryosleep pod: the reserve sleeps in them
 var stove := {}                      # (v71) wall cells with the galley's stove: meals cooked from rations (see Galley)
 var pod := {}                        # (v96, the author's P4) wall cells with our boarding pod's bay -> the floor cell in front
+var teleporter := {}                 # (v97, his T1 C) wall cells with the teleporter's pad -> the floor cell in front
 var dock := {}                       # (v86) wall cells with the shuttle's dock console, all ships of the fleet (see Shuttle)
 var force_field := {}                    # (v86) hull cells with a hangar's force field: air-tight, see-through, never breached
 var backup_rooms := {}               # (v61) the rooms (numbers in `rooms`) the backup SMES faces: it keeps them lit
@@ -157,7 +161,7 @@ const MACHINE_WIDE := {"console_1": 2, "console_3": 2, "console_4": 3, "console_
 # there: from the cell in front of them, or the cells either side of that one.
 const FITTINGS := ["console_1", "console_2", "console_3", "console_4", "console_5",
 	"engine", "air_plant", "locker", "intercom", "lock_pump", "holo", "shield", "bench", "bay", "autodoc", "scanner", "smes", "smes_small",
-	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light", "pod"]
+	"comms", "tray", "cryo", "stove", "dock", "med_box", "tech_box", "fire_box", "wall_light", "pod", "teleporter"]
 
 
 func load_from(name: String, needs_spawns: bool = true) -> String:
@@ -186,7 +190,17 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 		if problem == "":
 			_split_fits()
 		return problem
-	if name.begins_with(USER_PREFIX):
+	if name.begins_with(MADE_PREFIX):
+		# (v97) a derelict made from pieces: its text came from PlaceMaker, the save or the server
+		var made := str(drawings.get(name, ""))
+		if made.is_empty():
+			return "Не найден корабль «%s»." % name
+		var built_made := MapBuilder.build("derelict", made)
+		if not (built_made["problems"] as Array).is_empty():
+			return "Корабль «%s»: %s" % [name, (built_made["problems"][0] as Dictionary)["text"]]
+		data = built_made["data"]
+		kind = built_made["kind"]
+	elif name.begins_with(USER_PREFIX):
 		# (v81) a ship of one's own, drawn in the ship editor: built here from its drawing;
 		# (v84) the copy the server sent or the save kept comes first, and a drawing read is kept
 		var text := str(drawings.get(name, ""))
@@ -213,6 +227,8 @@ func load_from(name: String, needs_spawns: bool = true) -> String:
 
 static func drawing_text(name: String) -> String:
 	## (v85) The text of a drawing: one of one's own (the copy kept, else the «ships» folder) or the game's.
+	if name.begins_with(MADE_PREFIX):
+		return str(drawings.get(name, ""))
 	if name.begins_with(USER_PREFIX):
 		var text := str(drawings.get(name, ""))
 		if text.is_empty():
@@ -463,6 +479,7 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 	stove = {}
 	dock = {}
 	pod = {}
+	teleporter = {}
 	force_field = {}
 	backup_rooms = {}
 	guns = PackedInt32Array()
@@ -533,6 +550,8 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			dock[i] = true
 		if cells[i] == tile_ids.get("pod", -1) or cells[i] == tile_ids.get("pirate_pod", -1):
 			pod[i] = fitting_front(i)
+		if cells[i] == tile_ids.get("teleporter", -1) or cells[i] == tile_ids.get("pirate_teleporter", -1):
+			teleporter[i] = fitting_front(i)
 		if cells[i] == tile_ids.get("window_field", -1):
 			force_field[i] = true
 		if cells[i] == tile_ids.get("smes_small", -1):
@@ -799,9 +818,19 @@ static func other_maps() -> Array[String]:
 	## The drawings of other ships that may come alongside, in the order `others` numbers them.
 	var out: Array[String] = Net.OTHER_MAPS.duplicate()
 	out.append_array(own_others)
+	out.append_array(made_others)
 	if try_other != "":
 		out.append(try_other)
 	return out
+
+
+static func make_places(seed_value: int) -> void:
+	## (v97) The campaign's derelicts made from pieces, ready in `drawings` and `made_others`.
+	made_others = []
+	var made: Dictionary = load("res://src/shared/place_maker.gd").make_set(seed_value)
+	for n: String in made:
+		drawings[n] = made[n]
+		made_others.append(n)
 
 
 static func own_drawings() -> Array[Dictionary]:
@@ -850,7 +879,7 @@ static func drawings_in_use(main: String) -> Dictionary:
 		names.append(n)
 	names.append_array(other_maps())
 	for n: String in names:
-		if n.begins_with(USER_PREFIX) and drawings.has(n):
+		if (n.begins_with(USER_PREFIX) or n.begins_with(MADE_PREFIX)) and drawings.has(n):
 			out[n] = drawings[n]
 	return out
 
@@ -1346,6 +1375,8 @@ func device_name(cell: int) -> String:
 		return "пульт челнока"
 	if pod.has(cell):
 		return "абордажная капсула"
+	if teleporter.has(cell):
+		return "платформа телепорта"
 	return ""
 
 

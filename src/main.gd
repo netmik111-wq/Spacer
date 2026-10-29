@@ -295,6 +295,7 @@ func _try_ship(ship: String, kind: String) -> void:
 	_trial = kind
 	ShipMap.drawings = {}                # (v84) the drawing as it is now, not as an earlier try read it
 	ShipMap.own_others = []
+	ShipMap.made_others = []
 	ShipMap.try_other = "" if kind == "ship" else ShipMap.USER_PREFIX + ship
 	_host_map = ShipMap.USER_PREFIX + ship if kind == "ship" else "ship02"
 	_editor.visible = false
@@ -339,6 +340,7 @@ static func _prepare_ships(how: String, wanted: String, own: bool, path: String 
 	## change since), a new one's from the «ships» folder as they are now.
 	ShipMap.drawings = {}
 	ShipMap.own_others = []
+	ShipMap.made_others = []             # (v97) a new campaign makes its own derelicts; a save brings them back
 	if how == "continue":
 		var data := Campaign.read(path)
 		if not data.is_empty():
@@ -347,6 +349,8 @@ static func _prepare_ships(how: String, wanted: String, own: bool, path: String 
 				ShipMap.drawings[n] = str(kept[n])
 			for n: Variant in data.get("own_others", []):
 				ShipMap.own_others.append(str(n))
+			for n: Variant in data.get("made_others", []):
+				ShipMap.made_others.append(str(n))
 			return str(data.get("map", "ship02"))
 	if own:
 		ShipMap.own_others = ShipMap.coming_in_run()

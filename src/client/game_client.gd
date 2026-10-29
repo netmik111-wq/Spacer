@@ -187,6 +187,8 @@ var shuttle_at := -1                 # the dock it stands at or left (-1: no shu
 var shuttle_to := -1                 # the dock it flies to (-1: it stands)
 var shuttle_done := 0.0              # the share of the flight done, moved on between the server's word
 var shuttle_riders: Array[int] = []  # the ids of those aboard
+var tele_state := Net.TELE_NONE      # (v97) the teleporter that serves us (Net.TELE_*) and its seconds to ready
+var tele_secs := 0
 var pods := {}                       # (v96) our boarding pods: the bay's wall cell -> {"state": POD_*, "secs", "stuck": cell or -1, "riders": ids}
 var foes: Array = [PackedByteArray([0, 0, 0, 0, 255]), PackedByteArray([0, 0, 0, 0, 255])]   # per enemy: in the fight 1/0, hull, full, class, drawing
 var goal_flags := 0                  # Net.GOALF_*
@@ -512,6 +514,11 @@ func pod_at(cell: int) -> int:
 		if int(pods[bay]["stuck"]) == cell:
 			return bay
 	return -1
+
+
+func send_teleport(action: int) -> void:
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_TELEPORT, action]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_pod(action: int) -> void:
@@ -1223,6 +1230,8 @@ func use_target(facing: int = -1) -> int:
 			return 46                        # (v86) the shuttle's dock console
 		if pod_at(cell) >= 0:
 			return 51                        # (v96) our boarding pod: at its bay, or stuck in the pirate's hull
+		if map.teleporter.has(cell):
+			return 52                        # (v97) the teleporter's pad: a press beams whoever stands by it
 		if map.trays.has(cell):
 			return 31
 		if map.cryo.has(cell):
@@ -1271,7 +1280,12 @@ func gear_here(cell: int) -> String:
 		return "-"
 	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
 	var g := Items.gear_of(item)
-	if g != Gear.NONE:
+	if g == Gear.TELEPORT:
+		if not map.teleporter.has(cell):
+			return "-"
+		if tele_state != Net.TELE_NONE:
+			return "Телепорт уже стоит в платформе."
+	elif g != Gear.NONE:
 		var sys := Gear.system_of(g)
 		if sys >= 0:
 			var machines: Dictionary = map.shield if sys == Gear.SYS_SHIELD else (map.holo if sys == Gear.SYS_SENSORS else
@@ -2181,6 +2195,10 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				shuttle_riders.clear()
 				for i in pkt[4]:
 					shuttle_riders.append(pkt.decode_u16(5 + i * 2))
+		Net.S_TELEPORT:
+			if pkt.size() >= 3:
+				tele_state = pkt[1]
+				tele_secs = pkt[2]
 		Net.S_POD:
 			# (v96) our boarding pods (Pods.packet)
 			if pkt.size() >= 2:

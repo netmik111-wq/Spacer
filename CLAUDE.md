@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v96 (version 0.89: places drawn in space, meteors as rocks, our boarding pod, bots fighting together) is the latest. Plans one to four are done except the darkness front (the
+Build v97 (version 0.90: derelicts made from pieces, their robots and vaults, our teleporter) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -150,7 +150,10 @@ v96 ("next build"; questions `https://claude.ai/artifact/1PD8wL3crt6FGhEEHQ21sx`
 in space only when near (his F5), a derelict/wreck/rock glides to the airlock, stations and traders dock only once stopped;
 meteors are rocks flying in space (evade early, shoot, shield); our boarding pod (`k`, `pods.gd`: 2 seats, flies to the pirate
 alongside, sticks, E takes riders home, bots called); bots' radio, falling back, shotgun first, one target.
-Next: the teleporter as a rare find with procedural places, choosing the enemy deck, arsenal, races.
+v97 (his answers on `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`, all A but T1 C): 8 derelicts a campaign made from
+pieces (`place_maker.gd`, one deck, 7 rows), rogue robots that wake and hold their places, a welded vault with its keeper
+and a prize; our teleporter is a pad machine (`t`, his T1 C) the found crate goes into (`teleporter.gd`).
+Next: arsenal, races (a lore question round first), choosing the enemy deck (when enemies have decks), places with decks.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -181,7 +184,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 51 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 52 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -233,6 +236,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/fluxtest.gd (since v94: every gun in space, heat, overload, vent, the pilot's shield, mount kinds, clips)
     godot --headless --path . --script res://tools/flighttest.gd (since v95: flying the system, autopilot, edge, held, jump, practice fire, break-off, ambush, pods)
     godot --headless --path . --script res://tools/podtest.gd (since v96: places' drawings, meteors in space, our boarding pod, bots' radio, falling back, shotgun, one target)
+    godot --headless --path . --script res://tools/placetest.gd (since v97: made derelicts, their robots, the vault and its keeper, the teleporter)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -257,7 +261,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 51 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 52 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -292,7 +296,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   since v71 `galley`: the stove, its dishes and their effects; since v79 `defence`: bots against armed boarders; since v85
   `fleet`: our ships, and which one's state is in place; since v86 `wing`: a second pirate ship fighting from afar,
   `shuttle`: the fleet's shuttle between the hangars; since v92 `arena`: the fight in real time, ships as bodies in space;
-  since v96 `pods`: our boarding pod).
+  since v96 `pods`: our boarding pod; since v97 `teleporter`: our teleporter).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -326,7 +330,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   (predicted rules), `ship_map.gd` (the grid, decks, tiles), `sight.gd` (sight and light), `items.gd`,
   `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers), `gear.gd` (v59: crates of ship gear),
   `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints),
-  `map_builder.gd` (v81: a text drawing to the layout, as `tools/make_assets.py` does).
+  `map_builder.gd` (v81: a text drawing to the layout, as `tools/make_assets.py` does), `place_maker.gd` (v97: derelicts made
+  from pieces, as drawings' text).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
@@ -636,6 +641,16 @@ The parameters for these checks are described in the header of `src/main.gd`.
   sign `k` (wall band, `ShipMap.pod`: wall cell -> front). S_ROAD's place record is 5 bytes (the drawing it is seen by) plus
   the system's own drawing at the end; S_POD, C_POD, `SHOT_ROCK` (protocol 70). Use target 51 is the pod bay. `Defence.radio`
   (D1) and `Player.falling_back` (D2) are new; `defence.spotted()` is cached per tick.
+- (v97) Made derelicts are `ShipMap.made_others` (names `made:N`, texts in `ShipMap.drawings`), after `own_others` in `others`;
+  `GameServer.start` makes them when none are ready (a save brings its own; `ShipMap.places_on = false` for tests that count
+  drawings, as hosttest). Its marks (`; dwellers = N`, `; vault = X Y`) are read by `PlaceMaker.info`; `Derelict.made` is
+  that of the one alongside. Its robots are pirates with `Player.dweller` (1 robot, 2 the keeper) and `stays` (they hold
+  their place in `Pirates.think` until they have a target); `Derelict._homes` keeps who lives where. `_move` keeps welded
+  doors. The main map's `door_vent` is 0 for the other ship's doors: ask `map.other.door_vent[d - other_first_door]`. The
+  teleporter's crate is `Net.ITEM_TELEPORTER` (253), not `ITEM_GEAR + Gear.TELEPORT` (191 is the goggles): always go through
+  `Gear.item_of`/`of_item`; it goes into the pad (`ShipMap.teleporter`, wall -> front), not the bay, and sets
+  `Ship.teleporter`. Whoever it put over there is `Teleporter.went`; `Derelict._leave` sends them home first. Use target 52
+  is the pad. C_TELEPORT, S_TELEPORT (protocol 71). `derelict.layout_for_test` picks the drawing the next derelict comes in.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -687,3 +702,4 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
   the classic pirate01; rolled ships put systems in rooms by lot, see `docs/DECISIONS.md`). A line `@ deck x y access` makes a compartment locked. (v91) `E` first-aid box, `J` spare parts box, `N` fire box, `L` wall light (wall things); a line
   `& deck x y base|tech|cargo|herm` gives a door its look; machine signs outside a wall band are machines on the floor;
   `/` stairs, two in a row on a deck over the same two on the deck below. (v96) `k` our boarding pod's bay (in an outer wall band).
+  (v97) `t` the teleporter's pad (in a wall band).

@@ -3856,6 +3856,16 @@
    "id": 770,
    "name": "pirate_pod",
    "kind": "wall"
+  },
+  {
+   "id": 771,
+   "name": "teleporter",
+   "kind": "wall"
+  },
+  {
+   "id": 772,
+   "name": "pirate_teleporter",
+   "kind": "wall"
   }
  ]
 }

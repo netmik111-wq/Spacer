@@ -2082,3 +2082,36 @@ his answers are pending.
 - **Bots fighting** (his P1 comment; D1-D4 all A): radio (fighters know what any of ours sees, `Defence.spotted`), falling
   back below 40 (back above 70, a medical patch on the way), the shotgun first plus a patch from the locker, and one
   target for fighters within 6 cells. Bots without a patch heal as before (the autodoc when free).
+
+## v97: derelicts made from pieces, their robots and vaults, our teleporter
+
+He wrote "next build". Questions on `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`: he answered all A except
+T1 C. His v96 page answers came in the same evening: all A, so v96 stood as built.
+- **Made, not drawn by hand** (P1 A): a campaign makes 8 derelicts from pieces at its start (`PlaceMaker`) and keeps
+  them, rather than a new one at every arrival: a place should be the same ship when one comes back to it, and the
+  save keeps what was left on it by the layout. They are plain drawings in the editor's text (`ShipMap.MADE_PREFIX`,
+  texts in `ShipMap.drawings`), so MapBuilder, the welcome's drawings (v84) and the save's copies carry them with no new
+  format. The old drawn derelict stays among them.
+- **One deck, 7 rows** (P2 A): a derelict lies over our airlock in ship02's 10 empty rows (GAP 3 and the docking row
+  take the rest), so a made derelict can be no taller than derelict01. Places with several decks wait for landing on
+  stations (another docking).
+- **Robots, not pirates** (I1 A): a derelict has little air, and a robot needs none; pirates already live on their own
+  wrecks. They wake when the first of ours sets foot aboard (as a wreck's survivors do) in the rooms farthest from the
+  way in, and hold their places (`Player.stays`) until they have somebody to go after: one walking about a dark ship
+  from the start would meet our people at the airlock every time. One more a cluster, at most 4.
+- **Kept between visits** (I2 A): `Derelict._homes` per sector, like `_left`; not in the save (neither is `_left`).
+- **The vault** (V1 A): welded shut, so the welder (v70) opens it and nothing new is needed; the weld is kept when the
+  derelict docks (`_move` used to clear every door's flags). Its keeper takes 35% of wounds (heavier than a stormtrooper's
+  50%), 6 magazines, and holds its place.
+- **The prize** (V2 A): the teleporter in 40% of vaults while none lay in one this campaign (one a campaign: it is the
+  late tech); else a gun or a crate one tier above what lies about there, so a vault pays for the fight.
+- **The teleporter is a machine of its own** (his T1 C, not my A: a module): the pad `t`, a wall machine used from the
+  floor in front, like the pod's bay; the found crate (thing 253: 191 is the night vision goggles, so Gear's numbers past
+  190 needed their own thing) is installed in it by an engineer, and `Ship.teleporter` says it is in. ship02 has an
+  empty pad in the workshop. E at the pad sends; who stands within 4 cells and is an armed bot told «К оружию» (or a
+  guard) goes along, up to 3 in all.
+- **Home** (T2 A), **through shields** (T3 A), **never sold** (T4 A, a trader pays 400). A ship that leaves sends home
+  whoever our teleporter put on it (`Teleporter.ship_leaves` in `Derelict._leave`): otherwise they would be removed with
+  its pirates, or left in a grid that no longer holds that ship.
+- **machinetest's trading check** had failed since v96 (the helm's course still braking at (150, 150), and v96's M3
+  docks only a stopped ship): the test now ends the course before docking.
