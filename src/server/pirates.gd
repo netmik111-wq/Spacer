@@ -353,7 +353,7 @@ func think(p) -> void:
 	var here: Vector2 = Vector2(p.st.x, p.st.y)
 	var item: int = p.in_hand()
 	# badly hurt: patch itself up if it can, else fall back from whoever it fights (a machine does not)
-	if p.health < FLEE_BELOW and not p.robot:
+	if p.health < FLEE_BELOW and not p.robot and not p.monster:
 		var patch: int = p.slots.find(Net.ITEM_MEDPATCH)
 		if patch >= 0 and p.wounds > 0.0 and now >= p.ready_tick:
 			p.hand = patch
@@ -366,6 +366,8 @@ func think(p) -> void:
 		var there: Vector2 = Vector2(target.st.x, target.st.y)
 		var dist: float = here.distance_to(there)
 		var rounds: int = Items.rounds(item)
+		if p.monster and server.mantises.leap(p, target):
+			return                           # (v99) a mantis leaps over the one cell between them
 		if rounds == 0 and p.slots.has(Items.ammo_of(item)):           # (v79) a guard bot may carry a shotgun
 			_stop(p)
 			server.combat.use_at(p, now, there)                  # reload
@@ -379,7 +381,10 @@ func think(p) -> void:
 				var aim: Vector2 = Mover.visual_pos(target.st, now) + Vector2(_rng.randf_range(-AIM_SPREAD, AIM_SPREAD), _rng.randf_range(-AIM_SPREAD, AIM_SPREAD))
 				server.combat.use_at(p, now, aim)
 			return
-		if rounds <= 0 and absi(target.st.x - p.st.x) + absi(target.st.y - p.st.y) == 1:
+		var close := absi(target.st.x - p.st.x) + absi(target.st.y - p.st.y) == 1
+		if p.monster:
+			close = maxi(absi(target.st.x - p.st.x), absi(target.st.y - p.st.y)) == 1 and server.map.deck_of(target.st.y) == server.map.deck_of(p.st.y)
+		if rounds <= 0 and close:
 			_stop(p)
 			_face(p, there)
 			if p.slots.has(Net.ITEM_BATON):
@@ -514,7 +519,7 @@ func _first_step(p, goal: Vector2i) -> int:
 func give_goal(p) -> void:
 	## By lot, a boarder on our ship comes for something: about half of a party, at
 	## most one bomb and one kidnapping in each.
-	if p == null or p.robot or not goals_on:
+	if p == null or p.robot or p.monster or not goals_on:
 		return
 	if server.tick - _party_tick > PARTY_GAP:
 		_party_bomb = false

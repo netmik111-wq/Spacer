@@ -129,6 +129,10 @@ const BASE := {
 		"price": 8, "stock": 2, "aim": true},
 	Net.ITEM_SPLINT: {"name": "Шина", "about": "Щёлкните по себе или по соседу: вправляет сломанную руку или ногу (4 секунды, не сходя с места).",
 		"price": 6, "stock": 2, "aim": true},
+	# (v99, the author's mantises on the asteroids) a mantis's claws (in its hand) and the claw one cuts off its body
+	Net.ITEM_CLAWS: {"name": "Клешни богомола", "about": "Бьют на 30.", "blow": 30, "pace": 1.5},
+	Net.ITEM_MANTIS_CLAW: {"name": "Коготь богомола", "about": "Коготь с тела богомола, острый как бритва. Торговцы дают за него хорошие деньги.",
+		"price": 50, "keep": true},
 	Net.ITEM_BOMB: {"name": "Бомба пиратов", "about": "Тикает. Держите E, стоя рядом, чтобы обезвредить (инженер быстрее)."},
 	# (v71, the author's H1) complex repairs' toolbox and second kind of spare part
 	Net.ITEM_TOOLBOX: {"name": "Ящик с инструментами", "about": "При сложном ремонте (выбирается при создании игры, в тяжёлом режиме включён) без него машины и двери чинятся втрое дольше. Не расходуется.",
@@ -417,7 +421,7 @@ static var CATEGORIES: Array = [
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
 	["Охрана", [Net.ITEM_ROBOT]],
 	["Провизия", [Net.ITEM_FOOD, Net.ITEM_STEW, Net.ITEM_COFFEE, Net.ITEM_BROTH]],
-	["Добыча", [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA]],
+	["Добыча", [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA, Net.ITEM_MANTIS_CLAW]],
 	["Семена", range(Net.ITEM_SEED, Net.ITEM_SEED + Plants.COUNT * Plants.TRAITS)],
 	["Задания", [Net.ITEM_CARGO, Net.ITEM_BLACKBOX]],
 ]

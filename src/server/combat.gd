@@ -117,7 +117,7 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 			p.ready_tick = server.tick + SHOT_TICKS
 			server.chat.sound(Net.SOUND_CLICK, p.st.x, p.st.y, p.slot)
 	elif Items.INFO.has(item) and Items.INFO[item].has("blow"):
-		p.ready_tick = server.tick + roundi(BLOW_TICKS * slow * (1.5 if Items.INFO[item].has("stun") else 1.0))
+		p.ready_tick = server.tick + roundi(BLOW_TICKS * slow * (1.5 if Items.INFO[item].has("stun") else float(Items.INFO[item].get("pace", 1.0))))
 		_strike(p, at, int(Items.INFO[item]["blow"]), float(Items.INFO[item].get("stun", 0.0)))
 	elif item == Net.ITEM_FLASHBANG:
 		_throw(p, at)
@@ -558,6 +558,8 @@ func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 		tell_hit(q)
 	# (v62) heavy armour takes half, our robot more; (v98) what is worn takes its share by the kind of harm
 	var taken := hit * q.toughness * Armour.taken(q.worn, q.deflated, kind)
+	if q.monster and kind == Armour.KINETIC:
+		taken *= server.mantises.CHITIN      # (v99, my M1 pick) a mantis's chitin
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
 	q.health = maxf(q.health - taken, Net.HEALTH_DEAD - 1.0)
 	q.wounds = minf(q.wounds + taken, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)

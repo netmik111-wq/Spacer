@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v98 (version 0.91: the arsenal, body armour, helmets, suits that inflate) is the latest. Plans one to four are done except the darkness front (the
+Build v99 (version 0.92: asteroids, landing, abandoned stations, mantises) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -158,8 +158,13 @@ v98 (his answers on `https://claude.ai/artifact/JESXpjSKin5YKnoKTCcccr`, all A b
 plasma gun in the hand (energy cells), armour by kind of harm (`src/shared/armour.gd`: vest and helmet 60/45/45/30, nothing
 off plasma, never with a suit; a suit 10% inflated, 30% let down with B), an energy shield on the belt, a hand shield on the
 arm (no gun with it), boarders with lasers/plasma/armour down the road, the pulse laser and plasma cannon on ships.
-Next: races (a lore question round first), asteroid generation and landing on/near asteroids (his 2026-10-30 roadmap add),
-choosing the enemy deck (when enemies have decks), places with decks.
+v99 (his order of 2026-10-30: races to the long-term plans; questions `https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA`,
+built on my picks, all A): ship02 has 24 empty rows over each deck (14 more) so places up to ~40x20 fit; 8 made asteroids a
+campaign (small solid, medium/large with caves from a mouth in the bottom row), landing on one from the helm's dock button;
+4 of the 8 made derelicts are abandoned stations (rooms by kind, loot by kind); mantises in the caves (`mantises.gd`: 80 hp,
+chitin, claws 30 every 1.2 s, a leap over one empty cell).
+Next: asteroid dwellers and minibosses, quests inside places, places with decks with station landing, enemy decks and
+choosing them, enemy fleets. Long-term: races (a lore question round first).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -190,7 +195,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 53 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 54 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -244,6 +249,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/podtest.gd (since v96: places' drawings, meteors in space, our boarding pod, bots' radio, falling back, shotgun, one target)
     godot --headless --path . --script res://tools/placetest.gd (since v97: made derelicts, their robots, the vault and its keeper, the teleporter)
     godot --headless --path . --script res://tools/arsenaltest.gd (since v98: energy guns, armour by kind, suits let down, energy and hand shields, boarders' arms, new ship guns)
+    godot --headless --path . --script res://tools/asteroidtest.gd (since v99: made asteroids and stations, landing, mantises, their leap, rooms' loot)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -268,7 +274,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 53 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 54 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -303,7 +309,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   since v71 `galley`: the stove, its dishes and their effects; since v79 `defence`: bots against armed boarders; since v85
   `fleet`: our ships, and which one's state is in place; since v86 `wing`: a second pirate ship fighting from afar,
   `shuttle`: the fleet's shuttle between the hangars; since v92 `arena`: the fight in real time, ships as bodies in space;
-  since v96 `pods`: our boarding pod; since v97 `teleporter`: our teleporter).
+  since v96 `pods`: our boarding pod; since v97 `teleporter`: our teleporter; since v99 `mantises`: the asteroids' monsters).
   A part reaches the rest through `server` (typed `GameServer`, a `class_name`), so a wrong name is a
   parse error, not a surprise at run time. Calls between parts go `server.chat.say(...)`.
 - **Ships are objects with a network id** (`src/server/ship.gd`, since v39). The crew's ship is
@@ -338,7 +344,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `weapons.gd`, `sectors.gd`, `hulls.gd` (pirate ship classes and tempers), `gear.gd` (v59: crates of ship gear),
   `plants.gd` (v63: what grows in the trays), `upkeep.gd` (v71: complex repairs' rules, shared with the hints),
   `map_builder.gd` (v81: a text drawing to the layout, as `tools/make_assets.py` does), `place_maker.gd` (v97: derelicts made
-  from pieces, as drawings' text).
+  from pieces, as drawings' text; v99 stations and asteroids too).
 - `src/server/`: `game_server.gd` (state, network loop, tick order) and one part per topic (see
   "How it works"); `player.gd`, `ship.gd`, `air.gd`, `vitals.gd`; (v77) `paths.gd`, the 8-way way-finding every bot,
   pirate and robot uses. (v82) `usage.gd`, what people used this run.
@@ -665,6 +671,15 @@ The parameters for these checks are described in the header of `src/main.gd`.
   which refuses a vest or helmet with a suit (`Armour.clash`). A let-down suit is `Player.deflated` (vitals flags bit 7;
   `Vitals.pressure_harm` on the tank). Energy guns are rounds items with `"energy"` (`Items.energy`); new ship guns from
   `Weapons.PULSE` map to `Net.ITEM_GUN_NEW` (228). SEC_VITALS has one more byte (the shield's charge); C_INFLATE (protocol 72).
+- (v99) ship02's rows moved down by 14 (24 empty rows over each deck): never write its cells as numbers in a test, take them
+  from the map (`map.helm`, `lock_pump`, a room's floor). `PlaceMaker.make_set` gives COUNT derelicts (the first SHIPS ships,
+  then stations) and then ROCKS asteroids (`made:9`...), so `made_others` holds both kinds: ask `others_of(kind)`. An
+  asteroid with caves has a mouth (`PlaceMaker.info`), so `Derelict._spots` gives it a docked spot and `dock()` lands on it
+  (`docked` with `kind == OTHER_ROCK`). A mantis is a pirate Player with `monster` (claws `ITEM_CLAWS` in its hand, toughness
+  1.25: health always comes back to 100 less the wounds); whatever counts pirates may want to skip `p.monster`. Mantises
+  appear on the first foot on their asteroid (`Derelict._watch_nest`) and are kept per place by `Derelict.rock_key()` (the
+  key it came by). `server.mantises.leaps_on = false` keeps them from leaping. The people's sheet is folded in two (`CrewArt.folded`, `at`):
+  a frame's place goes through `CrewArt.at(column, row)` (one column grew past 8192 pixels, older cards' limit). Protocol 73.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
@@ -717,3 +732,5 @@ size in `play.bat`, two archives in `/mnt/project-files/builds/vNN/` → a parag
   `& deck x y base|tech|cargo|herm` gives a door its look; machine signs outside a wall band are machines on the floor;
   `/` stairs, two in a row on a deck over the same two on the deck below. (v96) `k` our boarding pod's bay (in an outer wall band).
   (v97) `t` the teleporter's pad (in a wall band).
+  (v99) Made asteroids mark `; mouth = X Y` (the way into the caves, bottom row), `; mantises = N` (-1 none), `; finds = N`;
+  made stations `; room = X Y kind` (a floor cell, `PlaceMaker.ROOM_KINDS`).

@@ -80,6 +80,8 @@ extends Node
 ## (v62, --inproc only) enemy_after=SECONDS with enemy_class=K (a pirate ship of that class, Net.ECLASS_*,
 ## comes to fight at a distance), assault_after=SECONDS (an assault drone lands aboard at once),
 ## robot_after=SECONDS (one of our security robots is set down beside the character).
+## (v99, --inproc only) rock_after=SECONDS (the campaign's last asteroid comes, the ship lands on it, the character
+## stands in its mouth looking in, a mantis two cells in, not leaping; in a suit with night vision).
 
 const Net := preload("res://src/shared/net.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -102,6 +104,7 @@ var _pirateshipped := false
 var _enemied := false                # (v62) the screenshot options above
 var _assaulted := false
 var _roboted := false
+var _rocked := 0                     # (v99) rock_after: 1 asked for, 2 landed
 var _dockship := false
 var _server: GameServer = null
 var _client: GameClient = null
@@ -471,7 +474,7 @@ func _on_joined() -> void:
 	_screen = GameScreen.new()
 	add_child(_screen)
 	_screen.demo_walk = _flags.has("demo")
-	_screen.scripted_look = _flags.has("demo") or _opt.has("goto") or _opt.has("path") or _opt.has("click") or _opt.has("hover")
+	_screen.scripted_look = _flags.has("demo") or _opt.has("goto") or _opt.has("path") or _opt.has("click") or _opt.has("hover") or _opt.has("rock_after")
 	if _opt.has("aim"):
 		var aim := str(_opt["aim"]).split(",")
 		_screen.aim_cells = Vector2(float(aim[0]), float(aim[1]) if aim.size() > 1 else 0.0)
@@ -594,6 +597,31 @@ func _process(_delta: float) -> void:
 			var c: Vector2i = Vector2i(me.st.x, me.st.y) + d
 			if _server.map.walkable(c.x, c.y) and _server.map.door_at(c.x, c.y) < 0:
 				_server.robots.spawn(c.x, c.y)
+				break
+	if _opt.has("rock_after") and _rocked == 0 and _server != null and _screen != null and t >= float(_opt["rock_after"]):
+		_rocked = 1
+		var rocks: Array = _server.derelict._rock_spots()
+		_server.derelict.layout_for_test = rocks[-1]
+		_server.road._here_places = [[Sectors.P_ASTEROID, _server.ship.pos]]
+		_server.road._places_for = _server.ship.sector
+		_server.ship.moving = false
+	if _rocked == 1 and _server != null and _server.derelict.here:
+		_rocked = 2
+		_server.derelict.dock(true)
+		var map: ShipMap = _server.map
+		var outer: Vector2i = map.doors[int(map.lock_pump.values()[0]["outer"])]
+		var me = _server.players[_client.my_id]
+		me.st.place(outer.x, outer.y - 1)
+		me.self_dirty = true
+		me.st.facing = Net.DIR_UP
+		me.worn[Net.WEAR_SUIT] = Net.ITEM_SUIT + Net.SUIT_TANK_STEPS   # (in a suit, on its tank)
+		me.supply = true
+		me.worn[Net.WEAR_EYES] = Net.ITEM_NVG
+		for y in range(outer.y - 3, outer.y - 8, -1):
+			if map.walkable(outer.x, y):
+				var m = _server.mantises.spawn(outer.x, y)
+				m.st.facing = Net.DIR_DOWN
+				_server.mantises.leaps_on = false
 				break
 	if _opt.has("board_after") and not _boarded and _flags.has("server") and _server != null and t >= float(_opt["board_after"]):
 		_boarded = true

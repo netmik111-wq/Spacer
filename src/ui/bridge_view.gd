@@ -5,6 +5,8 @@ extends RefCounted
 ## buttons to stop and to dock). GameScreen owns the controls and opens and
 ## closes the frame; this fills them in.
 
+const PlaceMaker := preload("res://src/shared/place_maker.gd")
+const ShipMap := preload("res://src/shared/ship_map.gd")
 const Net := preload("res://src/shared/net.gd")
 const GameClient := preload("res://src/client/game_client.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
@@ -317,6 +319,14 @@ func update_helm() -> void:
 			var on := not client.other_docked
 			dock.pressed.connect(func() -> void: client.send_dock(on))
 			buttons.add_child(dock)
+		if client.other_here() and client.other_rock and _rock_lands():
+			# (v99, my A2 pick) an asteroid with caves: the ship lands on its mouth, the airlock opens onto the ground
+			var land := Button.new()
+			land.text = "Взлететь с астероида" if client.other_docked else "Сесть на астероид"
+			land.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var down := not client.other_docked
+			land.pressed.connect(func() -> void: client.send_dock(down))
+			buttons.add_child(land)
 		if client.fighting():
 			for pos in ([Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK, Net.POS_BEHIND] if _has_phase() else [Net.POS_CLOSE, Net.POS_FAR, Net.POS_FLANK]):
 				var go := Button.new()
@@ -685,3 +695,12 @@ func _draw_helm() -> void:
 			chart.draw_rect(Rect2(by - Vector2(5, 3), Vector2(10, 6)), colour, false, 1.5)
 		chart.draw_string(font, by + Vector2(-60, -8), "астероид" if client.other_rock else "обломки пиратов" if client.other_wreck else
 			("пираты" if client.pirates_alongside() else "корабль рядом"), HORIZONTAL_ALIGNMENT_CENTER, 120, 11, colour)
+
+
+func _rock_lands() -> bool:
+	## (v99) The asteroid alongside has caves to land on (a made one with a mouth).
+	var k: int = client.map.other_kind
+	if k < 0 or k >= client.map.others.size():
+		return false
+	var name: String = client.map.others[k].map_name
+	return (PlaceMaker.info(str(ShipMap.drawings.get(name, "")))["mouth"] as Vector2i).x >= 0

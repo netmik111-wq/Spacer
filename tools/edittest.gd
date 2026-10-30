@@ -274,6 +274,7 @@ func _in_game() -> void:
 	f.store_string(text)
 	f.close()
 	ShipMap.try_other = ShipMap.USER_PREFIX + "Мой пират"
+	ShipMap.made_others = []                  # ((v99) the first server's made asteroids: these checks are the old two's)
 	server = GameServer.new()
 	get_root().add_child(server)
 	var problem := server.start(26491, "ship02", 0)

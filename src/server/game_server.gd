@@ -108,6 +108,7 @@ const Arena := preload("res://src/server/arena.gd")
 const Shuttle := preload("res://src/server/shuttle.gd")
 const Pods := preload("res://src/server/pods.gd")
 const Teleporter := preload("res://src/server/teleporter.gd")
+const Mantises := preload("res://src/server/mantises.gd")
 
 const HELLO_TIMEOUT_MS := 5000      # a connection must introduce itself within this time
 const MAX_INPUT_QUEUE := 32
@@ -208,6 +209,7 @@ var wing := Wing.new()                 # (v86, the author's E1) a second pirate 
 var shuttle := Shuttle.new()           # (v86, the author's N1) the fleet's shuttle between the ships' hangars
 var pods := Pods.new()                 # (v96, the author's P4) our boarding pods
 var teleporter := Teleporter.new()     # (v97, the author's 3.2) our teleporter, a rare find
+var mantises := Mantises.new()         # (v99) the asteroids' mantises
 var arena := Arena.new()               # (v92, the author's plan item 0) the ship fight in real time: see Arena
 var mode := Net.MODE_NORMAL            # (v63) the game's mode (Net.MODE_*): set before start, kept in the campaign
 var complex_repairs := false           # (v71, the author's H1) toolboxes and kinds of spare part: set before start
@@ -314,6 +316,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	shuttle.setup(self)
 	pods.setup(self)
 	teleporter.setup(self)
+	mantises.setup(self)
 	derelict.setup(self)
 	gunnery.setup(self)
 	mounts.setup(self)
@@ -574,7 +577,7 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			var why := derelict.dock(pkt[1] != 0)
 			if why != "":
 				chat.say(why)
-			elif derelict.here:
+			elif derelict.here and derelict.kind != Net.OTHER_ROCK:
 				chat.say("%s: %s." % [p.name, ("стыковка: " + derelict.ship.name.to_lower()) if derelict.docked else "расстыковка"])
 	elif kind == Net.C_BLAST:
 		if pkt.size() > 1:

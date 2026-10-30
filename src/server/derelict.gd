@@ -95,6 +95,26 @@ var made := {}                       # PlaceMaker.info of the made derelict alon
 var vault_door := -1                 # its vault's door (-1: none)
 var _homes := {}                     # sector key -> {"robots": n, "keeper": bool, "opened": bool}: who lives there still
 var _woken := false                  # its robots are in the world (the first of ours came aboard)
+# (v99, the author's "asteroid generation" and "simple monsters on the asteroids") the campaign's made asteroids
+const ROCK_FINDS := [
+	[Net.ITEM_SCRAP, 4], [Net.ITEM_ORE, 4], [Net.ITEM_PART, 3], [Net.ITEM_FUEL, 2], [-Net.ITEM_MEDKIT, 1], [Net.ITEM_CELL, 1],
+	[Net.ITEM_DATA, 2], [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS / 2, 1],
+]
+const MANTISES_MAX := 5              # (my M6 pick) on one asteroid at most: one more each cluster down the road
+# (v99, my D1 pick) what each kind of a station's room holds (PlaceMaker.ROOM_KINDS)
+const ROOM_LOOT := [
+	[[Net.ITEM_FOOD, 4], [Net.ITEM_FLASHLIGHT, 2], [Net.ITEM_RADIO, 2], [Net.ITEM_JUMPSUIT, 1], [Net.ITEM_MEDPATCH, 2], [Net.ITEM_COFFEE, 1]],
+	[[Net.ITEM_PART, 4], [Net.ITEM_SCRAP, 4], [Net.ITEM_FUEL, 4], [Net.ITEM_MAG, 2], [Net.ITEM_BOARD, 2], [Net.ITEM_TOOLBOX, 1]],
+	[[-Net.ITEM_MEDKIT, 4], [Net.ITEM_MEDPATCH, 4], [Net.ITEM_SPLINT, 2], [Net.ITEM_BROTH, 1]],
+	[[Net.ITEM_PART, 4], [Net.ITEM_BOARD, 3], [Net.ITEM_FUEL, 3], [Net.ITEM_TOOLBOX, 2], [Net.ITEM_WELDER, 1], [Net.ITEM_PATCH, 2]],
+	[[Net.ITEM_RADIO, 3], [Net.ITEM_DATA, 2], [Net.ITEM_BOARD, 2], [Net.ITEM_FLASHLIGHT, 2]],
+	[[Net.ITEM_CELL, 3], [Net.ITEM_DATA, 3], [Net.ITEM_NVG, 1], [Net.ITEM_THERMAL, 1], [Net.ITEM_BOARD, 2]],
+	[[Net.ITEM_MAG, 4], [-Net.ITEM_PISTOL, 2], [Net.ITEM_SHELLS, 2], [Net.ITEM_VEST, 1], [Net.ITEM_HELMET, 1], [-Net.ITEM_SHOTGUN, 1],
+		[-Net.ITEM_LASER_GUN, 1], [Net.ITEM_CELL, 2]],
+]
+var rock := {}                       # PlaceMaker.info of the made asteroid alongside ({}: any other)
+var _rock_key := ""                  # its place's key (see rock_key)
+var _nest_woken := false             # its mantises are in the world (the first of ours set foot on it)
 var trial := false                   # (v81) laid by the ship editor's «Попробовать»: it never leaves by itself
 var _rng := RandomNumberGenerator.new()
 
@@ -109,6 +129,7 @@ func setup(p_server: Node) -> void:
 	_left_bodies.clear()
 	_homes.clear()
 	made = {}
+	rock = {}
 	vault_door = -1
 	_woken = false
 	_rng.randomize()
@@ -148,12 +169,18 @@ func _spots_off_airlock() -> Dictionary:
 				theirs = o.doors[d]
 		if theirs.x < 0 and o.kind != "asteroid":
 			continue
+		var lands := false
 		if theirs.x < 0:
 			theirs = Vector2i(o.width / 2, o.height - 1)   # (v81) an asteroid lies over the airlock, never docked
+			# (v99, my A2 pick) one with caves is landed on: its mouth right over our outer door
+			var mouth: Vector2i = PlaceMaker.info(str(ShipMap.drawings.get(o.map_name, "")))["mouth"]
+			if mouth.x >= 0:
+				theirs = mouth
+				lands = true
 		var docked_at := ours - theirs - Vector2i(0, 1)
 		var alongside := docked_at - Vector2i(0, GAP)
 		if map.other_fits_kind(k, docked_at) and map.other_fits_kind(k, alongside):
-			spots[k] = [alongside, alongside if o.kind == "asteroid" else docked_at]
+			spots[k] = [alongside, alongside if o.kind == "asteroid" and not lands else docked_at]
 	return spots
 
 
@@ -185,13 +212,18 @@ func _derelict_spots() -> Array:
 
 
 func _rock_spots() -> Array:
-	## (v81) The asteroids' drawings that can lie off our airlock.
+	## (v81) The asteroids' drawings that can lie off our airlock; (v99) the campaign's made ones, while any fit.
 	_aim()
 	var out := []
+	var made_ones := []
 	for k: int in _spots.keys():
 		if map.others_of("asteroid").has(k):
 			out.append(k)
-	return out
+			if str(map.others[k].map_name).begins_with(ShipMap.MADE_PREFIX):
+				made_ones.append(k)
+	out.sort()
+	made_ones.sort()
+	return made_ones if not made_ones.is_empty() else out
 
 
 func _comes(of_kind: int, of_layout: int, of_name: String) -> void:
@@ -307,6 +339,8 @@ func who_outside() -> Player:
 
 func holds_ship() -> String:
 	## Why our ship may not move or jump right now ("" = it may).
+	if docked and kind == Net.OTHER_ROCK:
+		return "Корабль сидит на астероиде: сначала взлетите с пульта управления."   # (v99)
 	if docked:
 		return "Корабль пристыкован: сначала расстыкуйтесь с пульта управления."
 	var out := who_outside()
@@ -351,6 +385,7 @@ func update() -> void:
 	if here and kind == Net.OTHER_DERELICT:
 		_watch_dwellers()                    # (v97)
 	if here and kind == Net.OTHER_ROCK:
+		_watch_nest()                        # (v99)
 		# (v81) an asteroid stays while the ship holds still by it
 		if (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR or not server.road.at_asteroid()) and holds_ship() == "":
 			_leave()
@@ -383,8 +418,8 @@ func dock(on: bool) -> String:
 		return ""
 	if kind == Net.OTHER_PIRATE and on and not wreck:
 		return "Стыковаться с пиратами по своей воле никто не станет."
-	if kind == Net.OTHER_ROCK:
-		return "К астероиду не пристыковаться: до него добираются в скафандре через шлюз и открытый космос."
+	if kind == Net.OTHER_ROCK and _spots[layout][1] == _spots[layout][0]:
+		return "На этот астероид не сесть: у него нет пещер. До него добираются в скафандре через шлюз и открытый космос."
 	if on and (server.ship.moving or server.ship.jump_to != Net.NO_SECTOR):
 		return "Стыковка на ходу невозможна: сначала остановите корабль."   # (v69, the author's note)
 	var from: Vector2i = map.other_at
@@ -393,6 +428,8 @@ func dock(on: bool) -> String:
 		return "Стыковка невозможна: между кораблями кто-то есть." if on else "Расстыковка невозможна: рядом кто-то есть."
 	_move(from, to)
 	_set_docked(on)
+	if kind == Net.OTHER_ROCK:
+		server.chat.say("Корабль сел на астероид: шлюз открывается прямо в пещеру." if on else "Корабль взлетел с астероида.")
 	return ""
 
 
@@ -638,6 +675,8 @@ func _arrive(called := "Брошенный корабль") -> void:
 		for e: Array in _left[key]:
 			_put(map.other_at, int(e[0]), e[1])
 		_bodies_back(_left_bodies.get(key, []))
+	elif not (made.get("rooms", []) as Array).is_empty():
+		_fill_rooms()                        # (v99) a station: each room holds what such a room would
 	else:
 		for i in _rng.randi_range(5, 8):
 			_drop(cells, LOOT)
@@ -663,14 +702,24 @@ func _rock_arrives() -> void:
 	## the rock lies over our airlock, a few cells of open space away. Ore is dug out of its veins
 	## by hand (Salvage.mine), in a suit; how much it holds is the place's own (Road.work).
 	var rocks := _rock_spots()
-	var k: int = rocks[server.road.asteroid_key() % rocks.size()]
-	_comes(Net.OTHER_ROCK, k, "Астероид")
+	var k: int = rocks[server.road.asteroid_key() % rocks.size()] if not rocks.has(layout_for_test) else layout_for_test
+	var drawn_name: String = map.others[k].map_name
+	rock = PlaceMaker.info(str(ShipMap.drawings.get(drawn_name, ""))) if drawn_name.begins_with(ShipMap.MADE_PREFIX) else {}
+	_nest_woken = false
+	_rock_key = "rock:%d" % server.road.asteroid_key()
+	var called := "Астероид"
+	if not rock.is_empty() and not (map.others[k].deck_names as PackedStringArray).is_empty():
+		called = map.others[k].deck_names[0]
+	_comes(Net.OTHER_ROCK, k, called)
 	_place(_spots[k][0])
 	for c in map.other_cells:
 		if map.walk[c] == 1:
 			server.air.air[c] = 0.0          # bare rock in space: no air on its ground
 	server.air.wake()
-	server.chat.say("Рядом астероид. Руду добывают из жил: выйдите в скафандре через шлюз и держите E у жилы.")
+	var note := _settle_rock() if not rock.is_empty() else ""
+	var lands: bool = _spots[k][1] != _spots[k][0]
+	server.chat.say("Рядом %s. Руду добывают из жил: выйдите в скафандре через шлюз и держите E у жилы.%s%s" % [called.to_lower(),
+		" В нём есть пещеры: на него можно сесть с пульта управления." if lands else "", note])
 
 
 func try_alongside(k: int) -> bool:
@@ -741,6 +790,8 @@ func _hulk_leaves() -> void:
 func _leave(quiet: bool = false) -> void:
 	server.teleporter.ship_leaves()          # (v97) whoever our teleporter sent there comes home first
 	var was_wreck := wreck
+	if kind == Net.OTHER_ROCK and not rock.is_empty() and not trial:
+		_rock_left()                         # (v99) what lies on it and who lives there still
 	# what is left on a derelict is remembered for this sector
 	if kind == Net.OTHER_DERELICT and not sos and not trial:
 		var key := Sectors.key(server.sectors.cell[server.ship.sector])
@@ -751,9 +802,11 @@ func _leave(quiet: bool = false) -> void:
 		_left[key] = kept
 		_left_bodies[key] = _bodies_aboard()
 		_home_left(key)
-	# whoever lies on it (pirates struck down on their own ship) goes with it
+	# whoever lies on it (pirates struck down on their own ship) goes with it; (v99) a mantis out in
+	# space stays by its asteroid (one that got aboard our ship stays aboard)
 	for p in server.players:
-		if p != null and map.is_other(p.st.y * map.width + p.st.x) and (p.corpse or p.pirate):
+		if p != null and (map.is_other(p.st.y * map.width + p.st.x) and (p.corpse or p.pirate)
+				or p.monster and not map.on_ship(p.st.y * map.width + p.st.x)):
 			server.crew.remove(p)
 	_clear_region()
 	here = false
@@ -782,7 +835,7 @@ func _bodies_aboard() -> Array:
 		if body and not p.taken and map.is_other(p.st.y * map.width + p.st.x):
 			out.append({"at": _local(p.st.y * map.width + p.st.x, map.other_at), "name": p.name, "colour": p.colour, "job": p.job,
 				"slots": Array(p.slots), "worn": Array(p.worn), "tank": p.tank, "facing": p.st.facing, "wounds": p.wounds,
-				"pirate": p.pirate, "robot": p.robot})
+				"pirate": p.pirate, "robot": p.robot, "monster": p.monster})
 	return out
 
 
@@ -797,6 +850,7 @@ func _bodies_back(bodies: Array) -> void:
 		q.job = int(b["job"])
 		q.pirate = bool(b["pirate"])
 		q.robot = bool(b["robot"])
+		q.monster = bool(b.get("monster", false))     # (v99) a mantis's body
 		q.st.place(c % map.width, c / map.width)
 		q.st.facing = int(b["facing"])
 		q.st.down = true
@@ -989,6 +1043,10 @@ func _loot(table: Array) -> int:
 				return Net.ITEM_MEDKIT + _rng.randi_range(1, Net.MEDKIT_USES)
 			if thing == -Net.ITEM_PISTOL:
 				return Net.ITEM_PISTOL + _rng.randi_range(0, Net.PISTOL_ROUNDS)
+			if thing == -Net.ITEM_SHOTGUN:
+				return Net.ITEM_SHOTGUN + _rng.randi_range(0, Net.SHOTGUN_ROUNDS)
+			if thing == -Net.ITEM_LASER_GUN:
+				return Net.ITEM_LASER_GUN + _rng.randi_range(0, Net.LASER_ROUNDS)
 			return thing
 	return Net.ITEM_PATCH
 
@@ -1064,6 +1122,116 @@ func _fill_vault() -> void:
 	server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], prize)
 	for i in _rng.randi_range(VAULT_THINGS[0], VAULT_THINGS[1]):
 		_drop(cells, LOOT)
+
+
+func _fill_rooms() -> void:
+	## (v99, my D1 pick) A station's rooms, each with what its kind holds: one to three things a room, and a
+	## few odd things anywhere.
+	var at := map.other_at
+	for e: Array in made["rooms"]:
+		var cell: Vector2i = e[0]
+		var kind := int(e[1])
+		var inside := (at.y + cell.y) * map.width + at.x + cell.x
+		for room: Array in _rooms():
+			if room.has(inside) and kind >= 0 and kind < ROOM_LOOT.size():
+				for i in _rng.randi_range(1, 3):
+					_drop(PackedInt32Array(room), ROOM_LOOT[kind])
+	var cells := _floor_cells()
+	for i in _rng.randi_range(1, 3):
+		_drop(cells, LOOT)
+
+
+# ---------------------------------------------------------------- (v99) the made asteroids: finds and mantises
+
+func rock_key() -> String:
+	## The asteroid alongside's place (what is kept of it goes by this): taken as it came, the place may be gone by now.
+	return _rock_key
+
+
+func _ground_cells() -> PackedInt32Array:
+	## The asteroid's bare ground (its caves), the deepest from its mouth first.
+	var out := _floor_cells()
+	var m: Vector2i = rock.get("mouth", Vector2i(-1, -1))
+	if m.x < 0:
+		return out
+	var mouth := Vector2(map.other_at + m)
+	var arr := Array(out)
+	arr.sort_custom(func(a: int, b: int) -> bool:
+		return Vector2(a % map.width, a / map.width).distance_squared_to(mouth) > Vector2(b % map.width, b / map.width).distance_squared_to(mouth))
+	return PackedInt32Array(arr)
+
+
+func _settle_rock() -> String:
+	## A made asteroid came alongside: the first time, its finds and how many mantises nest in it; after that,
+	## what was left on it. Returns what the sensors say of it.
+	var key := rock_key()
+	var deep := _ground_cells()
+	if not _homes.has(key):
+		var n := int(rock.get("mantises", -1))
+		if n >= 0 and not deep.is_empty():
+			n = mini(n + server.road.depth, MANTISES_MAX)
+		_homes[key] = {"mantises": maxi(n, 0)}
+		var half := deep.slice(0, maxi(1, deep.size() / 2))
+		if not half.is_empty():
+			for i in int(rock.get("finds", 0)):
+				_drop(half, ROCK_FINDS)
+	else:
+		for e: Array in _left.get(key, []):
+			_put(map.other_at, int(e[0]), e[1])
+		_bodies_back(_left_bodies.get(key, []))
+	if int(_homes[key]["mantises"]) > 0:
+		return " Сенсоры: в пещерах движение."
+	return ""
+
+
+func _watch_nest() -> void:
+	## The first of ours to set foot on the asteroid (or in its caves' mouth) wakes its mantises into the
+	## world: deep in the caves, asleep until they see or hear somebody.
+	if _nest_woken or rock.is_empty() or not _homes.has(rock_key()):
+		return
+	var first: Player = null
+	for p: Player in server.players:
+		if p != null and not p.pirate and not p.ally and not p.corpse and not p.in_shuttle and p.cond != Net.COND_DEAD \
+				and map.is_other(p.st.y * map.width + p.st.x):
+			first = p
+			break
+	if first == null:
+		return
+	_nest_woken = true
+	var deep := _ground_cells()
+	var n := int(_homes[rock_key()]["mantises"])
+	var taken := {}
+	for i in n:
+		if deep.is_empty():
+			break
+		# the deepest third of the caves, apart from each other
+		var pick := deep.slice(0, maxi(1, deep.size() / 3))
+		var c: int = pick[_rng.randi_range(0, pick.size() - 1)]
+		for tries in 8:
+			if not taken.has(c):
+				break
+			c = pick[_rng.randi_range(0, pick.size() - 1)]
+		taken[c] = true
+		server.mantises.spawn(c % map.width, c / map.width)
+	server.replication.sight_changed()
+
+
+func _rock_left() -> void:
+	## Leaving a made asteroid: what lies on it, its bodies and how many mantises are alive on it stay for next time.
+	var key := rock_key()
+	var kept := []
+	for c in map.other_cells:
+		if server.floor_things.has(c):
+			kept.append([_local(c, map.other_at), (server.floor_things[c] as PackedByteArray).duplicate()])
+	_left[key] = kept
+	_left_bodies[key] = _bodies_aboard()
+	if _homes.has(key) and _nest_woken:
+		var alive := 0
+		for p: Player in server.players:
+			if p != null and p.monster and not p.corpse and p.cond != Net.COND_DEAD and map.is_other(p.st.y * map.width + p.st.x):
+				alive += 1
+		_homes[key]["mantises"] = alive
+	rock = {}
 
 
 func _watch_dwellers() -> void:

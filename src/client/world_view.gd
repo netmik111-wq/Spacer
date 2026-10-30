@@ -675,6 +675,8 @@ class HandArt extends Node2D:
 func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
 	## Puts the thing held where the figure's hand is for that facing: behind the figure when
 	## it faces away from us.
+	if item == Net.ITEM_CLAWS:
+		item = Net.ITEM_NONE                 # (v99) a mantis's claws are part of its picture
 	var hand: HandArt = sprite.get_node_or_null("hand")
 	if hand == null:
 		if item == Net.ITEM_NONE:
@@ -713,6 +715,9 @@ func _row_of(id: int) -> int:
 
 func _cell(column: int, row: int) -> Rect2:
 	## A frame of the character sheet; a row is a colour and a way of being dressed (see Net.LOOKS).
+	var spot := CrewArt.at(column, row)                # (v99) the sheet is folded in two
+	column = spot.x
+	row = spot.y
 	return Rect2(column * (CHAR_W + 2 * CHAR_PAD) + CHAR_PAD, row * (CHAR_H + 2 * CHAR_PAD) + CHAR_PAD, CHAR_W, CHAR_H)
 
 
@@ -2676,7 +2681,7 @@ func _process(delta: float) -> void:
 		_lie[id] = t
 		# (v88) machines keep the shadow drawn in their old pictures; (v89) the heavy boarder is drawn anew
 		var colour := client.player_colour(id)
-		_put_shadow(sprite, t, colour < CrewArt.TINTS.size() or colour == Net.ARMOUR_COLOUR)
+		_put_shadow(sprite, t, colour < CrewArt.TINTS.size() or colour == Net.ARMOUR_COLOUR or colour == Net.MANTIS_COLOUR)
 		var stand_at := sprite.position
 		_stand[id] = stand_at
 		if cond == Net.COND_OK and (client.prone_of(id) or t > 0.0):

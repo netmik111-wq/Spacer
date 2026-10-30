@@ -2001,6 +2001,70 @@ def build_shuttle():
     print("shuttle: assets/shuttle.png")
 
 
+def build_mantis():
+    """(v99, the author: "like centipedes but they have 10 legs and look like a praying mantis") The asteroids'
+    mantis: four frames of 32x48 in a row, as the people's sheet has them (0 the front, looking down; 1 the right
+    side; 2 the back; 3 the left side). A simple base picture for the artist («sprites/mantis.png» of the same size
+    replaces it)."""
+    W, H = 32, 48
+    im = Image.new("RGBA", (W * 4, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    shell, light, dark, leg, eye, blade = (120, 168, 84, 255), (170, 210, 120, 255), (52, 78, 40, 255), \
+        (78, 110, 56, 255), (230, 60, 40, 255), (200, 228, 160, 255)
+
+    def front(ox, back=False):
+        # the body runs away from us, segment by segment, narrowing; five pairs of legs out to the sides
+        for k in range(5):
+            y = 24 + k * 4 if back else 40 - k * 4
+            r = 6 - k * 0.6 if not back else 4 + k * 0.5
+            for side in (-1, 1):
+                x0 = ox + 16 + side * r
+                d.line((x0, y, x0 + side * 6, y + 2, x0 + side * 8, y + 6), fill=leg, width=1)
+            d.ellipse((ox + 16 - r, y - 3, ox + 16 + r, y + 3), fill=shell, outline=dark)
+            d.line((ox + 16 - r + 2, y - 1, ox + 16 + r - 2, y - 1), fill=light)
+        if not back:
+            # the head, its big eyes, and the raised scythes on each side
+            d.polygon([(ox + 10, 26), (ox + 22, 26), (ox + 16, 34)], fill=shell, outline=dark)
+            d.rectangle((ox + 11, 27, ox + 13, 29), fill=eye)
+            d.rectangle((ox + 19, 27, ox + 21, 29), fill=eye)
+            for side in (-1, 1):
+                x = ox + 16 + side * 7
+                d.line((x, 34, x + side * 3, 22, x + side * 1, 14), fill=blade, width=2)
+                d.line((x + side * 1, 14, x - side * 2, 20), fill=blade, width=1)
+        else:
+            for side in (-1, 1):
+                x = ox + 16 + side * 6
+                d.line((x, 22, x + side * 2, 14), fill=blade, width=2)
+
+    def side(ox, flip):
+        part = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        q = ImageDraw.Draw(part)
+        # the body along the ground, its tail to the left, five legs under it to the ground
+        for k in range(5):
+            x = 5 + k * 4
+            q.line((x + 1, 40, x - 1, 44, x + 1, 47), fill=leg, width=1)
+        for k in range(5):
+            x = 4 + k * 4
+            q.ellipse((x - 3, 35 - k, x + 4, 41 - k), fill=shell, outline=dark)
+            q.line((x - 1, 36 - k, x + 2, 36 - k), fill=light)
+        # the raised front: thorax up, the head, the folded scythe in front
+        q.line((22, 34, 24, 24), fill=shell, width=4)
+        q.polygon([(22, 18), (30, 21), (24, 26)], fill=shell, outline=dark)
+        q.rectangle((25, 20, 26, 21), fill=eye)
+        q.line((24, 28, 29, 24, 28, 32), fill=blade, width=2)
+        q.line((28, 32, 26, 30), fill=blade, width=1)
+        if flip:
+            part = part.transpose(Image.FLIP_LEFT_RIGHT)
+        im.alpha_composite(part, (ox, 0))
+
+    front(0)
+    side(W, False)
+    front(2 * W, back=True)
+    side(3 * W, True)
+    im.save(os.path.join(OUT, "mantis.png"))
+    print("mantis: assets/mantis.png")
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(os.path.join(ROOT, "tools", "preview"), exist_ok=True)
@@ -2012,6 +2076,7 @@ def main():
     build_hud()
     build_fx()
     build_shuttle()
+    build_mantis()
 
 
 if __name__ == "__main__":

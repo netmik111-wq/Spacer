@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v98 (version 0.91).
+Last updated: build v99 (version 0.92).
 
 Contents:
 
@@ -57,6 +57,7 @@ Contents:
 47. [Flying round the system in space (v95)](#47-flying-round-the-system-in-space-v95)
 48. [Places seen in space, meteors, our boarding pod, bots in a fight (v96)](#48-places-seen-in-space-meteors-our-boarding-pod-bots-in-a-fight-v96)
 49. [Derelicts made from pieces, their robots, vaults, our teleporter (v97)](#49-derelicts-made-from-pieces-their-robots-vaults-our-teleporter-v97)
+50. [Asteroids, landing, abandoned stations, mantises (v99)](#50-asteroids-landing-abandoned-stations-mantises-v99)
 
 ---
 
@@ -1382,6 +1383,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
   are docked, the ship **doesn't move or jump**; if someone went out while a jump was charging,
   the jump is aborted.
 - (v97) Derelicts made from pieces may have rogue robots and a vault aboard: section 49.
+- (v99) Half the made ones are abandoned stations, rooms by kind with their own loot: section 50.
 
 ## 19. Space, sectors and jumps
 
@@ -2889,4 +2891,63 @@ its own).
   home first.
 - It needs the ship's power and recharges **20** s after every beam. The hint at the pad and the menu show its state.
 - The packet: C_TELEPORT, S_TELEPORT (protocol **71**); the crate is thing 253.
+
+## 50. Asteroids, landing, abandoned stations, mantises (v99)
+
+The author's order (2026-10-30): races go to the long-term plans; now asteroid generation, landing on and near
+asteroids, better derelict stations, and simple monsters on the asteroids. Questions on
+https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA; built on my picks (all A) while his answers are pending.
+
+### Room above our ship
+
+- Our ship (ship02) has **24** empty rows above its top deck (10 before): whatever comes to the airlock (an asteroid,
+  a derelict, a station) can be up to about **40 x 20** cells. Old saves load, but holes and wear in cells are reset
+  (the layout changed). One's own ships from the editor get big places only if drawn with empty rows above.
+
+### Asteroids
+
+- Every campaign makes **8** asteroids of its own: 2 small (10-14 x 6-8, solid rock, ore veins on the outside),
+  3 medium (18-26 x 10-14) and 3 large (28-38 x 15-20) with **caves**. By an asteroid place a campaign's asteroid comes
+  (the old two only if none fit); the same place always brings the same one.
+- Caves: a passage goes up from a **mouth** in the asteroid's bottom edge and winds to 4-7 chambers deep in the rock.
+  Ore veins line the cave walls, more of them deeper in. No air anywhere: a suit is needed.
+- **Finds**: 0-2 things lie deep in the caves the first time (scrap, ore, parts, fuel, a medkit, an energy cell, scan
+  data, a half-filled suit). What is left stays for the next visit, bodies too.
+- **Near**: as before, the asteroid lies 3 cells over the airlock; one floats over in a suit.
+- **Landing**: a button «Сесть на астероид» on the ship control console (only for an asteroid with caves): the ship
+  sets down on the mouth and the airlock opens straight onto the cave floor. «Взлететь с астероида» takes off. While
+  landed the ship does not move or jump, and **no meteor** finds it. Pirates still can come (a hunter makes the ship
+  let go, as with a docked derelict).
+
+### Mantises
+
+- Simple monsters that live in the caves: ten legs like a centipede, the forelegs of a praying mantis.
+- **Health 80** (a wound weighs 1.25 times on its 100). Its **chitin** takes **20%** off bullets and pellets; lasers
+  and plasma go through whole.
+- It walks as people do (same pace, 8 ways), needs no air, never falls unconscious: at 0 it dies.
+- **Claws**: a blow of **30** every **1.2 s**, by kind a blow (a vest and a helmet take 60% each).
+- **Leap**: when one empty cell lies between it and its target (straight or on a slant), it leaps over it in **0.2 s**
+  and strikes as it lands; then **4 s** before the next leap.
+- Half the caved asteroids have a nest: 0-2 mantises, **+1** each cluster down the road, **5** at most. They appear
+  deep in the caves when the first of ours sets foot on the asteroid, and sleep (hold their place) until they see
+  somebody or are hurt. The sensors say «в пещерах движение».
+- It goes after one anywhere, through our airlock too: a mantis that got aboard stays aboard when the asteroid is left.
+  Those still alive on the asteroid are there again next time.
+- Pirates and mantises leave each other be; our bots and security robots fight them.
+- A dead mantis's body stays; a **«Коготь богомола»** can be taken off it (kept in the locker, sold at a trader).
+- Its picture is a simple base one, `sprites/mantis.png` (128 x 48, frames 32 x 48: front, right, back, left)
+  replaces it.
+
+### Abandoned stations
+
+- Of the campaign's 8 made derelicts, 4 are ships (as in v97) and **4 are stations**: 26-38 cells across and 13-15
+  tall, a spine corridor from end to end, a row of rooms over it and a row under it, the way in through a small dock
+  room in the lower row; now and then a tall hall at one end.
+- Every room has a **kind**, with its (dead) machines and what it holds: quarters (food, flashlight, radio, jumpsuit,
+  plasters, coffee), storage (parts, scrap, fuel, magazines, boards, a toolbox), medbay (medkits, plasters, splints,
+  broth), engine room (parts, boards, fuel, a toolbox, a welder, patches), control room (radio, scan data, boards,
+  flashlight), laboratory (energy cells, scan data, night vision or thermal goggles, boards), and seldom an armoury
+  (magazines, a pistol, shells, a vest, a helmet, a shotgun, a laser rifle, cells). 1-3 things a room and 1-3 anywhere.
+- Rogue robots and a welded vault with its keeper, as on the made ships (section 49).
+- Protocol **73**.
 

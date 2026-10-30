@@ -75,6 +75,8 @@ func _drawings() -> void:
 	for s in 40:
 		var made := PlaceMaker.make_set(1000 + s)
 		for n: String in made:
+			if MapBuilder.kind_of(n, str(made[n])) != "derelict":
+				continue                     # ((v99) the asteroids: asteroidtest)
 			var built := MapBuilder.build("derelict", str(made[n]))
 			if not (built["problems"] as Array).is_empty():
 				bad += 1
@@ -85,8 +87,8 @@ func _drawings() -> void:
 			if o.load_data(n, tiles, built["data"], false) != "":
 				bad += 1
 				continue
-			if o.height > PlaceMaker.HEIGHT:
-				tall += 1
+			if o.height > (PlaceMaker.HEIGHT if str(made[n]).contains("(v97)") else 20):
+				tall += 1                    # ((v99) a station: as tall as ship02's 24 empty rows take)
 			var outer := Vector2i(-1, -1)
 			var count := 0
 			for d in o.doors.size():
@@ -104,12 +106,12 @@ func _drawings() -> void:
 			if (PlaceMaker.info(str(made[n]))["vault"] as Vector2i).x >= 0:
 				vaults += 1
 	_expect(bad == 0, "every drawing of 40 sets builds with no problem (%d bad)" % bad)
-	_expect(tall == 0 and doors_bad == 0, "each is at most %d rows and has one outer door (%d too tall, %d with another count)" % [PlaceMaker.HEIGHT, tall, doors_bad])
+	_expect(tall == 0 and doors_bad == 0, "each is at most %d rows (a station 20) and has one outer door (%d too tall, %d with another count)" % [PlaceMaker.HEIGHT, tall, doors_bad])
 	_expect(misfit == 0, "each lies off ship02's airlock, alongside and docked (%d do not)" % misfit)
 	_expect(vaults > 40 and vaults < 300, "some have a vault (%d of 320)" % vaults)
 	var a := PlaceMaker.make_set(7)
 	var b := PlaceMaker.make_set(7)
-	_expect(a == b and a.size() == PlaceMaker.COUNT, "the same seed makes the same %d drawings" % PlaceMaker.COUNT)
+	_expect(a == b and a.size() == PlaceMaker.COUNT + PlaceMaker.ROCKS, "the same seed makes the same %d drawings" % a.size())
 
 
 func _choose_set() -> void:
@@ -127,12 +129,13 @@ func _choose_set() -> void:
 
 func _campaign_set() -> void:
 	print("  -- the campaign's own set")
-	_expect(ShipMap.made_others.size() == PlaceMaker.COUNT, "the campaign has its own %d derelicts" % ShipMap.made_others.size())
+	_expect(ShipMap.made_others.size() == PlaceMaker.COUNT + PlaceMaker.ROCKS, "the campaign has its own %d derelicts and asteroids" % ShipMap.made_others.size())
 	var names := ShipMap.other_maps()
 	var all_in := true
 	for n: String in ShipMap.made_others:
-		all_in = all_in and names.has(n) and server.map.others_of("derelict").has(names.find(n))
-	_expect(all_in, "each is one of the drawings that come alongside, a derelict")
+		var kind := "asteroid" if ShipMap.made_others.find(n) >= PlaceMaker.COUNT else "derelict"   # ((v99) the asteroids after)
+		all_in = all_in and names.has(n) and server.map.others_of(kind).has(names.find(n))
+	_expect(all_in, "each is one of the drawings that come alongside, a derelict or an asteroid")
 	var spots := 0
 	for k: int in server.map.others_of("derelict"):
 		if server.derelict._spots.has(k):
