@@ -161,8 +161,10 @@ func _initialize() -> void:
 		if w == Weapons.GUARD or w == Weapons.NEURAL or w == Weapons.NOVA:
 			continue
 		# a siphon works on a raised shield only; an EMP's sure work is heating one (on a bare hull it puts out only
-		# the system of the room it strikes, and may strike an empty one 8 times running)
-		a.pirate_shields = w != Weapons.SIPHON and w != Weapons.EMP
+		# the system of the room it strikes, and may strike an empty one 8 times running). (v100.1) Their shields
+		# were down here and every other gun's up (the test had it the wrong way round), so an EMP worked only by
+		# striking a system, and CI went red 1 run in 20.
+		a.pirate_shields = w == Weapons.SIPHON or w == Weapons.EMP
 		var did := false
 		for tries in 8:
 			if a.body(Arena.LEAD) == null:       # (a heavy gun finished it: another comes)
@@ -200,6 +202,9 @@ func _initialize() -> void:
 			_hold(Vector2(0, 0), 0.0, Vector2(0, -40), 0.0)
 			_run(Net.TICK_HZ * 2)                 # the turrets turn to it
 			if w == Weapons.SIPHON or w == Weapons.EMP:
+				if g.systems_full[Net.ESYS_SHIELDS] <= 0:
+					g.systems_full[Net.ESYS_SHIELDS] = 2     # (a rolled pirate may have no shield generator)
+					g.systems[Net.ESYS_SHIELDS] = 2
 				b.heat = 500.0
 				e.raised = true
 				e.auto_until = server.tick + 200

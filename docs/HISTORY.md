@@ -908,3 +908,9 @@ armour and helmets drawn so people don't look naked, a simple grey jumpsuit for 
 - His note: blocks of walls are drawn solid with his `top_wall_junction` piece.
 - New test `tools/spritetest.gd` (55 scripts); protocol 74. `main.gd` `dress_after=` dresses everyone for screenshots.
 
+### v100.1 (his two screenshots: "armor, helmet and energy shield are not in place, and the shield is behind the person")
+- One's own character is drawn a second time over the dark (`WorldView._me_over`, so we always make ourselves out);
+  that copy had only the body, so it hid the vest, helmet and belt drawn under it, and the hand shield showed only past
+  its edge. The copy now carries the wear and the hand's thing too (`_dress`/`_hold` on `_me_over`). Others always saw
+  them right. `main.gd` `dress_full=1` dresses everyone in all four for screenshots. Version 0.93.1, build in
+  `/mnt/project-files/builds/v100.1/`.

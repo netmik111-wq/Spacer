@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v100 (version 0.93).
+Last updated: build v100.1 (version 0.93.1).
 
 Contents:
 
@@ -2977,3 +2977,5 @@ people don't look naked"; "make a simple grey jumpsuit for both sexes".
   `top_wall_junction` piece on every cell of it with wall below; its bottom row keeps the wall's face. The ship editor
   and the game draw it the same way. No ship of ours has such a block yet.
 - Protocol **74** (S_OUTFIT carries what is worn over the clothes).
+- (v100.1) One's own figure shows what it wears and holds too (before, the copy of it drawn over the dark hid the
+  vest, helmet and belt, and the hand shield showed only past its edge, as if behind the body).

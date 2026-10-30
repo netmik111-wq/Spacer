@@ -61,7 +61,8 @@ extends Node
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
 ## (v100) dress_after=SECONDS with --inproc: everyone (us too) takes the suit off and puts on a jumpsuit, and in turn
-## a vest and helmet, an energy belt and hand shield, goggles, a backpack (to look at the placeholders).
+## a vest and helmet, an energy belt and hand shield, goggles, a backpack (to look at the placeholders);
+## (v100.1) dress_full=1 puts the vest, helmet, energy belt and hand shield on everyone at once.
 ## (v78) lie_after=SECONDS (lie down, as the C key does). (v82) rise_after=SECONDS (get up again).
 ## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
 ## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
@@ -718,7 +719,12 @@ func _process(_delta: float) -> void:
 			q.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
 			q.supply = false
 			q.worn[Net.WEAR_JUMPSUIT] = Net.ITEM_JUMPSUIT
-			match k % 4:
+			if _opt.has("dress_full"):
+				q.worn[Net.WEAR_BODY] = Net.ITEM_VEST
+				q.worn[Net.WEAR_HEAD] = Net.ITEM_HELMET
+				q.worn[Net.WEAR_BELT] = Net.ITEM_ESHIELD
+				q.worn[Net.WEAR_SHIELD] = Net.ITEM_RIOT
+			match -1 if _opt.has("dress_full") else k % 4:
 				0:
 					q.worn[Net.WEAR_BODY] = Net.ITEM_VEST
 					q.worn[Net.WEAR_HEAD] = Net.ITEM_HELMET

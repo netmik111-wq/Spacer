@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v100 (version 0.93: worn things drawn, NO SPRITE, solid wall blocks) is the latest. Plans one to four are done except the darkness front (the
+Build v100.1 (version 0.93.1: one's own figure shows its wear) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -691,6 +691,8 @@ The parameters for these checks are described in the header of `src/main.gd`.
   (returning true), or `spritetest` fails (and the game shows NO SPRITE). `ItemArt.draw` draws nothing for ITEM_NONE.
   The jumpsuit is baked into the people's sheet (`CrewArt.jumpsuit`), not an overlay. A `#` with wall below inside a
   2x2 of walls is `wall_fill` (both builders). Protocol 74.
+  (v100.1) Our own figure is drawn twice (`_me_over`, above the dark): whatever new is drawn on a character's sprite
+  as a child must go on that copy too, or it hides under it (as the wear did).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in
