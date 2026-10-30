@@ -856,3 +856,9 @@ as a rare find). Questions `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`: 
 - machinetest's trading check fixed (broken since v96's stop-to-dock rule). New test `tools/placetest.gd` (52 scripts);
   protocol 71.
 
+
+### v97.1 (his screenshot of a side wall: "next build also not fixed")
+- His internal corners (a side wall that goes on past a room's wall leaving it, ├ and ┤) begin their wall with a bevel
+  in the top 4 rows, as a wall end does; under the straight wall above it a dark notch showed on the far side of every
+  such joint. Those rows are now drawn straight on (`JOINT_TOPS` in `make_assets.py`), pirate copies too. Pictures only,
+  maps unchanged. Version 0.90.1, build in `/mnt/project-files/builds/v97.1/`.

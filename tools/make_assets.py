@@ -341,6 +341,22 @@ NEW_ART = {
     "airlock_half": "Door_vertical_base_open_stage_1",
     "airlock": "Door_vertical_base_open_stage_2",
 }
+# (v97.1, the author's picture of a side wall: "next build also not fixed") his internal corners (├ ┤) start their
+# vertical wall with a bevel in the top 4 rows, as a wall end does, so where the wall comes down from above a dark
+# notch stood out on the far side of every joint. That side's top rows are drawn straight on from row 4, which is
+# the same as the bottom row of the piece above. Value: the columns of the wall that goes on (x from, x to).
+JOINT_TOPS = {"wall_jl": (16, T), "wall_jr": (0, T // 2)}
+JOINT_BEVEL = 4
+
+
+def joint_top(piece, columns):
+    out = piece.copy()
+    for y in range(JOINT_BEVEL):
+        for x in range(*columns):
+            out.putpixel((x, y), piece.getpixel((x, JOINT_BEVEL)))
+    return out
+
+
 FLOOR_SETS = {"floor": "floor", "glass": "glass_floor", "grate": "grated_floor", "hatch": "ladder_floor_down",
               "ladder": "ladder_floor_up"}
 FLOOR_SPOTS = {"l_t": "internal_corner_l", "m_t": "up", "r_t": "internal_corner_r", "l_m": "l", "m_m": "m",
@@ -503,6 +519,8 @@ def art_tile(art, mock, images, name):
         return art["floor_danger_line_decal"]
     if name == "vent":
         return art["vent_floor"]
+    if name in JOINT_TOPS:
+        return joint_top(art[NEW_ART[name]], JOINT_TOPS[name])
     if name in NEW_ART:
         return art[NEW_ART[name]]
     if name == "door_half":

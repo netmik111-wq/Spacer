@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v97 (version 0.90: derelicts made from pieces, their robots and vaults, our teleporter) is the latest. Plans one to four are done except the darkness front (the
+Build v97.1 (version 0.90.1: v97's derelicts made from pieces, their robots and vaults, our teleporter; v97.1 fixed the side-wall joints' notch) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -153,6 +153,7 @@ alongside, sticks, E takes riders home, bots called); bots' radio, falling back,
 v97 (his answers on `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`, all A but T1 C): 8 derelicts a campaign made from
 pieces (`place_maker.gd`, one deck, 7 rows), rogue robots that wake and hold their places, a welded vault with its keeper
 and a prize; our teleporter is a pad machine (`t`, his T1 C) the found crate goes into (`teleporter.gd`).
+v97.1 (his screenshot): the side-wall joints (├ ┤) lost the dark notch his internal corners' top bevel drew (`JOINT_TOPS`).
 Next: arsenal, races (a lore question round first), choosing the enemy deck (when enemies have decks), places with decks.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
