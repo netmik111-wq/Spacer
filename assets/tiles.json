@@ -3866,6 +3866,16 @@
    "id": 772,
    "name": "pirate_teleporter",
    "kind": "wall"
+  },
+  {
+   "id": 773,
+   "name": "wall_fill",
+   "kind": "wall"
+  },
+  {
+   "id": 774,
+   "name": "pirate_wall_fill",
+   "kind": "wall"
   }
  ]
 }

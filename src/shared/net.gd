@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 73
+const PROTOCOL := 74
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -146,6 +146,14 @@ const OUTFIT_BARE := 2
 const LOOKS := 6
 const LOOK_WOMAN := 16              # (v87, the author's base bodies) in the look byte: a woman's body
 const LOOK_TANK := 8                # (v85, the author's C2) in the look byte: it breathes from its oxygen tank (the visor is down)
+# (v100, the author: "placeholders ... so people don't look naked") S_OUTFIT's gear byte: what is worn over the
+# clothes, drawn on the figure for everyone (WearArt); one bit each
+const GEAR_VEST := 1
+const GEAR_HELMET := 2
+const GEAR_BELT := 4                # the energy shield
+const GEAR_RIOT := 8                # the hand shield
+const GEAR_NVG := 16
+const GEAR_THERMAL := 32
 
 # things that can be carried
 const ITEM_NONE := 0
@@ -340,7 +348,7 @@ const GOALF_LOST := 1               # the cargo pod is smashed (or the bounty lo
 const S_SEARCH := 23                # u16 id of the character we are searching (NOBODY = not any more), then
                                     # SLOTS bytes: what they carry, WORN bytes: what they wear,
                                     # then u8 how hurt they are (0 = unhurt .. 4 = dying)
-const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed; (v74) u8 the thing in its hand
+const S_OUTFIT := 27                # u16 id, u8 look (see LOOKS): how a character is dressed; (v74) u8 the thing in its hand; (v100) u8 GEAR_* bits
 const S_GUNS := 28                  # u8 count of mounts, per mount u8 weapon (Weapons.*), u8 charge (0..100,
                                     # GUN_BROKEN, GUN_JAMMED), u8 GUNF_* flags; u8 power drawn, u8 power the reactor
                                     # gives; u8 our shield (0..100), u8 SHF_* flags; then u8 enemy hull

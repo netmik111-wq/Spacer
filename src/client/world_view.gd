@@ -672,6 +672,61 @@ class HandArt extends Node2D:
 			ItemArt.draw(self, Rect2(-HAND_SIZE * 0.5, -HAND_SIZE * 0.5, HAND_SIZE, HAND_SIZE), item)
 
 
+class WearArt extends Node2D:
+	## (v100, the author: "make simple placeholders, for example armour and helmets, so people don't look naked")
+	## What a character wears over its clothes, drawn over the figure from the wear_*.png sheets (laid out as
+	## body.png: front, right, back, left; the woman's row, then the man's), or the same names in the «sprites»
+	## folder. It turns over with the figure, as the hand's thing does.
+	const LAYERS := [[Net.GEAR_VEST, "wear_vest"], [Net.GEAR_BELT, "wear_belt"], [Net.GEAR_HELMET, "wear_helmet"],
+		[Net.GEAR_NVG, "wear_nvg"], [Net.GEAR_THERMAL, "wear_thermal"], [Net.GEAR_RIOT, "wear_riot"]]
+	const PACK := 64                      # not a gear bit: the backpack, from the look byte
+	var bits := 0
+	var view := 0                         # 0 front, 1 right, 2 back, 3 left
+	var woman := false
+
+	func _draw() -> void:
+		var frame := Rect2(view * CHAR_W, (0 if woman else 1) * CHAR_H, CHAR_W, CHAR_H)
+		var at := Rect2(-CHAR_W / 2.0, -CHAR_H, CHAR_W, CHAR_H)
+		if bits & PACK != 0:
+			draw_texture_rect_region(Sprites.sheet("wear_pack"), at, frame)
+		for layer: Array in LAYERS:
+			if bits & int(layer[0]) != 0:
+				draw_texture_rect_region(Sprites.sheet(str(layer[1])), at, frame)
+
+
+const WEAR_VIEW := {0: 0, 3: 2, 6: 3, 9: 1}   # (v100) a first column of the sheet -> the way in the wear sheets
+
+
+func _dress(sprite: Sprite2D, facing: int, id: int) -> void:
+	## (v100) Puts what that character wears over its clothes on its figure (WearArt). The machines, the heavy
+	## boarder and the mantis have it in their own pictures.
+	var bits := client.gear_of(id)
+	var look := client.look_of(id)
+	var outfit := (look & (Net.LOOK_TANK - 1)) / 2
+	if look & 1 != 0 and outfit != Net.OUTFIT_SUIT:
+		bits |= WearArt.PACK              # a suit carries its own tank on the back
+	if outfit == Net.OUTFIT_SUIT:
+		bits &= ~(Net.GEAR_NVG | Net.GEAR_THERMAL)    # behind the suit's visor
+	if client.player_colour(id) >= CrewArt.TINTS.size():
+		bits = 0
+	var wear: WearArt = sprite.get_node_or_null("wear")
+	if wear == null:
+		if bits == 0:
+			return
+		wear = WearArt.new()
+		wear.name = "wear"
+		sprite.add_child(wear)
+		sprite.move_child(wear, 0)        # under the thing in the hand
+	wear.visible = bits != 0
+	var view: int = WEAR_VIEW.get(FACING_COLUMN.get(facing, 0), 0)
+	var woman := look & Net.LOOK_WOMAN != 0
+	if wear.bits != bits or wear.view != view or wear.woman != woman:
+		wear.bits = bits
+		wear.view = view
+		wear.woman = woman
+		wear.queue_redraw()
+
+
 func _hold(sprite: Sprite2D, facing: int, item: int) -> void:
 	## Puts the thing held where the figure's hand is for that facing: behind the figure when
 	## it faces away from us.
@@ -2673,6 +2728,7 @@ func _process(delta: float) -> void:
 		sprite.position = ((_feet(pos) + nudge.get(id, Vector2.ZERO)) * zoom).round() / zoom   # on a whole screen pixel
 		sprite.region_rect = _frame(s[1], s[2] and cond == Net.COND_OK, pos, id)
 		_hold(sprite, s[1], client.held_by(id) if cond == Net.COND_OK else Net.ITEM_NONE)
+		_dress(sprite, s[1], id)
 		# (v82, his crawl video) lying down, getting up and falling turn the body over in LIE_TURN
 		# seconds rather than flipping it; a body first seen already lies
 		var lies := cond != Net.COND_OK or client.prone_of(id)

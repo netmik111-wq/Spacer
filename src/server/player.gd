@@ -258,6 +258,19 @@ func look() -> int:
 		+ (Net.LOOK_WOMAN if woman and not robot else 0)
 
 
+func gear_look() -> int:
+	## (v100) What it wears over its clothes, as Net.GEAR_* bits (others see it drawn on the figure).
+	var out := 0
+	if worn.size() > Net.WEAR_SHIELD:
+		out |= Net.GEAR_VEST if worn[Net.WEAR_BODY] != Net.ITEM_NONE else 0
+		out |= Net.GEAR_HELMET if worn[Net.WEAR_HEAD] != Net.ITEM_NONE else 0
+		out |= Net.GEAR_BELT if worn[Net.WEAR_BELT] != Net.ITEM_NONE else 0
+		out |= Net.GEAR_RIOT if worn[Net.WEAR_SHIELD] != Net.ITEM_NONE else 0
+		out |= Net.GEAR_NVG if worn[Net.WEAR_EYES] == Net.ITEM_NVG else 0
+		out |= Net.GEAR_THERMAL if worn[Net.WEAR_EYES] == Net.ITEM_THERMAL else 0
+	return out
+
+
 func holds_in(wear: int) -> bool:
 	## Is anything kept in what is worn there (a jumpsuit's pockets, a backpack)?
 	var from := Net.BASE_SLOTS if wear == Net.WEAR_JUMPSUIT else (Net.BASE_SLOTS + Net.POCKETS if wear == Net.WEAR_PACK else 0)

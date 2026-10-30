@@ -60,6 +60,8 @@ extends Node
 ## the supply locker the character faces), act_after=SECONDS (use the thing in
 ## the hand: switch a flashlight), drop_after=SECONDS (put it down),
 ## pick_after=SECONDS (press "use" once: picks up what lies in front or underfoot).
+## (v100) dress_after=SECONDS with --inproc: everyone (us too) takes the suit off and puts on a jumpsuit, and in turn
+## a vest and helmet, an energy belt and hand shield, goggles, a backpack (to look at the placeholders).
 ## (v78) lie_after=SECONDS (lie down, as the C key does). (v82) rise_after=SECONDS (get up again).
 ## (v77) aim=DX,DY (the mouse is taken to be that many cells from our character: the eyes turn to it).
 ## --demo, goto, path, click and hover look where they walk (the view does not follow the mouse).
@@ -160,6 +162,7 @@ var _dragged := false
 var _searched := false
 var _looted := false
 var _fainted := false
+var _dressed := false
 var _handed := false
 var _taken := false
 var _acted := false
@@ -706,6 +709,26 @@ func _process(_delta: float) -> void:
 		_helm_broken = true
 		_server.ship.broken[_server.map.helm.keys()[0]] = true
 		_server.to_all(_server.ship.devices_packet())
+	if _opt.has("dress_after") and not _dressed and _server != null and _screen != null and t >= float(_opt["dress_after"]):
+		_dressed = true
+		var k := 0
+		for q in _server.players:
+			if q == null or q.corpse or q.pirate:
+				continue
+			q.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
+			q.supply = false
+			q.worn[Net.WEAR_JUMPSUIT] = Net.ITEM_JUMPSUIT
+			match k % 4:
+				0:
+					q.worn[Net.WEAR_BODY] = Net.ITEM_VEST
+					q.worn[Net.WEAR_HEAD] = Net.ITEM_HELMET
+				1:
+					q.worn[Net.WEAR_BELT] = Net.ITEM_ESHIELD
+					q.worn[Net.WEAR_SHIELD] = Net.ITEM_RIOT
+				2:
+					q.worn[Net.WEAR_EYES] = Net.ITEM_NVG
+					q.worn[Net.WEAR_PACK] = Net.ITEM_BACKPACK
+			k += 1
 	if _opt.has("faint_after") and not _fainted and _server != null and _screen != null and t >= float(_opt["faint_after"]):
 		_fainted = true
 		var me = _server.players[_client.my_id]

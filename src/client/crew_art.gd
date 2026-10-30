@@ -130,6 +130,16 @@ static func mantis() -> Image:
 	return out
 
 
+static func jumpsuit() -> Image:
+	## (v100) The jumpsuit over the body (assets/wear_jumpsuit.png, or the same name in the «sprites» folder),
+	## as RGBA of 4 x 2 whole frames.
+	var im := Sprites.sheet("wear_jumpsuit").get_image()
+	if im.is_compressed():
+		im.decompress()
+	im.convert(Image.FORMAT_RGBA8)
+	return im
+
+
 static func suits() -> Array[Image]:
 	## (v88) His suited sheets, the woman's and the man's, as RGBA of 3 x 4 whole frames.
 	var out: Array[Image] = []
@@ -170,6 +180,11 @@ static func build() -> Image:
 	var out := Image.create(CELL.x * COLUMNS, CELL.y * ALL_ROWS, false, Image.FORMAT_RGBA8)
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
+	# (v100, the author: "so people don't look naked") one in a jumpsuit wears it: the jumpsuit's sheet laid over
+	# the body (long sleeves, trousers, boots), its navy painted in the row's colour as the body's clothes are
+	var dressed := src.duplicate() as Image
+	dressed.blend_rect(jumpsuit(), Rect2i(Vector2i.ZERO, dressed.get_size()), Vector2i.ZERO)
+	var dressed_navy := _navy(dressed)
 	# (v88) the suit with its visor up, half and down, its navy painted as the body's clothes are
 	var sheets := suits()
 	var suit: Array[Image] = []
@@ -178,7 +193,7 @@ static func build() -> Image:
 		suit.append(suited(sheets, visor))
 		suit_navy.append(_navy(suit[visor]))
 	for colour in TINTS.size():
-		var painted := _paint(src, navy, TINTS[colour])
+		var painted := _paint(dressed, dressed_navy, TINTS[colour])
 		var suits_painted: Array[Image] = []
 		for visor in 3:
 			var made := _paint(suit[visor], suit_navy[visor], TINTS[colour])

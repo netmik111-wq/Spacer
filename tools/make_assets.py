@@ -10,11 +10,13 @@
   (generated in code)     -> assets/chars.png                       (robots, heavy boarders; the old drawn crew)
   art_src/body.png        -> assets/body.png                        (v87: the author's base bodies, woman and man, 4 ways of 32x48)
   art_src/suit_man.png, suit_woman.png -> assets/                   (v88: the suited man and woman, 3 visors x 4 ways of 32x48)
+  (made from body.png)   -> assets/wear_*.png                     (v100: what people wear, placeholders the artist replaces)
   art_src/hud.dmi         -> assets/hud_monitor.png                 (heartbeat monitor animation)
 
 Run from the project folder:  python3 tools/make_assets.py
 Needs Pillow. The game itself never runs this; it only reads the outputs.
 """
+import colorsys
 import json
 import os
 import struct
@@ -252,6 +254,9 @@ TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in GLOBE]
 TILES += [("pod", None, "wall"), (PIRATE + "pod", None, "wall")]
 # (v97, the author's T1 C) the teleporter's pad, a machine in the wall ('t'); last, as above
 TILES += [("teleporter", None, "wall"), (PIRATE + "teleporter", None, "wall")]
+# (v100, the author's note "when walls connected to each other it needs to be full") the inside of a block
+# of walls (WALL_FILL); last, as above
+TILES += [("wall_fill", None, "wall"), (PIRATE + "wall_fill", None, "wall")]
 ATLAS_COLS = 8
 
 
@@ -329,6 +334,7 @@ NEW_ART = {
     # T and the turned T is the plain horizontal wall
     "wall_cross": "T-shaped_corner",
     "wall_tup": "horizontal_wall",
+    "wall_fill": "top_wall_junction",   # (v100) a wall cell inside a block of walls: his plain wall top
     "wall_jr": "internal_corner_r",
     "wall_jl": "internal_corner_l",
     "wall_v": "vertical_wall",
@@ -1298,6 +1304,10 @@ def resolve_map(name, lines, ids, w, h, above, below):
                         piece = special[c]
                         if c == "D":
                             doors.append([x, y, "D"])
+                    elif c == "#" and s and (e and solid(x + 1, y + 1) or wst and solid(x - 1, y + 1)):
+                        # (v100, the author's note) a block of walls, two or more thick, is drawn solid: every
+                        # cell of it with wall below is the wall's top; its bottom row keeps the band's face
+                        piece = "wall_fill"
                     elif e and wst:
                         piece = "wall_cross" if (n and s) else ("wall_tdown" if s else ("wall_tup" if n else "wall_h"))
                     elif e and not wst:
@@ -1958,6 +1968,14 @@ def build_fx():
 
 
 BODY_CELL = (32, 48)        # (v87) a frame of the author's base bodies: 4 ways (front, right, back, left) x 2 (woman, man)
+# (v100) what people wear, drawn over the body (build_wear); rows and columns of body.png's frames
+WEAR_LAYERS = ["jumpsuit", "vest", "helmet", "belt", "riot", "nvg", "thermal", "pack"]
+COLLAR = (18, 17)          # by body (0 the woman, 1 the man): the first row under the neck
+HAND_ROW = 30              # from here down the arms' ends are hands
+FEET_ROW = 44              # from here down the legs are feet
+WAIST = 31                 # the shorts' top row
+TORSO = {0: (10, 21), 2: (10, 22)}   # front and back: the columns of the trunk (the arms are outside)
+EYE_ROW = 11
 
 
 def build_body():
@@ -1999,6 +2017,203 @@ def build_shuttle():
     d.rectangle((106, 68, 110, 72), fill=(60, 220, 110, 255))
     im.save(os.path.join(OUT, "shuttle.png"))
     print("shuttle: assets/shuttle.png")
+
+
+def build_wear():
+    """(v100, the author: "make simple placeholders, for example armour and helmets, so people don't look
+    naked") What people wear, each a sheet laid out as body.png (4 ways x woman, man): the game lays it over
+    the body. The jumpsuit is made into the people's sheet (its navy painted in the job's colour, as the
+    body's clothes are); the rest are drawn over the figure as it is worn (src/client/wear_art.gd). Shapes
+    are taken from the body itself, so they fit it. A simple base picture for the artist: «sprites/wear_*.png»
+    of the same size replaces each."""
+    body = Image.open(os.path.join(OUT, "body.png")).convert("RGBA")
+    W, H = BODY_CELL
+    sheets = {name: Image.new("RGBA", (W * 4, H * 2), (0, 0, 0, 0)) for name in WEAR_LAYERS}
+
+    def shade(rgb, v):
+        h, s, _ = colorsys.rgb_to_hsv(*[c / 255 for c in rgb])
+        r, g, b = colorsys.hsv_to_rgb(h, s, max(0.0, min(1.0, v)))
+        return (round(r * 255), round(g * 255), round(b * 255), 255)
+
+    def outline(im, ox, oy, colour):
+        # a dark rim round whatever was drawn in that frame, where it meets nothing
+        px = im.load()
+        edge = []
+        for y in range(H):
+            for x in range(W):
+                if px[ox + x, oy + y][3] == 0:
+                    continue
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nx, ny = x + dx, y + dy
+                    if not (0 <= nx < W and 0 <= ny < H) or px[ox + nx, oy + ny][3] == 0:
+                        edge.append((ox + x, oy + y))
+                        break
+        for at in edge:
+            px[at] = colour
+
+    for b in range(2):
+        for v in range(4):
+            ox, oy = v * W, b * H
+            side = v in (1, 3)
+            facing = 1 if v == 1 else (-1 if v == 3 else 0)
+            src = body.load()
+
+            def at(x, y):
+                if 0 <= x < W and 0 <= y < H:
+                    return src[ox + x, oy + y]
+                return (0, 0, 0, 0)
+
+            def hair(c):
+                return c[3] > 0 and c[0] < 110 and c[2] <= c[0]
+
+            def trunk(x):
+                if side:
+                    return True
+                lo, hi = TORSO[v]
+                return lo <= x <= hi
+
+            # the jumpsuit: everything from the collar to the ankles, the hands bare, boots on the feet. (v100, the
+            # author: "simple grey jumpsuit for both sexes") Grey cloth; its collar, cuffs and belt are navy, which the
+            # game paints in the job's colour, so jobs are still told apart
+            js = sheets["jumpsuit"].load()
+            cloth, trim = (124, 128, 136), (40, 52, 110)
+            for y in range(COLLAR[b], FEET_ROW):
+                for x in range(W):
+                    c = at(x, y)
+                    if c[3] == 0:
+                        continue
+                    if y >= HAND_ROW and y < WAIST + 4 and (side and y >= WAIST or not side and not trunk(x)):
+                        continue        # a hand
+                    lum = colorsys.rgb_to_hsv(*[k / 255 for k in c[:3]])[2]
+                    js[ox + x, oy + y] = shade(cloth, 0.38 + 0.3 * lum)
+            if v == 0:
+                for y in range(COLLAR[b] + 1, WAIST - 1):
+                    if js[ox + 15, oy + y][3]:
+                        js[ox + 15, oy + y] = shade(cloth, 0.55)              # a seam down the front
+            for y in range(FEET_ROW, H):
+                for x in range(W):
+                    c = at(x, y)
+                    if c[3]:
+                        js[ox + x, oy + y] = (46, 44, 48, 255) if y < H - 1 else (28, 26, 30, 255)
+            outline(sheets["jumpsuit"], ox, oy, (40, 42, 48, 255))
+            for x in range(W):
+                for y in (COLLAR[b] + 1, WAIST - 1):                           # the collar and the belt
+                    if js[ox + x, oy + y][3] and js[ox + x, oy + y][0] > 60:
+                        js[ox + x, oy + y] = shade(trim, 0.4)
+                for y in (HAND_ROW - 2, HAND_ROW - 1):                         # the cuffs (seen from the front and back)
+                    if not side and not trunk(x) and js[ox + x, oy + y][3]:
+                        js[ox + x, oy + y] = shade(trim, 0.4)
+
+            # the vest: plates over the trunk from the collar to the waist
+            vs = sheets["vest"].load()
+            lo, hi = (0, W) if side else (TORSO[v][0] - 1, TORSO[v][1] + 1)
+            for y in range(COLLAR[b] + 1, WAIST + 1):
+                for x in range(lo, hi + 1):
+                    if at(x, y)[3] == 0:
+                        continue
+                    if side and (y >= HAND_ROW - 4 and abs(x - 16) > 5):
+                        continue
+                    plate = (70, 84, 66, 255) if (x + y) % 7 else (82, 98, 76, 255)
+                    vs[ox + x, oy + y] = plate
+            if not side:
+                for x in range(lo + 2, hi - 1):
+                    if vs[ox + x, oy + COLLAR[b] + 7][3]:
+                        vs[ox + x, oy + COLLAR[b] + 7] = (120, 124, 112, 255)       # a strap across
+                for x0 in (lo + 3, hi - 6):
+                    for y in range(WAIST - 4, WAIST - 1):
+                        for x in range(x0, x0 + 3):
+                            if vs[ox + x, oy + y][3]:
+                                vs[ox + x, oy + y] = (54, 64, 50, 255)              # pouches
+            outline(sheets["vest"], ox, oy, (26, 30, 24, 255))
+
+            # the helmet: the hair and the crown of the head, one pixel wider, a brim over the brow
+            hs = sheets["helmet"].load()
+            top = next(y for y in range(H) if any(at(x, y)[3] for x in range(W)))
+            brim = top + 4
+            cells = set()
+            for y in range(top, COLLAR[b] - 2):
+                for x in range(W):
+                    c = at(x, y)
+                    if c[3] and (y <= brim or hair(c) and (v == 2 or y <= brim + 3)):
+                        cells.add((x, y))
+            grown = set(cells)
+            for x, y in cells:
+                if y <= brim + 1:
+                    grown.update({(x - 1, y), (x + 1, y), (x, y - 1)})
+            for x, y in grown:
+                if 0 <= x < W and 0 <= y < H:
+                    hs[ox + x, oy + y] = (88, 98, 80, 255) if y < brim else (66, 74, 60, 255)
+            for x in range(W):
+                if (x, brim) in grown and v != 2:
+                    hs[ox + x, oy + brim + 1] = (40, 44, 36, 255)
+            outline(sheets["helmet"], ox, oy, (24, 26, 22, 255))
+
+            # the energy shield's belt: a dark band at the waist and its glowing emitter
+            bs = sheets["belt"].load()
+            for y in (WAIST - 1, WAIST):
+                for x in range(W):
+                    if at(x, y)[3] and trunk(x):
+                        bs[ox + x, oy + y] = (44, 46, 54, 255)
+            ex = {0: 14, 1: 18, 2: 14, 3: 11}[v]
+            for y in range(WAIST - 2, WAIST + 2):
+                for x in range(ex, ex + 3):
+                    bs[ox + x, oy + y] = (70, 220, 255, 255) if WAIST - 1 <= y <= WAIST and x == ex + 1 else (30, 34, 40, 255)
+
+            # the hand shield on the arm: seen face on in front of the body, edge on from the side, its back from behind
+            rs = sheets["riot"].load()
+            face, rim, window = (112, 128, 152, 255), (30, 34, 44, 255), (175, 210, 235, 255)
+            if v == 0:
+                box = (3, 20, 12, 41)
+            elif v == 2:
+                box = (21, 21, 28, 38)
+            else:
+                box = (20, 19, 25, 41) if v == 1 else (6, 19, 11, 41)
+            for y in range(box[1], box[3] + 1):
+                for x in range(box[0], box[2] + 1):
+                    edge = x in (box[0], box[2]) or y in (box[1], box[3])
+                    c = rim if edge else face
+                    if v != 2 and not edge and box[1] + 3 <= y <= box[1] + 5:
+                        c = window
+                    if v == 2 and not edge:
+                        c = (78, 86, 100, 255)
+                    rs[ox + x, oy + y] = c
+
+            # goggles: two lenses over the eyes and a strap round the head
+            for name, lens in (("nvg", (90, 255, 110, 255)), ("thermal", (255, 140, 50, 255))):
+                gs = sheets[name].load()
+                row = [x for x in range(W) if at(x, EYE_ROW)[3]]
+                for x in range(min(row), max(row) + 1):
+                    gs[ox + x, oy + EYE_ROW - 1] = (36, 36, 40, 255)
+                if v == 0:
+                    for x0 in (12, 17):
+                        for y in (EYE_ROW, EYE_ROW + 1):
+                            for x in range(x0, x0 + 3):
+                                gs[ox + x, oy + y] = (24, 24, 28, 255) if x in (x0, x0 + 2) else lens
+                elif side:
+                    x0 = 18 if v == 1 else 11
+                    for y in (EYE_ROW - 1, EYE_ROW, EYE_ROW + 1):
+                        for x in range(x0, x0 + 3):
+                            gs[ox + x, oy + y] = (24, 24, 28, 255)
+                    gs[ox + x0 + (2 if v == 1 else 0), oy + EYE_ROW] = lens
+                    gs[ox + x0 + (2 if v == 1 else 0), oy + EYE_ROW + 1] = lens
+
+            # the backpack: a box on the back; from the front only its straps
+            ps = sheets["pack"].load()
+            pack, dark = (120, 96, 62, 255), (58, 44, 28, 255)
+            if v == 0:
+                for x in (11, 20):
+                    for y in range(COLLAR[b] + 1, COLLAR[b] + 10):
+                        if at(x, y)[3]:
+                            ps[ox + x, oy + y] = dark
+            else:
+                box = (10, 19, 21, 31) if v == 2 else ((7, 19, 12, 31) if v == 1 else (19, 19, 24, 31))
+                for y in range(box[1], box[3] + 1):
+                    for x in range(box[0], box[2] + 1):
+                        edge = x in (box[0], box[2]) or y in (box[1], box[3])
+                        ps[ox + x, oy + y] = dark if edge or y == box[1] + 4 else pack
+    for name, im in sheets.items():
+        im.save(os.path.join(OUT, "wear_%s.png" % name))
+    print("wear: assets/wear_%s.png" % ", wear_".join(WEAR_LAYERS))
 
 
 def build_mantis():
@@ -2073,6 +2288,7 @@ def main():
     build_maps(images, ids)
     build_chars()
     build_body()
+    build_wear()
     build_hud()
     build_fx()
     build_shuttle()

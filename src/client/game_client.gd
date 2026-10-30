@@ -112,6 +112,7 @@ var search_worn := PackedByteArray()   # and what they wear
 var worn := PackedByteArray()        # what our character wears (Net.WEAR_*)
 var looks := {}                      # id -> how that character is dressed (Net.LOOKS); not there = in a suit
 var holding := {}                    # (v74) id -> the thing in that character's hand (Net.ITEM_*; not there = nothing)
+var gear := {}                       # (v100) id -> what it wears over its clothes (Net.GEAR_* bits; not there = nothing)
 var drag_id := -1                    # the lying character we last took hold of (who we haul, while dragging() is true)
 var store := {}                      # the ship's supplies in the locker: thing -> how many
 var other_docked := false           # the derelict alongside is docked (where it lies is in map.other_at)
@@ -420,6 +421,7 @@ func close() -> void:
 	slots.resize(Net.SLOTS)
 	worn.resize(Net.WORN)
 	looks.clear()
+	gear.clear()
 	search_id = -1
 	drag_id = -1
 	bytes_in = 0
@@ -714,6 +716,11 @@ func has_suit() -> bool:
 
 func look_of(id: int) -> int:
 	return int(looks.get(id, 0))
+
+
+func gear_of(id: int) -> int:
+	## (v100) Net.GEAR_* bits: what that character wears over its clothes.
+	return int(gear.get(id, 0))
 
 
 func held_by(id: int) -> int:
@@ -2070,6 +2077,8 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				looks[pkt.decode_u16(1)] = pkt[3]
 			if pkt.size() >= 5:
 				holding[pkt.decode_u16(1)] = pkt[4]
+			if pkt.size() >= 6:
+				gear[pkt.decode_u16(1)] = pkt[5]
 		Net.S_STORE:
 			if not _ours(pkt):
 				return
