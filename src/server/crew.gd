@@ -579,16 +579,22 @@ func update_vitals(p: Player) -> void:
 			respawn(p)
 		return
 	var breathes := server.air.air[p.st.y * server.map.width + p.st.x]
+	var pressed := 0.0                       # (v98) what thin air does to a body whose suit is let down
 	if p.robot or (p.pirate and p.has_suit()):
 		breathes = 1.0                       # pirates come in sealed suits (v62: not all of them); a machine needs no air
 	elif p.supply:
 		# on the tank: the air around does not matter while there is oxygen left
 		p.tank = maxf(p.tank - Net.TICK_SEC / Vitals.TANK_SECONDS, 0.0)
 		if p.tank > 0.0:
+			# (v98, the author's idea) a let-down suit still feeds the mask, but keeps no vacuum off the body
+			pressed = Vitals.pressure_harm(breathes) if p.deflated else 0.0
 			breathes = 1.0
 		else:
 			p.supply = false
-	p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds + server.garden.hunger_of(p))
+	if pressed > 0.0 and p.cond != Net.COND_DEAD:
+		p.health = maxf(p.health - pressed * Net.TICK_SEC, Net.HEALTH_DEAD)
+	else:
+		p.health = Vitals.advance(p.health, p.cond, breathes, Net.TICK_SEC, p.wounds + server.garden.hunger_of(p))
 	server.combat.bleed(p)                   # (v70) bleeding opens the wounds a little every tick
 	if p.concussed > 0 and server.tick >= p.concussed:
 		p.concussed = 0

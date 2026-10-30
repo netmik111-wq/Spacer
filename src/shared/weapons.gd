@@ -53,7 +53,9 @@ const HORNET := 23                   # (v62) «Шершень»: a bomb teleport
 const DAMPER := 24                   # (v62) «Глушилка»: an ion bomb: puts the system out and stuns the room
 const THERMITE := 25                 # (v62) «Термит»: the top bomb: burns the system through, holes the hull, kills one
 const SHRAPNEL := 26                 # (v62) «Шрапнель»: kinetic fragments over the room aimed at and those beside it
-const COUNT := 27                    # every weapon's number is below this
+const PULSE := 27                    # (v98, the author's arsenal) a pulse laser: three quick bolts, fits anywhere
+const PLASMA_CANNON := 28            # (v98) a plasma cannon: one heavy bolt that often slips through a shield
+const COUNT := 29                    # every weapon's number is below this
 
 const CLASS_LASER := 0
 const CLASS_BEAM := 1
@@ -236,6 +238,13 @@ const INFO := {
 	SHRAPNEL: {"name": "Шрапнель", "short": "Шрапнель", "class": CLASS_KINETIC, "charge": 12.0, "shots": 4, "hit": 0.7, "damage": 1,
 		"power": 2, "price": 90, "ammo": Net.ITEM_SHELL, "crew": 1.0, "area": true, "tier": 2, "kind": KIND_KINETIC, "next": HAMMER,
 		"about": "Снаряд рвётся облаком осколков: 4 осколка ложатся в наведённый отсек и в соседние с ним, по 1 урона, и ранят всех, кого заденут. Щит снимает с осколка 1 урона, от брони бывает рикошет. Тратит один снаряд на залп."},
+	# (v98, the author's arsenal: "lasers and plasma get new kinds in the new rules")
+	PULSE: {"name": "Импульсный лазер", "short": "Импульсный", "class": CLASS_LASER, "charge": 10.0, "shots": 3, "hit": 0.7, "damage": 1,
+		"power": 2, "price": 85, "tier": 2, "kind": KIND_LASER, "next": PLASMA_CANNON,
+		"about": "Очередь из трёх лазерных сгустков по 1 урона, попадает чаще скорострела. Ставится в любое гнездо. Щит его останавливает."},
+	PLASMA_CANNON: {"name": "Плазменная пушка", "short": "Плазм. пушка", "class": CLASS_BLASTER, "charge": 18.0, "shots": 1, "hit": 0.7, "damage": 3,
+		"power": 3, "price": 170, "tier": 3, "kind": KIND_LASER,
+		"about": "Один тяжёлый сгусток плазмы: 3 урона, в половине случаев проходит сквозь щит, как будто его нет. Только носовое или бортовое гнездо. Заряжается 18 с."},
 	# (v57) the flagship's only: never sold, never ours. "stun" is the health it takes from each one in the room hit
 	NEURAL: {"name": "Нейроизлучатель", "short": "Нейро", "class": CLASS_NEURAL, "charge": 9.0, "shots": 1, "hit": 0.8, "damage": 0,
 		"power": 2, "price": 0, "stun": 40.0, "tier": 2, "kind": KIND_ION,
@@ -244,10 +253,10 @@ const INFO := {
 
 # (v58) What pirates may carry, by tier: every gun but the beams (theirs have no beam
 # gear), the point defence (a mount of its own) and the flagship's own two.
-const PIRATE_GUNS: Array = [[], [LASER, RAPID, ION, ROCKET, AUTOCANNON], [HEAVY, BLASTER, ION_CANNON, EMP, RAILGUN, HORNET, DAMPER, SHRAPNEL],
-	[SIEGE, PHOENIX, STORM, DEVASTATOR, HAMMER, THERMITE]]
+const PIRATE_GUNS: Array = [[], [LASER, RAPID, ION, ROCKET, AUTOCANNON], [HEAVY, BLASTER, ION_CANNON, EMP, RAILGUN, HORNET, DAMPER, SHRAPNEL, PULSE],
+	[SIEGE, PHOENIX, STORM, DEVASTATOR, HAMMER, THERMITE, PLASMA_CANNON]]
 # the ship weapons a crew may own, in the order the cargo shows them
-const OURS: Array[int] = [LASER, RAPID, HEAVY, BLASTER, SIEGE, PHOENIX, ION, ION_CANNON, STORM, ROCKET, EMP, DEVASTATOR,
+const OURS: Array[int] = [LASER, RAPID, PULSE, HEAVY, BLASTER, PLASMA_CANNON, SIEGE, PHOENIX, ION, ION_CANNON, STORM, ROCKET, EMP, DEVASTATOR,
 	HORNET, DAMPER, THERMITE, TRACTOR, SIPHON, BEAM, REAPER, AUTOCANNON, SHRAPNEL, RAILGUN, HAMMER, GUARD, NOVA]
 
 const SHIELD_HARDEN_PRICE := 80      # the rare upgrade: the shield stops rockets too
@@ -415,6 +424,8 @@ const SPACE := {
 	SIEGE: {"d": 300.0, "n": 1, "every": 4.0, "heat": 220.0, "type": DMG_ENERGY},
 	PHOENIX: {"d": 120.0, "n": 2, "every": 2.5, "heat": 85.0, "type": DMG_ENERGY},
 	BLASTER: {"d": 25.0, "n": 4, "every": 1.6, "heat": 18.0, "type": DMG_ENERGY},
+	PULSE: {"d": 40.0, "n": 3, "every": 1.2, "heat": 15.0, "type": DMG_ENERGY},          # (v98)
+	PLASMA_CANNON: {"d": 350.0, "n": 1, "every": 3.5, "heat": 120.0, "type": DMG_ENERGY},
 	NOVA: {"d": 1500.0, "n": 1, "every": 10.0, "heat": 0.0, "type": DMG_ENERGY},
 	ION: {"d": 10.0, "n": 1, "every": 1.2, "heat": 8.0, "type": DMG_ION, "emp": 150.0, "jam": 0.35},
 	ION_CANNON: {"d": 20.0, "n": 1, "every": 2.0, "heat": 15.0, "type": DMG_ION, "emp": 300.0, "jam": 0.5},
@@ -442,7 +453,7 @@ const FIT_ROOF := 4
 const FIT_ANY := 7
 const FITS := {SIEGE: FIT_HARD, RAILGUN: FIT_HARD, DEVASTATOR: FIT_HARD, NOVA: FIT_HARD,
 	HEAVY: FIT_HARD | FIT_SIDE, PHOENIX: FIT_HARD | FIT_SIDE, ION_CANNON: FIT_HARD | FIT_SIDE, STORM: FIT_HARD | FIT_SIDE,
-	HAMMER: FIT_HARD | FIT_SIDE, REAPER: FIT_HARD | FIT_SIDE}
+	HAMMER: FIT_HARD | FIT_SIDE, REAPER: FIT_HARD | FIT_SIDE, PLASMA_CANNON: FIT_HARD | FIT_SIDE}
 const TURN_LIGHT := PI * 2.0 / 3.0    # radians a second a light gun turns (120°)
 const TURN_HEAVY := PI / 3.0          # and a heavy one (60°)
 const SHOTS_HEAT := false               # (v94.1) his S4 B: firing does not heat the ship (the "heat" numbers wait)
@@ -567,6 +578,8 @@ static func item_of(w: int, fx: int = FX_NONE, damaged: bool = false) -> int:
 		return Net.ITEM_GUN_DAMAGED + w
 	if fx > FX_NONE and FX_GUNS.has(w):
 		return Net.ITEM_GUN_FX + FX_GUNS.find(w) * FX_COUNT + fx - 1
+	if w >= PULSE:
+		return Net.ITEM_GUN_NEW + w - PULSE      # (v98) the numbers after SHRAPNEL's were taken by the seeds
 	if w >= HORNET:
 		return Net.ITEM_GUN_LATE + w - HORNET    # (v62) the numbers after NOVA's were taken by the shells and parts
 	return Net.ITEM_GUN + w if w < TRACTOR else Net.ITEM_GUN_MORE + w
@@ -579,7 +592,9 @@ static func of_item(item: int) -> int:
 		return d if OURS.has(d) else NONE
 	if item >= Net.ITEM_GUN_FX and item < Net.ITEM_GUN_FX + FX_GUNS.size() * FX_COUNT:
 		return FX_GUNS[(item - Net.ITEM_GUN_FX) / FX_COUNT]
-	if item >= Net.ITEM_GUN_LATE and item < Net.ITEM_GUN_LATE + COUNT - HORNET:
+	if item >= Net.ITEM_GUN_NEW and item < Net.ITEM_GUN_NEW + COUNT - PULSE:
+		return item - Net.ITEM_GUN_NEW + PULSE
+	if item >= Net.ITEM_GUN_LATE and item < Net.ITEM_GUN_LATE + PULSE - HORNET:
 		return item - Net.ITEM_GUN_LATE + HORNET
 	var w := item - Net.ITEM_GUN
 	if w > NONE and w < TRACTOR:

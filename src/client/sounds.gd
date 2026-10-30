@@ -27,7 +27,8 @@ const NAMES := {Net.SOUND_STEP: "step", Net.SOUND_DOOR: "door", Net.SOUND_HISS: 
 	Net.SOUND_PHASE: "phase", Net.SOUND_LOAD: "load", Net.SOUND_BANG: "bang", Net.SOUND_BEEP: "beep",
 	Net.SOUND_SHOTGUN: "shotgun", Net.SOUND_ZAP: "zap",
 	Net.SOUND_CRY: "cry", Net.SOUND_CLICK: "click", Net.SOUND_RELOAD: "reload", Net.SOUND_PICKUP: "pickup",
-	Net.SOUND_SWING: "swing", Net.SOUND_TELEPORT: "teleport"}   # (v82; v84 the swing; v89 the teleport)
+	Net.SOUND_SWING: "swing", Net.SOUND_TELEPORT: "teleport",   # (v82; v84 the swing; v89 the teleport)
+	Net.SOUND_LASER: "laser", Net.SOUND_PLASMA: "plasma", Net.SOUND_SUIT: "suit"}   # (v98)
 # (v56) sounds of the ship fight (Net.JOLT_*), by name
 const GUN_LASER := "gun_laser"       # a laser or blaster of ours firing (heard aboard, near the gun loudest)
 const GUN_HEAVY := "gun_heavy"       # a heavy or siege laser
@@ -108,6 +109,9 @@ static func prepare() -> void:
 	_streams[Net.SOUND_PICKUP] = [_pickup()]
 	_streams[Net.SOUND_SWING] = [_swing(1.0), _swing(0.85)]   # (v84)
 	_streams[Net.SOUND_TELEPORT] = [_teleport()]        # (v89)
+	_streams[Net.SOUND_LASER] = [_laser_hand(1.0), _laser_hand(1.08)]   # (v98)
+	_streams[Net.SOUND_PLASMA] = [_plasma_hand()]
+	_streams[Net.SOUND_SUIT] = [_suit_air()]
 	_streams[UI_OPEN] = [_ui_blip(1.0)]
 	_streams[UI_CLOSE] = [_ui_blip(0.75)]
 	_streams[UI_DENY] = [_ui_deny()]
@@ -568,6 +572,34 @@ static func _shot() -> AudioStreamWAV:
 	_noise(out, 0.0, 0.7, 0.7, 9.0, 0.95)
 	_tone(out, 0.0, 55.0, 0.4, 8.0)
 	_noise(out, 0.05, 0.7, 0.12, 7.0, 0.5)
+	return _wav(out)
+
+
+static func _laser_hand(pitch: float) -> AudioStreamWAV:
+	# (v98) a laser rifle: a sharp electric zip falling fast, a little crackle
+	var out := _buffer(0.25)
+	_tone(out, 0.0, 2600.0 * pitch, 0.35, 14.0, -6000.0)
+	_tone(out, 0.0, 1300.0 * pitch, 0.2, 18.0, -2500.0)
+	_noise(out, 0.0, 0.08, 0.25, 40.0, 0.2)
+	_fade(out, 0.002)
+	return _wav(out)
+
+
+static func _plasma_hand() -> AudioStreamWAV:
+	# (v98) a plasma gun: a deep thump and a long hiss
+	var out := _buffer(0.6)
+	_tone(out, 0.0, 90.0, 0.6, 8.0, -60.0)
+	_noise(out, 0.0, 0.6, 0.5, 6.0, 0.6)
+	_tone(out, 0.0, 700.0, 0.15, 10.0, -900.0)
+	_fade(out, 0.004)
+	return _wav(out)
+
+
+static func _suit_air() -> AudioStreamWAV:
+	# (v98) a suit letting its air out or filling: a soft long hiss
+	var out := _buffer(1.2)
+	_noise(out, 0.0, 1.2, 0.25, 1.8, 0.75)
+	_fade(out, 0.15)
 	return _wav(out)
 
 

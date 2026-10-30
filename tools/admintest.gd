@@ -75,7 +75,7 @@ func _initialize() -> void:
 	var missing := []
 	for item: int in Items.INFO.keys():
 		var whole: bool = Items.kind_of(item) == item and Items.light(item).is_empty() and not Items.INFO[item].has("fx") and not Items.INFO[item].has("damaged")
-		if whole and not listed.has(item + Net.PISTOL_ROUNDS if Items.rounds(item) == 0 else item):
+		if whole and not listed.has(Items.loaded(item)):   # (v98: a gun is listed loaded, whatever it holds)
 			missing.append(item)
 	_expect(missing.is_empty(), "the panel lists every kind of thing (missing: %s)" % str(missing))
 	for g: int in Gear.all():

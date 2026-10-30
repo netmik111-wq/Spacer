@@ -32,6 +32,11 @@ static func harm(air: float) -> float:
 	return loss
 
 
+static func pressure_harm(air: float) -> float:
+	## (v98) Health lost per second to the low pressure alone (one breathing from a mask in a let-down suit).
+	return DECOMPRESSION * (1.0 - air / PRESSURE_MIN) if air < PRESSURE_MIN else 0.0
+
+
 static func advance(health: float, cond: int, air: float, seconds: float, wounds: float = 0.0) -> float:
 	## Health after `seconds` in that air. Good air only gives back what thin air
 	## took: `wounds` (cuts, bruises, bullet holes) do not close by themselves,

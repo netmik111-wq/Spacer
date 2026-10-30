@@ -862,3 +862,18 @@ as a rare find). Questions `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`: 
   in the top 4 rows, as a wall end does; under the straight wall above it a dark notch showed on the far side of every
   such joint. Those rows are now drawn straight on (`JOINT_TOPS` in `make_assets.py`), pirate copies too. Pictures only,
   maps unchanged. Version 0.90.1, build in `/mnt/project-files/builds/v97.1/`.
+
+## v98 (0.91): arsenal, body armour, helmets, suits that inflate
+
+He wrote "next build" (his roadmap's item 3 and 3.1) and added body armour, inflatable suits and helmets. Questions
+`https://claude.ai/artifact/JESXpjSKin5YKnoKTCcccr`: all A but his own numbers for the vest and helmet (A2, W1) and the
+hand shield in its own place (S1).
+- In the hand: a laser rifle (22, 18 cells, 10 charges, no bleeding) and a plasma gun (45, 10 cells, 4 charges), both
+  loaded with an energy cell.
+- Armour by kind of harm: a vest and a helmet (blows 60%, bullets and lasers 45%, blasts 30%, plasma nothing), never with
+  a suit; the suit 10% inflated, 30% let down (B, 2 s), let down it keeps no vacuum off the body.
+- An energy shield on the belt (50, plasma twice, blows pass, charges after 5 s) and a hand shield on the arm (stops what
+  comes from the front; no gun with it, a baton yes). Eight worn places.
+- Boarders down the road carry lasers and plasma; stormtroopers wear a vest and a helmet.
+- Ship guns: pulse laser (tier 2) and plasma cannon (tier 3).
+- New test `tools/arsenaltest.gd` (53 scripts); protocol 72.

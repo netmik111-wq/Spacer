@@ -35,6 +35,7 @@ const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const Plants := preload("res://src/shared/plants.gd")
+const Armour := preload("res://src/shared/armour.gd")
 
 const PISTOL_ABOUT := "Стреляет туда, куда щёлкнули. Перезаряжается магазином."
 const MEDKIT_ABOUT := "Лечит раны: себе или соседу, три секунды не сходя с места. Пять раз."
@@ -42,7 +43,9 @@ const MEDKIT_HEAL := 30
 
 const SHOTGUN_ABOUT := "Бьёт дробью веером: шесть дробин по 15, до 6 клеток. В упор валит с ног. Перезаряжается коробкой патронов."
 
-const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Z: надеть."
+const SUIT_ABOUT := "Шлем и баллон с кислородом. Без него подача кислорода (Q) не работает. Надутый держит космос и снимает 10% урона; сдутый (B) снимает 30%, но в пустоте космос жжёт тело. Z: надеть."
+const LASER_ABOUT := "Лазерная винтовка: 22 урона, бьёт на 18 клеток, луч прижигает рану (кровотечения нет). Бронежилет держит лазер. Десять выстрелов от энергоячейки."
+const PLASMA_ABOUT := "Плазмомёт: 45 урона, до 10 клеток, медленный. Бронежилет и каска от плазмы не спасают; энергощит теряет вдвое. Четыре выстрела от энергоячейки."
 
 const BASE := {
 	Net.ITEM_JUMPSUIT: {"name": "Комбинезон", "about": "Два кармана. Z: надеть.", "price": 8, "stock": 2, "wear": Net.WEAR_JUMPSUIT},
@@ -153,6 +156,32 @@ const BASE := {
 	Net.ITEM_PISTOL + 6: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 6},
 	Net.ITEM_PISTOL + 7: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 7},
 	Net.ITEM_PISTOL + 8: {"name": "Пистолет", "about": PISTOL_ABOUT, "kind": Net.ITEM_PISTOL, "rounds": 8},
+	# (v98, the author's arsenal and body armour) armour, helmets, shields, energy weapons
+	Net.ITEM_VEST: {"name": "Бронежилет", "about": "Снимает 60% урона от ударов, 45% от пуль, дроби и лазера, 30% от взрывов; от плазмы не спасает. Со скафандром не надеть: он для боя на борту и высадки. Z: надеть.",
+		"price": 60, "stock": 1, "wear": Net.WEAR_BODY},
+	Net.ITEM_HELMET: {"name": "Каска", "about": "Защищает как бронежилет (удары 60%, пули и лазер 45%, взрывы 30%, плазма нет); контузия вдвое реже, оглушение от гранаты вдвое короче. Со скафандром не надеть: у него свой шлем. Z: надеть.",
+		"price": 35, "stock": 1, "wear": Net.WEAR_HEAD},
+	Net.ITEM_RIOT: {"name": "Ручной щит", "about": "Носится на руке: останавливает все выстрелы и удары спереди (120° туда, куда вы смотрите). С ним не выстрелить, но дубинкой и шокером бить можно. Z: надеть.",
+		"price": 50, "keep": true, "wear": Net.WEAR_SHIELD},
+	Net.ITEM_ESHIELD: {"name": "Энергощит", "about": "На поясе. Запас 50 гасит пули, дробь и лазер; плазма тратит его вдвое; удары и взрывы проходят. Через 5 с без попаданий заряжается по 5 в секунду. Z: надеть.",
+		"price": 120, "keep": true, "wear": Net.WEAR_BELT},
+	Net.ITEM_CELL: {"name": "Энергоячейка", "about": "Заряжает лазерную винтовку (10 выстрелов) или плазмомёт (4).", "price": 10, "keep": true},
+	Net.ITEM_LASER_GUN + 0: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 0, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER, "price": 70, "keep": true},
+	Net.ITEM_LASER_GUN + 1: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 1, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 2: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 2, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 3: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 3, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 4: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 4, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 5: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 5, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 6: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 6, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 7: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 7, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 8: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 8, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 9: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 9, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_LASER_GUN + 10: {"name": "Лазерная винтовка", "about": LASER_ABOUT, "kind": Net.ITEM_LASER_GUN, "rounds": 10, "ammo": Net.ITEM_CELL, "full": Net.LASER_ROUNDS, "energy": Armour.LASER},
+	Net.ITEM_PLASMA_GUN + 0: {"name": "Плазмомёт", "about": PLASMA_ABOUT, "kind": Net.ITEM_PLASMA_GUN, "rounds": 0, "ammo": Net.ITEM_CELL, "full": Net.PLASMA_ROUNDS, "energy": Armour.PLASMA, "price": 90, "keep": true},
+	Net.ITEM_PLASMA_GUN + 1: {"name": "Плазмомёт", "about": PLASMA_ABOUT, "kind": Net.ITEM_PLASMA_GUN, "rounds": 1, "ammo": Net.ITEM_CELL, "full": Net.PLASMA_ROUNDS, "energy": Armour.PLASMA},
+	Net.ITEM_PLASMA_GUN + 2: {"name": "Плазмомёт", "about": PLASMA_ABOUT, "kind": Net.ITEM_PLASMA_GUN, "rounds": 2, "ammo": Net.ITEM_CELL, "full": Net.PLASMA_ROUNDS, "energy": Armour.PLASMA},
+	Net.ITEM_PLASMA_GUN + 3: {"name": "Плазмомёт", "about": PLASMA_ABOUT, "kind": Net.ITEM_PLASMA_GUN, "rounds": 3, "ammo": Net.ITEM_CELL, "full": Net.PLASMA_ROUNDS, "energy": Armour.PLASMA},
+	Net.ITEM_PLASMA_GUN + 4: {"name": "Плазмомёт", "about": PLASMA_ABOUT, "kind": Net.ITEM_PLASMA_GUN, "rounds": 4, "ammo": Net.ITEM_CELL, "full": Net.PLASMA_ROUNDS, "energy": Armour.PLASMA},
 }
 
 # (v58) Every thing: BASE, and the ship's weapons in all their states (whole, with
@@ -202,6 +231,13 @@ const SHOTGUN_SPREAD := 0.2          # radians between the outermost pellets and
 const SHOTGUN_KNOCK := 4             # (v80) pellets of one shot that knock the one they hit off their feet
 const SHOTGUN_KNOCK_SECONDS := 1.5
 const THROW_RANGE := 6               # (v70) how far a flashbang is thrown
+# (v98, the author's arsenal) energy weapons in the hand: [damage, range in cells, ticks between shots]
+const LASER_DAMAGE := 22
+const LASER_RANGE := 18
+const LASER_TICKS := 5
+const PLASMA_DAMAGE := 45
+const PLASMA_RANGE := 10
+const PLASMA_TICKS := 14
 
 
 static func carried_gun(item: int) -> bool:
@@ -276,6 +312,11 @@ static func tank_of(item: int) -> int:
 static func suit_with(tank: float) -> int:
 	## A spacesuit, as an item, holding that much oxygen (0..1).
 	return Net.ITEM_SUIT + clampi(roundi(tank * Net.SUIT_TANK_STEPS), 0, Net.SUIT_TANK_STEPS)
+
+
+static func energy(item: int) -> int:
+	## (v98) The kind of harm (Armour.LASER, Armour.PLASMA) an energy weapon does; -1 if it is not one.
+	return int(INFO[item].get("energy", -1)) if INFO.has(item) else -1
 
 
 static func is_weapon(item: int) -> bool:
@@ -365,8 +406,9 @@ static func kept_in_locker() -> PackedInt32Array:
 static var CATEGORIES: Array = [
 	["Ремонт и топливо", [Net.ITEM_PATCH, Net.ITEM_PART, Net.ITEM_BOARD, Net.ITEM_TOOLBOX, Net.ITEM_FUEL]],
 	["Снаряжение", [Net.ITEM_SUIT + Net.SUIT_TANK_STEPS, Net.ITEM_JUMPSUIT, Net.ITEM_BACKPACK, Net.ITEM_FLASHLIGHT, Net.ITEM_RADIO, Net.ITEM_NVG, Net.ITEM_THERMAL]],
+	["Броня и щиты", [Net.ITEM_VEST, Net.ITEM_HELMET, Net.ITEM_RIOT, Net.ITEM_ESHIELD]],
 	["Медицина", [Net.ITEM_MEDPATCH, Net.ITEM_MEDKIT + Net.MEDKIT_USES, Net.ITEM_SPLINT]],
-	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON, Net.ITEM_SHOTGUN, Net.ITEM_SHELLS, Net.ITEM_STUNNER,
+	["Личное оружие", [Net.ITEM_PISTOL, Net.ITEM_MAG, Net.ITEM_BATON, Net.ITEM_SHOTGUN, Net.ITEM_SHELLS, Net.ITEM_LASER_GUN, Net.ITEM_PLASMA_GUN, Net.ITEM_CELL, Net.ITEM_STUNNER,
 		Net.ITEM_FLASHBANG, Net.ITEM_WELDER, Net.ITEM_CUFFS]],
 	["Корабельное оружие", Array(Weapons.gun_items())],
 	["Боеприпасы", [Net.ITEM_ROCKET, Net.ITEM_EMP_ROCKET, Net.ITEM_SHELL]],

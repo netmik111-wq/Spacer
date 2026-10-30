@@ -27,7 +27,13 @@ const MAX_ABOARD := 4
 # (v62, the author's K12) boarders who come over by docking or by teleport are not all in sealed suits:
 const BARE_FROM := 3                 # from this many jumps out...
 const BARE_SHARE := 0.35             # ... this share come without a suit: they breathe the air (venting kills them)
-const HEAVY_FROM := 6                # from this many jumps out...
+# (v98, his H4 answer) energy weapons and armour among boarders, further down the road
+const LASER_DEPTH := 1                # from the second cluster on...
+const LASER_SHARE := 0.3              # ... this share of gunners carry a laser rifle
+const PLASMA_DEPTH := 2               # from the third...
+const PLASMA_SHARE := 0.15            # ... this share a plasma gun
+const BARE_ARMOUR := 0.5              # one without a suit wears a vest this often, and a helmet as often
+const HEAVY_FROM := 6                 # from this many jumps out...
 const HEAVY_SHARE := 0.15            # ... this share are heavy stormtroopers: no suit, armour that takes half of every wound
 const HEAVY_TOUGHNESS := 0.5
 const ROBOT_MAGS := 3                # (v62) an assault drone's built-in gun reloads this many times
@@ -133,11 +139,39 @@ func spawn_boarder(x: int, y: int, gunner: bool, far: int = -1, bare_ok: bool = 
 		p.toughness = HEAVY_TOUGHNESS
 		p.colour = Net.ARMOUR_COLOUR
 		p.name = "Штурмовик %d" % count
+		p.worn[Net.WEAR_BODY] = Net.ITEM_VEST      # (v98, his A3 answer) and it shows: a vest and a helmet to take off the body
+		p.worn[Net.WEAR_HEAD] = Net.ITEM_HELMET
 		server.crew.announce_join(p, null)
 	elif bare_ok and far >= BARE_FROM and roll < HEAVY_SHARE + BARE_SHARE:
 		p.worn[Net.WEAR_SUIT] = Net.ITEM_NONE
+		if _rng.randf() < BARE_ARMOUR:
+			p.worn[Net.WEAR_BODY] = Net.ITEM_VEST  # (v98) one without a suit may wear armour
+		if _rng.randf() < BARE_ARMOUR:
+			p.worn[Net.WEAR_HEAD] = Net.ITEM_HELMET
+	_arm_energy(p)
 	give_goal(p)
 	return p
+
+
+func _arm_energy(p) -> void:
+	## (v98, his H4 answer) Further down the road a gunner may come with a laser rifle (from the
+	## second cluster) or a plasma gun (from the third), and an energy cell in place of a magazine.
+	var gun: int = p.slots.find(Net.ITEM_PISTOL + Net.PISTOL_ROUNDS)
+	if gun < 0:
+		return
+	var roll := _rng.randf()
+	var depth: int = server.road.depth
+	var energy := Net.ITEM_NONE
+	if depth >= PLASMA_DEPTH and roll < PLASMA_SHARE:
+		energy = Net.ITEM_PLASMA_GUN + Net.PLASMA_ROUNDS
+	elif depth >= LASER_DEPTH and roll < PLASMA_SHARE + LASER_SHARE:
+		energy = Net.ITEM_LASER_GUN + Net.LASER_ROUNDS
+	if energy == Net.ITEM_NONE:
+		return
+	p.slots[gun] = energy
+	var mag: int = p.slots.find(Net.ITEM_MAG)
+	if mag >= 0:
+		p.slots[mag] = Net.ITEM_CELL
 
 
 func spawn_robot(x: int, y: int, what: String = "Штурмовой дрон"):

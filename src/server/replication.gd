@@ -551,10 +551,12 @@ func send() -> void:
 		var tank_now := roundi(p.tank * Net.TANK_FULL)
 		var work_now := p.work * 100 / maxi(p.work_total, 1)
 		var marks := (1 if p.supply else 0) | (2 if p.bleeding > 0 else 0) | (4 if p.arm else 0) | (8 if p.leg else 0) | (16 if p.concussed > 0 else 0) | (32 if p.dragging >= 0 else 0) \
-			| (64 if p.weak else 0)
+			| (64 if p.weak else 0) | (128 if p.deflated else 0)
 		# (v71) the dish at work, and its seconds left in fives
 		var meal_left := clampi(ceili((p.meal_until - server.tick) / float(Net.TICK_HZ * 5)), 0, 255) if p.meal != 0 else 0
+		var shield_now := clampi(roundi(p.shield), 0, 255) if p.worn[Net.WEAR_BELT] == Net.ITEM_ESHIELD else 0   # (v98)
 		var vitals := ((health_now + 200) << 40) | (tank_now << 32) | (work_now << 24) | (marks << 16) | ((p.meal & 255) << 8) | meal_left
+		vitals = vitals ^ (shield_now << 53)
 		var carried := p.slots.duplicate()
 		carried.append_array(p.worn)
 		if vitals != p.vitals_sent or carried != p.slots_sent:
@@ -573,6 +575,7 @@ func send() -> void:
 				out.encode_u8(ov + 6 + Net.SLOTS + k, p.worn[k])
 			out.encode_u8(ov + 6 + Net.SLOTS + Net.WORN, p.meal & 255)
 			out.encode_u8(ov + 7 + Net.SLOTS + Net.WORN, meal_left)
+			out.encode_u8(ov + 8 + Net.SLOTS + Net.WORN, shield_now)
 		if p.self_dirty or server.tick - p.last_self_tick >= SELF_REFRESH_TICKS:
 			var o := out.size()
 			out.resize(o + 1 + Net.SELF_BYTES)

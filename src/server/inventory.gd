@@ -6,6 +6,7 @@ extends RefCounted
 const Net := preload("res://src/shared/net.gd")
 const Player := preload("res://src/server/player.gd")
 const Items := preload("res://src/shared/items.gd")
+const Armour := preload("res://src/shared/armour.gd")
 
 var server: GameServer
 
@@ -103,6 +104,37 @@ func set_supply(p: Player, on: bool) -> void:
 		p.supply = on and p.tank > 0.0 and p.has_suit()
 
 
+func inflate(p: Player) -> void:
+	## (v98, the author's idea) Starts letting the suit down, or sealing it again: done in
+	## Armour.SWITCH_SECONDS (switch_tick). Pressing again while it works calls it off.
+	if p.cond != Net.COND_OK or p.corpse or not p.has_suit():
+		return
+	if p.suit_switch > 0:
+		p.suit_switch = 0
+		server.chat.tell(p, "Скафандр остаётся %s." % ("сдутым" if p.deflated else "надутым"))
+		return
+	p.suit_switch = server.tick + roundi(Armour.SWITCH_SECONDS * Net.TICK_HZ)
+	server.chat.sound(Net.SOUND_SUIT, p.st.x, p.st.y, p.slot)
+	if p.peer != null:
+		server.chat.tell(p, "Надуваю скафандр…" if p.deflated else "Сдуваю скафандр…")
+
+
+func switch_tick(p: Player) -> void:
+	## (v98) A suit being let down or sealed is done; an energy shield charges after a quiet while.
+	if p.suit_switch > 0 and server.tick >= p.suit_switch:
+		p.suit_switch = 0
+		if p.has_suit() and p.cond == Net.COND_OK:
+			p.deflated = not p.deflated
+			if p.peer != null:
+				server.chat.tell(p, "Скафандр сдут: брони больше (30%), но космос он не держит." if p.deflated
+					else "Скафандр надут: держит космос, брони меньше (10%).")
+			if p.deflated:
+				server.usage.note(p, "deflate")
+	if p.worn[Net.WEAR_BELT] == Net.ITEM_ESHIELD and p.shield < Net.SHIELD_FULL and p.cond != Net.COND_DEAD \
+			and server.tick - p.shield_hit >= roundi(Armour.SHIELD_WAIT * Net.TICK_HZ):
+		p.shield = minf(p.shield + Armour.SHIELD_RATE / Net.TICK_HZ, Net.SHIELD_FULL)
+
+
 func take_off(p: Player, wear: int) -> bool:
 	## Takes off what is worn there, into the hand (or a free slot). Not while
 	## things are kept in it, and not without room for it.
@@ -131,6 +163,9 @@ func act(p: Player) -> bool:
 		return true
 	if p.cond == Net.COND_OK and not p.corpse and Items.worn_as(item) >= 0:
 		var wear := Items.worn_as(item)
+		if Armour.clash(p.worn, item) != "":
+			server.chat.tell(p, Armour.clash(p.worn, item))   # (v98) a helmet and a suit's own
+			return false
 		p.slots[p.hand] = Net.ITEM_NONE
 		var old := Net.ITEM_NONE
 		if p.worn[wear] != Net.ITEM_NONE:
@@ -142,6 +177,8 @@ func act(p: Player) -> bool:
 		p.slots[p.hand] = old
 		if wear == Net.WEAR_EYES:
 			server.usage.note(p, "goggles")
+		elif wear == Net.WEAR_BODY or wear == Net.WEAR_HEAD or wear == Net.WEAR_BELT:
+			server.usage.note(p, "armour")     # (v98)
 		return true
 	if p.cond != Net.COND_OK or p.corpse or Items.switched(item) == Net.ITEM_NONE:
 		return false

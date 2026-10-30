@@ -192,6 +192,7 @@ func _cut() -> void:
 	server.ship.dest = server.ship.pos
 	_run(1)
 	_expect(d.here and d.dark(), "a derelict lies alongside")
+	d.made = {}                 # (v97) no rogue robots waking: this is about cutting scrap
 	var wall := -1
 	for c: int in map.other_cells:
 		if map.walk[c] == 0 and map.door_of[c] < 0 and map.cells[c] >= 0 and not server.air.holes.has(c):   # (a hole is mended first)

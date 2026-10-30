@@ -11,6 +11,7 @@ const GameServer := preload("res://src/server/game_server.gd")
 const Director := preload("res://src/server/director.gd")
 const Items := preload("res://src/shared/items.gd")
 const Net := preload("res://src/shared/net.gd")
+const Armour := preload("res://src/shared/armour.gd")
 const Sectors := preload("res://src/shared/sectors.gd")
 
 var failed := 0
@@ -35,7 +36,7 @@ func _initialize() -> void:
 	a.hand = 0
 	_run(3)
 	server.combat.use_at(a, server.tick, Vector2(12, 4))
-	_expect(b.health == 100.0 - Items.PISTOL_DAMAGE and a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS - 1,
+	_expect(is_equal_approx(b.health, 100.0 - Items.PISTOL_DAMAGE * Armour.taken(b.worn, b.deflated, Armour.KINETIC)) and a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS - 1,
 		"a shot hits the one aimed at (%d left in the pistol)" % (a.slots[0] - Net.ITEM_PISTOL))
 	server.combat.use_at(a, server.tick, Vector2(12, 4))
 	_expect(a.slots[0] == Net.ITEM_PISTOL + Net.PISTOL_ROUNDS - 1, "a pistol does not fire again at once")
@@ -76,11 +77,11 @@ func _initialize() -> void:
 	b.health = 100.0
 	_run(GameServer.Combat.RELOAD_TICKS)
 	server.combat.use_at(a, server.tick, Vector2(9, 4))
-	_expect(b.health == 100.0 - 15, "a baton hurts the one next to us")
+	_expect(is_equal_approx(b.health, 100.0 - 15 * Armour.taken(b.worn, b.deflated, Armour.BLOW)), "a baton hurts the one next to us")
 	b.health = 100.0
 	_run(GameServer.Combat.BLOW_TICKS)
 	server.combat.use_at(a, server.tick, Vector2(8.6, 3.7))
-	_expect(b.health == 100.0 - 15, "even when the click is not right on them")
+	_expect(is_equal_approx(b.health, 100.0 - 15 * Armour.taken(b.worn, b.deflated, Armour.BLOW)), "even when the click is not right on them")
 	b.st.place(11, 4)
 	b.health = 100.0
 	_run(GameServer.Combat.BLOW_TICKS)

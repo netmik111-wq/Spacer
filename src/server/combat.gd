@@ -8,6 +8,7 @@ const Mover := preload("res://src/shared/mover.gd")
 const Player := preload("res://src/server/player.gd")
 const Items := preload("res://src/shared/items.gd")
 const Sight := preload("res://src/shared/sight.gd")
+const Armour := preload("res://src/shared/armour.gd")
 
 const TREAT_TICKS := 60             # one use of a first-aid kit takes 3 s
 const SHOT_TICKS := 6                # a pistol fires at most this often
@@ -44,6 +45,9 @@ const CAUSE_SHOT := 1
 const CAUSE_PELLET := 2
 const CAUSE_BLOW := 3
 const CAUSE_BLAST := 4
+const CAUSE_LASER := 5               # (v98) a laser rifle: no bleeding (the beam seals the wound)
+const CAUSE_PLASMA := 6              # (v98) a plasma gun: a vest and a helmet take nothing off it
+const ARMOUR_OF := [Armour.OTHER, Armour.KINETIC, Armour.KINETIC, Armour.BLOW, Armour.BLAST, Armour.LASER, Armour.PLASMA]   # by CAUSE_*
 
 var server: GameServer
 var bangs: Array = []                # (v70) flashbangs in the air: [tick it bursts, cell, the thrower's slot]
@@ -76,15 +80,31 @@ func use_at(p: Player, seen_tick: int, at: Vector2) -> void:
 	var item := p.in_hand()
 	var rounds := Items.rounds(item)
 	var slow := ARM_SLOWER if p.arm else 1.0
+	if rounds >= 0 and p.worn.size() > Net.WEAR_SHIELD and p.worn[Net.WEAR_SHIELD] == Net.ITEM_RIOT:
+		# (v98, his S1 note) a hand shield on the arm: no gun, though a baton still strikes
+		p.ready_tick = server.tick + SHOT_TICKS
+		if p.peer != null:
+			server.chat.tell(p, "С ручным щитом не выстрелить: бейте дубинкой или снимите щит.")
+		return
 	if rounds > 0:
 		p.slots[p.hand] = item - 1
-		p.ready_tick = server.tick + roundi(SHOT_TICKS * slow * (SHOTGUN_PACE if Items.INFO[item].has("pellets") else 1.0))
+		var energy := Items.energy(item)
+		var pace := float(SHOT_TICKS) * (SHOTGUN_PACE if Items.INFO[item].has("pellets") else 1.0)
+		if energy >= 0:
+			pace = Items.LASER_TICKS if energy == Armour.LASER else Items.PLASMA_TICKS   # (v98)
+			server.usage.note(p, "energy_gun")
+		p.ready_tick = server.tick + roundi(pace * slow)
 		if p.arm:
 			at += Vector2(_rng.randf_range(-ARM_SPREAD, ARM_SPREAD), _rng.randf_range(-ARM_SPREAD, ARM_SPREAD))
+		var seen := clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick)
 		if Items.INFO[item].has("pellets"):
-			_shotgun(p, clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick), at, int(Items.INFO[item]["pellets"]))
+			_shotgun(p, seen, at, int(Items.INFO[item]["pellets"]))
+		elif energy == Armour.LASER:
+			_shoot(p, seen, at, Items.LASER_RANGE, Items.LASER_DAMAGE, CAUSE_LASER, Net.SHOT_LASER_HAND, Net.SOUND_LASER)
+		elif energy == Armour.PLASMA:
+			_shoot(p, seen, at, Items.PLASMA_RANGE, Items.PLASMA_DAMAGE, CAUSE_PLASMA, Net.SHOT_PLASMA_HAND, Net.SOUND_PLASMA)
 		else:
-			_shoot(p, clampi(seen_tick, server.tick - Player.HISTORY + 1, server.tick), at)
+			_shoot(p, seen, at)
 	elif rounds == 0:
 		var mag := p.slots.find(Items.ammo_of(item))
 		if mag >= 0:
@@ -246,14 +266,16 @@ func _stops_shot(x: int, y: int) -> bool:
 	return d >= 0 and server.doors.is_shut(d)
 
 
-func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
+func _shoot(p: Player, seen_tick: int, at: Vector2, range_cells: int = Items.PISTOL_RANGE, damage: int = Items.PISTOL_DAMAGE,
+		cause: int = CAUSE_SHOT, kind: int = Net.SHOT_BULLET, sound: int = Net.SOUND_SHOT) -> void:
+	## A single shot: a pistol's bullet, (v98) a laser rifle's beam or a plasma gun's bolt.
 	var from := place_at(p, seen_tick)      # (v78) from where the shooter stood, quarters and all
 	var way := at - from
 	if way.length() < 0.1:
 		return
 	way = way.normalized()
 	var start := Vector2i(p.st.x, p.st.y)
-	var reach := float(Items.PISTOL_RANGE)
+	var reach := float(range_cells)
 	var t := 0.3
 	while t < reach:
 		var c := from + way * t
@@ -277,10 +299,10 @@ func _shoot(p: Player, seen_tick: int, at: Vector2) -> void:
 	var end := from + way * best
 	if hit != null:
 		p.train(Net.SKILL_GUNS)
-	tell_shot(Net.SHOT_BULLET, hit != null, from, end, p.st.y, 0, 0, p)
-	server.chat.sound(Net.SOUND_SHOT, p.st.x, p.st.y, p.slot)
+	tell_shot(kind, hit != null, from, end, p.st.y, 0, 0, p)
+	server.chat.sound(sound, p.st.x, p.st.y, p.slot)
 	if hit != null:
-		hurt(hit, Items.PISTOL_DAMAGE, p, CAUSE_SHOT)
+		hurt(hit, damage, p, cause)
 
 
 func spared(p: Player, q: Player, pos: Vector2, from: Vector2, at: Vector2) -> bool:
@@ -339,7 +361,7 @@ func _shotgun(p: Player, seen_tick: int, at: Vector2, pellets: int) -> void:
 		p.train(Net.SKILL_GUNS)
 	for q: Player in hits:
 		hurt(q, Items.PELLET_DAMAGE * int(hits[q]), p, CAUSE_PELLET)
-		if int(hits[q]) >= Items.SHOTGUN_KNOCK and q.cond != Net.COND_DEAD:
+		if int(hits[q]) >= Items.SHOTGUN_KNOCK and q.cond != Net.COND_DEAD and not blocked(q, Vector2(p.st.x, p.st.y)):
 			stun_for(q, Items.SHOTGUN_KNOCK_SECONDS * (ROBOT_STUN if q.robot else 1.0))   # (v80) a blast at close range
 
 
@@ -393,8 +415,10 @@ func flash(cell: int, stun: float = FLASH_STUN, concuss: float = FLASH_CONCUSS) 
 			continue
 		if to != at and not Sight.clear_cached(map, server.doors, at, to, server.replication.lines):
 			continue
-		stun_for(q, stun * (ROBOT_STUN if q.robot else 1.0))
-		if not q.robot and _rng.randf() < concuss:
+		# (v98) a helmet's visor keeps half the flash off; it and a suit's helmet keep half the concussions
+		var helmet := q.worn.size() > Net.WEAR_HEAD and q.worn[Net.WEAR_HEAD] == Net.ITEM_HELMET
+		stun_for(q, stun * (ROBOT_STUN if q.robot else 1.0) * (Armour.HEAD_FLASH if helmet else 1.0))
+		if not q.robot and _rng.randf() < concuss * (Armour.HEAD_CONCUSS if Armour.headed(q.worn) else 1.0):
 			concuss_now(q)
 		fell += 1
 	return fell
@@ -432,6 +456,8 @@ func injure(q: Player, taken: float, cause: int) -> void:
 			q.arm = true
 			server.chat.say("%s: перелом руки!" % q.name)
 	var concuss := BLOW_CONCUSS if cause == CAUSE_BLOW else (BLAST_CONCUSS if cause == CAUSE_BLAST else 0.0)
+	if Armour.headed(q.worn):
+		concuss *= Armour.HEAD_CONCUSS   # (v98) a helmet (a suit's own too) keeps the head
 	if concuss > 0.0 and _rng.randf() < concuss:
 		concuss_now(q)
 
@@ -498,7 +524,7 @@ func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
 	server.chat.sound(Net.SOUND_SWING if q == null else (Net.SOUND_ZAP if stun > 0.0 else Net.SOUND_BLOW), p.st.x, p.st.y, p.slot)
 	if q != null:
 		hurt(q, damage, p, CAUSE_BLOW)
-		if stun > 0.0:
+		if stun > 0.0 and not blocked(q, from):
 			# (v70) a stun baton: down for a while, and now and then concussed
 			stun_for(q, stun * (ROBOT_STUN if q.robot else 1.0))
 			if _rng.randf() < STUN_CONCUSS - BLOW_CONCUSS:
@@ -508,11 +534,30 @@ func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
 func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 	## A wound. What it does to the body is worked out with everything else in
 	## Crew.update_vitals on the next tick. (v70) It may also injure (see injure).
+	if damage > 0 and by != null and blocked(q, Vector2(by.st.x, by.st.y)):
+		tell_hit(q, Net.BLOOD_RIOT)          # (v98) a hand shield held toward it takes the whole of it
+		return
+	var kind: int = ARMOUR_OF[cause] if cause >= 0 and cause < ARMOUR_OF.size() else Armour.OTHER
+	var hit := float(damage)
+	if hit > 0.0 and q.worn.size() > Net.WEAR_BELT and q.worn[Net.WEAR_BELT] == Net.ITEM_ESHIELD and q.shield > 0.0 \
+			and kind != Armour.BLOW and kind != Armour.BLAST and kind != Armour.OTHER:
+		# (v98) a personal energy shield soaks up shots while its charge lasts (plasma drains it twice over)
+		var cost := Armour.SHIELD_PLASMA if kind == Armour.PLASMA else 1.0
+		var soaked := minf(hit, q.shield / cost)
+		q.shield -= soaked * cost
+		q.shield_hit = server.tick
+		hit -= soaked
+		if hit <= 0.01:
+			tell_hit(q, Net.BLOOD_SHIELD)
+			if (q.pirate or q.ally) and by != null:
+				server.pirates.attacked(q, by)
+			return
 	if q.cond == Net.COND_OK:
 		server.chat.sound(Net.SOUND_CRY, q.st.x, q.st.y, q.slot)
-	if damage > 0:
+	if hit > 0.0:
 		tell_hit(q)
-	var taken := damage * q.toughness        # (v62) heavy armour takes half, our robot more
+	# (v62) heavy armour takes half, our robot more; (v98) what is worn takes its share by the kind of harm
+	var taken := hit * q.toughness * Armour.taken(q.worn, q.deflated, kind)
 	# (a wound that kills goes a little past the line, so that the next breath of good air does not undo it)
 	q.health = maxf(q.health - taken, Net.HEALTH_DEAD - 1.0)
 	q.wounds = minf(q.wounds + taken, Net.HEALTH_FULL - Net.HEALTH_DEAD + 1.0)
@@ -523,9 +568,26 @@ func hurt(q: Player, damage: int, by: Player, cause: int = CAUSE_OTHER) -> void:
 		server.defence.hurt_by(q, by)         # (v79) it knows where the pirate is now: it runs (or a guard fights)
 
 
-func tell_hit(q: Player) -> void:
+func blocked(q: Player, from: Vector2) -> bool:
+	## (v98) Does the hand shield q holds stop what comes at it from there (within Armour.RIOT_ARC of where it faces)?
+	if q.cond != Net.COND_OK or q.corpse or q.worn.size() <= Net.WEAR_SHIELD or q.worn[Net.WEAR_SHIELD] != Net.ITEM_RIOT:
+		return false
+	var to := from - Vector2(q.st.x, q.st.y)
+	var facing := Net.way(q.st.facing)
+	if to.length() < 0.01 or facing == Vector2.ZERO:
+		return false
+	if absf(facing.angle_to(to)) > Armour.RIOT_ARC + 0.01:
+		return false
+	server.usage.note(q, "riot")
+	return true
+
+
+func tell_hit(q: Player, blood: int = -1) -> void:
 	## (v75, the author's F1) A wound shows: those near on its deck see the figure flash and blood drip.
-	var msg := PackedByteArray([Net.S_HIT, Net.BLOOD_METAL if q.robot else Net.BLOOD_FLESH, 0, 0, 0, 0, 0, 0])
+	## (v98) Or a shield takes it: a blue flicker (an energy shield) or sparks (a hand shield).
+	if blood < 0:
+		blood = Net.BLOOD_METAL if q.robot else Net.BLOOD_FLESH
+	var msg := PackedByteArray([Net.S_HIT, blood, 0, 0, 0, 0, 0, 0])
 	msg.encode_u16(2, q.slot)
 	msg.encode_s16(4, q.st.x)
 	msg.encode_s16(6, q.st.y)
