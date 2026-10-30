@@ -47,6 +47,67 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		for k in Net.SHOTGUN_ROUNDS:
 			canvas.draw_rect(Rect2(at + Vector2(8 + k * 2, 11) * u, Vector2(1.3, 2) * u), Color(0.85, 0.2, 0.15) if k < n else Color(0.25, 0.25, 0.3))
 		return
+	if item >= Net.ITEM_LASER_GUN and item <= Net.ITEM_LASER_GUN + Net.LASER_ROUNDS:
+		# (v98) a laser rifle: a long white body, a red lens at the muzzle, a pip for every charge
+		canvas.draw_rect(Rect2(at + Vector2(1, 5) * u, Vector2(15, 4) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(2, 6) * u, Vector2(13, 2) * u), Color(0.82, 0.84, 0.88))
+		canvas.draw_rect(Rect2(at + Vector2(14.5, 6) * u, Vector2(1.5, 2) * u), Color(1.0, 0.2, 0.15))
+		canvas.draw_rect(Rect2(at + Vector2(3, 9) * u, Vector2(3, 4) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(8, 9) * u, Vector2(3, 2.5) * u), Color(0.25, 0.55, 0.85))
+		for k in Net.LASER_ROUNDS:
+			canvas.draw_rect(Rect2(at + Vector2(2 + k * 1.4, 14) * u, Vector2(1, 1.4) * u),
+				Color(1.0, 0.35, 0.3) if k < item - Net.ITEM_LASER_GUN else Color(0.25, 0.25, 0.3))
+		return
+	if item >= Net.ITEM_PLASMA_GUN and item <= Net.ITEM_PLASMA_GUN + Net.PLASMA_ROUNDS:
+		# (v98) a plasma gun: a stubby dark body with a glowing green coil, a pip for every charge
+		canvas.draw_rect(Rect2(at + Vector2(2, 5) * u, Vector2(12, 6) * u), Color(0.1, 0.1, 0.12))
+		canvas.draw_rect(Rect2(at + Vector2(3, 6) * u, Vector2(10, 4) * u), Color(0.32, 0.36, 0.34))
+		for k in 3:
+			canvas.draw_rect(Rect2(at + Vector2(5 + k * 2.5, 6) * u, Vector2(1.2, 4) * u), Color(0.4, 1.0, 0.5))
+		canvas.draw_circle(at + Vector2(14.5, 8) * u, 1.6 * u, Color(0.6, 1.0, 0.6))
+		canvas.draw_rect(Rect2(at + Vector2(4, 11) * u, Vector2(3, 3) * u), Color(0.1, 0.1, 0.12))
+		for k in Net.PLASMA_ROUNDS:
+			canvas.draw_rect(Rect2(at + Vector2(9 + k * 1.8, 12) * u, Vector2(1.2, 1.6) * u),
+				Color(0.4, 1.0, 0.5) if k < item - Net.ITEM_PLASMA_GUN else Color(0.25, 0.25, 0.3))
+		return
+	match item:
+		Net.ITEM_VEST:
+			# (v98) a bulletproof vest: dark plates, a grey strap
+			canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(4, 2) * u, at + Vector2(7, 4) * u, at + Vector2(10, 4) * u,
+				at + Vector2(13, 2) * u, at + Vector2(14, 15) * u, at + Vector2(3, 15) * u]), Color(0.1, 0.1, 0.12))
+			canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(5, 3.5) * u, at + Vector2(7, 5) * u, at + Vector2(10, 5) * u,
+				at + Vector2(12, 3.5) * u, at + Vector2(13, 14) * u, at + Vector2(4, 14) * u]), Color(0.3, 0.36, 0.3))
+			canvas.draw_rect(Rect2(at + Vector2(5, 9) * u, Vector2(7, 1.2) * u), Color(0.55, 0.57, 0.6))
+			return
+		Net.ITEM_HELMET:
+			# (v98) a combat helmet: a dome with a visor strip
+			canvas.draw_circle(at + Vector2(8.5, 9) * u, 6.0 * u, Color(0.1, 0.1, 0.12))
+			canvas.draw_circle(at + Vector2(8.5, 9) * u, 5.0 * u, Color(0.34, 0.4, 0.32))
+			canvas.draw_rect(Rect2(at + Vector2(2, 10) * u, Vector2(13, 5) * u), Color(0, 0, 0, 0))
+			canvas.draw_rect(Rect2(at + Vector2(3, 11) * u, Vector2(11, 2) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(5, 8.5) * u, Vector2(7, 1.6) * u), Color(0.55, 0.75, 0.9))
+			return
+		Net.ITEM_RIOT:
+			# (v98) a hand shield: a tall plate with a window
+			canvas.draw_rect(Rect2(at + Vector2(4, 1) * u, Vector2(9, 15) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(5, 2) * u, Vector2(7, 13) * u), Color(0.45, 0.48, 0.55))
+			canvas.draw_rect(Rect2(at + Vector2(6, 3.5) * u, Vector2(5, 2.5) * u), Color(0.6, 0.85, 1.0, 0.8))
+			canvas.draw_rect(Rect2(at + Vector2(5, 9) * u, Vector2(7, 1) * u), Color(0.95, 0.85, 0.3))
+			return
+		Net.ITEM_ESHIELD:
+			# (v98) a personal energy shield: a belt box with a blue ring over it
+			canvas.draw_rect(Rect2(at + Vector2(2, 10) * u, Vector2(13, 3) * u), Color(0.25, 0.2, 0.15))
+			canvas.draw_rect(Rect2(at + Vector2(6, 8) * u, Vector2(5, 6) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(7, 9) * u, Vector2(3, 4) * u), Color(0.3, 0.55, 0.9))
+			canvas.draw_arc(at + Vector2(8.5, 9) * u, 6.5 * u, PI * 1.1, PI * 1.9, 12, Color(0.5, 0.8, 1.0), 1.2 * u)
+			return
+		Net.ITEM_CELL:
+			# (v98) an energy cell: a stubby battery with a glowing band
+			canvas.draw_rect(Rect2(at + Vector2(5, 3) * u, Vector2(7, 12) * u), Color(0.1, 0.1, 0.12))
+			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.5, 0.52, 0.58))
+			canvas.draw_rect(Rect2(at + Vector2(7, 1.5) * u, Vector2(3, 1.5) * u), Color(0.75, 0.75, 0.8))
+			canvas.draw_rect(Rect2(at + Vector2(6, 7) * u, Vector2(5, 3) * u), Color(0.45, 0.95, 1.0))
+			return
 	if item > Net.ITEM_MEDKIT and item <= Net.ITEM_MEDKIT + Net.MEDKIT_USES:
 		# a first-aid kit: a white box with a red cross, and a pip for every use left
 		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.15, 0.15, 0.18))

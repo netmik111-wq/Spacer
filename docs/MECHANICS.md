@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v97.1 (version 0.90.1).
+Last updated: build v98 (version 0.91).
 
 Contents:
 
@@ -246,7 +246,12 @@ Contents:
   new crew member arrives wearing one. Without a spacesuit the **oxygen supply doesn't work**:
   there is no protection in a vacuum or without air.
 - A removed spacesuit is an item, and its tank keeps how much oxygen is left in it (in tenths).
-- The only control on the spacesuit is the **oxygen supply** (Q).
+- The spacesuit has two controls: the **oxygen supply** (Q) and (v98) **inflated or let down** (B).
+- (v98, the author's idea) **Inflated or let down.** B (or the right-click menu on oneself) switches the suit in
+  **2 s** (B again calls it off). A new or taken-off suit is inflated. **Inflated**: it keeps space out and takes
+  **10%** off every wound. **Let down**: it takes **30%** off every wound (plasma too), the tank still feeds the
+  mask, but in a vacuum the body takes the pressure's harm: up to **2 health a second** (as without a suit, minus
+  the suffocation). The HUD says "Скафандр сдут". Pirates' suits are always inflated.
 - While the supply is on and the tank isn't empty, the surrounding air doesn't matter: no suffocation, no damage
   from pressure. A full tank lasts **2 minutes**.
 - The supply doesn't turn on by itself: the player has to notice the lamp and press Q.
@@ -587,6 +592,37 @@ Contents:
 - Four pistol hits knock someone unconscious.
 - **Shooting skill** widens the hit zone: from **0.45** cells from the line of fire without
   skill to **0.55** with skill 100.
+
+### Energy weapons, armour and shields (v98)
+
+The author's arsenal step and his body armour, helmet and suit ideas; numbers from his answers on
+`https://claude.ai/artifact/JESXpjSKin5YKnoKTCcccr`.
+
+- **Laser rifle** (70 cr): damage **22**, range **18** cells, once every 0.25 s, **10 charges**; a laser wound
+  never bleeds. A thin red beam. **Plasma gun** (90 cr): damage **45**, range **10**, once every 0.7 s,
+  **4 charges**, a green bolt. Both reload on click with an **energy cell** (10 cr) from your slots.
+- **Kinds of harm**: bullets and pellets, laser, plasma, blows, blasts. Each piece of armour takes its share off:
+
+  | | bullets | laser | plasma | blows | blasts |
+  |---|---|---|---|---|---|
+  | Suit inflated | 10% | 10% | 10% | 10% | 10% |
+  | Suit let down | 30% | 30% | 30% | 30% | 30% |
+  | Vest (60 cr) | 45% | 45% | 0 | 60% | 30% |
+  | Helmet (35 cr) | 45% | 45% | 0 | 60% | 30% |
+
+  Shares multiply (a vest and a helmet: a bullet does 30% of its damage). The heavy stormtroopers' half is on top.
+- **A vest and a helmet never go on with a suit** (his A2: armour is for fighting aboard and boarding by pod),
+  and a suit never over them. A helmet, and a suit's own helmet, make a concussion **half as likely**; a helmet's
+  visor also halves a flashbang's stun. The ship sets out with one vest and one helmet.
+- **Energy shield** (120 cr, worn on the belt): a charge of **50** soaks up bullets, pellets and lasers whole;
+  plasma drains it **twice over**; blows and blasts pass it. **5 s** after its last hit it charges at **5 a second**.
+  A hit it takes shows as a blue flicker. Taken off, it loses its charge. The HUD shows "Энергощит: N из 50".
+- **Hand shield** (50 cr, worn on the arm, his S1 note): stops every shot and blow coming from within **60°** each
+  way of where one faces (sparks fly). With it on, **no gun fires** (a click says so); a baton and a stun baton do.
+- Worn places are now eight: suit, jumpsuit, backpack, goggles, vest, energy shield, helmet, hand shield.
+- **Boarders** (his H4): from the second cluster **30%** of gunners carry a laser rifle, from the third **15%** a
+  plasma gun (with an energy cell for a magazine). A heavy stormtrooper wears a vest and a helmet; one without a
+  suit wears each half the time. All of it comes off their bodies.
 
 ## 15. Healing
 
@@ -1071,6 +1107,14 @@ cutting beam → Reaper; autocannon → railgun → Hammer.
 - The console shows the reactor's power, our shield, each gun with its weapon, charge, power and change list,
   the enemy's hull, shield and guns, the time until it docks (or that it fights at a distance), how long until it
   jumps away while it runs, its systems and what knocking each out does.
+
+### Pulse laser and plasma cannon (v98)
+
+- **Pulse laser** (tier 2, 85 cr, power 2): three bolts of 1 damage, hit 70%, charge 10 s; any mount. In space
+  40 energy a bolt, three a burst every 1.2 s. Upgrades to the plasma cannon.
+- **Plasma cannon** (tier 3, 170 cr, power 3): one bolt of 3 damage, hit 70%, charge 18 s; half the time it passes
+  a shield as if there were none (as the blaster's pellets). In space 350 energy every 3.5 s. Bow or side mount only.
+- Pirate raiders and gunships may carry the pulse laser; gunships and cruisers the plasma cannon.
 
 ### Gun tiers, kinetic guns, point defence, loot (v58)
 
@@ -1633,6 +1677,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
 | F | drag a person lying down / let go |
 | X | (v81) hold position: a living wall nobody passes, see section 36 |
 | Q | oxygen supply |
+| B | (v98) let the suit down or inflate it (2 s) |
 | 1–6, mouse wheel | what's in hand |
 | Z | use the item in hand (flashlight) |
 | G | drop the item on the floor |

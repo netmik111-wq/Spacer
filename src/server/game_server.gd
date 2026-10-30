@@ -518,6 +518,8 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	elif kind == Net.C_SUIT:
 		if pkt.size() > 1:
 			inventory.set_supply(p, pkt[1] != 0)
+	elif kind == Net.C_INFLATE:
+		inventory.inflate(p)
 	elif kind == Net.C_RESPAWN:
 		if p.cond == Net.COND_DEAD and tick - p.died_tick >= Net.RESPAWN_TICKS:
 			crew.respawn_from_reserve(p)
@@ -756,6 +758,7 @@ func _tick() -> void:
 			continue
 		movement.move(p)
 		crew.update_vitals(p)
+		inventory.switch_tick(p)     # (v98) a suit let down or sealed, an energy shield charging
 		looting.update(p)
 		repairs.update(p)
 		workshop.update(p)

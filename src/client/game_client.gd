@@ -266,6 +266,8 @@ var concussed := false
 var weak := false                    # (v71) weak with long hunger: we walk slowly (SEC_VITALS)
 var meal := 0                        # (v71) the galley's dish at work on us (Net.ITEM_STEW.., 0 = none)...
 var meal_left := 0                   # ... and about how many seconds it has left
+var deflated := false                # (v98) our suit is let down (SEC_VITALS flags bit 7)
+var eshield := 0                     # (v98) the charge of the energy shield we wear (0..Net.SHIELD_FULL)
 var boards := 0                      # (v71) circuit boards we carry
 var toolbox := false                 # (v71) we carry a toolbox
 var summary := {}                    # (v75, the author's E1) the run's story at its end (Net.S_SUMMARY): ships, boarders, earned, deaths
@@ -674,6 +676,12 @@ func send_drop() -> void:
 	## Puts the thing in the hand down here.
 	if phase == PLAYING:
 		_peer.send(0, PackedByteArray([Net.C_DROP]), ENetPacketPeer.FLAG_RELIABLE)
+
+
+func send_inflate() -> void:
+	## (v98) Let the suit down, or seal it again.
+	if phase == PLAYING:
+		_peer.send(0, PackedByteArray([Net.C_INFLATE]), ENetPacketPeer.FLAG_RELIABLE)
 
 
 func send_act() -> void:
@@ -2441,6 +2449,8 @@ func _on_world(pkt: PackedByteArray) -> void:
 			concussed = (pkt[pos + 3] & 16) != 0
 			hauling = (pkt[pos + 3] & 32) != 0
 			weak = (pkt[pos + 3] & 64) != 0
+			deflated = (pkt[pos + 3] & 128) != 0
+			eshield = pkt[pos + 7 + Net.SLOTS + Net.WORN]
 			meal = pkt[pos + 5 + Net.SLOTS + Net.WORN]
 			meal_left = pkt[pos + 6 + Net.SLOTS + Net.WORN] * 5
 			work = pkt[pos + 4]

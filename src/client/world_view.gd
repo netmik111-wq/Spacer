@@ -134,7 +134,8 @@ const HEAT_COLOUR := Color(1.0, 0.45, 0.1)
 const SOUND_SECONDS := 1.6                        # how long the mark of a sound stays
 const SOUND_LOOK := ["", "шаги", "дверь", "шипение", "падение", "стук", "лестница", "выстрел", "удар", "крик",
 	"прыжок", "заряжание", "взрыв", "писк", "выстрел", "разряд",   # (v75: the kinds from 10 on were never played)
-	"щелчок", "перезарядка", "взял", "взмах", "телепорт"]   # (v82; v84 the swing; v89 a pirate teleport charging)
+	"щелчок", "перезарядка", "взял", "взмах", "телепорт",
+	"лазер", "плазма", "скафандр"]   # (v98)   # (v82; v84 the swing; v89 a pirate teleport charging)
 const HIT_FLASH := 0.25              # (v75, the author's F1) seconds a hurt figure shows red
 const CASING_SECONDS := 30.0         # (v82) how long a spent casing lies on the floor
 const CASING_FADE := 3.0             # and the last seconds of it, fading
@@ -789,8 +790,10 @@ func _update_ship(delta: float) -> void:
 	_red = move_toward(_red, 1.0 if red_alert else 0.0, delta * 1.5)
 	_alert_tint.color.a = _red * RED_ALERT_TINT * (0.75 + 0.25 * sin(now_s * 2.2))
 	for id: int in _flash.keys():
-		_flash[id] = float(_flash[id]) - delta
-		if float(_flash[id]) <= 0.0:
+		# (v98) a blue flicker (negative) counts up to nothing, a red one down
+		var was := float(_flash[id])
+		_flash[id] = was - delta if was > 0.0 else was + delta
+		if (was > 0.0) != (float(_flash[id]) > 0.0) or float(_flash[id]) == 0.0:
 			_flash.erase(id)
 	for i in range(_sparks.size() - 1, -1, -1):
 		_sparks[i][2] = float(_sparks[i][2]) - delta
@@ -997,7 +1000,7 @@ func _light_picture(light: Dictionary, key: int) -> Array:
 func _on_shot(kind: int, hit: int, from: Vector2, to: Vector2, delay: float, flight: float, by := -1) -> void:
 	var map := client.map
 	var deck := map.deck_of(clampi(roundi(from.y), 0, map.height - 1))
-	if kind >= Net.SHOT_CANNON and kind != Net.SHOT_FLASH:
+	if not Net.hand_shot(kind):
 		# (v56) a ship's gun: it flies, then bursts (FightFx); drawn at the middle of the cells
 		var lift := Vector2(_tile * 0.5, _tile * 0.5)
 		_fight.add(kind, hit, Vector2(from.x, from.y - deck * _stride) * _tile + lift, Vector2(to.x, to.y - deck * _stride) * _tile + lift,
@@ -1697,6 +1700,14 @@ func _draw_shade() -> void:
 		if int(sh[0]) == Net.SHOT_BULLET:
 			_shade.draw_line(a, b, Color(1.0, 0.9, 0.5, 0.85 * left), 1.5)
 			_shade.draw_circle(a + (b - a).normalized() * 10.0, 5.0 * left, Color(1.0, 0.85, 0.4, left))
+		elif int(sh[0]) == Net.SHOT_LASER_HAND:
+			# (v98) a laser rifle: a thin red beam with a white core
+			_shade.draw_line(a, b, Color(1.0, 0.15, 0.1, 0.8 * left), 3.0)
+			_shade.draw_line(a, b, Color(1.0, 0.85, 0.8, left), 1.0)
+		elif int(sh[0]) == Net.SHOT_PLASMA_HAND:
+			# (v98) a plasma gun: a fat green streak that fades from the muzzle, a ball where it struck
+			_shade.draw_line(a.lerp(b, 1.0 - left), b, Color(0.4, 1.0, 0.5, 0.75 * left), 5.0)
+			_shade.draw_circle(b, 4.0 + 6.0 * left, Color(0.6, 1.0, 0.6, left))
 		elif int(sh[0]) == Net.SHOT_FLASH:
 			# (v70) a flashbang or a bomb: a white burst
 			_shade.draw_circle(b, 40.0 + 60.0 * (1.0 - left), Color(1.0, 1.0, 0.95, 0.75 * left))
@@ -1767,7 +1778,7 @@ func _draw_mask() -> void:
 		_draw_light(_mask, _dim, Color(1, 0, 0, DIM), 0)
 		_draw_light(_mask, _near, Color(1, 0, 0, NEAR * 0.5), 2)   # and a little more right around us
 	for sh: Array in _shots:
-		if int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_BULLET:
+		if int(sh[4]) == _deck_shown and (int(sh[0]) == Net.SHOT_BULLET or int(sh[0]) == Net.SHOT_LASER_HAND or int(sh[0]) == Net.SHOT_PLASMA_HAND):
 			_mask.draw_circle(sh[2], 26.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))   # a muzzle flash lights the dark
 		elif int(sh[4]) == _deck_shown and int(sh[0]) == Net.SHOT_FLASH:
 			_mask.draw_circle(sh[3], 140.0, Color(0, 0, 1, float(sh[5]) / SHOT_SECONDS))  # (v70) a flashbang lights the room
@@ -2231,6 +2242,16 @@ func _on_hit(blood: int, id: int, x: int, y: int) -> void:
 	## (v75, the author's F1) Somebody near was hurt: the figure flashes red, a few drops
 	## of blood stay on the floor (sparks fly off a robot), the blow is heard where there is air.
 	var map := client.map
+	if blood == Net.BLOOD_SHIELD or blood == Net.BLOOD_RIOT:
+		# (v98) a shield took it: no blood, a blue flicker on the figure (an energy shield) or sparks off the shield
+		var spot := Vector2(x, map.local_y(y)) * _tile + Vector2(16.0, 10.0)
+		if map.deck_of(y) >= 0 and map.deck_of(y) < _decks.size():
+			_sparks.append([map.deck_of(y), spot, 0.35, Color(0.45, 0.75, 1.0) if blood == Net.BLOOD_SHIELD else Color(1.0, 0.85, 0.35)])
+		if blood == Net.BLOOD_SHIELD:
+			_flash[id] = -HIT_FLASH          # (a negative flash is drawn blue)
+		if map.deck_of(y) == client.my_deck():
+			_audio.play(Net.SOUND_ZAP if blood == Net.BLOOD_SHIELD else Sounds.HIT_METAL, _feet(Vector2(x, map.local_y(y))), 8.0, not can_see(x, y), -4.0)
+		return
 	_flash[id] = HIT_FLASH
 	if id == client.my_id:
 		_shake = maxf(_shake, HURT_SHAKE * Options.shake)   # (v82, his O1 note) we feel our own hurt
@@ -2400,7 +2421,8 @@ func _draw_fx(d: int) -> void:
 		for j in 5:
 			var dir := Vector2.from_angle(float(j) * 1.3 + float((sp[1] as Vector2).x))
 			var from: Vector2 = (sp[1] as Vector2) + dir * (1.0 - k) * 10.0
-			pen.draw_line(from, from + dir * 3.0, Color(1.0, 0.85, 0.35, k), 1.0)
+			var tint: Color = sp[3] if sp.size() > 3 else Color(1.0, 0.85, 0.35)
+			pen.draw_line(from, from + dir * 3.0, Color(tint, k), 1.0)
 	# the engine: its light falls on the floor in front of it, so its state can be
 	# read from across the room, or from the deck above through a glass floor
 	for cell: int in map.engine.keys():
@@ -2684,7 +2706,8 @@ func _process(delta: float) -> void:
 			sprite.position += (Vector2(2.0 - CHAR_H * 0.5, -7.0) * t * zoom).round() / zoom
 			sprite.modulate = Color(0.55, 0.55, 0.6) if cond == Net.COND_DEAD else Color(0.85, 0.85, 0.88)
 		if _flash.has(id):
-			sprite.modulate = sprite.modulate.lerp(Color(1.0, 0.2, 0.2), clampf(float(_flash[id]) / HIT_FLASH, 0.0, 1.0))
+			var lit := float(_flash[id])
+			sprite.modulate = sprite.modulate.lerp(Color(1.0, 0.2, 0.2) if lit > 0.0 else Color(0.4, 0.7, 1.0), clampf(absf(lit) / HIT_FLASH, 0.0, 1.0))
 	_fade_afterimages(delta)
 	for id: int in _views.keys():
 		if not client.ents.has(id):

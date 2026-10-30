@@ -44,7 +44,7 @@ const SLOT_GAP := 4.0
 const BIG_SLOT_PX := 60.0            # and in the search panel
 const BIG_SLOT_GAP := 8.0
 const WORN_GAP := 12.0               # between what is worn (on the left) and the slots
-const WORN_MARKS := ["С", "К", "Р", "О"]  # an empty place for a suit, a jumpsuit, a backpack, (v93) goggles
+const WORN_MARKS := ["С", "К", "Р", "О", "Б", "Э", "Ш", "Щ"]  # an empty place for a suit, a jumpsuit, a backpack, (v93) goggles, (v98) a vest, an energy shield, a helmet, a hand shield
 const HINT_LEFT := 550.0             # the hint line keeps clear of the chat (this far from the left edge)
 const HINT_RIGHT := 250.0            # and of the instruments (this far from the right edge)
 const CHAT_VISIBLE_SEC := 12.0        # a chat line stays this long, then fades
@@ -1665,6 +1665,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			client.send_drag(client.lying_near())
 	elif Options.pressed(event, "suit"):
 		client.send_suit(not client.supply)
+	elif Options.pressed(event, "inflate"):
+		client.send_inflate()                 # (v98, the author's idea)
 	elif Options.pressed(event, "drop"):
 		client.send_drop()
 	elif Options.pressed(event, "lie"):
@@ -2025,6 +2027,9 @@ func _open_menu(at: Vector2) -> void:
 				add.call("Взять: %s" % Items.name_of(pile[k]), func() -> void: client.send_take(cell, at_k))
 	if client.dragging():
 		add.call("Отпустить  [%s]" % Options.key_text("drag"), func() -> void: client.send_drag(Net.NOBODY))
+	if c == Vector2i(client.pred.x, client.pred.y) and client.has_suit() and client.my_cond == Net.COND_OK:
+		# (v98, the author's idea) the suit let down for more armour, or sealed against space
+		add.call("%s скафандр  [%s]" % ["Надуть" if client.deflated else "Сдуть", Options.key_text("inflate")], func() -> void: client.send_inflate())
 	if client.tele_state != Net.TELE_NONE:
 		# (v97) our teleporter: from its pad, or home from the ship alongside
 		var wait := "" if client.tele_state == Net.TELE_READY else ("  (гудит)" if client.tele_state == Net.TELE_HUMMING else "  (ещё %d с)" % client.tele_secs)
@@ -2558,6 +2563,10 @@ func _process(delta: float) -> void:
 		lines.append("Травмы: " + ", ".join(hurt))
 	if client.weak:
 		lines.append("Слабость от голода: идёте медленно")       # (v71)
+	if client.has_suit() and client.deflated:
+		lines.append("Скафандр сдут (%s): брони больше, космос не держит" % Options.key_text("inflate"))   # (v98)
+	if client.worn.size() > Net.WEAR_BELT and client.worn[Net.WEAR_BELT] == Net.ITEM_ESHIELD:
+		lines.append("Энергощит: %d из %d" % [client.eshield, Net.SHIELD_FULL])
 	if client.meal != 0 and client.meal_left > 0:
 		lines.append("%s: %s, ещё %d:%02d" % [Items.name_of(client.meal), {Net.ITEM_STEW: "раны затягиваются",
 			Net.ITEM_COFFEE: "работа быстрее"}.get(client.meal, ""), client.meal_left / 60, client.meal_left % 60])

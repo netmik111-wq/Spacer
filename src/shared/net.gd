@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 71
+const PROTOCOL := 72
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -50,6 +50,11 @@ static func dir_of(dx: int, dy: int) -> int:
 static func way(dir: int) -> Vector2:
 	## The direction as a vector of length 1 (zero for none).
 	return Vector2(DX[dir], DY[dir]).normalized() if dir > 0 and dir <= DIRS else Vector2.ZERO
+
+
+static func hand_shot(kind: int) -> bool:
+	## (v98) Is an S_SHOT of that kind fired by hand (drawn as a trace, not as a ship's shot flying)?
+	return kind == SHOT_BULLET or kind == SHOT_BLOW or kind == SHOT_FLASH or kind == SHOT_LASER_HAND or kind == SHOT_PLASMA_HAND
 
 # --- packets, client -> server (first byte) ---
 const C_HELLO := 1                  # u16 protocol, u8 name length, name, u8 job (JOB_*), u8 ship asked, (v87) u8 1 = a woman
@@ -123,12 +128,17 @@ const SLOTS := 12                   # slots for things: BASE_SLOTS always, POCKE
 const BASE_SLOTS := 6
 const POCKETS := 2                  # slots BASE_SLOTS .. BASE_SLOTS + POCKETS - 1
 const PACK_SLOTS := 4               # the last ones
-const WORN := 4                     # what is worn, one thing each:
+const WORN := 8                     # what is worn, one thing each:
 const WEAR_SUIT := 0                #   a spacesuit (helmet and oxygen tank): without it there is no supply
 const WEAR_JUMPSUIT := 1            #   a jumpsuit: its pockets
 const WEAR_PACK := 2                #   a backpack
 const WEAR_EYES := 3                #   (v93, the author's O1) goggles: night vision or thermal
-const VITALS_BYTES := 7 + SLOTS + WORN  # (v71) then u8 the meal at work (ITEM_STEW.. or 0), u8 its seconds left / 5
+const WEAR_BODY := 4                #   (v98, the author's body armour) a bulletproof vest, over a suit too
+const WEAR_BELT := 5                #   (v98) a personal energy shield on the belt
+const WEAR_HEAD := 6                #   (v98, the author's "don't forget about helmets") a helmet; a suit has its own
+const WEAR_SHIELD := 7              #   (v98, his S1 note) a hand shield on the arm: no gun fires with it, a baton does
+const VITALS_BYTES := 8 + SLOTS + WORN  # (v71) then u8 the meal at work (ITEM_STEW.. or 0), u8 its seconds left / 5;
+                                        # (v98) then u8 the energy shield's charge (0..SHIELD_FULL); flags bit 7: the suit deflated
 # how a character looks (S_OUTFIT): outfit * 2 + 1 with a backpack; a row of assets/chars.png per colour and look
 const OUTFIT_SUIT := 0
 const OUTFIT_JUMPSUIT := 1
@@ -153,6 +163,17 @@ const MEDKIT_USES := 5
 const ITEM_SUIT := 30               # a spacesuit with an empty tank; ITEM_SUIT + n has n tenths of a tank
 const SUIT_TANK_STEPS := 10
 const ITEM_JUMPSUIT := 41
+# (v98, the author's arsenal and body armour) armour, helmets and personal shields
+const ITEM_VEST := 43               # a bulletproof vest (WEAR_BODY): takes much off all but plasma; never with a suit
+const ITEM_HELMET := 44             # a combat helmet (WEAR_HEAD): a little off bullets, lasers and blows; fewer concussions
+const ITEM_RIOT := 45               # a hand shield (WEAR_SHIELD): it stops what comes from the front
+const ITEM_ESHIELD := 46            # a personal energy shield (WEAR_BELT): soaks up shots until its charge runs out
+const ITEM_PLASMA_GUN := 65         # (v98) a plasma gun with no charges; ITEM_PLASMA_GUN + n holds n (65..69)
+const PLASMA_ROUNDS := 4
+const ITEM_CELL := 70               # (v98) an energy cell: recharges a laser rifle or a plasma gun
+const ITEM_LASER_GUN := 89          # (v98) a laser rifle with no charges; ITEM_LASER_GUN + n holds n (89..99)
+const LASER_ROUNDS := 10
+const SHIELD_FULL := 50             # (v98) a full personal energy shield's charge
 const ITEM_BACKPACK := 42
 const ITEM_GUN := 50                # a ship's weapon in the cargo: ITEM_GUN + Weapons.* (51..60; later ones ITEM_GUN_MORE); kept in the
                                     # supply locker only, never carried (Items "cargo")
@@ -170,6 +191,7 @@ const ITEM_NVG := 191               # (v93, the author's O1) night vision goggle
 const ITEM_THERMAL := 192           # (v93) thermal goggles: living people show through walls nearby, as heat
 const ITEM_ROBOT := 195             # (v62) a security robot in its crate: set down on the floor, it switches on and guards
 const ITEM_GUN_LATE := 200          # (v62) weapons from Weapons.HORNET on: ITEM_GUN_LATE + (w - Weapons.HORNET) (200..203; cargo)
+const ITEM_GUN_NEW := 228           # (v98) weapons from Weapons.PULSE on: ITEM_GUN_NEW + (w - Weapons.PULSE) (228, 229; cargo)
 const ITEM_SEED := 204              # (v63) a packet of seeds: ITEM_SEED + Plants.seed_item (204..227; carried, kept in the locker)
 const ITEM_FOOD := 230              # (v63) a ration: the crew eats them from the supply locker at every jump (see Garden)
 const ITEM_CARGO := 231             # (v63) a quest's crate of cargo, for a station (cargo: kept in the locker)
@@ -281,6 +303,7 @@ const POD_HOME := 4                 # flying home
 const POD_MENDING := 5              # shot down on its way: back at its bay, being made good
 const POD_SEATS := 2
 const C_TELEPORT := 41              # (v97) our teleporter: u8 TELE_SEND (at the module bay), TELE_HOME (on the ship alongside), TELE_ALL (at the bay)
+const C_INFLATE := 42               # (v98, the author's idea) nothing else: let the suit down, or seal it again (Armour.SWITCH_SECONDS)
 const S_TELEPORT := 53              # (v97) to each player: u8 TELE_NONE/READY/CHARGING/HUMMING of the teleporter that serves them, u8 seconds to ready
 const TELE_SEND := 0
 const TELE_HOME := 1
@@ -513,6 +536,8 @@ const SHOT_FLASH := 22              # (v70) a flashbang or a boarder's bomb burs
 const SHOT_POD := 23                # (v95) a pirates' boarding pod flying in space (S_ARENA_SHOT only)
 const SHOT_DRONE := 24              # (v95) an assault drone flying in space (S_ARENA_SHOT only)
 const SHOT_ROCK := 25               # (v96, my R1 pick) a meteor flying at our ship in a meteor stream (S_ARENA_SHOT only)
+const SHOT_LASER_HAND := 26         # (v98) a laser rifle's beam: a thin red line, there at once
+const SHOT_PLASMA_HAND := 27        # (v98) a plasma gun's bolt: a thick green streak
 # (for a ship's shot, hit 0 = it was stopped by a shield short of the hull, LANDED where it lands, MISSED: flies past)
 const LANDED := 1
 const MISSED := 2
@@ -598,6 +623,8 @@ const S_SHUTTLE := 49               # (v86) the fleet's shuttle: u8 the dock it 
 const FLEET_MAX := 2                # (v85, the author's FS2) ships in our fleet at most
 const BLOOD_FLESH := 0
 const BLOOD_METAL := 1
+const BLOOD_SHIELD := 2             # (v98) a personal energy shield taking the shot: a blue flicker, no blood
+const BLOOD_RIOT := 3               # (v98) a hand shield taking it: sparks off the shield
 const GROW_EMPTY := 0
 const GROW_GROWING := 1
 const GROW_RIPE := 2
@@ -711,7 +738,10 @@ const SOUND_RELOAD := 17             # (v82) a magazine pushed home
 const SOUND_PICKUP := 18             # (v82) a thing picked up
 const SOUND_SWING := 19              # (v84, the author's S1) a blow that met nothing: a whoosh
 const SOUND_TELEPORT := 20           # (v89, his note) a pirate teleport charging: a hum and a shimmer where one will appear
-const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4, 4, 30]
+const SOUND_LASER := 21              # (v98) a laser rifle: a sharp electric zip
+const SOUND_PLASMA := 22             # (v98) a plasma gun: a deep hissing thump
+const SOUND_SUIT := 23               # (v98) a suit inflating or letting its air out
+const SOUND_RANGE: Array[int] = [0, 6, 8, 12, 10, 5, 7, 18, 8, 12, 40, 6, 24, 6, 20, 7, 4, 5, 4, 4, 30, 14, 16, 4]
 const SOUND_AIR := 0.2              # below this share of normal pressure there is no sound
 const SOUND_CONTACT := 1.5          # this close a sound is felt even in a vacuum
 

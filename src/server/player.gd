@@ -4,6 +4,7 @@ extends RefCounted
 const Mover := preload("res://src/shared/mover.gd")
 const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
+const Armour := preload("res://src/shared/armour.gd")
 
 var slot := 0
 var peer: ENetPacketPeer = null      # null for bots
@@ -20,6 +21,10 @@ var robot := false                   # (v62) a machine (an assault drone, a guar
 var quarters := false                # (v78) a player's character: steps a quarter of a tile at a time (Mover.State.fine)
 var ally := false                    # (v62) our security robot: the server moves it against pirates; it is not crew
 var toughness := 1.0                 # (v62) the share of a wound's damage it takes (heavy armour: half)
+var deflated := false                # (v98, the author's idea) its suit is let down: more armour, no keeping space out
+var suit_switch := 0                 # (v98) the tick a suit being let down or sealed is done (0 = none)
+var shield := 0.0                    # (v98) the charge of the energy shield it wears (0..Net.SHIELD_FULL)
+var shield_hit := 0                  # (v98) the last tick that shield took a shot
 var ready_tick := 0                  # its hands are free again from this tick (after a shot, a blow, a reload)
 var history := PackedVector2Array()  # where it was drawn on each of the last HISTORY ticks (see Combat.place_at)
 # what a pirate has in mind (see Pirates)
@@ -272,13 +277,17 @@ func take_off(wear: int) -> int:
 		item = Items.suit_with(tank)
 		supply = false
 		tank = 0.0
+		deflated = false                 # (v98) a suit taken off is folded sealed
+		suit_switch = 0
+	elif wear == Net.WEAR_BELT:
+		shield = 0.0                     # (v98) a shield taken off loses its charge
 	return item
 
 
 func put_on(item: int) -> bool:
 	## Puts it on, if that place is free.
 	var wear := Items.worn_as(item)
-	if wear < 0 or worn[wear] != Net.ITEM_NONE:
+	if wear < 0 or worn[wear] != Net.ITEM_NONE or Armour.clash(worn, item) != "":
 		return false
 	if wear == Net.WEAR_SUIT:
 		tank = float(Items.tank_of(item)) / Net.SUIT_TANK_STEPS

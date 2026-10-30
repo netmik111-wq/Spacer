@@ -2124,3 +2124,33 @@ T1 C. His v96 page answers came in the same evening: all A, so v96 stood as buil
   to its edge. Mine: the wall side's top 4 rows repeat row 4 (`JOINT_TOPS`); the band side keeps his drawing, as it
   opens into the room's wall. I checked every touching pair of wall tiles in all maps: the wall side now differs from
   the piece above only by the rib's edge, as between two plain side-wall pieces.
+
+## v98: arsenal, body armour, helmets, suits that inflate
+
+He asked for the arsenal step (lasers and plasma, hand and energy shields) and added body armour, suits that inflate
+or let down, and "don't forget about helmets". Questions on `https://claude.ai/artifact/JESXpjSKin5YKnoKTCcccr`: all A
+but his notes on A2, W1 and S1 (below).
+- **Kinds of harm** (`src/shared/armour.gd`, shared so hints and server agree): bullets/pellets, laser, plasma, blows,
+  blasts and "other" (ship hits inside, the admin's, a bruise: no armour). `Combat.hurt` maps its CAUSE_* to one.
+- **His numbers for the vest** (A2): blows 60%, bullets and lasers 45%, blasts 30%. Plasma 0: his H2 A says a vest
+  and helmet do not save from plasma, and plasma has to be the answer to armour. **The helmet the same** (W1). Shares
+  multiply, so a vest and helmet leave 30% of a bullet: strong, by his word; numbers wait for his playtests.
+- **No armour with a suit, either way round** (A2: "armour is for inside our ship or boarding by drop pod"). So the
+  suit itself is the armour outside: 10% sealed, 30% let down (A1 A).
+- **A let-down suit still feeds the mask** (my pick, A1 A): only the pressure's harm (`Vitals.pressure_harm`, up to
+  2/s) reaches the body. Taking breath away too would make letting down useless in a fight, where the ship loses air.
+  Switching takes 2 s (`Armour.SWITCH_SECONDS`) so it is a choice made before a fight, not a reflex. Taken off, a suit
+  is folded sealed. Pirates never let theirs down.
+- **A suit's helmet counts as a helmet for concussions** (W1), but only a real helmet's visor halves a flashbang:
+  boarders mostly wear suits, and halving flashbangs on them all would quietly weaken a v70 tool.
+- **The hand shield is worn, not held** (his S1 note "a slot for the shield; no shooting with it, but a baton"): an
+  eighth worn place, `WEAR_SHIELD`. It blocks within 60° of facing (the server's 8-way facing), shots and blows alike;
+  a blocked shotgun blast does not knock down, a blocked stun baton does not stun.
+- **Energy shield** (S2 A): charge on the Player (`shield`), not in the item: one item number each, and it charges
+  again in 10 s anyway. Blows pass it (Dune's slow blade), plasma drains it twice.
+- **Energy guns share one cell** (H3 A). Their charges are the item number, as a pistol's rounds: laser 89..99,
+  plasma 65..69, the cell 70 (free numbers; 228/229 the new ship guns, `Net.ITEM_GUN_NEW`, since seeds took 204..227).
+- **Two ship guns** (G1 A): pulse laser (tier 2, any mount) and plasma cannon (tier 3, CLASS_BLASTER so it slips
+  shields half the time like the blaster, bow or side). No tier 3 effects for them: `ITEM_GUN_FX` has no room.
+- **Fire guns wait** (G2 A) for the fire question round. Armour is not drawn on the body (the artist's layers).
+- admintest assumed every gun loads `PISTOL_ROUNDS`; it now asks `Items.loaded`.

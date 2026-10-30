@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v97.1 (version 0.90.1: v97's derelicts made from pieces, their robots and vaults, our teleporter; v97.1 fixed the side-wall joints' notch) is the latest. Plans one to four are done except the darkness front (the
+Build v98 (version 0.91: the arsenal, body armour, helmets, suits that inflate) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -154,7 +154,12 @@ v97 (his answers on `https://claude.ai/artifact/7jRYnpwScA1mbRd5FsiuQX`, all A b
 pieces (`place_maker.gd`, one deck, 7 rows), rogue robots that wake and hold their places, a welded vault with its keeper
 and a prize; our teleporter is a pad machine (`t`, his T1 C) the found crate goes into (`teleporter.gd`).
 v97.1 (his screenshot): the side-wall joints (├ ┤) lost the dark notch his internal corners' top bevel drew (`JOINT_TOPS`).
-Next: arsenal, races (a lore question round first), choosing the enemy deck (when enemies have decks), places with decks.
+v98 (his answers on `https://claude.ai/artifact/JESXpjSKin5YKnoKTCcccr`, all A but his A2/W1 numbers and S1): a laser rifle and a
+plasma gun in the hand (energy cells), armour by kind of harm (`src/shared/armour.gd`: vest and helmet 60/45/45/30, nothing
+off plasma, never with a suit; a suit 10% inflated, 30% let down with B), an energy shield on the belt, a hand shield on the
+arm (no gun with it), boarders with lasers/plasma/armour down the road, the pulse laser and plasma cannon on ships.
+Next: races (a lore question round first), asteroid generation and landing on/near asteroids (his 2026-10-30 roadmap add),
+choosing the enemy deck (when enemies have decks), places with decks.
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
 
 The author's standing rules (details in `docs/DECISIONS.md`):
@@ -185,7 +190,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 52 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 53 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -238,6 +243,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/flighttest.gd (since v95: flying the system, autopilot, edge, held, jump, practice fire, break-off, ambush, pods)
     godot --headless --path . --script res://tools/podtest.gd (since v96: places' drawings, meteors in space, our boarding pod, bots' radio, falling back, shotgun, one target)
     godot --headless --path . --script res://tools/placetest.gd (since v97: made derelicts, their robots, the vault and its keeper, the teleporter)
+    godot --headless --path . --script res://tools/arsenaltest.gd (since v98: energy guns, armour by kind, suits let down, energy and hand shields, boarders' arms, new ship guns)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -262,7 +268,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 52 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 53 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -652,6 +658,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `Gear.item_of`/`of_item`; it goes into the pad (`ShipMap.teleporter`, wall -> front), not the bay, and sets
   `Ship.teleporter`. Whoever it put over there is `Teleporter.went`; `Derelict._leave` sends them home first. Use target 52
   is the pad. C_TELEPORT, S_TELEPORT (protocol 71). `derelict.layout_for_test` picks the drawing the next derelict comes in; a test that boards a derelict for another reason sets `derelict.made = {}` after it comes, or its robots may wake and fight (airlocktest went red so).
+- (v98) Wounds go through `Combat.hurt(q, damage, by, cause)`: the cause picks the kind of harm (`Combat.ARMOUR_OF`,
+  `Armour.*`), and what is worn takes its share (`Armour.taken`), after a hand shield (`Combat.blocked`, by `by`'s place) and
+  an energy shield (`Player.shield`). Pass `by` for anything a person or pirate does, and a real cause: CAUSE_OTHER is never
+  armoured. Worn places are 8 (`WEAR_BODY`, `WEAR_BELT`, `WEAR_HEAD`, `WEAR_SHIELD`); put things on through `Player.put_on`,
+  which refuses a vest or helmet with a suit (`Armour.clash`). A let-down suit is `Player.deflated` (vitals flags bit 7;
+  `Vitals.pressure_harm` on the tank). Energy guns are rounds items with `"energy"` (`Items.energy`); new ship guns from
+  `Weapons.PULSE` map to `Net.ITEM_GUN_NEW` (228). SEC_VITALS has one more byte (the shield's charge); C_INFLATE (protocol 72).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

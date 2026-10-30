@@ -15,7 +15,7 @@ const CELL := 56.0
 const GAP := 8.0
 const LABEL_H := 16.0
 const ROW_H := CELL + LABEL_H + 26.0       # a cell, its name under it, the group's caption over it
-const WORN_NAMES: Array[String] = ["Скафандр", "Комбинезон", "Рюкзак"]
+const WORN_NAMES: Array[String] = ["Скафандр", "Комбинезон", "Рюкзак", "Очки", "Бронежилет", "Энергощит", "Каска", "Ручной щит"]   # (v93, v98)
 # the groups of slots: caption, first slot, how many
 const GROUPS: Array = [["При себе", 0, Net.BASE_SLOTS], ["Карманы комбинезона", Net.BASE_SLOTS, Net.POCKETS],
 	["Рюкзак", Net.BASE_SLOTS + Net.POCKETS, Net.PACK_SLOTS]]
@@ -28,6 +28,7 @@ var _drag := -1                       # (v73, the author's H2 note) the slot who
 var _act: Button
 var _drop: Button
 var _supply: Button
+var _inflate: Button                  # (v98)
 
 
 func setup(p_client: GameClient) -> void:
@@ -75,6 +76,7 @@ func setup(p_client: GameClient) -> void:
 	_act = _button(row, func() -> void: client.send_act())
 	_drop = _button(row, func() -> void: client.send_drop())
 	_supply = _button(row, func() -> void: client.send_suit(not client.supply))
+	_inflate = _button(row, func() -> void: client.send_inflate())
 	var tip := Label.new()
 	tip.add_theme_font_size_override("font_size", 12)
 	tip.modulate = Color(1, 1, 1, 0.6)
@@ -141,7 +143,9 @@ func _draw_canvas() -> void:
 			ItemArt.draw(_canvas, cell, Items.suit_with(float(client.tank) / Net.TANK_FULL) if k == Net.WEAR_SUIT else thing)   # (v80) its real tank
 		var label := WORN_NAMES[k]
 		if k == Net.WEAR_SUIT and thing != Net.ITEM_NONE:
-			label += " %d%%" % (client.tank * 100 / Net.TANK_FULL)
+			label += " %d%%%s" % [client.tank * 100 / Net.TANK_FULL, ", сдут" if client.deflated else ""]
+		elif k == Net.WEAR_BELT and thing != Net.ITEM_NONE:
+			label += " %d" % client.eshield
 		_canvas.draw_string(font, cell.position + Vector2(-20, CELL + 13), label if thing != Net.ITEM_NONE else "нет",
 			HORIZONTAL_ALIGNMENT_CENTER, CELL + 40, 11, ink if thing != Net.ITEM_NONE else dim)
 	for k in GROUPS.size():
@@ -204,7 +208,7 @@ func _process(_delta: float) -> void:
 	if client.my_cond != Net.COND_OK:
 		visible = false
 		return
-	var now := client.slots + client.worn + PackedByteArray([client.hand, client.tank, 1 if client.supply else 0])
+	var now := client.slots + client.worn + PackedByteArray([client.hand, client.tank, 1 if client.supply else 0, 1 if client.deflated else 0, client.eshield])
 	if _canvas.custom_minimum_size.x < _group_x(GROUPS.size() - 1) + _group_width(GROUPS.size() - 1):
 		_canvas.custom_minimum_size.x = _group_x(GROUPS.size() - 1) + _group_width(GROUPS.size() - 1)
 	if now == _shown:
@@ -225,7 +229,7 @@ func _process(_delta: float) -> void:
 	else:
 		var what := Items.name_of(item)
 		if Items.rounds(item) >= 0:
-			what += ", патронов %d из %d" % [Items.rounds(item), Items.full_rounds(item)]
+			what += ", %s %d из %d" % ["зарядов" if Items.energy(item) >= 0 else "патронов", Items.rounds(item), Items.full_rounds(item)]
 		elif Items.uses(item) >= 0:
 			what += ", применений %d из %d" % [Items.uses(item), Net.MEDKIT_USES]
 		elif Items.tank_of(item) >= 0:
@@ -243,3 +247,5 @@ func _process(_delta: float) -> void:
 	_drop.text = "Положить на пол (%s)" % Options.key_text("drop")
 	_supply.visible = client.has_suit()
 	_supply.text = "%s подачу кислорода (%s)" % ["Выключить" if client.supply else "Включить", Options.key_text("suit")]
+	_inflate.visible = client.has_suit()
+	_inflate.text = "%s скафандр (%s)" % ["Надуть" if client.deflated else "Сдуть", Options.key_text("inflate")]
