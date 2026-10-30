@@ -23,6 +23,30 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 	if own != null:
 		canvas.draw_texture_rect(own, cell, false)      # (v74) a picture of one's own (the «sprites» folder)
 		return
+	if item != Net.ITEM_NONE and not _drawn(canvas, cell, item):
+		no_sprite(canvas, cell)
+
+
+static func no_sprite(canvas: CanvasItem, cell: Rect2) -> void:
+	## (v100, the author: "need a picture NO SPRITE if it doesn't have any") A thing the game has no picture for: a
+	## pink and black card that says so, plain to see, until a picture is drawn (or put in the «sprites» folder).
+	var half := cell.size * 0.5
+	for k in 4:
+		var corner := cell.position + Vector2(k % 2, k / 2) * half
+		canvas.draw_rect(Rect2(corner, half), Color(1.0, 0.0, 0.85) if (k == 0 or k == 3) else Color(0.05, 0.05, 0.05))
+	canvas.draw_rect(cell, Color(1.0, 1.0, 1.0), false, maxf(1.0, cell.size.x / 17.0))
+	var font := ThemeDB.fallback_font
+	var size := maxi(6, int(cell.size.x * 0.24))
+	for line: int in 2:
+		var text := "NO" if line == 0 else "SPRITE"
+		var wide := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+		var spot := cell.position + Vector2((cell.size.x - wide) * 0.5, cell.size.y * (0.45 + 0.35 * line))
+		canvas.draw_string_outline(font, spot, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, maxi(2, size / 4), Color.BLACK)
+		canvas.draw_string(font, spot, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color.WHITE)
+
+
+static func _drawn(canvas: CanvasItem, cell: Rect2, item: int) -> bool:
+	## The game's own picture of that thing, drawn in code; (v100) false if it has none (draw() then shows NO SPRITE).
 	var u := cell.size.x / 17.0
 	var at := cell.position
 	if item >= Net.ITEM_PISTOL and item <= Net.ITEM_PISTOL + Net.PISTOL_ROUNDS:
@@ -35,7 +59,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		for k in Net.PISTOL_ROUNDS:
 			canvas.draw_rect(Rect2(at + Vector2(9 + (k % 4) * 1.6, 9 + (k / 4) * 2.2) * u, Vector2(1, 1.4) * u),
 				Color(0.95, 0.75, 0.25) if k < n else Color(0.25, 0.25, 0.3))
-		return
+		return true
 	if item >= Net.ITEM_SHOTGUN and item <= Net.ITEM_SHOTGUN + Net.SHOTGUN_ROUNDS:
 		# (v70) a shotgun: a long double barrel, a wooden stock, a pip for every shell in it
 		canvas.draw_rect(Rect2(at + Vector2(1, 6) * u, Vector2(15, 3) * u), Color(0.1, 0.1, 0.12))
@@ -46,7 +70,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		var n := item - Net.ITEM_SHOTGUN
 		for k in Net.SHOTGUN_ROUNDS:
 			canvas.draw_rect(Rect2(at + Vector2(8 + k * 2, 11) * u, Vector2(1.3, 2) * u), Color(0.85, 0.2, 0.15) if k < n else Color(0.25, 0.25, 0.3))
-		return
+		return true
 	if item >= Net.ITEM_LASER_GUN and item <= Net.ITEM_LASER_GUN + Net.LASER_ROUNDS:
 		# (v98) a laser rifle: a long white body, a red lens at the muzzle, a pip for every charge
 		canvas.draw_rect(Rect2(at + Vector2(1, 5) * u, Vector2(15, 4) * u), Color(0.1, 0.1, 0.12))
@@ -57,7 +81,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		for k in Net.LASER_ROUNDS:
 			canvas.draw_rect(Rect2(at + Vector2(2 + k * 1.4, 14) * u, Vector2(1, 1.4) * u),
 				Color(1.0, 0.35, 0.3) if k < item - Net.ITEM_LASER_GUN else Color(0.25, 0.25, 0.3))
-		return
+		return true
 	if item >= Net.ITEM_PLASMA_GUN and item <= Net.ITEM_PLASMA_GUN + Net.PLASMA_ROUNDS:
 		# (v98) a plasma gun: a stubby dark body with a glowing green coil, a pip for every charge
 		canvas.draw_rect(Rect2(at + Vector2(2, 5) * u, Vector2(12, 6) * u), Color(0.1, 0.1, 0.12))
@@ -69,7 +93,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		for k in Net.PLASMA_ROUNDS:
 			canvas.draw_rect(Rect2(at + Vector2(9 + k * 1.8, 12) * u, Vector2(1.2, 1.6) * u),
 				Color(0.4, 1.0, 0.5) if k < item - Net.ITEM_PLASMA_GUN else Color(0.25, 0.25, 0.3))
-		return
+		return true
 	match item:
 		Net.ITEM_VEST:
 			# (v98) a bulletproof vest: dark plates, a grey strap
@@ -78,7 +102,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(5, 3.5) * u, at + Vector2(7, 5) * u, at + Vector2(10, 5) * u,
 				at + Vector2(12, 3.5) * u, at + Vector2(13, 14) * u, at + Vector2(4, 14) * u]), Color(0.3, 0.36, 0.3))
 			canvas.draw_rect(Rect2(at + Vector2(5, 9) * u, Vector2(7, 1.2) * u), Color(0.55, 0.57, 0.6))
-			return
+			return true
 		Net.ITEM_HELMET:
 			# (v98) a combat helmet: a dome with a visor strip
 			canvas.draw_circle(at + Vector2(8.5, 9) * u, 6.0 * u, Color(0.1, 0.1, 0.12))
@@ -86,28 +110,28 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(2, 10) * u, Vector2(13, 5) * u), Color(0, 0, 0, 0))
 			canvas.draw_rect(Rect2(at + Vector2(3, 11) * u, Vector2(11, 2) * u), Color(0.1, 0.1, 0.12))
 			canvas.draw_rect(Rect2(at + Vector2(5, 8.5) * u, Vector2(7, 1.6) * u), Color(0.55, 0.75, 0.9))
-			return
+			return true
 		Net.ITEM_RIOT:
 			# (v98) a hand shield: a tall plate with a window
 			canvas.draw_rect(Rect2(at + Vector2(4, 1) * u, Vector2(9, 15) * u), Color(0.1, 0.1, 0.12))
 			canvas.draw_rect(Rect2(at + Vector2(5, 2) * u, Vector2(7, 13) * u), Color(0.45, 0.48, 0.55))
 			canvas.draw_rect(Rect2(at + Vector2(6, 3.5) * u, Vector2(5, 2.5) * u), Color(0.6, 0.85, 1.0, 0.8))
 			canvas.draw_rect(Rect2(at + Vector2(5, 9) * u, Vector2(7, 1) * u), Color(0.95, 0.85, 0.3))
-			return
+			return true
 		Net.ITEM_ESHIELD:
 			# (v98) a personal energy shield: a belt box with a blue ring over it
 			canvas.draw_rect(Rect2(at + Vector2(2, 10) * u, Vector2(13, 3) * u), Color(0.25, 0.2, 0.15))
 			canvas.draw_rect(Rect2(at + Vector2(6, 8) * u, Vector2(5, 6) * u), Color(0.1, 0.1, 0.12))
 			canvas.draw_rect(Rect2(at + Vector2(7, 9) * u, Vector2(3, 4) * u), Color(0.3, 0.55, 0.9))
 			canvas.draw_arc(at + Vector2(8.5, 9) * u, 6.5 * u, PI * 1.1, PI * 1.9, 12, Color(0.5, 0.8, 1.0), 1.2 * u)
-			return
+			return true
 		Net.ITEM_CELL:
 			# (v98) an energy cell: a stubby battery with a glowing band
 			canvas.draw_rect(Rect2(at + Vector2(5, 3) * u, Vector2(7, 12) * u), Color(0.1, 0.1, 0.12))
 			canvas.draw_rect(Rect2(at + Vector2(6, 4) * u, Vector2(5, 10) * u), Color(0.5, 0.52, 0.58))
 			canvas.draw_rect(Rect2(at + Vector2(7, 1.5) * u, Vector2(3, 1.5) * u), Color(0.75, 0.75, 0.8))
 			canvas.draw_rect(Rect2(at + Vector2(6, 7) * u, Vector2(5, 3) * u), Color(0.45, 0.95, 1.0))
-			return
+			return true
 	if item > Net.ITEM_MEDKIT and item <= Net.ITEM_MEDKIT + Net.MEDKIT_USES:
 		# a first-aid kit: a white box with a red cross, and a pip for every use left
 		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.15, 0.15, 0.18))
@@ -118,7 +142,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		for k in Net.MEDKIT_USES:
 			canvas.draw_rect(Rect2(at + Vector2(3.5 + k * 2.2, 14.5) * u, Vector2(1.4, 1.2) * u),
 				Color(0.4, 0.9, 0.5) if k < item - Net.ITEM_MEDKIT else Color(0.25, 0.25, 0.3))
-		return
+		return true
 	if item >= Net.ITEM_SUIT and item <= Net.ITEM_SUIT + Net.SUIT_TANK_STEPS:
 		# a helmet with its orange visor, and a gauge of the oxygen left in the tank
 		canvas.draw_rect(Rect2(at + Vector2(3, 2) * u, Vector2(11, 11) * u), Color(0.15, 0.15, 0.19))
@@ -128,7 +152,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		var left := float(item - Net.ITEM_SUIT) / Net.SUIT_TANK_STEPS
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11, 1.6) * u), Color(0.15, 0.15, 0.19))
 		canvas.draw_rect(Rect2(at + Vector2(3, 14) * u, Vector2(11 * left, 1.6) * u), Color(0.35, 0.75, 0.95))
-		return
+		return true
 	if Plants.is_seed(item):
 		# (v63) a packet of seeds: a paper sachet with the plant's leaf on it; a mutated seed's packet has a gold corner
 		canvas.draw_rect(Rect2(at + Vector2(4, 3) * u, Vector2(9, 12) * u), Color(0.12, 0.12, 0.15))
@@ -138,13 +162,13 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_line(at + Vector2(8.5, 12) * u, at + Vector2(8.5, 9) * u, leaf.darkened(0.4), 0.8 * u)
 		if Plants.trait_of(item) != Plants.PLAIN:
 			canvas.draw_rect(Rect2(at + Vector2(10, 4) * u, Vector2(2, 2) * u), Color(0.95, 0.78, 0.25))
-		return
+		return true
 	if item == Net.ITEM_FOOD:
 		# (v63) a ration: a foil pack with a label
 		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_rect(Rect2(at + Vector2(4, 6) * u, Vector2(9, 6) * u), Color(0.7, 0.72, 0.68))
 		canvas.draw_rect(Rect2(at + Vector2(5.5, 7.5) * u, Vector2(6, 3) * u), Color(0.85, 0.55, 0.25))
-		return
+		return true
 	if item == Net.ITEM_SCRAP:
 		# (v67) scrap: a bent plate of hull and a torn strip
 		canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(2, 9) * u, at + Vector2(9, 5) * u, at + Vector2(14, 8) * u,
@@ -153,7 +177,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			at + Vector2(11.5, 13) * u, at + Vector2(4.5, 12) * u]), Color(0.5, 0.48, 0.45))
 		canvas.draw_line(at + Vector2(5, 10) * u, at + Vector2(11, 11) * u, Color(0.65, 0.35, 0.2), 0.9 * u)
 		canvas.draw_rect(Rect2(at + Vector2(10, 3) * u, Vector2(2, 4) * u), Color(0.38, 0.4, 0.46))
-		return
+		return true
 	if item == Net.ITEM_ORE:
 		# (v67) a lump of ore with glinting veins
 		canvas.draw_circle(at + Vector2(8.5, 9.5) * u, 5.5 * u, Color(0.12, 0.12, 0.15))
@@ -161,7 +185,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_circle(at + Vector2(6.5, 8) * u, 1.0 * u, Color(0.4, 0.85, 0.8))
 		canvas.draw_circle(at + Vector2(10.5, 11) * u, 0.8 * u, Color(0.4, 0.85, 0.8))
 		canvas.draw_circle(at + Vector2(9.5, 7) * u, 0.6 * u, Color(0.95, 0.8, 0.4))
-		return
+		return true
 	if item == Net.ITEM_DATA:
 		# (v67) a data core: a chip with a glowing stripe
 		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
@@ -169,21 +193,21 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(5, 8) * u, Vector2(7, 1.4) * u), Color(0.75, 0.5, 1.0))
 		for k in 4:
 			canvas.draw_rect(Rect2(at + Vector2(4.5 + k * 2.4, 14) * u, Vector2(1, 1.5) * u), Color(0.8, 0.7, 0.3))
-		return
+		return true
 	if item == Net.ITEM_CARGO:
 		# (v63) a quest's crate: a stencilled box
 		canvas.draw_rect(Rect2(at + Vector2(2, 4) * u, Vector2(13, 10) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_rect(Rect2(at + Vector2(3, 5) * u, Vector2(11, 8) * u), Color(0.55, 0.42, 0.25))
 		canvas.draw_line(at + Vector2(3, 5) * u, at + Vector2(14, 13) * u, Color(0.35, 0.25, 0.14), 0.8 * u)
 		canvas.draw_line(at + Vector2(14, 5) * u, at + Vector2(3, 13) * u, Color(0.35, 0.25, 0.14), 0.8 * u)
-		return
+		return true
 	if item == Net.ITEM_BLACKBOX:
 		# (v63) a black box (that is orange, as they are), with a blinking light
 		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_rect(Rect2(at + Vector2(4, 5) * u, Vector2(9, 8) * u), Color(0.95, 0.5, 0.15))
 		canvas.draw_rect(Rect2(at + Vector2(4, 8) * u, Vector2(9, 1.2) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_circle(at + Vector2(11.5, 6.5) * u, 0.9 * u, Color(1.0, 0.25, 0.2))
-		return
+		return true
 	if item == Net.ITEM_ROBOT:
 		# (v62) a security robot folded in its crate: a squat steel body, a green eye, a gun arm
 		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))
@@ -193,10 +217,10 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(12.5, 9.5) * u, Vector2(3.5, 1.6) * u), Color(0.2, 0.2, 0.24))
 		canvas.draw_rect(Rect2(at + Vector2(5, 13.5) * u, Vector2(2, 1.5) * u), Color(0.2, 0.2, 0.24))
 		canvas.draw_rect(Rect2(at + Vector2(10, 13.5) * u, Vector2(2, 1.5) * u), Color(0.2, 0.2, 0.24))
-		return
+		return true
 	if Gear.of_item(item) != Gear.NONE:
 		_crate(canvas, at, u, Gear.of_item(item))
-		return
+		return true
 	if Weapons.of_item(item) != Weapons.NONE:
 		_ship_gun(canvas, at, u, Weapons.of_item(item))
 		if Weapons.fx_of(item) != Weapons.FX_NONE:
@@ -207,7 +231,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(2, 7) * u, Vector2(14, 8) * u), Color(0.1, 0.06, 0.04, 0.45))
 			canvas.draw_line(at + Vector2(3, 8) * u, at + Vector2(7, 13) * u, Color(0.95, 0.35, 0.2), 0.8 * u)
 			canvas.draw_line(at + Vector2(7, 13) * u, at + Vector2(11, 9) * u, Color(0.95, 0.35, 0.2), 0.8 * u)
-		return
+		return true
 	if item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS:
 		# (v58) gun parts: a coil, a plate and a bolt, marked with their kind's colour
 		var mark: Color = KIND_MARK[item - Net.ITEM_GUN_PARTS]
@@ -217,13 +241,13 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(10 + k * 1.6, 4) * u, Vector2(1.0, 6) * u), mark)
 		canvas.draw_rect(Rect2(at + Vector2(9.5, 12) * u, Vector2(5, 2) * u), Color(0.38, 0.4, 0.46))
 		canvas.draw_rect(Rect2(at + Vector2(4, 4) * u, Vector2(3, 3) * u), mark)
-		return
+		return true
 	if item == Net.ITEM_SHELL:
 		# (v58) a shell standing up: a brass case and a dark tip
 		canvas.draw_rect(Rect2(at + Vector2(6, 6) * u, Vector2(5, 9) * u), Color(0.12, 0.1, 0.06))
 		canvas.draw_rect(Rect2(at + Vector2(7, 7) * u, Vector2(3, 7) * u), Color(0.85, 0.65, 0.25))
 		canvas.draw_rect(Rect2(at + Vector2(7, 3) * u, Vector2(3, 4) * u), Color(0.35, 0.35, 0.4))
-		return
+		return true
 	if item == Net.ITEM_ROCKET or item == Net.ITEM_EMP_ROCKET:
 		# a rocket lying across: a grey body, a coloured nose, fins at the tail
 		var nose := Color(0.85, 0.25, 0.18) if item == Net.ITEM_ROCKET else Color(0.35, 0.6, 1.0)
@@ -231,7 +255,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_line(at + Vector2(3.5, 12.5) * u, at + Vector2(12, 5) * u, Color(0.72, 0.74, 0.78), 2.6 * u)
 		canvas.draw_line(at + Vector2(11, 6) * u, at + Vector2(14, 3) * u, nose, 2.6 * u)
 		canvas.draw_line(at + Vector2(2, 11) * u, at + Vector2(5, 14) * u, Color(0.3, 0.3, 0.36), 1.4 * u)
-		return
+		return true
 	if item == Net.ITEM_PROBE:
 		# a probe: a round body with a sensor eye, two antennae and small fins
 		canvas.draw_circle(at + Vector2(8.5, 9) * u, 5.2 * u, Color(0.12, 0.12, 0.15))
@@ -243,7 +267,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(13, 3) * u, Vector2(1.2, 1.2) * u), Color(0.95, 0.35, 0.3))
 		canvas.draw_rect(Rect2(at + Vector2(2, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
 		canvas.draw_rect(Rect2(at + Vector2(12, 12) * u, Vector2(3, 2) * u), Color(0.3, 0.32, 0.38))
-		return
+		return true
 	if item == Net.ITEM_DRONE:
 		# a scouting drone seen from above: a flat body, four rotor rings and an orange eye
 		for c: Vector2 in [Vector2(4, 4), Vector2(13, 4), Vector2(4, 13), Vector2(13, 13)]:
@@ -252,7 +276,7 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 		canvas.draw_rect(Rect2(at + Vector2(5.5, 6) * u, Vector2(6, 5) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_rect(Rect2(at + Vector2(6, 6.5) * u, Vector2(5, 4) * u), Color(0.42, 0.45, 0.5))
 		canvas.draw_circle(at + Vector2(8.5, 8.5) * u, 1.3 * u, Color(1.0, 0.6, 0.2))
-		return
+		return true
 	match item:
 		Net.ITEM_JUMPSUIT:
 			# a folded jumpsuit with a collar and a pocket
@@ -422,6 +446,16 @@ static func draw(canvas: CanvasItem, cell: Rect2, item: int) -> void:
 			canvas.draw_rect(Rect2(at + Vector2(10, 5) * u, Vector2(3, 7) * u), Color(0.15, 0.15, 0.19))
 			canvas.draw_rect(Rect2(at + Vector2(10.5, 5.5) * u, Vector2(2, 6) * u), Color(0.55, 0.57, 0.66))
 			canvas.draw_rect(Rect2(at + Vector2(12, 6) * u, Vector2(1, 5) * u), Color(1.0, 0.97, 0.75) if lit else Color(0.62, 0.7, 0.78))
+		Net.ITEM_MANTIS_CLAW, Net.ITEM_CLAWS:
+			# (v100) a mantis's claw: a pale green curved blade with a dark root
+			canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(3, 14) * u, at + Vector2(6, 7) * u, at + Vector2(11, 3) * u,
+				at + Vector2(15, 2) * u, at + Vector2(11, 6) * u, at + Vector2(8, 11) * u, at + Vector2(6, 15) * u]), Color(0.12, 0.16, 0.1))
+			canvas.draw_colored_polygon(PackedVector2Array([at + Vector2(4.2, 13.5) * u, at + Vector2(7, 7.5) * u, at + Vector2(11.5, 4) * u,
+				at + Vector2(13.5, 3.2) * u, at + Vector2(10.5, 6.2) * u, at + Vector2(7.5, 10.5) * u, at + Vector2(5.8, 14) * u]), Color(0.72, 0.85, 0.55))
+			canvas.draw_rect(Rect2(at + Vector2(2.5, 13) * u, Vector2(4, 3) * u), Color(0.32, 0.45, 0.25))
+		_:
+			return false
+	return true
 
 
 static func _crate(canvas: CanvasItem, at: Vector2, u: float, g: int) -> void:

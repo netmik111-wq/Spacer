@@ -558,15 +558,16 @@ func _unique_name(wanted: String) -> String:
 
 
 func look_packet(p: Player) -> PackedByteArray:
-	return PackedByteArray([Net.S_OUTFIT, p.slot & 0xFF, p.slot >> 8, p.look(), p.in_hand()])
+	return PackedByteArray([Net.S_OUTFIT, p.slot & 0xFF, p.slot >> 8, p.look(), p.in_hand(), p.gear_look()])
 
 
 func tell_looks() -> void:
-	## Tells everyone how a character is dressed, and (v74, the author's N6) what it holds, when that changes.
+	## Tells everyone how a character is dressed, and (v74, the author's N6) what it holds, (v100) and the gear
+	## worn over its clothes, when that changes.
 	for p: Player in server.players:
 		if p == null:
 			continue
-		var now := p.look() | (p.in_hand() << 8)
+		var now := p.look() | (p.in_hand() << 8) | (p.gear_look() << 16)
 		if now != p.look_sent:
 			p.look_sent = now
 			server.to_all(look_packet(p))

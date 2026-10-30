@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v99 (version 0.92).
+Last updated: build v100 (version 0.93).
 
 Contents:
 
@@ -58,6 +58,7 @@ Contents:
 48. [Places seen in space, meteors, our boarding pod, bots in a fight (v96)](#48-places-seen-in-space-meteors-our-boarding-pod-bots-in-a-fight-v96)
 49. [Derelicts made from pieces, their robots, vaults, our teleporter (v97)](#49-derelicts-made-from-pieces-their-robots-vaults-our-teleporter-v97)
 50. [Asteroids, landing, abandoned stations, mantises (v99)](#50-asteroids-landing-abandoned-stations-mantises-v99)
+51. [What people wear, drawn; NO SPRITE; solid wall blocks (v100)](#51-what-people-wear-drawn-no-sprite-solid-wall-blocks-v100)
 
 ---
 
@@ -2951,3 +2952,28 @@ https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA; built on my picks (all A) whi
 - Rogue robots and a welded vault with its keeper, as on the made ships (section 49).
 - Protocol **73**.
 
+## 51. What people wear, drawn; NO SPRITE; solid wall blocks (v100)
+
+The author: "need placeholders if I don't upload any sprites, and a picture NO SPRITE if it doesn't have any ... so
+people don't look naked"; "make a simple grey jumpsuit for both sexes".
+
+- **The jumpsuit** is drawn on the body: a **grey** suit with long sleeves, trousers and dark boots, hands and head
+  bare, for the man and the woman. Its collar, cuffs and belt are in the **job's colour** (pirates' in theirs), so
+  jobs are still told apart. One with no jumpsuit stays in the grey top and shorts; one in a space suit as before.
+- **Worn over the clothes, seen by everyone**: the bulletproof vest (olive plates, a strap, two pouches), the helmet
+  (covers the hair, a brim over the brow), the energy shield's belt (a dark band with a glowing blue emitter), the hand
+  shield (a tall steel-blue shield on the arm, a window at the top), night vision (green lenses) and thermal goggles
+  (orange lenses; not drawn over a space suit's visor), and the backpack (a brown pack on the back, straps from the
+  front). All four ways, the man and the woman; they lie down and turn over with the body. Machines, robots, the heavy
+  boarder and mantises have them in their own pictures.
+- Each is a **placeholder sheet** of 128 x 96 laid out as `body.png` (front, right, back, left; the woman's row, then
+  the man's): `wear_jumpsuit`, `wear_vest`, `wear_helmet`, `wear_belt`, `wear_riot`, `wear_nvg`, `wear_thermal`,
+  `wear_pack`. A file of the same name and size in the «sprites» folder replaces it without any code change. In the
+  jumpsuit's sheet the navy is what the game paints in the job's colour.
+- **NO SPRITE**: a thing with no picture of the game's own and none in the «sprites» folder is shown as a pink and
+  black card with the words NO SPRITE (in slots, on the floor, in the hand). Every thing has a picture now; the mantis's
+  claw got one in this build.
+- **Solid wall blocks** (his Notebook note): a block of walls two or more cells thick is drawn solid, his
+  `top_wall_junction` piece on every cell of it with wall below; its bottom row keeps the wall's face. The ship editor
+  and the game draw it the same way. No ship of ours has such a block yet.
+- Protocol **74** (S_OUTFIT carries what is worn over the clothes).

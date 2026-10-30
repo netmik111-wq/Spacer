@@ -2191,3 +2191,29 @@ Questions `https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA`, built on my picks
 - (v99, mine) The people's sheet (`CrewArt`) is folded: rows from `FOLD` on lie beside the first half. With the mantis's
   row the single column reached 8350 pixels, past the 8192 that older graphics cards take (a precaution: the software
   renderer here takes more). `WorldView._cell` maps a frame through `CrewArt.at`.
+
+## v100: placeholders for what people wear, NO SPRITE, solid wall blocks
+
+His words (2026-10-30): "Need placeholders if I don't upload any sprites (and a picture NO SPRITE if it doesn't have
+any). Make simple placeholders, for example armour and helmets, so people don't look naked. And check suggestions."
+Then: "And make a simple grey jumpsuit for both sexes."
+- **The nakedness was the jumpsuit** (mine, told to him): his base man has no shirt and a jumpsuit only painted his
+  shorts. The jumpsuit is now a sheet laid over the body inside `CrewArt.build` (no new rows): grey cloth, its collar,
+  cuffs and belt navy, which `_paint` turns into the row's colour. Grey (his word) with the job's colour kept on the
+  trim so jobs stay readable; I asked him whether he wants no job colour at all.
+- **Gear as an overlay, not sheet rows**: vest, helmet, belt, hand shield, goggles and backpack combine freely, so
+  baking them into rows would multiply the sheet (already folded once, v99). `WorldView.WearArt` draws the layers as a
+  child of the figure (turns and lies with it), from `Sprites.sheet("wear_*")`. The server tells everyone in S_OUTFIT's
+  sixth byte (`Player.gear_look`, `Net.GEAR_*`); `Crew.tell_looks` resends on any change. The backpack comes from the
+  look byte's old bit. Goggles are not drawn over a suit (behind the visor).
+- **Placeholders made from the body** (`tools/make_assets.py build_wear`): shapes follow `body.png`'s own pixels (collar
+  row, hands, feet), so they fit both bodies and every way. Files go to `assets/wear_*.png` and are replaced from
+  «sprites» like every sheet (same size).
+- **NO SPRITE** (`ItemArt.no_sprite`): `ItemArt._drawn` returns false when the code has no picture; `spritetest` draws
+  every item in a real `_draw` and fails if any falls back, so a new item without art is caught by CI. The mantis's
+  claw (and the claws item) got a picture.
+- **His Notebook note "when walls connected to each other it needs to be full like on the first screen"** (two
+  pictures: his `top_wall_junction` piece, and the editor showing blocks of walls drawn as grids of T pieces): a `#`
+  with wall below and a 2x2 of wall beside it is `wall_fill` = his `top_wall_junction`; the block's bottom row keeps the
+  face. Only `#` (windows, doors, machines keep their own pieces). No existing map changes (checked: none has such a
+  block). Both builders (MapBuilder and make_assets.py) changed together.

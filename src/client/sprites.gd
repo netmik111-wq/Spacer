@@ -17,6 +17,15 @@ const SHEETS := {
 	"hud_monitor": "res://assets/hud_monitor.png",
 	"hud_alerts": "res://assets/hud_alerts.png",
 	"shuttle": "res://assets/shuttle.png",   # (v86) the fleet's shuttle, nose up (4 x 3 tiles)
+	# (v100) what people wear, laid out as body.png (4 ways x the woman, the man): placeholders the artist replaces
+	"wear_jumpsuit": "res://assets/wear_jumpsuit.png",
+	"wear_vest": "res://assets/wear_vest.png",
+	"wear_helmet": "res://assets/wear_helmet.png",
+	"wear_belt": "res://assets/wear_belt.png",
+	"wear_riot": "res://assets/wear_riot.png",
+	"wear_nvg": "res://assets/wear_nvg.png",
+	"wear_thermal": "res://assets/wear_thermal.png",
+	"wear_pack": "res://assets/wear_pack.png",
 }
 
 static var own_files := PackedStringArray()   # the pictures of one's own in use (for the log)

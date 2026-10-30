@@ -896,3 +896,15 @@ they move like characters and have a small leap toward an enemy when there is a 
 - The people's sheet is folded in two halves side by side: with the mantis's row it grew past 8192 pixels tall,
   more than older graphics cards take.
 - New test `tools/asteroidtest.gd` (54 scripts); protocol 73.
+
+## v100 (0.93): placeholders for what people wear, NO SPRITE, solid wall blocks
+
+His request (2026-10-30): placeholders when no sprites are uploaded, a NO SPRITE picture for anything without one,
+armour and helmets drawn so people don't look naked, a simple grey jumpsuit for both sexes, and his open Notebook note.
+- A grey jumpsuit (sleeves, trousers, boots) on everyone who wears one, collar, cuffs and belt in the job's colour.
+- Vest, helmet, energy belt, hand shield, night vision and thermal goggles, and the backpack drawn on the figure, for
+  everyone to see (S_OUTFIT's gear byte). Placeholder sheets `assets/wear_*.png`, replaced from «sprites».
+- Things without a picture show a pink and black NO SPRITE card; the mantis's claw got a picture.
+- His note: blocks of walls are drawn solid with his `top_wall_junction` piece.
+- New test `tools/spritetest.gd` (55 scripts); protocol 74. `main.gd` `dress_after=` dresses everyone for screenshots.
+

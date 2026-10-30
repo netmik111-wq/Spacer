@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v99 (version 0.92: asteroids, landing, abandoned stations, mantises) is the latest. Plans one to four are done except the darkness front (the
+Build v100 (version 0.93: worn things drawn, NO SPRITE, solid wall blocks) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -163,6 +163,10 @@ built on my picks, all A): ship02 has 24 empty rows over each deck (14 more) so 
 campaign (small solid, medium/large with caves from a mouth in the bottom row), landing on one from the helm's dock button;
 4 of the 8 made derelicts are abandoned stations (rooms by kind, loot by kind); mantises in the caves (`mantises.gd`: 80 hp,
 chitin, claws 30 every 1.2 s, a leap over one empty cell).
+v100 (his "placeholders so people don't look naked", "a simple grey jumpsuit for both sexes", one Notebook note): a grey
+jumpsuit on the body (trim in the job's colour), vest/helmet/belt/hand shield/goggles/backpack drawn on everyone
+(`WorldView.WearArt`, sheets `assets/wear_*.png` made by `make_assets.py build_wear`, replaceable from «sprites»), a NO
+SPRITE card for things without a picture (`ItemArt.no_sprite`), blocks of walls drawn solid (`wall_fill`).
 Next: asteroid dwellers and minibosses, quests inside places, places with decks with station landing, enemy decks and
 choosing them, enemy fleets. Long-term: races (a lore question round first).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -195,7 +199,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 54 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 55 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -250,6 +254,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/placetest.gd (since v97: made derelicts, their robots, the vault and its keeper, the teleporter)
     godot --headless --path . --script res://tools/arsenaltest.gd (since v98: energy guns, armour by kind, suits let down, energy and hand shields, boarders' arms, new ship guns)
     godot --headless --path . --script res://tools/asteroidtest.gd (since v99: made asteroids and stations, landing, mantises, their leap, rooms' loot)
+    godot --headless --path . --script res://tools/spritetest.gd (since v100: every item has a picture, wear sheets, the jumpsuit, the gear byte, solid wall blocks)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -274,7 +279,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 54 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 55 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -680,6 +685,12 @@ The parameters for these checks are described in the header of `src/main.gd`.
   appear on the first foot on their asteroid (`Derelict._watch_nest`) and are kept per place by `Derelict.rock_key()` (the
   key it came by). `server.mantises.leaps_on = false` keeps them from leaping. The people's sheet is folded in two (`CrewArt.folded`, `at`):
   a frame's place goes through `CrewArt.at(column, row)` (one column grew past 8192 pixels, older cards' limit). Protocol 73.
+- (v100) What is worn over the clothes is `Player.gear_look()` (`Net.GEAR_*`), S_OUTFIT's sixth byte (client `gear_of`);
+  a new wearable that should be seen gets a bit, a layer in `WorldView.WearArt.LAYERS`, a `wear_*` entry in
+  `Sprites.SHEETS` and a placeholder in `make_assets.py build_wear`. A new item needs a picture in `ItemArt._drawn`
+  (returning true), or `spritetest` fails (and the game shows NO SPRITE). `ItemArt.draw` draws nothing for ITEM_NONE.
+  The jumpsuit is baked into the people's sheet (`CrewArt.jumpsuit`), not an overlay. A `#` with wall below inside a
+  2x2 of walls is `wall_fill` (both builders). Protocol 74.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

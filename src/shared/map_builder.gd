@@ -593,6 +593,8 @@ static func _deck(g: Array, above: Array, below: Array, w: int, h: int, ids: Dic
 					piece = SPECIAL[c]
 					if c == "D":
 						doors.append([x, y, "D"])
+				elif c == "#" and s and (e and _solid(g, x + 1, y + 1, w, h, things) or wst and _solid(g, x - 1, y + 1, w, h, things)):
+					piece = "wall_fill"          # (v100, the author's note) inside a block of walls: drawn solid
 				elif e and wst:
 					piece = "wall_cross" if (n and s) else ("wall_tdown" if s else ("wall_tup" if n else "wall_h"))
 				elif e and not wst:
