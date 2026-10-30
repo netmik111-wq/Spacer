@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v97 (version 0.90).
+Last updated: build v97.1 (version 0.90.1).
 
 Contents:
 

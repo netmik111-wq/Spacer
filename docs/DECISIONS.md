@@ -2115,3 +2115,12 @@ T1 C. His v96 page answers came in the same evening: all A, so v96 stood as buil
   its pirates, or left in a grid that no longer holds that ship.
 - **machinetest's trading check** had failed since v96 (the helm's course still braking at (150, 150), and v96's M3
   docks only a stopped ship): the test now ends the course before docking.
+
+## v97.1: side-wall joints
+
+- **His internal corners' top bevel is cut off** (his screenshot with four arrows, "next build also not fixed"): v90.2
+  and v93 looked at which pieces join and at sight, not at the pixels of the seam. `internal_corner_l/r` start their
+  wall with a 4-row bevel, as a wall end does, while the piece above (`vertical_wall_to_internal_corner_*`) runs straight
+  to its edge. Mine: the wall side's top 4 rows repeat row 4 (`JOINT_TOPS`); the band side keeps his drawing, as it
+  opens into the room's wall. I checked every touching pair of wall tiles in all maps: the wall side now differs from
+  the piece above only by the rib's edge, as between two plain side-wall pieces.
