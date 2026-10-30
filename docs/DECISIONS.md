@@ -2217,3 +2217,6 @@ Then: "And make a simple grey jumpsuit for both sexes."
   with wall below and a 2x2 of wall beside it is `wall_fill` = his `top_wall_junction`; the block's bottom row keeps the
   face. Only `#` (windows, doors, machines keep their own pieces). No existing map changes (checked: none has such a
   block). Both builders (MapBuilder and make_assets.py) changed together.
+- **(v100.1) Our own figure's copy over the dark carries the wear and the hand's thing** (his screenshots): the copy
+  (`_me_over`: we always make ourselves out) is drawn above everything, so anything drawn on the real figure
+  hides under it. Giving the copy the same children was simpler than drawing the wear on a layer of its own.

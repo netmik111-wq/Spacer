@@ -2802,6 +2802,11 @@ func _process(delta: float) -> void:
 		_me_over.global_transform = me.global_transform
 		_me_over.region_rect = me.region_rect
 		_me_over.modulate = me.modulate * Color(0.8, 0.8, 0.85)
+		# (v100.1, his screenshots) this copy is drawn over our own figure, so it carries what we hold and wear too,
+		# or the vest, helmet and the hand's thing hide under it (the hand shield showed only past its edge)
+		if not mine_now.is_empty():
+			_hold(_me_over, mine_now[1], client.held_by(client.my_id) if client.my_cond == Net.COND_OK else Net.ITEM_NONE)
+			_dress(_me_over, mine_now[1], client.my_id)
 	var focus := _my_spot(me) - Vector2(0, 14) if me != null else Vector2.ZERO
 	# (v89, the author's note: "in the nose part of the ship we don't hear sound") at the grid's edge the
 	# camera stops short of our character, and sounds were heard from the middle of the screen, out of reach
