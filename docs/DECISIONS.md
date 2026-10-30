@@ -2154,3 +2154,40 @@ but his notes on A2, W1 and S1 (below).
   shields half the time like the blaster, bow or side). No tier 3 effects for them: `ITEM_GUN_FX` has no room.
 - **Fire guns wait** (G2 A) for the fire question round. Armour is not drawn on the body (the artist's layers).
 - admintest assumed every gun loads `PISTOL_ROUNDS`; it now asks `Items.loaded`.
+
+## v99: asteroids, landing, abandoned stations, mantises
+
+His order (2026-10-30): "Races need to be put in long plans. Now it's asteroids generation and better derelict station
+generators. And add simple monsters on the asteroids. Like centipedes but they have 10 legs and look like a praying
+mantis, melee damage 30, they move like characters and have a small leap toward an enemy when they have a 1 tile gap."
+Questions `https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA`, built on my picks (all A).
+- **More sky, not a new grid.** Everything alongside must fit over our airlock inside our top deck's band, and ship02
+  had 10 empty rows (so v97's derelicts were 7 tall). I added 14 empty rows on top of both decks of ship02 (decks are
+  lined up by row, so a ladder's cell must stay the same on each) and moved its `@` lines by 14. Nothing in the code
+  knew the old rows except a few tests' cells (crewtest, savetest). A new "landing area" elsewhere in the grid would
+  have needed the airlock to lead somewhere else: much more work for the same thing.
+- **Landing is docking** (A2): an asteroid with caves gets a docked spot like a derelict, its mouth (`; mouth = X Y`,
+  the bottom row) right over our outer door; the helm's dock packet lands and takes off. A solid one says why not.
+  Landed, `Stations.meteor_seen` sends nothing (A3).
+- **Caves by digging from the mouth**: passages wind toward far spots and only cells with whole rock round them are
+  dug, so a rim of rock always stays; what does not join the mouth is filled again. The mouth sits as near the middle as
+  ship02's airlock lets it (at the edge the passage never got past the rim: 27 of 240 had no caves).
+- **A mantis is a pirate Player with `monster`** (`src/server/mantises.gd`): Pirates.think already walks, picks a
+  target by sight, holds a place (`stays`) and strikes with what is in the hand, so a mantis is its claws
+  (`ITEM_CLAWS`, blow 30, "pace" 1.5 x the baton's 0.8 s) plus the leap. It is `pirate`, so pirates and mantises leave
+  each other be (one more side would touch every `foe`). Not `robot`: it bleeds and is warm in thermal goggles.
+- **Health 80 as toughness 1.25**: health always comes back toward 100 less the wounds (Vitals.advance), so a lower
+  starting health healed itself; a heavier wound gives the same 80.
+- **Spawned on the first foot, as v97's robots**, so a mantis is never in the world while nobody is on its asteroid
+  (pirate counts and the director stay as they were). Kept per place by the key it came by (`Derelict.rock_key`): the
+  place may already be gone when it is left.
+- **The leap** moves the mantis by hand (`st.place`, `fx/fy`, `span` 4) so clients draw it as a quick slide, and sets
+  `ready_tick` to the landing: the blow is the ordinary one. Only over an empty walkable cell, no doors, no slant past a
+  corner. No hiss sound yet (a new sound kind needs a client entry; the swing sound plays).
+- **Stations are the second half of the made derelicts** (D1): the same marks (`dwellers`, `vault`) plus `; room = X Y
+  kind`; loot by kind replaces the generic 5-8 things. One deck (D2): several decks wait for landing on stations.
+- Not done from my picks: the scientists' quest paying 60 for a claw (M6), the hiss before a leap (M3).
+
+- (v99, mine) The people's sheet (`CrewArt`) is folded: rows from `FOLD` on lie beside the first half. With the mantis's
+  row the single column reached 8350 pixels, past the 8192 that older graphics cards take (a precaution: the software
+  renderer here takes more). `WorldView._cell` maps a frame through `CrewArt.at`.

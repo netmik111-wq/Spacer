@@ -36,11 +36,11 @@ func _initialize() -> void:
 	p.slots.fill(Net.ITEM_NONE)
 	p.add(Net.ITEM_RADIO)
 	p.add(Net.ITEM_PISTOL + 5)
-	p.st.place(20, 15)
+	p.st.place(20, 29)
 	p.health = 60.0
 	p.wounds = 25.0
 	var q := a.crew.new_player("Боря")
-	q.st.place(24, 11)
+	q.st.place(24, 25)
 	q.add(Net.ITEM_FUEL)
 	q.health = -150.0
 	_run(a, 2)
@@ -70,8 +70,8 @@ func _initialize() -> void:
 	a.power.set_charge(0.0)              # (v61) and the SMES empty: the ship dark
 	a.doors.jammed[2] = 1
 	a.doors.ready[2] = 0
-	a.floor_things[15 * map.width + 22] = PackedByteArray([Net.ITEM_MAG, Net.ITEM_PART, 0, 0])
-	var air_cell := 15 * map.width + 3
+	a.floor_things[29 * map.width + 22] = PackedByteArray([Net.ITEM_MAG, Net.ITEM_PART, 0, 0])
+	var air_cell := 29 * map.width + 3
 	var air_there: float = a.air.air[air_cell]
 	a.voyage_ticks = 123456
 	var health_was := p.health
@@ -107,17 +107,17 @@ func _initialize() -> void:
 	_expect(b.air.holes.has(hole) and b.ship.broken.has(engine) and not b.powered(), "the hole is still there and the engine still out")
 	_expect(b.doors.jammed[2] == 1, "a jammed door is still jammed")
 	_expect(absf(b.air.air[air_cell] - air_there) < 0.01, "the air is as it was")
-	_expect(b.floor_things.get(15 * map.width + 22, PackedByteArray()) == PackedByteArray([Net.ITEM_MAG, Net.ITEM_PART, 0, 0]), "what lay on the floor lies there")
+	_expect(b.floor_things.get(29 * map.width + 22, PackedByteArray()) == PackedByteArray([Net.ITEM_MAG, Net.ITEM_PART, 0, 0]), "what lay on the floor lies there")
 	var body = null
 	for c in b.players:
 		if c != null and c.corpse and c.name == "Боря":
 			body = c
-	_expect(body != null and body.st.x == 24 and body.st.y == 11 and body.count(Net.ITEM_FUEL) == 1, "the body lies where it fell, with what it carried")
+	_expect(body != null and body.st.x == 24 and body.st.y == 25 and body.count(Net.ITEM_FUEL) == 1, "the body lies where it fell, with what it carried")
 	_expect(b.dead_names.has("Боря"), "and its player coming back will take one from the reserve")
 	_expect(b.saved_crew.has("Аня"), "the living wait for their players")
 	var back := b.crew.new_player("Аня")
 	b.crew.restore_character(back, b.saved_crew["Аня"])
-	_expect(back.st.x == 20 and back.st.y == 15 and back.job == Net.JOB_MEDIC and back.skills[Net.SKILL_MEDICINE] == 77,
+	_expect(back.st.x == 20 and back.st.y == 29 and back.job == Net.JOB_MEDIC and back.skills[Net.SKILL_MEDICINE] == 77,
 		"a player coming back finds their character where it stood, in its job, with its skills")
 	_expect(back.count(Net.ITEM_PISTOL + 5) == 1 and back.count(Net.ITEM_RADIO) == 1 and absf(back.health - health_was) < 0.01 and absf(back.wounds - wounds_was) < 0.01,
 		"with what it carried and its wounds")

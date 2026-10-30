@@ -580,7 +580,7 @@ func update_vitals(p: Player) -> void:
 		return
 	var breathes := server.air.air[p.st.y * server.map.width + p.st.x]
 	var pressed := 0.0                       # (v98) what thin air does to a body whose suit is let down
-	if p.robot or (p.pirate and p.has_suit()):
+	if p.robot or p.monster or (p.pirate and p.has_suit()):
 		breathes = 1.0                       # pirates come in sealed suits (v62: not all of them); a machine needs no air
 	elif p.supply:
 		# on the tank: the air around does not matter while there is oxygen left
@@ -600,6 +600,8 @@ func update_vitals(p: Player) -> void:
 		p.concussed = 0
 		if p.peer != null:
 			server.chat.tell(p, "Контузия прошла: в глазах больше не двоится.")
+	if p.monster and p.health <= 0.0:
+		p.health = Net.HEALTH_DEAD - 1.0     # (v99) a mantis is never out cold: it dies
 	var cond := Vitals.condition(p.health, p.cond)
 	var stunned := server.tick < p.stun_until
 	if cond == Net.COND_OK and (stunned or p.prisoner):
@@ -627,6 +629,8 @@ func update_vitals(p: Player) -> void:
 			server.deaths.append([p.name, how])
 		if p.robot:
 			_robot_breaks(p)
+		if p.monster:
+			server.mantises.dies(p)
 		if p.pirate or p.ally:
 			# a dead pirate is a body like any other, with what it carried
 			p.cond = cond

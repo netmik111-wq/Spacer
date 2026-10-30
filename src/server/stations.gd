@@ -367,8 +367,8 @@ func evade_asked(p: Player) -> void:
 func meteor_seen() -> bool:
 	## A meteor is coming (the director's, in a meteor stream): it strikes in
 	## METEOR_WARN seconds unless the pilot steers round it. False if one is coming already.
-	if meteor_at > 0:
-		return false
+	if meteor_at > 0 or (server.derelict.docked and server.derelict.kind == Net.OTHER_ROCK):
+		return false                         # ((v99, my A3 pick) a ship landed on an asteroid is out of the stream's way)
 	var rock: bool = server.arena.flying() and server.arena.launch_meteor(server.fleet.on)
 	var warn: float = server.arena.ROCK_WARN if rock else METEOR_WARN
 	meteor_at = server.tick + roundi(warn * Net.TICK_HZ)

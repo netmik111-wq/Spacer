@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 72
+const PROTOCOL := 73
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -168,6 +168,8 @@ const ITEM_VEST := 43               # a bulletproof vest (WEAR_BODY): takes much
 const ITEM_HELMET := 44             # a combat helmet (WEAR_HEAD): a little off bullets, lasers and blows; fewer concussions
 const ITEM_RIOT := 45               # a hand shield (WEAR_SHIELD): it stops what comes from the front
 const ITEM_ESHIELD := 46            # a personal energy shield (WEAR_BELT): soaks up shots until its charge runs out
+const ITEM_CLAWS := 47              # (v99) a mantis's claws: what it strikes with (never a thing to take)
+const ITEM_MANTIS_CLAW := 48        # (v99) a claw cut off a dead mantis: kept, sold
 const ITEM_PLASMA_GUN := 65         # (v98) a plasma gun with no charges; ITEM_PLASMA_GUN + n holds n (65..69)
 const PLASMA_ROUNDS := 4
 const ITEM_CELL := 70               # (v98) an energy cell: recharges a laser rifle or a plasma gun
@@ -884,6 +886,7 @@ const PIRATE_COLOURS := 3           # rows of assets/chars.png after the crew's 
 const ROBOT_COLOUR := SUIT_COLOURS + PIRATE_COLOURS        # (v62) the row of an enemy robot (assault drone, guard)
 const OUR_ROBOT_COLOUR := ROBOT_COLOUR + 1                 # (v62) the row of our security robot
 const ARMOUR_COLOUR := ROBOT_COLOUR + 2                    # (v62) the row of a heavy-armoured boarder (steel plates, no suit)
+const MANTIS_COLOUR := ROBOT_COLOUR + 3                    # (v99) the row of an asteroid's mantis (assets/mantis.png)
 
 const TANK_FULL := 200              # a full oxygen tank as sent over the network
 const REPAIR_TICKS := 120           # holding "use" on a hole for 6 s mends it

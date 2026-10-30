@@ -4,20 +4,35 @@
 ; (v94) a fixed gun in the bow's lower deck wall (the author's three mount kinds: a hardpoint fires along the bow).
 ; (v96) our boarding pod's bay ('k') in the lower deck's hull, by the gun room.
 ; (v97, the author's T1 C) the teleporter's pad ('t') in the workshop's wall, empty until a teleporter is found.
+; (v99) 24 empty rows over the top deck (14 more): room for the generated asteroids and stations that lie off the airlock.
 ; Restricted-access compartments (deck, x, y of a floor cell, access):
-@ 1 35 15 bridge
-@ 1 3 11 armory
-@ 1 14 18 medbay
-@ 1 30 11 guns
-@ 1 30 18 guns
-@ 2 4 12 engine
-@ 2 13 12 engine
-@ 2 24 18 guns
-@ 1 5 18 brig
-@ 1 7 18 brig
-@ 1 9 18 brig
-@ 1 11 18 brig
+@ 1 35 29 bridge
+@ 1 3 25 armory
+@ 1 14 32 medbay
+@ 1 30 25 guns
+@ 1 30 32 guns
+@ 2 4 26 engine
+@ 2 13 26 engine
+@ 2 24 32 guns
+@ 1 5 32 brig
+@ 1 7 32 brig
+@ 1 9 32 brig
+@ 1 11 32 brig
 = Верхняя палуба
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -41,6 +56,20 @@
  #.H#.#.#.#.#.Y.....X.....Y.#....#
  #W#############<>######W#####T###
 = Нижняя палуба
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

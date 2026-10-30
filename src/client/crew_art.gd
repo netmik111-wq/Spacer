@@ -32,10 +32,12 @@ const BODIES := 2                      # rows of his sheet: 0 the woman, 1 the m
 const WOMAN_COLUMN := 12               # the woman's frames start here in the made sheet
 const FEET := 47                       # the lowest row of the figure in a frame
 const HELMET_ROWS := 19                # (v88) the top rows of a suited frame that hold the helmet
-const ROWS := (Net.ARMOUR_COLOUR + 1) * Net.LOOKS
+const ROWS := (Net.MANTIS_COLOUR + 1) * Net.LOOKS
 const VISOR_ROW := ROWS                # + colour * LOOKS + look: on the tank, the bubble over the head
 const HALF_ROW := ROWS + Net.PIRATE_COLOURS * Net.LOOKS + Net.SUIT_COLOURS * Net.LOOKS   # + colour: the bubble half seen
 const ALL_ROWS := HALF_ROW + Net.SUIT_COLOURS + Net.PIRATE_COLOURS
+const COLUMNS := 24                    # frames in a row of the made sheet (the man's 12, the woman's 12)
+const FOLD := (ALL_ROWS + 1) / 2       # (v99) the folded sheet's height in rows (see folded())
 # the colours of the rows, as tools/make_assets.py has them (SUIT_COLOURS): the crew's jobs, then the pirates
 const TINTS: Array[Color] = [
 	Color8(200, 55, 45), Color8(47, 111, 208), Color8(58, 154, 74), Color8(217, 165, 32),
@@ -66,8 +68,24 @@ static var own := false                 # the sheet came from the «sprites» fo
 
 static func sheet() -> Texture2D:
 	if _sheet == null:
-		_sheet = ImageTexture.create_from_image(build())
+		_sheet = ImageTexture.create_from_image(folded(build()))
 	return _sheet
+
+
+static func folded(tall: Image) -> Image:
+	## (v99) The made sheet with its rows from FOLD on laid beside the first ones: one column of ALL_ROWS
+	## rows grew past 8192 pixels (the mantis's row), more than many graphics cards take. See at().
+	var out := Image.create(tall.get_width() * 2, CELL.y * FOLD, false, Image.FORMAT_RGBA8)
+	out.blit_rect(tall, Rect2i(0, 0, tall.get_width(), CELL.y * FOLD), Vector2i.ZERO)
+	out.blit_rect(tall, Rect2i(0, CELL.y * FOLD, tall.get_width(), CELL.y * (ALL_ROWS - FOLD)), Vector2i(tall.get_width(), 0))
+	return out
+
+
+static func at(column: int, row: int) -> Vector2i:
+	## (v99) Where a frame of the made sheet lies in the folded one: column and row.
+	if row >= FOLD:
+		return Vector2i(column + COLUMNS, row - FOLD)
+	return Vector2i(column, row)
 
 
 static func forget() -> void:
@@ -90,6 +108,25 @@ static func source() -> Image:
 	im.convert(Image.FORMAT_RGBA8)
 	var out := Image.create(FRAME.x * VIEWS, FRAME.y * BODIES, false, Image.FORMAT_RGBA8)
 	out.blit_rect(im, Rect2i(0, 0, mini(out.get_width(), im.get_width()), mini(out.get_height(), im.get_height())), Vector2i.ZERO)
+	return out
+
+
+static func mantis() -> Image:
+	## (v99) The mantis's four frames (front, right, back, left), laid out as his base sheet (the same for both bodies).
+	var im := Sprites.own_image("mantis.png")
+	if im != null and (im.get_width() != FRAME.x * VIEWS or im.get_height() != FRAME.y):
+		print("sprites/mantis.png is %dx%d, %dx%d is needed: not used" % [im.get_width(), im.get_height(), FRAME.x * VIEWS, FRAME.y])
+		im = null
+	if im == null:
+		im = (load("res://assets/mantis.png") as Texture2D).get_image()
+	else:
+		Sprites.own_files.append("mantis.png")
+	if im.is_compressed():
+		im.decompress()
+	im.convert(Image.FORMAT_RGBA8)
+	var out := Image.create(FRAME.x * VIEWS, FRAME.y * BODIES, false, Image.FORMAT_RGBA8)
+	for body in BODIES:
+		out.blit_rect(im, Rect2i(0, 0, FRAME.x * VIEWS, FRAME.y), Vector2i(0, body * FRAME.y))
 	return out
 
 
@@ -130,7 +167,7 @@ static func suited(sheets: Array[Image], visor: int) -> Image:
 static func build() -> Image:
 	var src := source()
 	_settle(src)
-	var out := Image.create(CELL.x * 24, CELL.y * ALL_ROWS, false, Image.FORMAT_RGBA8)
+	var out := Image.create(CELL.x * COLUMNS, CELL.y * ALL_ROWS, false, Image.FORMAT_RGBA8)
 	var navy := _navy(src)
 	var grey := _paint(src, navy, UNDERSUIT)
 	# (v88) the suit with its visor up, half and down, its navy painted as the body's clothes are
@@ -156,6 +193,10 @@ static func build() -> Image:
 	var plates := _steel(_visor_red(_paint(suit[2], suit_navy[2], ARMOUR_TINT)))
 	for look in Net.LOOKS:
 		_row(out, Net.ARMOUR_COLOUR * Net.LOOKS + look, plates)
+	# (v99) the asteroids' mantis, from assets/mantis.png (or mantis.png in the «sprites» folder)
+	var bug := mantis()
+	for look in Net.LOOKS:
+		_row(out, Net.MANTIS_COLOUR * Net.LOOKS + look, bug)
 	# the machines keep the old drawn pictures (their four straight ways, for both bodies)
 	var old := Sprites.sheet("chars").get_image()
 	if old.is_compressed():

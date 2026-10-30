@@ -877,3 +877,22 @@ hand shield in its own place (S1).
 - Boarders down the road carry lasers and plasma; stormtroopers wear a vest and a helmet.
 - Ship guns: pulse laser (tier 2) and plasma cannon (tier 3).
 - New test `tools/arsenaltest.gd` (53 scripts); protocol 72.
+
+## v99 (0.92): asteroids, landing, abandoned stations, mantises
+
+His order of 2026-10-30: races go to the long-term plans; now asteroid generation, better derelict station generators,
+and simple monsters on asteroids ("like centipedes but with 10 legs, looking like a praying mantis; melee damage 30;
+they move like characters and have a small leap toward an enemy when there is a 1 tile gap"). Questions
+`https://claude.ai/artifact/UFrWnH2ZwdzCXJKk3iBPjA`, built on my picks (all A).
+- ship02 got 14 more empty rows over each deck (24 in all), so places up to about 40x20 fit beside it.
+- Every campaign makes 8 asteroids of its own (small solid ones, medium and large with caves), kept in the save and
+  sent to guests. A cave asteroid has a mouth in its bottom row: the helm's dock button («Сесть на астероид») lands the
+  ship on it, and the airlock opens straight into the cave. Ore veins and finds lie deeper in.
+- 4 of the 8 made derelicts are now abandoned stations: a spine corridor with rooms by kind (quarters, mess, medbay,
+  workshop, storage, lab, armoury), each with its own machines and loot.
+- Mantises (`src/server/mantises.gd`): 80 health, chitin takes 20% off bullets and pellets, claws hit for 30 every
+  1.2 s, a leap over one empty cell straight or on a slant (every 4 s), no air needed. They sleep deep in the caves
+  until they see someone; 0-2 an asteroid, more down the road. A claw can be cut off the body and sold.
+- The people's sheet is folded in two halves side by side: with the mantis's row it grew past 8192 pixels tall,
+  more than older graphics cards take.
+- New test `tools/asteroidtest.gd` (54 scripts); protocol 73.
