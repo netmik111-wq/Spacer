@@ -3,6 +3,7 @@ extends SceneTree
 ## author: "simulate the full game from start to finish, I need numbers").
 ## Not a test: it always passes.
 ##   godot --headless --path . --script res://tools/playthrough.gd -- OUT_DIR [runs] [first run number] [mode] [hours] [stay]
+## (2026-10-31) HUNTERS=0 switches the pirate hunters off (a what-if for the run-length review; the game is unchanged).
 ## Each run is a fresh campaign on a real server stepped by hand: ship02, a
 ## captain (this script) and three bots. The bots get orders as a sensible
 ## captain would give them: one at the helm (dodging), two on «Работы» (they
@@ -157,6 +158,8 @@ func _run(number: int, mode: int) -> void:
 		print("run %d: %s" % [number, problem])
 		server.free()
 		return
+	if OS.get_environment("HUNTERS") == "0":
+		server.road.auto = false        # (2026-10-31) a what-if for the run-length review: no hunters at all
 	server.log_line.connect(_heard)
 	log_lines = []
 	timeline = []
