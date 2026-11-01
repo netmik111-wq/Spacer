@@ -288,6 +288,8 @@ var lean_on := true                  # (v79) GameScreen turns it off while a con
 const LEAN_EASE := 6.0
 var _pass_side := {}                 # (v79) Vector2i(id, id) -> the side two passing people step to
 const PASS_REACH := 1.0              # (v79) how near, in tiles, two people step aside for each other
+const NUDGE_EASE := 18.0             # (v102) how fast the sliding aside eases in and out (per second)
+var _nudge_now := {}                 # (v102) id -> how far aside it is drawn this frame (eased toward _passing)
 var _other_seen := 0                 # GameClient.other_changes when the tiles were last laid
 var _dark := 0.0                     # 0 = the lights are on, 1 = no power: eased, so it fades
 var _flash := {}                     # (v75) id -> seconds left of its red flash after a wound
@@ -582,6 +584,23 @@ func _feet(pos_tiles: Vector2) -> Vector2:
 	return Vector2(pos_tiles.x * _tile + _tile * 0.5, pos_tiles.y * _tile + FEET_Y)
 
 
+func _ease_nudge(want: Dictionary, delta: float) -> Dictionary:
+	## (v102, his Notebook video) The sliding aside eases in and out (about a tenth of a second) rather than
+	## jumping a quarter of a tile the moment somebody starts or stops walking.
+	var k := 1.0 - exp(-delta * NUDGE_EASE)
+	for id: int in want.keys():
+		if not _nudge_now.has(id):
+			_nudge_now[id] = Vector2.ZERO
+	for id: int in _nudge_now.keys():
+		var to: Vector2 = want.get(id, Vector2.ZERO)
+		var now: Vector2 = (_nudge_now[id] as Vector2).lerp(to, k)
+		if to == Vector2.ZERO and now.length() < 0.05:
+			_nudge_now.erase(id)
+		else:
+			_nudge_now[id] = now
+	return _nudge_now
+
+
 func _passing(samples: Dictionary) -> Dictionary:
 	## (v79, his W1 note) People walk through one another; two standing close are drawn stepping
 	## aside, each up to a quarter of a tile off its line, as if sliding past. Only the picture moves.
@@ -602,13 +621,13 @@ func _passing(samples: Dictionary) -> Dictionary:
 			if d >= PASS_REACH or not (bool(a[2]) or bool(b[2]) or _pass_side.has(Vector2i(ids[i], ids[j]))):
 				_pass_side.erase(Vector2i(ids[i], ids[j]))
 				continue
-			# sideways to the line between them; kept from the last frame once they stand on one spot
+			# sideways to the line between them. (v102, his Notebook video: the figures "split back and forth" as one
+			# started walking) The side is taken once, as they come near, and kept while they stay near: worked out
+			# anew every frame it flipped as they passed through each other, and each jumped across.
 			var side: Vector2 = _pass_side.get(Vector2i(ids[i], ids[j]), Vector2.ZERO)
-			if d > 0.05:
-				side = Vector2(-apart.y, apart.x) / d
+			if side == Vector2.ZERO:
+				side = Vector2(-apart.y, apart.x) / d if d > 0.05 else Vector2.RIGHT
 				_pass_side[Vector2i(ids[i], ids[j])] = side
-			elif side == Vector2.ZERO:
-				side = Vector2.RIGHT
 			var push := side * _tile * 0.25 * (1.0 - d / PASS_REACH)
 			out[ids[i]] = (out.get(ids[i], Vector2.ZERO) - push).limit_length(_tile * 0.25)
 			out[ids[j]] = (out.get(ids[j], Vector2.ZERO) + push).limit_length(_tile * 0.25)
@@ -2680,7 +2699,7 @@ func _process(delta: float) -> void:
 		var got := client.sample(id)
 		if not got.is_empty():
 			samples[id] = got
-	var nudge := _passing(samples)
+	var nudge := _ease_nudge(_passing(samples), delta)
 	_heat.clear()
 	var thermal := eyes() == Net.ITEM_THERMAL
 	for id: int in samples.keys():

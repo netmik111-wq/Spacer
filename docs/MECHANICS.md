@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v101 (version 0.94).
+Last updated: build v102 (version 0.95).
 
 Contents:
 
@@ -85,6 +85,9 @@ Contents:
 - (v79, the author's W1 note) People still walk through one another. Two close together (under **1 cell**
   apart) while either walks are drawn **stepping aside**, each up to a **quarter of a cell** off its line, as if
   sliding past; only the picture moves. Two standing still keep the spots they chose.
+  (v102, his Notebook video: the figures "split back and forth" as one started walking) The slide **eases** in and out
+  (about a tenth of a second), and each keeps the **side** it took as they came near until they part, so passing
+  through one another no longer flips them across.
 - Pressing a direction **turns** the character **immediately**, even mid-step or facing a wall.
 - **Wall objects** (consoles, racks, locker, engine, air plant, intercom, airlock
   pump) face one room (down if there is floor there, otherwise up or sideways). They can be used
@@ -1700,7 +1703,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
 | H | (v74) the help book |
 | V | (v92) a small window of the fight in space (in a fight); at the controls in a fight W/S/A/D/Q/E steer |
 | F1 | ship status and key hints at the top of the screen (hidden by default since v47) |
-| F3 | debug |
+| F3 | debug (v102: also ping, the slowest frame and the longest wait for the server in the last 5 s) |
 | F11 | full screen |
 
 ### Settings
@@ -2231,6 +2234,8 @@ The author's answers on "Spacer v81 Ship editor" (https://claude.ai/artifact/68o
   your tiles; bots and pirates find their way round. Your friends' shots fly past you, so a line can hold a door while
   others shoot through it. A light blue tint shows who holds.
 - A step, lying down (C) or falling lets go; X again lets go too.
+- (v102, found while looking at his notes) Until v102 the server threw the X key away in a real game: only one's own
+  screen showed the hold, and others walked through. It holds on the server now.
 
 ## 37. Polish without extra depth (v82)
 
@@ -2767,8 +2772,12 @@ all answered A; his P2 note added the pod bay.
   why). No engine or no power: it drifts.
 - **A jump**: the ship goes on flying until the jump; then it stands at its place of arrival. The autopilot stops at
   a jump.
-- **Our second ship** keeps its place in formation behind the first (**14** cells gap) out of a fight; either helm
-  flies both. In a fight it flies by itself, after the fight it goes back into formation.
+- **Our second ship** (v102, his Notebook note "both ships move like one", FL1 pick C) **follows** the first out of a
+  fight by its own engines and turning: behind it and to the side it is on (**14** cells clear). While the first
+  stands, the second stays where it is unless it is too near or more than **24** cells past touching. The first
+  turning on its spot no longer swings it round. A key at the **second ship's own helm** flies it alone (the first
+  stays); it follows again once its pilot leaves the helm or the autopilot gets a course. A jump or a save puts it in
+  formation. In a fight it flies by itself as before. (Before v102 it was glued in place and either helm flew both.)
 - **Firing with no enemy** (his N1 A): a gun can be fired at any time: by hand at the mount (hold anything but a
   gun or a round for it; empty hands still take the gun down out of a fight), with the mouse at the controls or at
   the gun console. Shots fly off and are gone; they hit nothing yet (meteors and asteroids later). Rounds are spent as

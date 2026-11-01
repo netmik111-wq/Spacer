@@ -478,8 +478,9 @@ func _on_packet(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 			return
 		var dir := pkt[7]
 		if dir > Net.DIRS and (dir <= Mover.TURN or dir > Mover.TURN + Net.DIRS) and dir != Mover.LOOK_FREE and dir != Mover.LOOK_WALK \
-				and dir != Mover.LIE and dir != Mover.RISE:
-			return                  # a direction, a turn (Mover.TURN + a direction), (v77) how it looks, (v78) lying down
+				and dir != Mover.LIE and dir != Mover.RISE and dir != Mover.HOLD and dir != Mover.LET_GO:
+			return                  # a direction, a turn (Mover.TURN + a direction), (v77) how it looks, (v78) lying down,
+			                        # (v102, found on the way) holding position: since v81 it was thrown away here
 		# A client sends every input change several times, so that one lost
 		# packet does not hold it up. Keep one copy of each, in order.
 		var seq := pkt.decode_u16(1)

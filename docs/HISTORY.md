@@ -934,3 +934,20 @@ page (`https://claude.ai/artifact/5v3oAETazwi2XUigNFwK15`), after the game-loop 
 - Checks: all 56 scripts, the 2-hour soak ("soak: ok"), nettest with and without the lag proxy, with a derelict and a
   pirate ship: 0 bad state checks, 0 errors, corrections 0-0.5%. On this 4-core container one or two of the 8 clients
   start too late to report (main shows the same). Archives in `/mnt/project-files/builds/v101/` (exe 111,125,056 bytes).
+
+## v102 (0.95): his Notebook notes of 1 November
+
+His ask (2026-11-01): "Check notes find some bugs and suggestions". Two open notes, one with a video: the fleet's two
+ships move as one; the character twitches back and forth when starting to walk after looking round; once he saw
+himself as if from above the ship (not reproduced); the game feels laggier since v101. Questions on
+`https://claude.ai/artifact/XVghu9LFyAHQBLRmfUuyCR`, built on my picks.
+- Out of a fight our second ship follows the first by its own engines (behind and to its side), no longer glued in
+  place and swung round when the first turns; a key at its own helm flies it alone until its pilot leaves.
+- The twitch was v79's sliding aside (he stood by a bot): it now eases and keeps its side while two people pass.
+- Holding position (X) reaches the server: the input check threw it away since v81.
+- F3 shows ping, the slowest frame and the longest pause between the server's packets over 5 s. Lag: v101 measured
+  the same as v100 here (server tick, traffic, client scripts); asked him for an F3 screenshot and who hosted.
+- The heat, cluster contracts, harbours and second chance planned for v102 move to v103 (my Z1 pick).
+- New test `tools/followtest.gd` (57 scripts; 30 of 30 runs pass). No protocol change.
+- Checks: all 57 scripts; nettest with and without the lag proxy, with a derelict and a pirate ship: 0 bad state
+  checks, 0 errors, corrections 0-0.1%. Archives in `/mnt/project-files/builds/v102/` (exe 111,127,424 bytes).

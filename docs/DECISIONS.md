@@ -2261,3 +2261,26 @@ N6 A; P4 A, P5 A, P6 A, S3 A, S4 A, O2 A. Heat, cluster contracts, harbours and 
   his feet (`LOW_BLOW`). The hand shield blocks with `Armour.RIOT_BLOCK` 0.35 (`Combat.riot_block` for tests).
 - **The run log** (S3 A): `RunLog`, lines with the game time, written next to the game as `run_log.txt` with
   `usage.txt` (at every save and the end), kept in the save.
+
+## v102: his Notebook notes of 1 November (the fleet, a twitch, a view from above, lag)
+
+Questions page: `https://claude.ai/artifact/XVghu9LFyAHQBLRmfUuyCR` (db `answers`), built on my picks.
+- **The second ship follows** (his note "both ships move like one", my FL1 pick C). Since v95 it was glued to a spot
+  in the first ship's own frame (`_form` every tick), so a turn on the spot swung it round like the end of a stick.
+  Now it flies itself (`Arena._follow`): toward a slot behind the first and to the side it is already on (it never
+  cuts across), at the first's speed plus 0.4 of the gap; with the first standing it stays put while between 0.6 of
+  touching and `FOLLOW_ROOM` (24) cells past touching. I picked a follower over two separate ships so one pilot
+  still flies the fleet; a key at the second ship's own helm makes it `solo` until its pilot leaves the helm (the
+  client sends C_PILOT every 0.5 s while at the helm) or the autopilot gets a course. `formed` now only marks the
+  tick it was put in place (`placed`); `form_slot` is the same slot `_follow` aims at. Out of a fight ships still do
+  not bump (`_bump` runs only in fights), so a solo pilot can fly through the first.
+- **The twitch** in his video: his character stood by a bot, and v79's sliding aside switched on the moment one of
+  them walked, a quarter tile at once, and its side was worked out anew every frame, so it flipped as they passed.
+  The side is now taken once per pair (`_pass_side`) and the slide eases (`_ease_nudge`, `NUDGE_EASE` 18/s).
+- **Holding position** was never accepted by the server: `C_INPUT`'s check let LIE and RISE through but not HOLD
+  and LET_GO (v81's tests put the input straight into `p.inputs`). Found while reading that check for the twitch.
+  `followtest` sends X from a real client.
+- **Lag**: v101 against v100 on this container: server tick 2.5 ms vs 2.4 ms with 4 clients, traffic the same, the
+  client's own scripts the same. Nothing found, so nothing changed; F3 now shows the ping, the slowest frame and the
+  longest wait between the server's world packets over 5 s, so his next screenshot tells network, host or picture.
+- **The view from above** (his third bug, not reproduced): asked when it happened (B2).

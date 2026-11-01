@@ -174,6 +174,9 @@ var _root: Control                   # (the windows above are made when first op
 var _held: Array[int] = []
 var _info_timer := 0.0
 var _fps_smooth := 60.0
+var _slow_now := 0.0                 # (v102) the slowest frame so far in this 5 s, seconds
+var _slow_for := 0.0
+var _slow_shown := 0.0               # and in the last whole 5 s (shown on F3)
 var _demo_until := 0.0
 var _demo_dir := 0
 var _rng := RandomNumberGenerator.new()
@@ -2643,6 +2646,13 @@ func _process(delta: float) -> void:
 	_alert_tint.color.a = 0.0                # (v75) the red light of a red alert is in the world now (WorldView)
 
 	_fps_smooth = lerpf(_fps_smooth, 1.0 / maxf(delta, 0.0001), 0.05)
+	# (v102) the slowest frame of the last 5 s, for F3
+	_slow_now = maxf(_slow_now, delta)
+	_slow_for += delta
+	if _slow_for >= 5.0:
+		_slow_shown = _slow_now
+		_slow_now = 0.0
+		_slow_for = 0.0
 	_info_timer -= delta
 	if _info_timer <= 0.0:
 		_info_timer = 0.25
@@ -2658,10 +2668,10 @@ func _process(delta: float) -> void:
 			_info.text += "     Кадров: %d" % int(round(_fps_smooth))
 		_info.text += "\n%s     Навыки: %s" % [Net.JOB_NAMES[client.job], _skills_text()]
 		if _debug.visible:
-			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
+			_debug.text = "тик сервера: %d\nпредсказание: %s (F4), исправлено шагов: %d\nсверка состояния: %d без расхождений, %d с расхождением\nпринято: %d пакетов, %.1f КБ\nкадров в секунду: %d, самый долгий кадр за 5 с: %d мс\nпинг: %d мс, самая долгая пауза сервера за 5 с: %d мс\nздоровье: %d, давление здесь: %d кПа, баллон: %d%%" % [
 				client.server_tick, "вкл" if client.predict else "выкл", client.mispredicts,
 				client.checks_ok, client.checks_bad, client.packets_in, client.bytes_in / 1024.0,
-				int(round(_fps_smooth)), client.health,
+				int(round(_fps_smooth)), roundi(_slow_shown * 1000.0), roundi(client.rtt_ms), client.worst_gap_ms, client.health,
 				int(round(maxi(client.air_at(client.pred.x, client.pred.y), 0) * Net.KPA_FULL / Net.AIR_FULL)),
 				client.tank * 100 / Net.TANK_FULL]
 

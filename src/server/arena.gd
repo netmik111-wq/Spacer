@@ -81,6 +81,7 @@ const STILL := 0.4                   # (v95) cells a second: a ship with no thru
 const NEAR_GOAL := 1.5               # (v95) cells: a course this near its mark is done
 const FORM_GAP := 14.0               # (v95) cells between our two ships in formation (as they stood in v92's fight)
 const FORM_SNAP := 3.0               # the second ship this near its place in formation takes it
+const FOLLOW_ROOM := 24.0            # (v102) a still fleet: the second ship this much past touching the first stays put
 const HELD_SAY := 5 * Net.TICK_HZ    # ticks between two "the ship is held" lines
 const POD_SPEED := 16.0              # (v95, my P1 pick) cells a second a boarding pod or an assault drone flies
 const POD_LIFE := 12.0               # seconds it flies before it is lost
@@ -162,7 +163,8 @@ class Body:
 	var auto_until := 0              # (nobody holds the shield) it stays up until this tick
 	var debt := 0.0                  # hull points taken that have not made a hit inside yet
 	var shield_dir := 0.0            # the middle of an arc, in the body's frame (ours: the pilot's mouse)
-	var formed := false              # (v95) our second ship riding in formation behind the first
+	var formed := false              # (v95) our second ship put in its place in formation (v102: it then flies there itself)
+	var solo := false                # (v102, his FL1 note) our second ship flown alone from its own helm, out of a fight
 
 	func overloaded(now: int) -> bool:
 		return now < over_until
@@ -327,7 +329,7 @@ func _ours_now() -> void:
 			continue
 		if not b.on:
 			_our_body(i)
-			b.pos = server.ship.pos * SCALE + (Vector2(0.0, (bodies[0] as Body).shape.h + FORM_GAP) if i > 0 else Vector2.ZERO)
+			b.pos = server.ship.pos * SCALE + (form_slot(bodies[0], b) if i > 0 else Vector2.ZERO)
 			b.vel = Vector2.ZERO
 			b.rot = 0.0
 			b.spin = 0.0
@@ -435,24 +437,47 @@ func _stop() -> void:
 
 
 func _formation() -> void:
-	## (v95, my F6 pick) Out of a fight our second ship keeps its place behind the first (either helm flies both, as the
-	## author's FS4); after a fight it flies back to it first.
-	if _was_on:
-		return
-	var lead: Body = bodies[0]
+	## (v95, my F6 pick) Out of a fight our second ship was glued to its place beside the first and swung round it as
+	## the first turned. (v102, his Notebook note "both ships move like one") It flies itself now (`_follow`); a ship
+	## put in formation (a jump, a save) only starts there.
 	for i in range(1, LEAD):
-		var b: Body = bodies[i]
-		if not b.on or not lead.on:
-			continue
-		var slot := lead.world(Vector2(0.0, lead.shape.h + FORM_GAP))
-		if b.formed or b.pos.distance_to(slot) <= FORM_SNAP:
-			b.formed = true
-			_form(b)
+		(bodies[i] as Body).formed = false
+
+
+static func form_slot(lead: Body, b: Body) -> Vector2:
+	## (v102) Where our second ship stands in formation, in the first one's own frame: behind it and to one side.
+	if lead.shape == null or b.shape == null:
+		return Vector2(0.0, 30.0)
+	return Vector2(-(lead.shape.w * 0.25 + b.shape.w * 0.25), lead.shape.h * 0.5 + b.shape.h * 0.5 + FORM_GAP)
+
+
+func _follow(b: Body) -> void:
+	## (v102, my FL1 pick) Our second ship out of a fight: it flies after the first by its own engines and turning, behind
+	## it and to the side it is on; with the first standing still it stays where it is unless it is too near or too far.
+	var lead: Body = bodies[0]
+	if not lead.on or lead.shape == null or b.shape == null:
+		return
+	var moving := lead.vel.length() > STILL * 2.0
+	var ahead := lead.vel.normalized() if moving else Vector2.from_angle(lead.rot)
+	var across := Vector2(-ahead.y, ahead.x)
+	var off := b.pos - lead.pos
+	if across.dot(off) < 0.0:
+		across = -across                     # it keeps to the side it is on: never cuts across the first ship
+	var touch: float = lead.shape.radius + b.shape.radius
+	var slot: Vector2 = lead.pos - ahead * (lead.shape.w * 0.25 + b.shape.w * 0.25) + across * (lead.shape.h * 0.5 + b.shape.h * 0.5 + FORM_GAP)
+	var d := off.length()
+	if not moving and d >= touch * 0.6 and d <= touch + FOLLOW_ROOM:
+		_fly_vel(b, Vector2.ZERO, b.rot)     # the fleet stands: it stays where it is
+		return
+	var speed: float = b.stats[0]
+	var want: Vector2 = (lead.vel + (slot - b.pos) * 0.4).limit_length(speed)
+	var face: float = ahead.angle() if moving else (slot - b.pos).angle() if b.pos.distance_to(slot) > 8.0 else b.rot
+	_fly_vel(b, want, face)
 
 
 func _form(b: Body) -> void:
 	var lead: Body = bodies[0]
-	b.pos = lead.world(Vector2(0.0, lead.shape.h + FORM_GAP))
+	b.pos = lead.world(form_slot(lead, b))
 	b.rot = lead.rot
 	b.vel = lead.vel
 	b.spin = lead.spin
@@ -674,8 +699,11 @@ func pilot_asked(p: Player, keys: int) -> void:
 		if why != "":
 			_held_say(why)               # (v95) the old helm's refusals: somebody outside, a ship docked
 	pilots[i] = {"keys": keys, "until": server.tick + PILOT_HOLD, "by": p}
-	if not _was_on and i > 0:
-		pilots[0] = pilots[i]            # (v95, the author's FS4) either helm flies the fleet in formation
+	# (v95, the author's FS4: either helm flew the fleet in formation.) (v102, his Notebook note "both ships move like
+	# one", my FL1 pick C) out of a fight a key at the second ship's helm flies that ship alone; it follows the first
+	# again once its pilot leaves the helm (or the autopilot is given a course)
+	if not _was_on and i > 0 and keys != 0 and i < bodies.size():
+		(bodies[i] as Body).solo = true
 
 
 func dash(ship: int, way: float) -> bool:
@@ -716,6 +744,24 @@ func _steer(b: Body) -> void:
 
 func _steer_ours(b: Body) -> void:
 	var pilot: Dictionary = pilots[b.id] if b.id < pilots.size() else {}
+	if b.id > 0 and not _was_on:
+		# (v102) out of a fight our second ship follows the first, unless flown alone from its own helm
+		var fresh := not pilot.is_empty() and server.tick < int(pilot["until"])
+		if fresh:
+			server.fleet.use(b.id)
+			fresh = server.systems.at_console(pilot["by"], server.map.helm)
+			server.fleet.use(0)
+		if not fresh or course:
+			b.solo = false
+			pilots[b.id] = {}
+		if b.solo:
+			var k: int = pilot["keys"]
+			b.thrust = (1.0 if k & KEY_AHEAD else 0.0) - (1.0 if k & KEY_BACK else 0.0)
+			b.turn = (1.0 if k & KEY_RIGHT else 0.0) - (1.0 if k & KEY_LEFT else 0.0)
+			b.slide = (1.0 if k & SLIDE_RIGHT else 0.0) - (1.0 if k & SLIDE_LEFT else 0.0)
+		else:
+			_follow(b)
+		return
 	if not pilot.is_empty() and server.tick < int(pilot["until"]):
 		server.fleet.use(b.id)
 		var still: bool = server.systems.at_console(pilot["by"], server.map.helm)
@@ -842,7 +888,11 @@ func _facing(b: Body, at: Vector2) -> float:
 
 func _fly_to(b: Body, goal: Vector2, face: float, pace: float, blind: bool = false) -> void:
 	var speed: float = float(b.stats[0]) * pace
-	var want := ((goal - b.pos) * 0.3).limit_length(speed)
+	_fly_vel(b, ((goal - b.pos) * 0.3).limit_length(speed), face, blind)
+
+
+func _fly_vel(b: Body, want: Vector2, face: float, blind: bool = false) -> void:
+	## Pushes and turns toward that speed and heading.
 	var need := (want - b.vel).rotated(-b.rot)
 	b.thrust = clampf(need.x * 1.5, -1.0, 1.0) if absf(need.x) > 0.2 else 0.0
 	b.slide = clampf(need.y * 1.5, -1.0, 1.0) if absf(need.y) > 0.2 else 0.0

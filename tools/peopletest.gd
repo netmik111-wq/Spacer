@@ -101,6 +101,22 @@ func _floor() -> int:
 	return at.y * server.map.width + at.x
 
 
+# a spawn tile with `n` floor cells of the same room to its right: a random spawn may sit by a
+# wall, and a pirate put two cells on then stands in the next room (a shot or "in the room" fails)
+func _floor_row(n: int) -> int:
+	var map := server.map
+	for s: Vector2i in map.spawns:
+		var room := map.room_at(s.x, s.y)
+		var fits := room >= 0
+		for k in range(1, n + 1):
+			if not fits:
+				break
+			fits = map.walkable(s.x + k, s.y) and map.room_at(s.x + k, s.y) == room
+		if fits:
+			return s.y * map.width + s.x
+	return _floor()
+
+
 # --------------------------------------------------------------- bots give half
 
 func _halves() -> void:
@@ -320,7 +336,7 @@ func _prisoners() -> void:
 	_clear()
 	var guard := server.crew.new_player("Охранник")
 	guard.take_job(Net.JOB_GUARD)
-	var here := _floor()
+	var here := _floor_row(3)
 	_place(guard, here, Net.DIR_RIGHT)
 	var pirate = server.pirates.spawn(here % server.map.width + 1, here / server.map.width, true)
 	pirate.goal = 0
@@ -498,7 +514,7 @@ func _weapons() -> void:
 	print("  -- the shotgun and the flashbang")
 	_clear()
 	var map := server.map
-	var here := _floor()
+	var here := _floor_row(3)
 	var shooter := server.crew.new_player("Стрелок")
 	_place(shooter, here, Net.DIR_RIGHT)
 	var target = server.pirates.spawn(here % map.width + 2, here / map.width, true)
