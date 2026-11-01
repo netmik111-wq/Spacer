@@ -58,10 +58,9 @@ func _initialize() -> void:
 			var i: int = shape.index(Vector2i(x, y))
 			if shape.armoured(i):
 				outer += 1
-				if top < 0 and y == 0 and shape.kind[i] == ArenaShape.WALL:
-					top = i
 			if shape.edge[i] == 0 and shape.armoured(i):
 				inner_armour += 1
+	top = _top_spot(shape)     # (v101) the hull's top in the middle of its length (plating over it counts)
 	_expect(outer > 20 and inner_armour == 0, "armour lies on the outer wall only (%d cells)" % outer)
 	var n: Vector2 = shape.normal(Vector2i(top % shape.w, top / shape.w))
 	_expect(top >= 0 and n.y < -0.7, "the top wall faces up (%.2f, %.2f)" % [n.x, n.y])
@@ -72,12 +71,7 @@ func _initialize() -> void:
 	var e = a.body(Arena.LEAD)
 	_expect(e != null and e.plates >= 50.0, "the raider's wall holds armour (%d)" % (e.plates if e != null else -1))
 	e.rot = 0.0
-	var spot := -1
-	for x in e.shape.w:
-		var i: int = e.shape.index(Vector2i(x, 0))
-		if e.shape.armoured(i) and e.shape.kind[i] == ArenaShape.WALL and e.shape.normal(Vector2i(x, 0)).y < -0.9:
-			spot = i
-			break
+	var spot := _top_spot(e.shape)
 	_expect(spot >= 0, "(a flat spot on its top wall)")
 	var c := Vector2i(spot % e.shape.w, spot / e.shape.w)
 	var l: Vector2 = e.shape.middle(c.x, c.y)
@@ -325,6 +319,21 @@ func _hold(ours: Vector2, our_rot: float, theirs: Vector2, their_rot: float) -> 
 func _run(ticks: int) -> void:
 	for i in ticks:
 		server._tick()
+
+
+func _top_spot(shape) -> int:
+	## (v101) A flat place on the top of the hull: the first solid cell from above in a column near the middle, where
+	## the plating's fins and bow do not reach.
+	for dx in range(0, shape.w / 2):
+		for x: int in [shape.w / 2 - dx, shape.w / 2 + dx]:
+			for y in shape.h:
+				var i: int = shape.index(Vector2i(x, y))
+				if shape.kind[i] == ArenaShape.EMPTY:
+					continue
+				if shape.armoured(i) and shape.normal(Vector2i(x, y)).y < -0.9:
+					return i
+				break
+	return -1
 
 
 func _expect(ok: bool, what: String) -> void:

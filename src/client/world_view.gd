@@ -687,11 +687,15 @@ class WearArt extends Node2D:
 	func _draw() -> void:
 		var frame := Rect2(view * CHAR_W, (0 if woman else 1) * CHAR_H, CHAR_W, CHAR_H)
 		var at := Rect2(-CHAR_W / 2.0, -CHAR_H, CHAR_W, CHAR_H)
-		if bits & PACK != 0:
+		# (v101, his Notebook note "the backpack does not show when one looks away") from the side and from behind
+		# the pack goes over the vest, or the vest's back hides it; from the front only its straps show, under
+		if bits & PACK != 0 and view == 0:
 			draw_texture_rect_region(Sprites.sheet("wear_pack"), at, frame)
 		for layer: Array in LAYERS:
 			if bits & int(layer[0]) != 0:
 				draw_texture_rect_region(Sprites.sheet(str(layer[1])), at, frame)
+		if bits & PACK != 0 and view != 0:
+			draw_texture_rect_region(Sprites.sheet("wear_pack"), at, frame)
 
 
 const WEAR_VIEW := {0: 0, 3: 2, 6: 3, 9: 1}   # (v100) a first column of the sheet -> the way in the wear sheets

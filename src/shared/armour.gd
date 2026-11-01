@@ -33,6 +33,7 @@ const SHIELD_RATE := 5.0             # then this much a second
 const SHIELD_PLASMA := 2.0           # plasma drains it this many times over
 # a hand shield on the arm stops what comes from within this angle of where one faces (each way)
 const RIOT_ARC := PI / 3.0
+const RIOT_BLOCK := 0.35            # (v101, his Notebook note "it blocks every hit? it needs a 35% chance") of what comes in its arc
 
 
 static func taken(worn: PackedByteArray, deflated: bool, kind: int) -> float:

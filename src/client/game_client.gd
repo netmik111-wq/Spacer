@@ -1187,6 +1187,8 @@ func use_target(facing: int = -1) -> int:
 	var bomb := floor_cell(f)
 	if bomb >= 0 and top_thing(bomb) == Net.ITEM_BOMB:
 		return 41                            # (v70) as Repairs.usable_ahead: a bomb comes first
+	if hand < slots.size() and slots[hand] == Net.ITEM_MOUNT and mount_here(map.cell_ahead(pred.x, pred.y, f)) != "-":
+		return 25                            # (v101) a mount in hand: the wall or floor right ahead
 	var cell := map.use_ahead(pred.x, pred.y, f, holes)
 	if cell >= 0:
 		if holes.has(cell):
@@ -1338,9 +1340,11 @@ func mount_here(cell: int) -> String:
 	## mount at that cell (or, with empty hands, the gun on it comes down), "-" if
 	## there is nothing of that to do there, else why not, in the player's words.
 	var i := map.guns.find(cell)
+	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
+	if item == Net.ITEM_MOUNT:
+		return mount_set_here(cell)
 	if i < 0:
 		return "-"
-	var item: int = slots[hand] if hand < slots.size() else Net.ITEM_NONE
 	var on: int = gun_weapon[i] if i < gun_weapon.size() else Weapons.NONE
 	if item != Net.ITEM_NONE and on != Weapons.NONE and item == Weapons.ammo(on):
 		# (v68) a round for its breech (Mounts.LOAD_MAX = 4)
@@ -1360,7 +1364,44 @@ func mount_here(cell: int) -> String:
 		return "-" if broken.has(cell) else ""
 	if item == Net.ITEM_NONE and on != Weapons.NONE and not broken.has(cell) and not arena_on():
 		return ""                            # (v92: in a fight, empty hands take the gun's controls instead)
+	if item == Net.ITEM_NONE and on == Weapons.NONE and not broken.has(cell):
+		# (v101, as Mounts.can) an empty mount: an engineer takes it down
+		if job != Net.JOB_ENGINEER:
+			return "Пустое гнездо снимает и переносит только инженер."
+		if arena_on():
+			return "В бою гнездо не снять."
+		if i < mount_wanted.size() and mount_wanted[i] != 0:
+			return "К этому гнезду уже несут орудие: сначала отмените приказ на пульте орудий."
+		return ""
 	return "-"
+
+
+func mount_set_here(cell: int) -> String:
+	## (v101, as Mounts.can_set) "" if the mount in our hands goes up on that cell, "-" if nothing of that, else why not.
+	if cell < 0 or cell >= map.cells.size():
+		return "-"
+	if map.guns.has(cell):
+		return "Здесь уже стоит гнездо."
+	if map.cells[cell] < 0 or map.is_other(cell) or (map.walk[cell] == 0 and not map.hull.has(cell) and map.fitting_front(cell) < 0):
+		return "-"                           # (open space, the ship alongside, an inner wall: nothing to say)
+	if Net.diagonal(pred.facing) or map.cells[pred.y * map.width + pred.x] < 0:
+		return "Встаньте внутри корабля прямо перед этим местом."
+	var why: String = map.can_mount(cell)
+	if why != "":
+		return why
+	if job != Net.JOB_ENGINEER:
+		return "Гнездо ставит только инженер."
+	if arena_on():
+		return "В бою гнездо не поставить."
+	if map.first_stowed() < 0:
+		return "На корабле больше нет места под гнёзда: у него их %d." % map.guns.size()
+	if map.walk[cell] == 1:
+		if floor_things.has(cell):
+			return "Сначала уберите с пола то, что там лежит."
+		for e: Ent in ents.values():
+			if e.id != my_id and e.y * map.width + e.x == cell:
+				return "Здесь кто-то есть."
+	return ""
 
 
 func turret_here(cell: int) -> int:
@@ -1602,7 +1643,9 @@ func shutter_gap(door: int) -> Array:
 
 
 func use_cell() -> int:
-	## The cell our character faces, or -1.
+	## The cell our character faces, or -1. (v101) With a gun mount in hand, the wall or floor right ahead.
+	if phase == PLAYING and hand < slots.size() and slots[hand] == Net.ITEM_MOUNT:
+		return map.cell_ahead(pred.x, pred.y, pred.facing)
 	return map.use_ahead(pred.x, pred.y, pred.facing, holes) if phase == PLAYING else -1
 
 
@@ -2010,6 +2053,29 @@ func _on_packet(pkt: PackedByteArray) -> void:
 				mount_gunner.append(pkt[4 + i * 3])
 				mount_wanted.append(pkt[5 + i * 3])
 				mount_loaded.append(pkt[6 + i * 3])
+		Net.S_MOUNT_CELLS:
+			# (v101, his N2 A) where a ship of our fleet's mounts are now: moved ones change the cells under them
+			if pkt.size() < 3 or pkt.size() < 3 + pkt[2] * 4:
+				return
+			var moved := false
+			map.use_ship(pkt[1])
+			var want := PackedInt32Array()
+			for k in pkt[2]:
+				want.append(pkt.decode_s32(3 + k * 4))
+			for k in mini(want.size(), map.guns.size()):
+				if map.guns[k] >= 0 and map.guns[k] != want[k]:
+					map.set_gun(k, -1)
+					moved = true
+			for k in mini(want.size(), map.guns.size()):
+				if want[k] >= 0 and map.guns[k] != want[k] and want[k] < map.cells.size():
+					map.set_gun(k, want[k])
+					moved = true
+			map.use_ship(my_fleet)
+			if moved:
+				ArenaShape.forget_kinds()
+				arena.forget_shapes()
+				_holo_cells()
+				other_changes += 1
 		Net.S_STATIONS:
 			if not _ours(pkt) or pkt.size() < 11:
 				return

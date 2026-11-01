@@ -102,6 +102,7 @@ const Prisons := preload("res://src/server/prisons.gd")
 const Galley := preload("res://src/server/galley.gd")
 const Defence := preload("res://src/server/defence.gd")
 const Usage := preload("res://src/server/usage.gd")
+const RunLog := preload("res://src/server/run_log.gd")
 const Fleet := preload("res://src/server/fleet.gd")
 const Wing := preload("res://src/server/wing.gd")
 const Arena := preload("res://src/server/arena.gd")
@@ -204,6 +205,7 @@ var prisons := Prisons.new()           # (v70) pirates in our handcuffs
 var galley := Galley.new()             # (v71) the galley's stove and its dishes
 var defence := Defence.new()           # (v79) bots against armed boarders
 var usage := Usage.new()               # (v82) what people used this run
+var run_log := RunLog.new()            # (v101, his S3 A) the run's story for his playtests (run_log.txt)
 var fleet := Fleet.new()               # (v85) our ships (one, or more for a fleet): see Fleet
 var wing := Wing.new()                 # (v86, the author's E1) a second pirate ship that joins a fight: see Wing
 var shuttle := Shuttle.new()           # (v86, the author's N1) the fleet's shuttle between the ships' hangars
@@ -332,6 +334,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 	galley.setup(self)
 	defence.setup(self)
 	usage.setup(self)
+	run_log.setup(self)
 	hazards.setup(self)
 	power.setup(self)
 	outside.setup(self)
@@ -352,6 +355,7 @@ func start(p_port: int, map_name: String, bots: int) -> String:
 		for i in crew_size:
 			crew.add_bot(k)
 	fleet.use(0)
+	run_log.started(map.map_name)
 	log_line.emit("Сервер запущен: порт %d, карта «%s», ботов %d." % [port, map.map_name, bots])
 	return ""
 
@@ -657,6 +661,7 @@ func save_campaign() -> bool:
 		log_line.emit("Не удалось сохранить кампанию в %s." % save_path)
 		return false
 	usage.write()                        # (v82) usage.txt next to the game
+	run_log.write()                      # (v101) run_log.txt
 	return true
 
 

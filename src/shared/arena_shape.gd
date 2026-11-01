@@ -16,6 +16,13 @@ const FLOOR := 1                     # inside: floors, doorways, machines on the
 const PANE := 2                      # a window
 const WALL := 3                      # the hull and the walls inside
 const GUN := 4                       # a gun mount ('T')
+const PLATE := 5                     # (v101, his N5 C: "a ship, not a hotdog") outer plating the shape adds round a ship's
+                                     # drawing: a pointed bow, engine bells at the stern, fins. No room lies under it: a shot
+                                     # that goes through lands on the nearest cell of the ship itself (`proxy`).
+const NOSE_SHARE := 0.6              # the bow's point is this share of the ship's height long (at least 3 cells)
+const BELL_LONG := 2                 # an engine bell sticks out this far behind the stern
+const FIN_SHARE := 0.28              # a fin runs along this share of the length, from the stern
+const FIN_HIGH := 2                  # and stands out this far above and below the hull
 
 var map: RefCounted                  # the ShipMap it was built from (the grid, or a drawing of others)
 var x0 := 0                          # the drawing's column of the shape's left edge
@@ -26,6 +33,10 @@ var kind := PackedByteArray()        # per cell (w * h), the most solid of the d
 var outline := PackedVector2Array()  # the middle of every solid cell that touches empty space, in the body's frame
 var edge := PackedByteArray()        # (v93) per cell: 1 = a solid cell that touches empty space (the outer wall: armour)
 var radius := 0.0                    # from the middle to the farthest corner
+var proxy := {}                      # (v101) a plating cell's index -> the shape's cell of the ship itself a shot through it lands on
+var own_w := 0                       # (v101) the ship's own length, without its plating
+var own_off := Vector2.ZERO          # and where its own middle lies in the body's frame
+var bells: Array[Vector2] = []       # (v101) where the engine bells end, in the body's frame (the engines' glow is drawn there)
 
 # (v94, the author's G1 note: "three mount kinds: a hardpoint, fixed and the strongest; a side turret, 180°; a roof
 # turret, 360°, the weakest") A gun mount's kind, by the "^" line of its drawing or else by its wall: a gun in the bow
@@ -45,28 +56,39 @@ var _skip_other := false             # (the grid) the ship alongside's cells are
 
 
 static func of_fleet(p_map: RefCounted, ship: int) -> RefCounted:
-	## Ship `ship` of our fleet, from the grid (the ship alongside left out).
+	## Ship `ship` of our fleet, from the grid (the ship alongside left out), with its plating (v101).
 	var s = load("res://src/shared/arena_shape.gd").new()
 	var top: int = p_map.fleet_rows[ship] if ship < p_map.fleet_rows.size() else 0
 	var bottom: int = p_map.fleet_rows[ship + 1] - ShipMap.FLEET_GAP / 2 if ship + 1 < p_map.fleet_rows.size() else p_map.deck_height
 	s._skip_other = true
 	s._build(p_map, 0, top, p_map.width, bottom - top)
+	s._plate()
 	return s
+
+
+static func forget_kinds() -> void:
+	## (v101) A mount was moved: the shapes kept for kind_in_fleet are out of date.
+	_fleet_kinds = {}
 
 
 static func kind_in_fleet(p_map: RefCounted, cell: int) -> int:
 	## (v94.1) The kind of our fleet's gun mount at that cell, without building its ship's shape every time.
+	if cell < 0 or p_map.on_floor.has(cell):
+		return MOUNT_ROOF
 	var f: int = maxi(p_map.fleet_of(cell), 0)
-	var key := "%d:%d:%d" % [p_map.get_instance_id(), p_map.crc, f]
+	var key := "%d:%d:%d:%d" % [p_map.get_instance_id(), p_map.crc, f, p_map.mounts_moved]
 	if not _fleet_kinds.has(key):
 		_fleet_kinds[key] = of_fleet(p_map, f)
 	return int(_fleet_kinds[key].mount_kind(cell))
 
 
-static func of_layout(p_map: RefCounted) -> RefCounted:
-	## A drawing of another ship (ShipMap.others), whole.
+static func of_layout(p_map: RefCounted, plated: bool = false) -> RefCounted:
+	## A drawing of another ship (ShipMap.others), whole; `plated` (v101): a ship that flies in the fight gets
+	## its plating (a pirate), a place does not (a derelict, a station, a rock).
 	var s = load("res://src/shared/arena_shape.gd").new()
 	s._build(p_map, 0, 0, p_map.width, p_map.deck_height)
+	if plated:
+		s._plate()
 	return s
 
 
@@ -103,7 +125,100 @@ func _build(p_map: RefCounted, cx: int, cy: int, cw: int, ch: int) -> void:
 		for x in w:
 			kind[y * w + x] = grid[(lo.y + y) * cw + lo.x + x]
 	radius = Vector2(w, h).length() / 2.0
+	own_w = w
 	edge.resize(w * h)
+	_edges()
+
+
+func _plate() -> void:
+	## (v101, his N5 C and N6 A) Lays plating round the ship's own cells so that from outside it looks like a ship:
+	## the bow (+x) drawn out to a point, two engine bells behind the stern, a fin above and below at the stern.
+	## Shared, so the server and every client make the same shape from the same drawing.
+	if w < 4 or h < 3:
+		return
+	var nose := maxi(3, roundi(h * NOSE_SHARE))
+	var fin_len := maxi(2, roundi(w * FIN_SHARE))
+	var pad_l := BELL_LONG
+	var pad_r := nose
+	var pad_t := FIN_HIGH
+	var pad_b := FIN_HIGH
+	var nw := w + pad_l + pad_r
+	var nh := h + pad_t + pad_b
+	var nk := PackedByteArray()
+	nk.resize(nw * nh)
+	for y in h:
+		for x in w:
+			nk[(y + pad_t) * nw + x + pad_l] = kind[y * w + x]
+	var add := {}                        # new index -> true
+	var mid := (h - 1) / 2.0
+	# the bow: each row runs on past its last solid cell to a point, less far the further it is from the middle
+	for y in h:
+		var last := -1
+		for x in range(w - 1, -1, -1):
+			if kind[y * w + x] != EMPTY:
+				last = x
+				break
+		if last < 0:
+			continue
+		var off := absf(y - mid) / maxf(mid + 0.5, 1.0)
+		var run := (w - 1 + floori(nose * (1.0 - off) + 0.5)) - last     # up to one smooth line, whatever the row's own end
+		for k in range(1, run + 1):
+			add[(y + pad_t) * nw + last + pad_l + k] = true
+	# two engine bells behind the stern, a quarter of the height in from each side, flaring out
+	bells.clear()
+	for share: float in [0.27, 0.73]:
+		var cy := roundi((h - 1) * share)
+		for k in range(1, BELL_LONG + 1):
+			for dy in range(-k, k + 1):
+				var y := cy + dy
+				if y >= 0 and y < h:
+					add[(y + pad_t) * nw + pad_l - k] = true
+		bells.append(Vector2(0, cy + pad_t))
+	# a fin above and below, along the stern's share of the length, sloping down towards the bow
+	for side: int in [-1, 1]:
+		for x in fin_len:
+			var high := ceili(FIN_HIGH * (1.0 - float(x) / fin_len))
+			for k in range(1, high + 1):
+				var y := -k if side < 0 else h - 1 + k
+				add[(y + pad_t) * nw + x + pad_l] = true
+	for i: int in add.keys():
+		if nk[i] == EMPTY:
+			nk[i] = PLATE
+	# the shape grows round the plating; x0 and r0 move with it, so local_of() still finds the drawing's cells
+	kind = nk
+	x0 -= pad_l
+	r0 -= pad_t
+	w = nw
+	h = nh
+	radius = Vector2(w, h).length() / 2.0
+	for b in bells.size():
+		bells[b] = middle(int(bells[b].x), int(bells[b].y)) - Vector2(0.5, 0.0)
+	own_off = Vector2(pad_l + own_w / 2.0 - w / 2.0, pad_t + (h - pad_t - pad_b) / 2.0 - h / 2.0)
+	# each plating cell lands its shots on the nearest cell of the ship itself
+	proxy = {}
+	for i in kind.size():
+		if kind[i] != PLATE:
+			continue
+		var at := Vector2i(i % w, i / w)
+		var best := Vector2i(-1, -1)
+		var best_d := 1 << 30
+		for y in h:
+			for x in w:
+				var k := kind[y * w + x]
+				if k == EMPTY or k == PLATE:
+					continue
+				var d := (x - at.x) * (x - at.x) + (y - at.y) * (y - at.y)
+				if d < best_d:
+					best_d = d
+					best = Vector2i(x, y)
+		proxy[i] = best
+	outline = PackedVector2Array()
+	edge = PackedByteArray()
+	edge.resize(w * h)
+	_edges()
+
+
+func _edges() -> void:
 	for y in h:
 		for x in w:
 			if kind[y * w + x] == EMPTY:
@@ -177,6 +292,10 @@ func cells_under(c: Vector2i) -> PackedInt32Array:
 	var out := PackedInt32Array()
 	if at(c.x, c.y) == EMPTY:
 		return out
+	if at(c.x, c.y) == PLATE:
+		c = proxy.get(c.y * w + c.x, Vector2i(-1, -1))   # (v101) through the plating onto the ship itself
+		if c.x < 0:
+			return out
 	for d in map.deck_count:
 		var cell := _cell_of(d, x0 + c.x, r0 + c.y)
 		if cell >= 0:
@@ -198,7 +317,9 @@ func outward(cell: int) -> Vector2:
 	for d: Vector2 in [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]:
 		var n := 0
 		for k in range(1, 4):
-			if solid(p + d * k):
+			var c := cell_at(p + d * k)
+			var at_k := at(c.x, c.y)
+			if at_k != EMPTY and at_k != PLATE:      # (v101) the plating never turns a mount
 				n += 1
 		if n < best_n:
 			best_n = n
@@ -208,14 +329,18 @@ func outward(cell: int) -> Vector2:
 
 func mount_kind(cell: int) -> int:
 	## (v94) The kind of the gun mount at that cell of the drawing (MOUNT_*).
+	if cell < 0 or map != null and map.on_floor.has(cell):
+		return MOUNT_ROOF                    # (v101, his N3 A) a turret on the roof or the belly (or a mount taken down)
 	if map != null and map.gun_kind.has(cell):
 		return int(KIND_OF.get(map.gun_kind[cell], MOUNT_SIDE))
-	return MOUNT_HARD if outward(cell).x > 0.7 or local_of(cell).x > w * BOW_SHARE else MOUNT_SIDE
+	return MOUNT_HARD if outward(cell).x > 0.7 or (local_of(cell) - own_off).x > own_w * BOW_SHARE else MOUNT_SIDE
 
 
 func mount_out(cell: int) -> float:
 	## (v94) Which way a mount points when straight, in the body's frame: a fixed gun along the bow
 	## (Starsector's hardpoints; its own hull does not stop our shots), a turret out of its wall.
+	if cell < 0 or map != null and map.on_floor.has(cell):
+		return 0.0                           # (v101) a turret turns all round: it rests pointing along the bow
 	return 0.0 if mount_kind(cell) == MOUNT_HARD else outward(cell).angle()
 
 

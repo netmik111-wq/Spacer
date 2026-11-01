@@ -67,7 +67,10 @@ var locker := {}                     # wall cells with the supply locker
 var intercom := {}                   # wall cells with an intercom panel
 var med_box := {}                    # (v91, the author's M7) wall cells with a first-aid box (see Supplies.box)
 var tech_box := {}                   # (v91) wall cells with a spare parts box
-var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered
+var guns := PackedInt32Array()       # wall cells with the ship's guns, in the order they are numbered; (v101, his N2 A)
+                                     # our ships' list ends with spare mounts, and a mount taken down stays in its place
+                                     # in the list with no cell: -2 - its number (`stowed`). Ask `guns[i] < 0` before using it as a cell.
+var mount_was := {}                  # (v101) a wall cell a mount was moved onto -> the wall's tile it took the place of
 var gun_console := {}                # wall cells with the gun console (the fourth console of the mockup)
 var drone_console := {}              # (v54) wall cells with the drone monitor (the fifth console of the mockup)
 var holo := {}                       # wall cells with a holomap monitor: the whole ship's air, holes and breakdowns
@@ -133,6 +136,7 @@ var fleet_rows := PackedInt32Array([0])   # (v85) per ship of our fleet: the row
 var fleet_names := PackedStringArray()   # and its drawing's name
 var fleet_on := -1                   # the ship whose own things are in place now (-1: all of them)
 var _fits: Array = []                # per ship: field of FLEET_FITS -> its part; [-1] (the last) all of them
+var mounts_moved := 0                # (v101) counts the mounts set up or taken down (caches of the shape ask it)
 var held := {}                       # (v81, the author's human wall) cells somebody holds (Mover.State.hold): nobody
                                      # else walks into them. The server marks them every tick; a client marks those
                                      # of the others it sees, so its own walking is predicted alike
@@ -299,6 +303,141 @@ func shuttle_docks() -> Array:
 	return out
 
 
+const SPARE_MOUNTS := 2              # (v101, his N2 comment: a mount bought "for a lot of money") room in each ship's list
+
+
+func _add_spares(list: PackedInt32Array) -> void:
+	var n := list.size()
+	for k in SPARE_MOUNTS:
+		list.append(-2 - (n + k))
+
+
+func stowed(i: int) -> bool:
+	## (v101) Is gun mount i of the ship in place taken down (or a spare never set up)?
+	return i < 0 or i >= guns.size() or guns[i] < 0
+
+
+func first_stowed() -> int:
+	## (v101) The first mount of the ship in place with no cell, -1 = none (no room for one more).
+	for i in guns.size():
+		if guns[i] < 0:
+			return i
+	return -1
+
+
+func mount_cells() -> PackedInt32Array:
+	## (v101) The ship in place's mounts' cells, stowed ones -1: what S_MOUNTS carries.
+	var out := PackedInt32Array()
+	for c: int in guns:
+		out.append(c if c >= 0 else -1)
+	return out
+
+
+func can_mount(cell: int) -> String:
+	## (v101, his N2 A and N3 A) Can a gun mount be set up on that cell of our ship: an outer wall with nothing in it
+	## (open space on one side, a room on the other), or the floor of the top or the bottom deck with nothing on it.
+	## "" = yes, otherwise why not (Russian, for the player).
+	if cell < 0 or cell >= cells.size() or cells[cell] < 0 or is_other(cell):
+		return "Здесь некуда ставить гнездо."
+	var x := cell % width
+	var y := cell / width
+	if walk[cell] == 1:
+		# the roof or the belly: no deck of ours above that spot, or none below it
+		var up := cell - deck_stride * width
+		var down := cell + deck_stride * width
+		var open_up := up < 0 or cells[up] < 0
+		var open_down := down >= cells.size() or cells[down] < 0
+		if not open_up and not open_down:
+			return "Башню ставят на полу верхней или нижней палубы."
+		if door_of[cell] >= 0 or climb[cell] >= 0 or stair_to[cell] >= 0 or see_through[cell] == 1 or tile_kinds[cells[cell]] != "floor":
+			return "Башню ставят на чистом полу."
+		for v: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := (y + v.y) * width + x + v.x
+			if door_of[n] >= 0:
+				return "Башня закроет дверь."
+		return ""
+	if fitting_front(cell) >= 0 or force_field.has(cell) or door_of[cell] >= 0 or not hull.has(cell):
+		return "Гнездо ставят в чистую наружную стену."
+	if tile_names[cells[cell]].trim_prefix("pirate_").begins_with("window"):
+		return "В окно гнездо не встанет."
+	return ""
+
+
+func any_gun() -> int:
+	## (v101) The cell of the first mount of the ship in place that is set up, -1 = none.
+	for c: int in guns:
+		if c >= 0:
+			return c
+	return -1
+
+
+func roof(cell: int) -> bool:
+	## (v101) Is no deck of ours over that cell (a turret there stands on the roof; else on the belly)?
+	var up := cell - deck_stride * width
+	return up < 0 or cells[up] < 0
+
+
+func set_gun(i: int, cell: int) -> void:
+	## (v101) Moves mount i of the ship in place to that cell (-1: takes it down). The cells change on both sides
+	## the same way (the server, then every client from S_MOUNTS): the wall or floor it leaves comes back.
+	if i < 0 or i >= guns.size():
+		return
+	var old := guns[i]
+	if old == cell:
+		return
+	if old >= 0:
+		var gun_id: int = tile_ids.get("gun", -1)
+		if on_floor.has(old):
+			cells[old] = int(on_floor[old])
+			on_floor.erase(old)
+			walk[old] = 1
+		else:
+			cells[old] = int(mount_was.get(old, tile_ids.get(_wall_look(old), gun_id)))
+			if not hull.has(old) and (is_space(old % width - 1, old / width) or is_space(old % width + 1, old / width) \
+					or is_space(old % width, old / width - 1) or is_space(old % width, old / width + 1)):
+				hull.append(old)
+		opaque[old] = 1 if walk[old] == 0 else 0
+		mount_was.erase(old)
+		gun_kind.erase(old)
+		_keep_base(old)
+	if cell >= 0:
+		if walk[cell] == 1:
+			on_floor[cell] = cells[cell]
+			walk[cell] = 0
+			opaque[cell] = 0
+		else:
+			mount_was[cell] = cells[cell]
+			var at := hull.find(cell)
+			if at >= 0:
+				hull.remove_at(at)
+		cells[cell] = tile_ids.get("gun", cells[cell])
+		_keep_base(cell)
+	guns[i] = cell if cell >= 0 else -2 - i
+	if not _fits.is_empty() and fleet_on >= 0:
+		(_fits[fleet_on] as Dictionary)["guns"] = guns
+		var all := PackedInt32Array()
+		for f in _fits.size() - 1:
+			for c: int in (_fits[f] as Dictionary)["guns"]:
+				if c >= 0:
+					all.append(c)
+		(_fits[-1] as Dictionary)["guns"] = all
+	mounts_moved += 1
+
+
+func _keep_base(c: int) -> void:
+	if c < base_cells.size():
+		base_cells[c] = cells[c]
+		base_walk[c] = walk[c]
+		base_opaque[c] = opaque[c]
+
+
+func _wall_look(c: int) -> String:
+	## (v101) The wall's piece a cell gets back when a mount set in the drawing leaves it (one moved there knows its own).
+	var x := c % width
+	var y := c / width
+	return "wall_h" if _wall(x - 1, y) or _wall(x + 1, y) or not (_wall(x, y - 1) or _wall(x, y + 1)) else "wall_v"
+
+
 func all_of(field: String) -> Variant:
 	## (v85) Every ship's of those fittings (FLEET_FITS), whichever ship's are in place.
 	return get(field) if _fits.is_empty() else (_fits[-1] as Dictionary)[field]
@@ -333,8 +472,10 @@ func _split_fits() -> void:
 			elif all is PackedInt32Array:
 				mine = PackedInt32Array()
 				for c: int in all:
-					if fleet_of(c) == i:
+					if c >= 0 and fleet_of(c) == i:
 						mine.append(c)
+				if f == "guns":
+					_add_spares(mine)
 			else:
 				mine = all.filter(func(v: Vector2i) -> bool: return fleet_of(v.y * width + v.x) == i)
 			fits[f] = mine
@@ -507,11 +648,16 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 			for c: int in rooms[room_of[at]]:
 				brig[c] = 1
 	_group_machines()
+	var floor_guns := PackedInt32Array()
+	mount_was = {}
 	for i in cells.size():
 		if cells[i] >= 0 and cells[i] < fitting.size() and fitting[cells[i]] == 1 and root[i] != i:
 			continue                         # (v91) a piece of a wide machine: its first cell stands for it
 		if cells[i] >= 0 and cells[i] == tile_ids.get("gun", -2):
-			guns.append(i)
+			if on_floor.has(i):
+				floor_guns.append(i)         # (v101) turrets on the floor come after the wall's guns (older saves line up)
+			else:
+				guns.append(i)
 		if cells[i] >= 0 and cells[i] == tile_ids.get("console_4", -2):
 			gun_console[i] = true
 		if cells[i] >= 0 and cells[i] == tile_ids.get("console_5", -2):
@@ -575,6 +721,9 @@ func load_data(name: String, tiles_text: String, data: Variant, needs_spawns: bo
 		elif cells[i] == tile_ids.get("console_1", -1):
 			chart[i] = true
 
+	guns.append_array(floor_guns)
+	if kind == "ship" and fleet_rows.size() <= 1:
+		_add_spares(guns)
 	var problem := _find_airlocks()
 	if problem != "":
 		return problem

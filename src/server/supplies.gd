@@ -84,8 +84,8 @@ func offers() -> Dictionary:
 			continue
 		if item >= Net.ITEM_GUN_PARTS and item < Net.ITEM_GUN_PARTS + Weapons.KINDS:
 			continue                         # (parts come from guns taken apart, not from traders)
-		if LOOT.has(item):
-			continue                         # (v67) scrap, ore and scan data are found, never sold
+		if LOOT.has(item) or item == Net.ITEM_MOUNT:
+			continue                         # (v67) scrap, ore and scan data are found, never sold; (v101) mounts: arms dealers below
 		if want.has(item):
 			continue                         # (v77, the author's T1) it needs what it looks for itself
 		if is_ammo(item):
@@ -120,6 +120,10 @@ func offers() -> Dictionary:
 			crates = rng.randi_range(1, 2)
 		Sectors.DEAL_BLACK, Sectors.DEAL_JUNK:
 			crates = 1
+	if kind == Sectors.DEAL_ARMS or kind == Sectors.DEAL_BLACK:
+		# (v101, his N2 comment: "an extra one for a lot of money") a gun mount, while the ship has room for one more
+		if server.map.first_stowed() >= 0 and not gone.has(Net.ITEM_MOUNT):
+			_offers[Net.ITEM_MOUNT] = Items.price(Net.ITEM_MOUNT) * (3 if kind == Sectors.DEAL_BLACK else 2) / 2
 	for i in crates:
 		var g := Gear.roll(far, rng, kind == Sectors.DEAL_BLACK)
 		var item := Gear.item_of(g)

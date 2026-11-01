@@ -47,6 +47,7 @@ extends RefCounted
 ## (`practice`): the shots fly off and are gone. Pirates' boarding pods and assault drones fly here (`launch_pod`).
 ## Part of the server: GameServer keeps one of these and calls into it.
 
+const ROOF_SHARE := 0.8               # (v101, his N4 B) a 360° turret's shots do this share of the gun's damage
 const Net := preload("res://src/shared/net.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const ArenaShape := preload("res://src/shared/arena_shape.gd")
@@ -526,7 +527,31 @@ func _held_say(why: String) -> void:
 		server.chat.say(why)
 
 
+func mounts_moved() -> void:
+	## (v101, his N2 A) A mount of ours was set up or taken down: the ships' shapes and guns are made again.
+	for i in mini(server.map.fleet_size(), bodies.size()):
+		var b: Body = bodies[i]
+		if b.shape == null:
+			continue
+		var turned := b.guns.duplicate()
+		b.shape = ArenaShape.of_fleet(server.map, i)
+		_our_shapes[i] = b.shape
+		server.fleet.use(i)
+		b.guns = []
+		for cell: int in server.map.guns:
+			var gun := _gun(b, cell)
+			for t: Dictionary in turned:
+				if int(t["cell"]) == cell:
+					gun["aim"] = t["aim"]
+			b.guns.append(gun)
+		server.fleet.use(0)
+
+
 func _gun(b: Body, cell: int) -> Dictionary:
+	if cell < 0:
+		# (v101) a mount taken down (or a spare not set up): nowhere, nothing on it
+		return {"cell": cell, "at": Vector2.ZERO, "out": 0.0, "aim": 0.0, "bears": false, "kind": ArenaShape.MOUNT_ROOF,
+			"arc": ArenaShape.MOUNT_ARC[ArenaShape.MOUNT_ROOF]}
 	var at: Vector2 = b.shape.local_of(cell)
 	var out: float = b.shape.mount_out(cell)
 	var kind: int = b.shape.mount_kind(cell)
@@ -604,7 +629,7 @@ func _enemy_body(i: int, fights: bool, layout: int) -> void:
 		return
 	b.on = true
 	b.layout = layout
-	b.shape = ArenaShape.of_layout(server.map.others[layout])
+	b.shape = ArenaShape.of_layout(server.map.others[layout], true)
 	b.glued = false
 	b.spin = 0.0
 	var klass: int = int(server.wing.value(i - LEAD, "klass"))
@@ -1246,7 +1271,9 @@ func _shoot_ours(ship: int, gun: int, w: int, foe: int, room: int, miss: float, 
 	if not by_hand and at.is_finite():
 		off += miss * BOT_SPREAD * (1.0 + muzzle.distance_to(at) / FAR_SPREAD)
 	dir += _rng.randfn(0.0, off)
-	_launch(0, ship, muzzle, dir, w, meta)
+	var p := _launch(0, ship, muzzle, dir, w, meta)
+	if int(g["kind"]) == ArenaShape.MOUNT_ROOF:
+		p["d"] = float(p["d"]) * ROOF_SHARE      # (v101, his N4 B) a turret that turns all round hits softer
 
 
 func _barrel(b: Body, g: Dictionary, at: Vector2, muzzle: Vector2) -> float:
@@ -1559,7 +1586,7 @@ func beam_burn(ship: int, gun: int, foe: int, room: int, w: int) -> Dictionary:
 		return out
 	var from := b.world(b.guns[gun]["at"])
 	var to := e.world(_room_point(e, foe, room))
-	var d := Weapons.space_damage(w)
+	var d := Weapons.space_damage(w) * (ROOF_SHARE if int(b.guns[gun]["kind"]) == ArenaShape.MOUNT_ROOF else 1.0)
 	var meet := _bubble_meet(from, to, e)
 	if _shielded(e) and meet != to and _covers(e, e.local(meet)):
 		_on_shield(e, d * Weapons.SHIELD_MULT[Weapons.damage_type(w)], false)
@@ -2089,8 +2116,8 @@ func _pod_guard(whom: Body, at: Vector2) -> bool:
 	if g.guard_ready():
 		g.guard_charge = 0.0
 		var map = server.map
-		if map.guns.size() > 0:
-			server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.guns[0] % map.width, map.guns[0] / map.width))
+		if map.any_gun() >= 0:
+			server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.any_gun() % map.width, map.any_gun() / map.width))
 		down = _rng.randf() < Weapons.GUARD_HIT
 	server.fleet.use(0)
 	return down

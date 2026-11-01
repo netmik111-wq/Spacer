@@ -49,8 +49,8 @@ func _initialize() -> void:
 	_expect(shape.w > 20 and shape.h > 8 and shape.outline.size() > 20, "our ship's shape: %dx%d, %d cells round its edge" % [shape.w, shape.h, shape.outline.size()])
 	var out_ok: bool = map.guns.size() > 0
 	for c: int in map.guns:
-		if shape.local_of(c).dot(shape.outward(c)) <= 0.0:
-			out_ok = false
+		if c >= 0 and not map.on_floor.has(c) and shape.local_of(c).dot(shape.outward(c)) <= 0.0:
+			out_ok = false             # ((v101) spare places and the turrets on the floor point nowhere in particular)
 	_expect(out_ok, "every gun (%d) points out of the hull" % map.guns.size())
 
 	# a raider comes: the fight's space starts

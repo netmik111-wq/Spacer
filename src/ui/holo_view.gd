@@ -180,7 +180,8 @@ func _devices() -> Array:
 	for c: int in map.holo.keys():
 		out.append([c, "голокарта"])
 	for i in map.guns.size():
-		out.append([map.guns[i], "орудие %d" % (i + 1)])
+		if map.guns[i] >= 0:
+			out.append([map.guns[i], "орудие %d" % (i + 1)])
 	return out
 
 

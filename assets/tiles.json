@@ -3876,6 +3876,46 @@
    "id": 774,
    "name": "pirate_wall_fill",
    "kind": "wall"
+  },
+  {
+   "id": 775,
+   "name": "gun_fl",
+   "kind": "wall"
+  },
+  {
+   "id": 776,
+   "name": "gun_fl_up",
+   "kind": "wall"
+  },
+  {
+   "id": 777,
+   "name": "gun_fl_r",
+   "kind": "wall"
+  },
+  {
+   "id": 778,
+   "name": "gun_fl_l",
+   "kind": "wall"
+  },
+  {
+   "id": 779,
+   "name": "pirate_gun_fl",
+   "kind": "wall"
+  },
+  {
+   "id": 780,
+   "name": "pirate_gun_fl_up",
+   "kind": "wall"
+  },
+  {
+   "id": 781,
+   "name": "pirate_gun_fl_r",
+   "kind": "wall"
+  },
+  {
+   "id": 782,
+   "name": "pirate_gun_fl_l",
+   "kind": "wall"
   }
  ]
 }

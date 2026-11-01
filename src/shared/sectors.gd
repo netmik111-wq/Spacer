@@ -5,7 +5,7 @@ extends RefCounted
 ## coming in on its left side and two exits on its right. A long jump from an
 ## exit system (EXIT_FUEL jumps' fuel) leaves the cluster for good and comes into the
 ## next one; each exit leads to a cluster of its own kind, shown before one
-## goes. The pirates' flagship waits in the fourth cluster (FLAG_DEPTH); its
+## goes. The pirates' flagship waits in the sixth cluster (FLAG_DEPTH, v101; the fourth before); its
 ## exits open only once it is beaten. After it, the road goes on, harder.
 ##
 ## A cluster lies on a grid of COLS by ROWS cells of space: cluster `depth`
@@ -94,7 +94,7 @@ const SYSTEMS := [10, 14]            # (the author's C2) systems in a cluster
 const MOST_SYSTEMS := 16             # (the author's C17) with a big crew there are a few more, up to this
 const EXTRA_LANE := 0.4              # of two neighbouring systems not joined already, this share get a lane
 const DIAGONAL_LANE := 0.15          # and now and then a lane across a corner
-const FLAG_DEPTH := 3                # (the author's C3) the flagship waits in the fourth cluster
+const FLAG_DEPTH := 5                # (the author's C3: the fourth cluster; v101, his N1 A: the sixth, for runs of about 4 hours)
 const LEVEL_STEP := 4                # (the author's C13) each cluster is this many steps of danger harder
 const EXIT_FUEL := 2                 # (the author's C11) a long jump out of the cluster burns this many lane jumps' fuel (v67: was cans)
 const EXIT_JUMP := 254               # the jump target that means "the long jump out by this exit"

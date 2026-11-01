@@ -204,7 +204,9 @@ func _fight_effects() -> void:
 	g.enemy_hit_chance = -1.0
 	ship.shield_on = true
 	# the focusing array: two lasers in one volley at one room
-	ship.mounts = PackedByteArray([Weapons.LASER, Weapons.LASER, Weapons.ION, Weapons.ION])
+	var four := PackedByteArray([Weapons.LASER, Weapons.LASER, Weapons.ION, Weapons.ION])
+	four.resize(ship.mounts.size())          # ((v101) the turrets on the floor and the spare places stay bare)
+	ship.mounts = four
 	ship.armed.fill(1)
 	g.charge.fill(1.0)
 	g.aim = Net.AIM_ROOM

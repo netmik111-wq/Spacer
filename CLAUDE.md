@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v100.1 (version 0.93.1: one's own figure shows its wear) is the latest. Plans one to four are done except the darkness front (the
+Build v101 (version 0.94: longer runs, movable mounts, turrets, plated ships) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -167,6 +167,12 @@ v100 (his "placeholders so people don't look naked", "a simple grey jumpsuit for
 jumpsuit on the body (trim in the job's colour), vest/helmet/belt/hand shield/goggles/backpack drawn on everyone
 (`WorldView.WearArt`, sheets `assets/wear_*.png` made by `make_assets.py build_wear`, replaceable from «sprites»), a NO
 SPRITE card for things without a picture (`ItemArt.no_sprite`), blocks of walls drawn solid (`wall_fill`).
+v101 (his 1 Nov asks and answers N1-N6/P4-P6/S3/O2 on `https://claude.ai/artifact/5v3oAETazwi2XUigNFwK15`, after a game-loop
+review and 60 simulated runs): runs of about 4 h (the flagship in the 6th cluster, hunters by the cluster, bots weld with
+scrap), an engineer moves empty gun mounts (outer walls, or the floor of the top/bottom deck: 360° turrets at 0.8), two
+spare mount places per ship (arms dealers, 400 cr), ships in space plated (bow, engine bells, fins; pirates too), his
+Notebook bugs (backpack from behind, shots over the one knocked down, hand shield 35%), `run_log.txt`. v102 is planned
+from the same page: heat instead of hunter timers, cluster contracts, harbours, one second chance per act.
 Next: asteroid dwellers and minibosses, quests inside places, places with decks with station landing, enemy decks and
 choosing them, enemy fleets. Long-term: races (a lore question round first).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -199,7 +205,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 55 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 56 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -255,6 +261,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/arsenaltest.gd (since v98: energy guns, armour by kind, suits let down, energy and hand shields, boarders' arms, new ship guns)
     godot --headless --path . --script res://tools/asteroidtest.gd (since v99: made asteroids and stations, landing, mantises, their leap, rooms' loot)
     godot --headless --path . --script res://tools/spritetest.gd (since v100: every item has a picture, wear sheets, the jumpsuit, the gear byte, solid wall blocks)
+    godot --headless --path . --script res://tools/turrettest.gd (since v101: plated shapes, floor turrets at 0.8, moving mounts, S_MOUNT_CELLS, saves, the run log, longer runs)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -279,7 +286,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 55 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 56 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -693,6 +700,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   2x2 of walls is `wall_fill` (both builders). Protocol 74.
   (v100.1) Our own figure is drawn twice (`_me_over`, above the dark): whatever new is drawn on a character's sprite
   as a child must go on that copy too, or it hides under it (as the wear did).
+- (v101) Our ships' `ShipMap.guns` ends with `SPARE_MOUNTS` places, and a mount taken down keeps its place with cell
+  `-2 - i`: whatever uses `guns[i]` as a cell asks `>= 0` first (`map.stowed(i)`, `map.any_gun()`); never size a list by
+  the drawing's `T` count. Move mounts only through `ShipMap.set_gun` (both sides; the server then `Mounts._moved`:
+  `ArenaShape.forget_kinds()`, `arena.mounts_moved()`), and only with the ship in place. Floor turrets come after the
+  wall's guns in the list; a `T` with floor left, right and above or below is a turret in both builders. ArenaShape is
+  plated (`PLATE` cells, `proxy`, `own_w`/`own_off`): the drawing's own size is `own_w`, not `w`; `of_layout(map, true)`
+  for ships in space, without for places. A hand shield blocks by chance (`combat.riot_block`, tests pin 1.0). Protocol 75.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

@@ -18,6 +18,8 @@ const BLOW_TICKS := 16               # a blow with a baton
 const REACH := 0.8                   # (v84) cells: how far a blow that meets nobody is drawn toward the click
 const HIT_RADIUS := 0.45             # a shot passing this close (in cells) to somebody hits them
 const FRIEND_CLOSE := 1.25          # (v78) a friend this close (in cells, across and down) to the shooter is never hit
+var riot_block := Armour.RIOT_BLOCK  # (v101) tests may pin it (1: always, 0: never)
+const LOW_BLOW := 0.6                # (v101) a blow's click counts this much farther from one on the floor
 const PRONE_AIMED := 1.0             # (v78) one lying down is hit only by a shot aimed this close to it
 const SHOT_SEEN := 24                # a shot is drawn for everybody this close on its deck
 # (v70, the author's J2) injuries
@@ -314,8 +316,24 @@ func spared(p: Player, q: Player, pos: Vector2, from: Vector2, at: Vector2) -> b
 		return true
 	if q.pirate == p.pirate and q.st.hold and q != p:
 		return true                      # (v81, the author's human wall) friends fire past one holding the line
-	# (v80, the author's question about several bodies on one tile) one out cold on the floor is as low
-	return (q.st.prone or q.cond == Net.COND_CRIT) and pos.distance_to(at) > PRONE_AIMED
+	# (v80, the author's question about several bodies on one tile) one out cold on the floor is as low;
+	# (v101, his Notebook note "you hit the pirate that is down, not the one standing") so is one knocked down, and a
+	# shot meant for one standing by somebody lying flies over the one lying
+	if not lies_low(q):
+		return false
+	var near := pos.distance_to(at)
+	if near > PRONE_AIMED:
+		return true
+	for o: Player in server.players:
+		if o != null and o != p and o != q and not o.corpse and not o.in_shuttle and o.cond != Net.COND_DEAD and not lies_low(o) \
+				and server.map.deck_of(o.st.y) == server.map.deck_of(q.st.y) and Mover.visual_pos(o.st, server.tick).distance_to(at) < near:
+			return true
+	return false
+
+
+func lies_low(q: Player) -> bool:
+	## (v101) On the floor: lying down by choice, out cold, or knocked down for a while.
+	return q.st.prone or q.cond == Net.COND_CRIT or server.tick < q.stun_until
 
 
 func _ray(p: Player, from: Vector2, way: Vector2, reach: float) -> float:
@@ -486,7 +504,7 @@ func cuff(p: Player, q: Player) -> void:
 	server.prisons.take(q, p)
 
 
-func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
+func _beside(p: Player, at: Vector2, self_too: bool, standing_first: bool = false) -> Player:
 	## Whoever a click next to us means: ourselves (if `self_too` and the click
 	## was on us), else of those in the cells around us (diagonals too) the one
 	## nearest the click. A click is never quite on the cell, and the one
@@ -504,6 +522,8 @@ func _beside(p: Player, at: Vector2, self_too: bool) -> Player:
 		if absi(q.st.x - p.st.x) > 1 or absi(q.st.y - p.st.y) > 1 or server.map.deck_of(q.st.y) != server.map.deck_of(p.st.y):
 			continue
 		var d := at.distance_to(Vector2(q.st.x, q.st.y))
+		if standing_first and lies_low(q):
+			d += LOW_BLOW                    # (v101, his Notebook note) a blow goes to the one on his feet first
 		if d < best_d:
 			best_d = d
 			best = q
@@ -516,7 +536,7 @@ static func swing_end(from: Vector2, at: Vector2) -> Vector2:
 
 
 func _strike(p: Player, at: Vector2, damage: int, stun: float = 0.0) -> void:
-	var q := _beside(p, at, false)
+	var q := _beside(p, at, false, true)
 	var from := Vector2(p.st.x, p.st.y)
 	# (v84, the author's note) a miss lands within arm's reach toward the click, never where a far click was
 	var to := swing_end(from, at) if q == null else Vector2(q.st.x, q.st.y)
@@ -580,6 +600,8 @@ func blocked(q: Player, from: Vector2) -> bool:
 		return false
 	if absf(facing.angle_to(to)) > Armour.RIOT_ARC + 0.01:
 		return false
+	if _rng.randf() >= riot_block:
+		return false                     # (v101) it gets through past the shield's edge
 	server.usage.note(q, "riot")
 	return true
 

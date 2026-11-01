@@ -103,6 +103,9 @@ const BASE := {
 	# (v62, the author's K11) a security robot in its crate: kept in the locker, carried, set down to switch on
 	Net.ITEM_ROBOT: {"name": "Охранный робот", "about": "Робот в ящике. Поставьте его на пол (щёлкните по соседней клетке или нажмите E перед свободным местом): он включится и будет охранять этот отсек, стреляя по абордажникам. Воздух ему не нужен. На борту не больше двух.",
 		"price": 120, "robot": true},
+	# (v101, his N2 A) a gun mount: one taken down off the hull, or a new one bought dear from an arms dealer
+	Net.ITEM_MOUNT: {"name": "Орудийное гнездо", "about": "Гнездо для корабельного орудия. Инженер ставит его (E, 10 секунд) в чистую наружную стену или на пол верхней или нижней палубы: там выйдет башня, она бьёт во все стороны, но слабее. Пустое гнездо инженер так же снимает и переносит.",
+		"price": 400, "robot": true},
 	# (v63, the author's R1) the crew's food, and what quests are about
 	Net.ITEM_FOOD: {"name": "Паёк", "about": "Еда экипажа. Каждый прыжок экипаж съедает из шкафа снабжения по пайку на двоих; без еды все слабеют. Растёт в гидропонике.",
 		"price": 3, "stock": 16},
@@ -419,7 +422,7 @@ static var CATEGORIES: Array = [
 	["Детали орудий", range(Net.ITEM_GUN_PARTS, Net.ITEM_GUN_PARTS + Weapons.KINDS)],
 	["Модули корабля", Gear.all().map(func(g: int) -> int: return Gear.item_of(g))],
 	["Разведка", [Net.ITEM_PROBE, Net.ITEM_DRONE]],
-	["Охрана", [Net.ITEM_ROBOT]],
+	["Охрана", [Net.ITEM_ROBOT, Net.ITEM_MOUNT]],
 	["Провизия", [Net.ITEM_FOOD, Net.ITEM_STEW, Net.ITEM_COFFEE, Net.ITEM_BROTH]],
 	["Добыча", [Net.ITEM_SCRAP, Net.ITEM_ORE, Net.ITEM_DATA, Net.ITEM_MANTIS_CLAW]],
 	["Семена", range(Net.ITEM_SEED, Net.ITEM_SEED + Plants.COUNT * Plants.TRAITS)],

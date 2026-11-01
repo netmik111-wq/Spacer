@@ -48,7 +48,10 @@ const HUNTER_COME := 6.0             # we jump into its system: it comes out thi
 const HUNTER_BREATHER := 45.0        # (v69, the author's note) after a fight, a hunter waiting in our system comes out no sooner than this
 const SHELL_SECONDS := 8             # (v69) a hunter kept off by our people outside shells the hull this often...
 const SHELL_HULL := 4                # ... this hard
-const HUNTER_LEVEL := 3              # a hunter is this many steps of danger harder than the system it meets us in
+const HUNTER_LEVEL := 3              # a hunter is this many steps of danger harder than the system it meets us in (from the sixth cluster)
+# (v101, his N1/P4 A) nearer the start it is milder: at the place's danger in the first two clusters, a step above in
+# the next two, two in the fifth, HUNTER_LEVEL from the sixth (the flagship's)
+const HUNTER_LEVEL_BY_DEPTH: Array[int] = [0, 0, 1, 1, 2]
 const PACE: Array[float] = [1.0, 0.7, 1.4, 1.0, 1.0]   # per kind of cluster: how long they take to come (pirates sooner, traders later)
 const MODE_PACE: Array[float] = [2.0, 1.0, 0.75]       # per mode (easy, normal, hard)
 const MINE_SHARE := 0.2              # (my V4) a container that is a pirate mine
@@ -156,6 +159,7 @@ func next_cluster(exit_k: int) -> void:
 	var gone_kind := s.ckind
 	var into: int = s.beyond[exit_k]
 	entry = Sectors.next_entry(s.cell[s.exits[exit_k]])
+	server.run_log.cluster_done(depth + 1)   # (v101) the cluster just left, numbered from 1
 	depth += 1
 	history.append(gone_kind)
 	hunters = []
@@ -168,6 +172,16 @@ func next_cluster(exit_k: int) -> void:
 	server.story.left_cluster()
 	server.chat.say("Корабль вышел в скопление «%s» (%d-е на пути): %s.%s" % [Sectors.CLUSTER_NAMES[into], depth + 1,
 		Sectors.CLUSTER_ABOUT[into], _flagship_word()])
+
+
+func hunting() -> bool:
+	## (v101) Is the pirate we fight a hunter of the road's?
+	return not _fight.is_empty()
+
+
+func hunter_level() -> int:
+	## (v101) How many steps of danger a hunter is above the place it meets us in, by the cluster we are in.
+	return HUNTER_LEVEL_BY_DEPTH[depth] if depth >= 0 and depth < HUNTER_LEVEL_BY_DEPTH.size() else HUNTER_LEVEL
 
 
 func _flagship_word() -> String:
@@ -586,7 +600,7 @@ func _meet(h: Dictionary) -> void:
 				server.crew.hull_hit(SHELL_HULL)
 				server.chat.say("Охотник бьёт по нам издалека! Пока кто-то снаружи, мы не можем принять бой: всем на борт.")
 		return
-	var design: Dictionary = server.shipyard.make(server.director._party(), true, der._pirate_spots(), HUNTER_LEVEL, Net.TEMPER_HUNTER)
+	var design: Dictionary = server.shipyard.make(server.director._party(), true, der._pirate_spots(), hunter_level(), Net.TEMPER_HUNTER)
 	if design.is_empty():
 		return
 	design["name"] = "Охотник «%s»" % str(design["name"]).get_slice("«", 1).trim_suffix("»")

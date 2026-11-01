@@ -159,7 +159,15 @@ func _initialize() -> void:
 
 	# the hand shield on the arm (his S1 note)
 	b.worn[Net.WEAR_SHIELD] = Net.ITEM_RIOT
+	server.combat.riot_block = 1.0       # ((v101) it stops 35% by chance: pinned here, counted below)
 	_expect(_shot(a, b, Net.ITEM_PISTOL + 3) == _near(0.0), "a hand shield facing the shooter stops the bullet")
+	server.combat.riot_block = Armour.RIOT_BLOCK
+	var stopped := 0
+	for k in 2000:
+		if server.combat.blocked(b, Vector2(a.st.x, a.st.y)):
+			stopped += 1
+	_expect(absf(stopped / 2000.0 - Armour.RIOT_BLOCK) < 0.04, "(v101, his note) it stops about 35%% of what comes at it (%d of 2000)" % stopped)
+	server.combat.riot_block = 1.0
 	b.st.facing = Net.DIR_RIGHT
 	_expect(_shot(a, b, Net.ITEM_PISTOL + 3) > 1.0, "but not one from behind")
 	b.st.facing = Net.DIR_LEFT
@@ -197,6 +205,25 @@ func _initialize() -> void:
 		plain += 1 if pirate.slots.has(Net.ITEM_PISTOL + Net.PISTOL_ROUNDS) else 0
 		server.crew.remove(pirate)
 	_expect(plain == 30, "in the first cluster they keep their pistols")
+
+	# (v101, his Notebook note) a shot at the one standing flies over the one knocked down at his feet
+	var row := _line(7)
+	var c = server.crew.new_player("Сбитый")
+	b.worn[Net.WEAR_SHIELD] = Net.ITEM_NONE
+	a.st.place(row.x, row.y)
+	c.st.place(row.x + 4, row.y)
+	b.st.place(row.x + 5, row.y)
+	a.st.facing = Net.DIR_RIGHT
+	b.st.facing = Net.DIR_LEFT
+	server.combat.stun_for(c, 10.0)
+	c.health = 100.0
+	var hurt_b := _shot(a, b, Net.ITEM_PISTOL + 3)
+	_expect(hurt_b > 1.0 and c.health == 100.0, "a shot at the one standing hits him, not the one knocked down before him (%.1f)" % hurt_b)
+	b.st.place(row.x + 6, row.y)
+	a.slots[a.hand] = Net.ITEM_PISTOL + 3
+	a.ready_tick = 0
+	server.combat.use_at(a, server.tick, Vector2(c.st.x, c.st.y))
+	_expect(c.health < 100.0, "aimed at the one down, it hits him")
 
 	print("arsenaltest: %s" % ("ok" if failed == 0 else "%d failed" % failed))
 	quit(1 if failed > 0 else 0)

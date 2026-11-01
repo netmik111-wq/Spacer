@@ -914,3 +914,23 @@ armour and helmets drawn so people don't look naked, a simple grey jumpsuit for 
   its edge. The copy now carries the wear and the hand's thing too (`_dress`/`_hold` on `_me_over`). Others always saw
   them right. `main.gd` `dress_full=1` dresses everyone in all four for screenshots. Version 0.93.1, build in
   `/mnt/project-files/builds/v100.1/`.
+
+## v101 (0.94): longer runs, movable gun mounts, turrets, ships that look like ships
+
+His request (2026-11-01): runs about 4 hours for now, guns that move across the ship and stand on top and below to
+shoot all round, ships that look like ships ("not a hotdog"); his answers N1-N6, P4-P6, S3, S4, O2 on the run-length
+page (`https://claude.ai/artifact/5v3oAETazwi2XUigNFwK15`), after the game-loop review and 60 simulated runs.
+- The flagship waits in the 6th cluster; hunters grow by the cluster (0, 0, 1, 1, 2, then 3 steps); bots weld the hull
+  with scrap when patches run out.
+- An engineer moves an empty gun mount (10 s down, 10 s up) to any clean outer wall or onto the floor of the top or
+  bottom deck, where it is a 360° turret at 0.8 damage. ship02 got a roof and a belly turret; each ship has room for two
+  more mounts, sold by arms dealers (400 cr). S_MOUNT_CELLS tells clients; saves keep them.
+- Ships in space wear plating: a pointed bow, two engine bells that glow and flame, fins; pirates too.
+- His Notebook notes: the backpack shows from behind; shots and blows go to the one standing, not the one knocked
+  down; the hand shield blocks 35%.
+- `run_log.txt` next to the game for his playtests.
+- New test `tools/turrettest.gd` (56 scripts); protocol 75.
+
+- Checks: all 56 scripts, the 2-hour soak ("soak: ok"), nettest with and without the lag proxy, with a derelict and a
+  pirate ship: 0 bad state checks, 0 errors, corrections 0-0.5%. On this 4-core container one or two of the 8 clients
+  start too late to report (main shows the same). Archives in `/mnt/project-files/builds/v101/` (exe 111,125,056 bytes).
