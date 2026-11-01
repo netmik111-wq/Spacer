@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v100.1 (version 0.93.1).
+Last updated: build v101 (version 0.94).
 
 Contents:
 
@@ -59,6 +59,7 @@ Contents:
 49. [Derelicts made from pieces, their robots, vaults, our teleporter (v97)](#49-derelicts-made-from-pieces-their-robots-vaults-our-teleporter-v97)
 50. [Asteroids, landing, abandoned stations, mantises (v99)](#50-asteroids-landing-abandoned-stations-mantises-v99)
 51. [What people wear, drawn; NO SPRITE; solid wall blocks (v100)](#51-what-people-wear-drawn-no-sprite-solid-wall-blocks-v100)
+52. [Longer runs, movable gun mounts, turrets, ships that look like ships (v101)](#52-longer-runs-movable-gun-mounts-turrets-ships-that-look-like-ships-v101)
 
 ---
 
@@ -960,7 +961,7 @@ Chosen on the ship's controls during a fight, by whoever stands there (buttons u
 
 ### Pirate flagship: the goal of the game (v57)
 
-- Every game has a **goal point**: the pirates' flagship waits in a system of the **4th cluster** (v64; before, 12
+- Every game has a **goal point**: the pirates' flagship waits in a system of the **6th cluster** (v101, the author's N1 A, for runs of about 4 hours; v64 to v100 the 4th; before, 12
   jumps from the start). Never at an exit, rarely in an ion storm. The chart always shows its system in red with a ring
   once we are in its cluster; before that the sector console says how many clusters are left to it.
 - Arriving in its sector, the flagship comes out **5 s** later. Which of the two it is stays hidden until
@@ -1408,7 +1409,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
 - **Danger grows with each cluster** (the author's C13): a cluster is **4 steps** of danger harder than the one before;
   inside a cluster it grows by one step every two columns. Pirate ships and loot tiers go by that
   step, as they went by the distance from the start before.
-- **The flagship's lair is the 4th cluster** (section 17). While the flagship lives, its **jammer holds the exits**:
+- **The flagship's lair is the 6th cluster** (section 17; the 4th until v101). While the flagship lives, its **jammer holds the exits**:
   «Глушилка флагмана пиратов держит выходы из скопления». After it is beaten the exits open and the road goes on,
   harder, cluster after cluster.
 - **Nebulae** (the author's C14): a third of the clusters or so (half the pirate ones and dead zones) have a nebula over
@@ -1484,14 +1485,15 @@ on the small map; see section 47. The sector map console and jumps are as below.
 
 ### Pirate hunters (v64)
 
-- **Hunters** (the author's C15) are pirate ships the chart shows as red diamonds. The first comes **5 min** after the
-  ship enters a cluster, then one more every **4 min**; at most **3** at a time (**4** with a crew of 5 or more; **2** in
+- **Hunters** (the author's C15) are pirate ships the chart shows as red diamonds. The first comes **6 min 15 s** after the
+  ship enters a cluster, then one more every **5 min** (since v89); at most **3** at a time (**4** with a crew of 5 or more; **2** in
   the flagship's cluster). These times are ×0.7 in pirate territory, ×1.4 in trade worlds, ×2 on the easy mode and ×0.75
   on the hard one. Each comes in as far from us as it can.
 - Every **75 s** each hunter moves one lane closer to us. It **never enters a system with a supply station** (a safe
   harbour). From inside a nebula the chart shows no hunters, and they wander instead of following.
 - When one comes into our system, the chat warns: **20 s** to jump away. When we jump into its system, it comes out
-  **6 s** later. Its ship is a pirate ship **3 steps** of danger harder than the place, with the hunter's temper, named
+  **6 s** later. Its ship is a pirate ship harder than the place by the cluster (v101, the author's N1 A): **as hard** in the 1st and
+  2nd clusters, **1 step** harder in the 3rd and 4th, **2** in the 5th, **3** from the 6th (the flagship's) on; with the hunter's temper, named
   «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
   our trail from where we left it.
   (v67, the author's O3) Jumping out of any pirate fight: every pirate gun charged at least half fires a **parting
@@ -1633,7 +1635,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
 
 ## 23. Campaign: hull, end, saving
 
-- The **goal** (since v57) is to reach the pirates' flagship in the 4th cluster and beat it (section 17); after
+- The **goal** (since v57) is to reach the pirates' flagship in the 6th cluster (v101; the 4th before) and beat it (section 17); after
   that the game is won and the voyage may go on. Until then, hold out. The top line (F1) shows the reserve and hull integrity.
 - **Modes** (v63, the author's R9): chosen for a new campaign in the menu («Режим новой кампании»), kept in the save.
   **Easy**: a hull worn to nothing does not end the voyage; it costs **50** of the hull's top strength instead, and
@@ -2979,3 +2981,37 @@ people don't look naked"; "make a simple grey jumpsuit for both sexes".
 - Protocol **74** (S_OUTFIT carries what is worn over the clothes).
 - (v100.1) One's own figure shows what it wears and holds too (before, the copy of it drawn over the dark hid the
   vest, helmet and belt, and the hand shield showed only past its edge, as if behind the body).
+
+## 52. Longer runs, movable gun mounts, turrets, ships that look like ships (v101)
+
+The author (1 Nov): "make runs like 4 hours long for now; update the gun system so we can move guns across the ship
+and place them up top and down so the ship can shoot 360; make the ship look like a ship, not a hotdog". His answers
+N1-N6, P4-P6, S3, O2 on the run-length page.
+
+- **Longer runs** (N1 A): the flagship waits in the **6th cluster** (was the 4th). Hunters are milder near the start:
+  as hard as the place in the 1st and 2nd clusters, **1** step harder in the 3rd and 4th, **2** in the 5th, **3** from the
+  6th. **Bots weld the hull with scrap** (P5 A): a bot going out to mend the hull takes patches first, then scrap from
+  the locker (up to **3** in all); scrap gives **+10** hull, a patch **+15**.
+- **Moving a gun mount** (N2 A): an **engineer** facing an **empty** mount (no gun on it) holds E **10 s** (the repair
+  skill makes it up to twice as quick): it comes down into the hands as «Орудийное гнездо». Facing a **clean outer wall**
+  (open space beyond, nothing fitted in it, not a window or a doorway) or the **floor of the top or bottom deck** (no deck
+  of ours above or below that spot; plain floor, not by a door, nobody and nothing on it), he holds E **10 s** again
+  and it stands there, bare: the gun is carried up to it as to any mount. Not in a fight, never by bots, and a mount
+  with an order pending on the gun console stays. Its number stays the same.
+- **Turrets** (N3 A): a mount on the floor is a **turret**: it turns **all round (360°)**, takes any gun that fits the
+  roof kind, and blocks the way like a machine. Its shots do **0.8** of the gun's damage (N4 B), beams too. ship02 has
+  **two**: one on the top deck (the roof), one on the bottom deck (the belly); both start bare.
+- **More mounts** (his N2 comment): each ship has room for **2** more mounts than its drawing. Arms dealers sell one
+  for **400** credits (the black market **600**) while there is room; set up as above.
+- **Ships in space** (N5 C, N6 A): our ships and the pirates' get **plating** round the deck drawing: the bow drawn
+  out to a point, **two engine bells** at the stern (they glow, a long blue flame while the ship pushes), and a **fin**
+  above and below at the stern. The plating carries armour like the outer wall; a shot through it lands on the nearest
+  cell of the ship itself. The rooms inside are as before.
+- **The Notebook's notes** (O2 A): the backpack shows from the side and from behind (the vest hid it); a shot aimed at
+  one standing flies over one knocked down at his feet (a stunned one now lies low too) and a blow goes to the one on
+  his feet first; the **hand shield** stops **35%** of what comes at it within its arc (it stopped all).
+- **Run log** (S3 A): `run_log.txt` next to the game (written at every save and at the end): when the run began and on
+  which ship, every cluster passed with its minutes, credits in and out and the hull, every pirate ship beaten, every
+  one of ours lost, and how it ended. Send it with `usage.txt` after an evening.
+- Protocol **75** (S_MOUNT_CELLS: where each ship's mounts are).
+

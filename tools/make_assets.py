@@ -257,6 +257,11 @@ TILES += [("teleporter", None, "wall"), (PIRATE + "teleporter", None, "wall")]
 # (v100, the author's note "when walls connected to each other it needs to be full") the inside of a block
 # of walls (WALL_FILL); last, as above
 TILES += [("wall_fill", None, "wall"), (PIRATE + "wall_fill", None, "wall")]
+# (v101, his N3 A) a gun turret standing on the floor of the top or bottom deck ('T' with floor round it); last, as above
+FLOOR_LATE = ["gun"]
+GUN_FLOOR = [("gun_fl" + _side, None, "wall") for _side in ("", "_up", "_r", "_l")]
+TILES += GUN_FLOOR
+TILES += [(PIRATE + _name, None, _kind) for _name, _src, _kind in GUN_FLOOR]
 ATLAS_COLS = 8
 
 
@@ -415,9 +420,11 @@ def art_transplant(old, old_wall, wall):
 
 def art_standing(art, name):
     """(v91) A machine standing on the floor, alone on a clear tile (FLOOR_LOOKS), or None for another name."""
-    m = next((m for m in FLOOR_MACHINES if name.startswith(m + "_fl")), None)
+    m = next((m for m in FLOOR_MACHINES + FLOOR_LATE if name.startswith(m + "_fl")), None)
     if m is None:
         return None
+    if m == "gun":
+        return turret_picture()
     rest = name[len(m) + 3:]
     clear = Image.new("RGBA", (T, T), (0, 0, 0, 0))
     if rest.startswith("_t_"):
@@ -457,6 +464,34 @@ def art_standing(art, name):
         one.paste(full.crop((0, 0, T // 2, T)), (0, 0))
         one.paste(full.crop((full.width - T // 2, 0, full.width, T)), (T // 2, 0))
     return one
+
+
+def turret_picture():
+    """(v101) A gun turret on the floor, seen from above: a ring of armour on a hazard-striped base, the gun's
+    housing in it and its barrel pointing up (the game turns nothing: it aims in space, not on the deck)."""
+    o = Image.new("RGBA", (T, T), (0, 0, 0, 0))
+    px = o.load()
+    for y in range(T):
+        for x in range(T):
+            d = ((x - 15.5) ** 2 + (y - 17.5) ** 2) ** 0.5
+            if d < 6.0:
+                px[x, y] = (96, 100, 112, 255)
+            elif d < 8.0:
+                px[x, y] = (150, 156, 168, 255)
+            elif d < 10.5:
+                px[x, y] = (62, 64, 74, 255)
+            elif d < 12.5:
+                px[x, y] = (232, 182, 40, 255) if (int((x + y) / 3) % 2 == 0) else (40, 40, 46, 255)
+    for y in range(2, 14):
+        for x in range(14, 18):
+            px[x, y] = (70, 72, 84, 255) if x in (14, 17) else (110, 114, 126, 255)
+    for x in range(14, 18):
+        px[x, 2] = (36, 36, 44, 255)
+    for y in range(15, 20):
+        for x in range(13, 19):
+            if ((x - 15.5) ** 2 + (y - 17.5) ** 2) < 6:
+                px[x, y] = (230, 120, 40, 255) if (x, y) == (15, 17) else px[x, y]
+    return o
 
 
 def holo_table(art):
@@ -1203,6 +1238,15 @@ def resolve_map(name, lines, ids, w, h, above, below):
             if not in_wall:
                 things.update((i, y) for i in range(x, x1 + 1))
             x = x1 + 1
+
+    def turret_floor(c):
+        return c in FLOOR_CHARS or c in MACHINE_SIGNS or c == "T"
+
+    for y in range(h):                           # (v101, his N3 A) a turret 'T' standing on the floor
+        for x in range(w):
+            if at(x, y) == "T" and turret_floor(at(x - 1, y)) and turret_floor(at(x + 1, y)) and \
+                    (turret_floor(at(x, y - 1)) or turret_floor(at(x, y + 1))):
+                things.add((x, y))
 
     def solid(x, y):  # anything that is part of the wall structure
         return raw_solid(x, y) and (x, y) not in things

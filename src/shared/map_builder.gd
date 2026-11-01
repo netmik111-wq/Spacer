@@ -357,7 +357,17 @@ static func things_of(g: Array, w: int, h: int) -> Dictionary:
 				for i in range(x, x1 + 1):
 					things[Vector2i(i, y)] = true
 			x = x1 + 1
+	# (v101, his N3 A) a gun 'T' with floor on its left and right and above or below it is a turret on the floor
+	for y in h:
+		for x in w:
+			if _at(g, x, y, w, h) == "T" and _turret_floor(_at(g, x - 1, y, w, h)) and _turret_floor(_at(g, x + 1, y, w, h)) \
+					and (_turret_floor(_at(g, x, y - 1, w, h)) or _turret_floor(_at(g, x, y + 1, w, h))):
+				things[Vector2i(x, y)] = true
 	return things
+
+
+static func _turret_floor(c: String) -> bool:
+	return _floor(c) or MACHINE_SIGNS.find(c) >= 0 or c == "T"
 
 
 static func to_floor(text: String) -> String:

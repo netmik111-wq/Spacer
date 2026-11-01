@@ -208,6 +208,16 @@ static func _drawn(canvas: CanvasItem, cell: Rect2, item: int) -> bool:
 		canvas.draw_rect(Rect2(at + Vector2(4, 8) * u, Vector2(9, 1.2) * u), Color(0.12, 0.12, 0.15))
 		canvas.draw_circle(at + Vector2(11.5, 6.5) * u, 0.9 * u, Color(1.0, 0.25, 0.2))
 		return true
+	if item == Net.ITEM_MOUNT:
+		# (v101) a gun mount in its frame: a ring with a short stub of a barrel, hazard stripes on the base
+		canvas.draw_rect(Rect2(at + Vector2(3, 10) * u, Vector2(11, 4) * u), Color(0.3, 0.31, 0.36))
+		for k in 5:
+			canvas.draw_rect(Rect2(at + Vector2(3.5 + k * 2.2, 12.2) * u, Vector2(1.1, 1.3) * u), Color(0.95, 0.75, 0.2))
+		canvas.draw_circle(at + Vector2(8.5, 8.5) * u, 4.2 * u, Color(0.16, 0.17, 0.2))
+		canvas.draw_circle(at + Vector2(8.5, 8.5) * u, 3.2 * u, Color(0.55, 0.58, 0.64))
+		canvas.draw_circle(at + Vector2(8.5, 8.5) * u, 1.4 * u, Color(0.16, 0.17, 0.2))
+		canvas.draw_rect(Rect2(at + Vector2(7.6, 2.5) * u, Vector2(1.8, 4.5) * u), Color(0.35, 0.36, 0.42))
+		return true
 	if item == Net.ITEM_ROBOT:
 		# (v62) a security robot folded in its crate: a squat steel body, a green eye, a gun arm
 		canvas.draw_rect(Rect2(at + Vector2(3, 4) * u, Vector2(11, 10) * u), Color(0.12, 0.12, 0.15))

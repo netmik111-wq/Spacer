@@ -111,6 +111,11 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.stations.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.outfit.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.mounts.packet(), ENetPacketPeer.FLAG_RELIABLE)
+	var in_place: int = server.fleet.on
+	for f in server.map.fleet_size():          # (v101) where every ship's mounts are now
+		server.fleet.use(f)
+		peer.send(0, server.mounts.cells_packet(), ENetPacketPeer.FLAG_RELIABLE)
+	server.fleet.use(in_place)
 	peer.send(0, server.power.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.story.comms_packet(), ENetPacketPeer.FLAG_RELIABLE)     # (v63)
 	peer.send(0, server.story.story_packet(), ENetPacketPeer.FLAG_RELIABLE)
@@ -628,6 +633,7 @@ func update_vitals(p: Player) -> void:
 			elif p.weak and p.wounds < 40.0:
 				how = "умер от голода"
 			server.deaths.append([p.name, how])
+			server.run_log.add("%s %s." % [p.name, how])     # (v101)
 		if p.robot:
 			_robot_breaks(p)
 		if p.monster:
@@ -779,8 +785,10 @@ func end_campaign(how: int) -> void:
 		why, server.been.size(), server.farthest, voyage_text(server.voyage_ticks)])
 	tell_campaign()
 	server.to_all(summary_packet())
+	server.run_log.add("Кампания окончена: %s Продержались %s, разбито пиратских кораблей: %d." % [why, voyage_text(server.voyage_ticks), server.ships_beaten])
 	if server.save_path != "":
 		server.usage.write()             # (v82) the save is let go, usage.txt stays
+		server.run_log.write()           # (v101) and so does run_log.txt
 	campaign_ended()
 
 

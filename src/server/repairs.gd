@@ -37,6 +37,8 @@ func update(p: Player) -> void:
 			server.pirates.defuse(p, bomb)
 		return
 	var cell := server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes)
+	if p.in_hand() == Net.ITEM_MOUNT:
+		cell = server.map.cell_ahead(p.st.x, p.st.y, p.st.facing)   # (v101) a mount goes onto the wall or floor right ahead
 	var door := server.map.door_of[cell] if cell >= 0 else -1
 	# a spare part makes mending a machine or a door quick; without one it can still be done, slowly
 	# and the skill of the one at work makes it quicker, down to half the time
@@ -250,7 +252,7 @@ func press(p: Player) -> void:
 		return
 	var ahead := server.map.use_ahead(p.st.x, p.st.y, p.st.facing)
 	var gear_why := server.outfit.can(p, server.map.use_ahead(p.st.x, p.st.y, p.st.facing, server.air.holes))
-	var gun_why := server.mounts.can(p, ahead)
+	var gun_why := server.mounts.can(p, ahead if p.in_hand() != Net.ITEM_MOUNT else server.map.cell_ahead(p.st.x, p.st.y, p.st.facing))
 	if ahead >= 0 and server.map.lock_pump.has(ahead):
 		server.systems.toggle_pump(p, ahead)
 	elif ahead >= 0 and server.systems.call_lock(p, server.map.door_of[ahead]):

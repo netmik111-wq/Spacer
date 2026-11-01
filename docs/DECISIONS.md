@@ -2220,3 +2220,44 @@ Then: "And make a simple grey jumpsuit for both sexes."
 - **(v100.1) Our own figure's copy over the dark carries the wear and the hand's thing** (his screenshots): the copy
   (`_me_over`: we always make ourselves out) is drawn above everything, so anything drawn on the real figure
   hides under it. Giving the copy the same children was simpler than drawing the wear on a layer of its own.
+
+## v101: longer runs, movable gun mounts, turrets, ships that look like ships
+
+His words (2026-11-01): "We need to make runs like 4 hours long for now. Update gun system, so we can move them across
+ship. and place them up top and down so ship can shoot. 360. Then make ship look like a ship. Not a hotdog." He then
+answered questions N1-N6 (page `https://claude.ai/artifact/5v3oAETazwi2XUigNFwK15`): N1 A, N2 A, N3 A, N4 B, N5 C,
+N6 A; P4 A, P5 A, P6 A, S3 A, S4 A, O2 A. Heat, cluster contracts, harbours and the second chance wait for v102.
+- **About 4 hours** (N1 A): the simulator's runs ended at 73-104 min, ~90% of fights were hunters 3 steps harder, and
+  with no hunters 17 of 20 reached the flagship (sims are a check only, his S4 A: no number was tuned from them). So:
+  the flagship moves from the 4th to the 6th cluster (`Sectors.FLAG_DEPTH` 5), hunters grow by the cluster
+  (`Road.HUNTER_LEVEL_BY_DEPTH` 0, 0, 1, 1, 2, then `HUNTER_LEVEL` 3 from the 6th), and bots that go out to mend the
+  hull take scrap when patches are short (`Outside._menders`). Clusters take 30-40 min, so 6 of them is about 4 h.
+- **Moving mounts keeps every per-gun array its size**: `ShipMap.guns` of our ships ends with `SPARE_MOUNTS` (2) places,
+  and a mount taken down stays in its place in the list with cell `-2 - i` (unique, so `guns.find(cell)` never matches
+  one; -1 is left for "none"). Gunnery, Mounts, Arena and the console keep their arrays; only code that uses the cell
+  as a place asks `guns[i] < 0` (`ShipMap.stowed`, `any_gun`). A bare mount has no weapon, so the firing paths skip it.
+  `ShipMap.set_gun` changes the cells both sides (the wall's tile comes back, `mount_was` remembers what a moved mount
+  took the place of; a floor turret is a machine on the floor, `on_floor`). The server sends `S_MOUNT_CELLS` per ship on
+  join and on change; the client sets the same cells and forgets its shapes. Saves keep `gun_cells`; an older save
+  (fewer mounts) fills the first ones, as the new ones come at the end of the list.
+- **Turrets are `T` with floor round it** (left, right, and above or below) in both builders; their pictures
+  (`gun_fl*`) come last in the tile sheet. The roof or the belly is "no deck of ours above (or below) that spot", so it
+  works for any ship drawing. A turret is `MOUNT_ROOF` (the 360° kind that already existed for `^ roof` lines) and every
+  roof-kind gun does `Arena.ROOF_SHARE` 0.8 (his N4 B).
+- **One generic mount item** (`Net.ITEM_MOUNT` 196): it goes into the first free place of the ship one stands in, so a
+  mount carried from one ship of the fleet to the other works. Only engineers, never bots (a bot moving mounts on its
+  own would be a surprise), never in a fight. Price **400** (an arms dealer), **600** on the black market: "a lot"
+  against gear at 90-240. He may change it.
+- **Ships look like ships without redrawing them** (N5 C, N6 A; my deviation, told to him): plating is laid round the
+  deck drawing by `ArenaShape._plate` (shared, so the server and every client make the same shape): the bow drawn to a
+  point (`NOSE_SHARE`), two engine bells (`BELL_LONG`), a fin above and below (`FIN_SHARE`, `FIN_HIGH`). The rooms stay
+  as they were, saves still fit, and his own ships and the pirates' get it too. A plating cell carries armour as the
+  outer wall; a shot through it lands on the nearest real cell (`proxy`), so hits inside are as before. A hand-drawn
+  hull outline for ship02 can come later if he wants one.
+- **His Notebook notes** (O2 A): the backpack was drawn under the vest, whose back view covers it, so from the side and
+  behind it goes over now. A shot spared one lying only when aimed more than a cell from him; one knocked down (stun)
+  did not count as lying, and one aimed at a man standing by a body hit the body first. Now a stunned one lies low, and
+  a lying one is spared while anyone standing is nearer the aim (`Combat.lies_low`, `spared`); blows prefer the one on
+  his feet (`LOW_BLOW`). The hand shield blocks with `Armour.RIOT_BLOCK` 0.35 (`Combat.riot_block` for tests).
+- **The run log** (S3 A): `RunLog`, lines with the game time, written next to the game as `run_log.txt` with
+  `usage.txt` (at every save and the end), kept in the save.

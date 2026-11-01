@@ -116,9 +116,18 @@ func _wants(p: Player) -> bool:
 		return false
 	if _pump() < 0 or not server.stations._repair_jobs(p).is_empty() or server.stations._carried_gun(p) >= 0:
 		return false
-	var patches: int = p.count(Net.ITEM_PATCH) + int(server.ship.store.get(Net.ITEM_PATCH, 0))
+	var patches: int = _menders(p) + _store_menders()
 	var suit: bool = p.has_suit() or server.stations._store_suit() >= 0
 	return patches > 0 and suit
+
+
+func _menders(p: Player) -> int:
+	## (v101) What a bot carries to mend the hull with: patches and scrap.
+	return p.count(Net.ITEM_PATCH) + p.count(Net.ITEM_SCRAP)
+
+
+func _store_menders() -> int:
+	return int(server.ship.store.get(Net.ITEM_PATCH, 0)) + int(server.ship.store.get(Net.ITEM_SCRAP, 0))
 
 
 func _pump() -> int:
@@ -199,10 +208,10 @@ func drive(p: Player) -> bool:
 func _prep(p: Player, t: Dictionary) -> bool:
 	## Patches and a suit from the locker, then a full tank from an oxygen station.
 	var store: Dictionary = server.ship.store
-	var want_patch: bool = p.count(Net.ITEM_PATCH) < BOT_PATCHES and int(store.get(Net.ITEM_PATCH, 0)) > 0 and p.count(Net.ITEM_NONE) > 0 \
-		and (p.count(Net.ITEM_PATCH) == 0 or not t.get("took", false))
+	var want_patch: bool = _menders(p) < BOT_PATCHES and _store_menders() > 0 and p.count(Net.ITEM_NONE) > 0 \
+		and (_menders(p) == 0 or not t.get("took", false))
 	var want_suit: bool = not p.has_suit()
-	if want_suit and server.stations._store_suit() < 0 or p.count(Net.ITEM_PATCH) == 0 and int(store.get(Net.ITEM_PATCH, 0)) == 0:
+	if want_suit and server.stations._store_suit() < 0 or _menders(p) == 0 and _store_menders() == 0:
 		return _done(p, false)
 	if want_patch or want_suit:
 		var spots := {}
@@ -210,8 +219,13 @@ func _prep(p: Player, t: Dictionary) -> bool:
 			spots.merge(_spots(c))
 		if _at(p, t, spots):
 			var sup = server.supplies
-			while p.count(Net.ITEM_PATCH) < BOT_PATCHES and int(store.get(Net.ITEM_PATCH, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
-				sup.store_asked(p, Net.STORE_TAKE, Net.ITEM_PATCH)
+			# (v101, his P5 A) patches first, then scrap: salvage is the hull's repair too
+			for kind: int in [Net.ITEM_PATCH, Net.ITEM_SCRAP]:
+				while _menders(p) < BOT_PATCHES and int(store.get(kind, 0)) > 0 and p.count(Net.ITEM_NONE) > 0:
+					var had := p.count(kind)
+					sup.store_asked(p, Net.STORE_TAKE, kind)
+					if p.count(kind) == had:
+						break
 			t["took"] = true
 			if not p.has_suit() and server.stations._store_suit() >= 0 and p.count(Net.ITEM_NONE) > 0:
 				var s: int = server.stations._store_suit()

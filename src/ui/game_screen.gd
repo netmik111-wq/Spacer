@@ -2239,8 +2239,18 @@ func _process(delta: float) -> void:
 		var mount_why := client.mount_here(client.use_cell())
 		var g := client.map.guns.find(client.use_cell())
 		var item: int = client.slots[client.hand]
+		var on_it: int = client.gun_weapon[g] if g >= 0 and g < client.gun_weapon.size() else Weapons.NONE
 		if mount_why != "":
 			_hint.text = mount_why
+		elif item == Net.ITEM_MOUNT:
+			# (v101, his N2 A and N3 A) a mount set up in the wall, or a turret on the roof or the belly
+			var at := client.use_cell()
+			_hint.text = ("Ставлю гнездо…" if _use_held and client.work > 0 else
+				("Держите E, чтобы поставить здесь башню (на %s): бьёт во все стороны, но слабее" % ("крыше" if client.map.roof(at) else "днище"))
+				if client.map.walk[at] == 1 else "Держите E, чтобы поставить гнездо в эту стену")
+		elif item == Net.ITEM_NONE and on_it == Weapons.NONE:
+			_hint.text = "Снимаю гнездо…" if _use_held and client.work > 0 else \
+				"Орудие %d: пустое гнездо. Держите E, чтобы снять его и перенести (10 с)" % (g + 1)
 		elif _use_held and client.work > 0:
 			_hint.text = ("Досылаю снаряд…" if Weapons.of_item(item) == Weapons.NONE else "Ставлю орудие…") \
 				if item != Net.ITEM_NONE else "Снимаю орудие…"

@@ -214,8 +214,8 @@ func launch() -> bool:
 	if g.guard_ready():
 		g.guard_charge = 0.0
 		var map = server.map
-		if map.guns.size() > 0:
-			server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.guns[0] % map.width, map.guns[0] / map.width))
+		if map.any_gun() >= 0:
+			server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.any_gun() % map.width, map.any_gun() / map.width))
 		if _rng.randf() < Weapons.GUARD_HIT:
 			server.chat.say("«Заслон» сбил штурмовой дрон на подлёте.")
 			return false

@@ -5,6 +5,7 @@
 ; (v96) our boarding pod's bay ('k') in the lower deck's hull, by the gun room.
 ; (v97, the author's T1 C) the teleporter's pad ('t') in the workshop's wall, empty until a teleporter is found.
 ; (v99) 24 empty rows over the top deck (14 more): room for the generated asteroids and stations that lie off the airlock.
+; (v101, the author's N3 A) two gun turrets on the floor, 360 degrees: one on the top deck (the roof), one on the bottom deck (the belly).
 ; Restricted-access compartments (deck, x, y of a floor cell, access):
 @ 1 35 29 bridge
 @ 1 3 25 armory
@@ -45,7 +46,7 @@
 
  ##W######D9####W######<>#####T###
  #......#...#.....CCCC......#....#
- #......#...#...s.....s.....#....#W#I#<>#
+ #......#...#...s.....s.T...#....#W#I#<>#
  #......#...#......s........#....#MM.33.#
 ###D##L##D###I#N##D###2###L###D###.....5W
 #....gg...s...gg..........s......A..11..W
@@ -89,6 +90,6 @@
 #.............................H.....#
 #####D######I####D########D########T#
  #.........#..........#........#
- #//.......#..........#........#
+ #//.......#..........#....T...#
  #.H..8....#.PP...PPG.#........#
  ###############W######k##<>#T##

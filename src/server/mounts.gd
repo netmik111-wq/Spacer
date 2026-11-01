@@ -29,6 +29,7 @@ const Net := preload("res://src/shared/net.gd")
 const Items := preload("res://src/shared/items.gd")
 const Weapons := preload("res://src/shared/weapons.gd")
 const Player := preload("res://src/server/player.gd")
+const Mover := preload("res://src/shared/mover.gd")
 const ArenaShape := preload("res://src/shared/arena_shape.gd")
 
 const MOUNT_PACE := 0.25             # a gun with a gunner at it charges this much faster (the author's W1)...
@@ -41,6 +42,7 @@ const LOADED_PACE := 1.3             # a gun with a round loaded by hand charges
 const WANT_NONE := 0                 # no order for that mount
 const WANT_DOWN := 255               # the order: take its gun down into the locker
 const NOT_HERE := "-"                # can(): not a mount, or nothing to do at it with what is in hand
+const MOVE_SECONDS := 10.0           # (v101, his N2 A) an engineer takes an empty mount down, or sets one up, in this long
 
 var server: GameServer
 var gunners: Array = []              # per mount: the Player at it now, or null
@@ -48,6 +50,7 @@ var wanted := PackedByteArray()      # per mount: the gun (a thing) the console 
 var loaded := PackedByteArray()      # (v68) per mount: rounds loaded into its breech by hand
 var clip := PackedInt32Array()       # (v94) per mount: bursts left of the round in use (in space a round feeds Weapons.clip bursts)
 var _told := PackedByteArray()
+var _told_cells := PackedByteArray() # (v101) the last S_MOUNT_CELLS sent for this ship
 
 
 func setup(p_server: GameServer) -> void:
@@ -155,9 +158,11 @@ func can(p: Player, cell: int) -> String:
 	## to do there; otherwise why not, in the player's words. GameClient.mount_here
 	## gives the same answers.
 	var i := server.map.guns.find(cell)
+	var item := p.in_hand()
+	if item == Net.ITEM_MOUNT:
+		return can_set(p, cell)
 	if i < 0:
 		return NOT_HERE
-	var item := p.in_hand()
 	var on: int = server.ship.mounts[i]
 	if item != Net.ITEM_NONE and on != Weapons.NONE and item == Weapons.ammo(on):
 		# (v68) a round for its breech
@@ -192,7 +197,46 @@ func can(p: Player, cell: int) -> String:
 		if not p.bot and server.arena.on():
 			return NOT_HERE                  # (v92) in a fight "use" at a gun takes its controls (Arena), not the gun down
 		return ""
+	if item == Net.ITEM_NONE and on == Weapons.NONE and not p.bot:
+		# (v101, his N2 A) an empty mount: an engineer takes it down, to set it up elsewhere
+		if server.ship.broken.has(cell):
+			return NOT_HERE                  # (mended first)
+		if p.job != Net.JOB_ENGINEER:
+			return "Пустое гнездо снимает и переносит только инженер."
+		if server.arena.on():
+			return "В бою гнездо не снять."
+		if wanted[i] != WANT_NONE:
+			return "К этому гнезду уже несут орудие: сначала отмените приказ на пульте орудий."
+		return ""
 	return NOT_HERE
+
+
+func can_set(p: Player, cell: int) -> String:
+	## (v101, his N2 A and N3 A) "" if `p` may set the mount in its hands up on that cell (a clean outer wall, or the
+	## floor of the top or bottom deck: a turret); otherwise why not. GameClient.mount_here gives the same answers.
+	var map = server.map
+	if p.in_hand() != Net.ITEM_MOUNT or p.bot or cell < 0:
+		return NOT_HERE
+	if map.guns.has(cell):
+		return "Здесь уже стоит гнездо."
+	if Net.diagonal(p.st.facing) or map.cells[p.st.y * map.width + p.st.x] < 0:
+		return "Встаньте внутри корабля прямо перед этим местом."
+	var why: String = map.can_mount(cell)
+	if why != "":
+		return why
+	if p.job != Net.JOB_ENGINEER:
+		return "Гнездо ставит только инженер."
+	if server.arena.on():
+		return "В бою гнездо не поставить."
+	if map.first_stowed() < 0:
+		return "На корабле больше нет места под гнёзда: у него их %d." % map.guns.size()
+	if map.walk[cell] == 1:
+		if server.floor_things.has(cell):
+			return "Сначала уберите с пола то, что там лежит."
+		for q: Player in server.players:
+			if q != null and q != p and not q.in_shuttle and Mover.body_tiles(q.st).has(Vector2i(cell % map.width, cell / map.width)):
+				return "Здесь кто-то есть."
+	return ""
 
 
 static func misfit_of(w: int, kind: int) -> String:
@@ -208,6 +252,8 @@ func misfit(w: int, cell: int) -> String:
 
 
 func ticks(p: Player) -> int:
+	if p.in_hand() == Net.ITEM_MOUNT or p.in_hand() == Net.ITEM_NONE and _empty_ahead(p):
+		return roundi(MOVE_SECONDS * Net.TICK_HZ * (1.0 - 0.5 * p.skill(Net.SKILL_REPAIR)))   # (v101) a mount moved
 	if p.in_hand() != Net.ITEM_NONE and not _is_gun(p.in_hand()):
 		return roundi(LOAD_SECONDS * Net.TICK_HZ)   # (v68) a round into the breech
 	var seconds := UNMOUNT_SECONDS if p.in_hand() == Net.ITEM_NONE else MOUNT_SECONDS
@@ -222,6 +268,12 @@ func finish(p: Player, cell: int) -> void:
 	var ship = server.ship
 	var g = server.gunnery
 	var item := p.in_hand()
+	if item == Net.ITEM_MOUNT:
+		_set_up(p, cell)
+		return
+	if item == Net.ITEM_NONE and ship.mounts[i] == Weapons.NONE:
+		_take_down(p, i)
+		return
 	if item != Net.ITEM_NONE and not _is_gun(item):
 		# (v68) a round pushed into the breech
 		loaded[i] += 1
@@ -263,6 +315,9 @@ func order(p: Player, i: int, item: int) -> void:
 	## its gun down into the locker (ITEM_NONE). Carried out by hand (see above).
 	var ship = server.ship
 	if i < 0 or i >= ship.mounts.size():
+		return
+	if server.map.stowed(i):
+		server.chat.tell(p, "Орудие %d: гнездо снято, ставить некуда." % (i + 1))   # (v101)
 		return
 	var on := Weapons.item_of(ship.mounts[i], ship.mount_fx[i]) if ship.mounts[i] != Weapons.NONE else Net.ITEM_NONE
 	if item == Net.ITEM_NONE:
@@ -316,6 +371,10 @@ func tick() -> void:
 	if now != _told:
 		_told = now
 		server.to_all(now)
+	var cells := cells_packet()
+	if cells != _told_cells:
+		_told_cells = cells
+		server.to_all(cells)
 
 
 func _carried(item: int) -> bool:
@@ -323,6 +382,17 @@ func _carried(item: int) -> bool:
 		if p != null and not p.corpse and not p.pirate and p.slots.has(item):
 			return true
 	return false
+
+
+func cells_packet() -> PackedByteArray:
+	## (v101) Net.S_MOUNT_CELLS for the ship in place: where each of its mounts is (-1: taken down, or a spare).
+	var cells: PackedInt32Array = server.map.mount_cells()
+	var out := PackedByteArray([Net.S_MOUNT_CELLS, server.fleet.on, cells.size()])
+	for c: int in cells:
+		var at := out.size()
+		out.resize(at + 4)
+		out.encode_s32(at, c)
+	return out
 
 
 func packet() -> PackedByteArray:
@@ -334,3 +404,66 @@ func packet() -> PackedByteArray:
 		out.append(wanted[i])
 		out.append(loaded[i])            # (v68) rounds in its breech
 	return out
+
+
+# ---------------------------------------------------------------- (v101) mounts moved about the hull
+
+func _empty_ahead(p: Player) -> bool:
+	var i := server.map.guns.find(server.map.use_ahead(p.st.x, p.st.y, p.st.facing))
+	return i >= 0 and server.ship.mounts[i] == Weapons.NONE
+
+
+func _clear(i: int) -> void:
+	## A mount set up or taken down starts bare: no gun, nothing loaded, no order, no charge.
+	var ship = server.ship
+	ship.mounts[i] = Weapons.NONE
+	ship.mount_fx[i] = Weapons.FX_NONE
+	ship.armed[i] = 1
+	loaded[i] = 0
+	clip[i] = 0
+	wanted[i] = WANT_NONE
+	gunners[i] = null
+	server.gunnery.charge[i] = 0.0
+	server.gunnery.beam_left[i] = 0
+
+
+func _take_down(p: Player, i: int) -> void:
+	var map = server.map
+	var cell: int = map.guns[i]
+	var floor_one: bool = map.on_floor.has(cell)
+	server.ship.jammed.erase(cell)
+	map.set_gun(i, -1)
+	_clear(i)
+	p.slots[p.hand] = Net.ITEM_MOUNT
+	p.train(Net.SKILL_REPAIR)
+	server.usage.note(p, "mount_moved")
+	_moved(cell)
+	server.chat.say("%s снимает %s орудия %d. Его можно поставить в другую наружную стену или на пол верхней или нижней палубы." \
+		% [p.name, "башню" if floor_one else "гнездо", i + 1])
+
+
+func _set_up(p: Player, cell: int) -> void:
+	var map = server.map
+	var i: int = map.first_stowed()
+	if i < 0:
+		return
+	map.set_gun(i, cell)
+	_clear(i)
+	p.slots[p.hand] = Net.ITEM_NONE
+	p.train(Net.SKILL_REPAIR)
+	server.usage.note(p, "mount_moved")
+	_moved(cell)
+	var kind := ArenaShape.kind_in_fleet(map, cell)
+	server.chat.say("%s ставит гнездо: орудие %d, %s. Орудие на него несут из шкафа снабжения." % [p.name, i + 1,
+		("башня на крыше" if map.roof(cell) else "башня на днище") + ", бьёт во все стороны, но слабее" if map.on_floor.has(cell) \
+		else "в борту, " + ArenaShape.MOUNT_NAMES[kind]])
+
+
+func _moved(cell: int) -> void:
+	## Everything that knew where the mounts were learns it again.
+	ArenaShape.forget_kinds()
+	server.arena.mounts_moved()
+	server.replication.sight_changed()
+	server.to_all(server.gunnery.packet())
+	var x: int = cell % server.map.width
+	server.chat.sound(Net.SOUND_LOAD, x, cell / server.map.width, -1)

@@ -215,6 +215,14 @@ func layout_of(id: int) -> int:
 	return int((bodies.get(id, {}) as Dictionary).get("layout", -1))
 
 
+func forget_shapes() -> void:
+	## (v101) A mount of ours moved: our ships' shapes and guns are made again when next asked.
+	for key: String in _shapes.keys():
+		if key.begins_with("f"):
+			_shapes.erase(key)
+			_guns.erase(key)
+
+
 func shape_of(id: int) -> RefCounted:
 	## The ArenaShape of that ship, built once from the same drawing as on the server.
 	var layout := layout_of(id)
@@ -227,7 +235,7 @@ func shape_of(id: int) -> RefCounted:
 			_guns[key] = (map.guns as PackedInt32Array).duplicate()
 			map.use_ship(was)
 		elif layout < map.others.size():
-			_shapes[key] = ArenaShape.of_layout(map.others[layout])
+			_shapes[key] = ArenaShape.of_layout(map.others[layout], true)
 			_guns[key] = (map.others[layout].guns as PackedInt32Array).duplicate()
 		else:
 			return null
@@ -241,7 +249,7 @@ func gun_spot(id: int, k: int) -> Vector2:
 		return Vector2.ZERO
 	var key := ("f%d" % id) if layout_of(id) < 0 else ("o%d" % layout_of(id))
 	var guns: PackedInt32Array = _guns.get(key, PackedInt32Array())
-	return s.local_of(guns[k]) if k < guns.size() else Vector2.ZERO
+	return s.local_of(guns[k]) if k < guns.size() and guns[k] >= 0 else Vector2.ZERO
 
 
 func gun_kind(id: int, k: int) -> int:

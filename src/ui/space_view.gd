@@ -26,9 +26,9 @@ const SCALE := 4.0                   # (v95) as Arena.SCALE
 const MINI := 150.0                  # (v95) the small map's side, pixels
 const ARC_HALF := PI * 0.4           # as Arena.ARC_HALF
 const OURS := {ArenaShape.FLOOR: Color(0.2, 0.24, 0.27), ArenaShape.WALL: Color(0.5, 0.6, 0.62),
-	ArenaShape.PANE: Color(0.45, 0.75, 0.95), ArenaShape.GUN: Color(0.95, 0.82, 0.4)}
+	ArenaShape.PANE: Color(0.45, 0.75, 0.95), ArenaShape.GUN: Color(0.95, 0.82, 0.4), ArenaShape.PLATE: Color(0.36, 0.43, 0.47)}
 const THEIRS := {ArenaShape.FLOOR: Color(0.25, 0.19, 0.19), ArenaShape.WALL: Color(0.66, 0.42, 0.38),
-	ArenaShape.PANE: Color(0.85, 0.6, 0.5), ArenaShape.GUN: Color(1.0, 0.55, 0.3)}
+	ArenaShape.PANE: Color(0.85, 0.6, 0.5), ArenaShape.GUN: Color(1.0, 0.55, 0.3), ArenaShape.PLATE: Color(0.46, 0.3, 0.28)}
 const HOW_COLOUR := {Net.LANDED: Color(1.0, 0.6, 0.25), Net.MISSED: Color(0.7, 0.7, 0.7), Net.RICOCHET: Color(0.9, 0.9, 1.0),
 	Net.SHOT_DOWN: Color(1.0, 0.95, 0.6), 0: FightFx.SHIELD, Net.HELD: Color(0.75, 0.8, 0.85)}
 # (v93, my A4 pick) a word by a shot's end on a hull: went through, the armour held, glanced off
@@ -578,9 +578,18 @@ func _draw_ship(id: int, t: float) -> void:
 	var colours: Dictionary = OURS if ours else THEIRS
 	var pos: Vector2 = s["pos"]
 	var rot: float = s["rot"]
-	if int(s["flags"]) & Net.ARENA_THRUST:
-		var back := Vector2(-shape.w / 2.0 - 1.5, 0.0)
-		draw_circle(to_screen(pos + back.rotated(rot)), 0.9 * zoom, Color(0.5, 0.75, 1.0, 0.45))
+	# (v101) the engines: a dim glow in each bell, a long bright flame while it pushes
+	var pushing := int(s["flags"]) & Net.ARENA_THRUST != 0
+	var bells: Array = shape.bells if not shape.bells.is_empty() else [Vector2(-shape.w / 2.0, 0.0)]
+	for b: Vector2 in bells:
+		var at_bell: Vector2 = pos + b.rotated(rot)
+		if pushing:
+			var flick := 0.85 + 0.15 * sin(t * 37.0 + b.y)
+			var tail: Vector2 = pos + (b + Vector2(-2.6 * flick, 0.0)).rotated(rot)
+			draw_line(to_screen(at_bell), to_screen(tail), Color(0.45, 0.7, 1.0, 0.35), maxf(1.4 * zoom, 2.0))
+			draw_circle(to_screen(at_bell), 0.8 * zoom, Color(0.75, 0.9, 1.0, 0.75))
+		else:
+			draw_circle(to_screen(at_bell), 0.45 * zoom, Color(0.4, 0.6, 0.9, 0.3))
 	draw_set_transform(to_screen(pos), rot, Vector2(zoom, zoom))
 	var worn: Dictionary = client.arena.armour.get(id, {})
 	for y in shape.h:

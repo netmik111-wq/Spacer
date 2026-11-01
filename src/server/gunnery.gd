@@ -201,14 +201,21 @@ func setup(p_server: Node) -> void:
 		var shape = ArenaShape.of_fleet(server.map, server.fleet.on)
 		var turrets := 0
 		for c: int in server.map.guns:
-			if shape.mount_kind(c) != ArenaShape.MOUNT_HARD:
+			if c >= 0 and shape.mount_kind(c) != ArenaShape.MOUNT_HARD:
 				turrets += 1
 		for i in n:
-			if turrets > 0 and shape.mount_kind(server.map.guns[i]) == ArenaShape.MOUNT_HARD:
+			var c: int = server.map.guns[i]
+			if c < 0 or server.map.on_floor.has(c):
+				ship.mounts[i] = Weapons.NONE    # (v101) spare mounts, and the turrets on the floor, start bare
+				continue
+			if turrets > 0 and shape.mount_kind(c) == ArenaShape.MOUNT_HARD:
 				ship.armed[i] = 0
 	ship.mount_fx.resize(n)
 	charge.resize(n)
 	charge.fill(1.0)
+	for i in n:
+		if ship.mounts[i] == Weapons.NONE:
+			charge[i] = 0.0                  # (v101) a bare mount (a turret on the floor, a spare) has nothing to charge
 	beam_left.resize(n)
 	beam_left.fill(0)
 	_beam_next.resize(n)
@@ -1070,7 +1077,7 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 	_aim_bonus = GUNNER_HIT * p.skill(Net.SKILL_GUNS) * server.stations.share(p)   # (v60) the one at the console aims better with skill (v70: a bot, half)
 	for i in charge.size():
 		if not ((which == 255 or which == i) and charge[i] >= 1.0 and ship.armed[i] == 1 and not ship.broken.has(map.guns[i]) \
-				and not jammed(map.guns[i]) and beam_left[i] == 0):
+				and not jammed(map.guns[i]) and beam_left[i] == 0 and ship.mounts[i] != Weapons.NONE):
 			continue
 		var w: int = ship.mounts[i]
 		var fx: int = ship.mount_fx[i]
@@ -1124,7 +1131,7 @@ func _fire(p, which: int, at_mount: bool = false) -> void:
 func _ready_to_fire(i: int) -> bool:
 	var ship = server.ship
 	return charge[i] >= 1.0 and ship.armed[i] == 1 and not ship.broken.has(server.map.guns[i]) and not jammed(server.map.guns[i]) \
-		and beam_left[i] == 0
+		and beam_left[i] == 0 and ship.mounts[i] != Weapons.NONE
 
 
 func _focus(which: int) -> float:
@@ -2094,6 +2101,7 @@ func _wrecked() -> void:
 	if _wing():
 		# (v86) the wingman: it breaks up out in the dark, too far to search; its reward is paid
 		server.ships_beaten += 1
+		server.run_log.add("Разбит ведомый пиратов: %s." % server.wing.name)   # (v101)
 		_over = true
 		enemy_hull = 0
 		reward = roundi(reward * server.outfit.salvage_share())
@@ -2104,6 +2112,7 @@ func _wrecked() -> void:
 		return
 	server.story.pirates_beaten()           # (v63) a bounty's or the courier's
 	server.ships_beaten += 1                # (v75) for the run's summary
+	server.run_log.add("Разбит пиратский корабль%s, обшивка %d из %d." % [" (охотник)" if server.road.hunting() else "", server.ship.hull, server.ship.hull_max])
 	_over = true
 	var captured: bool = server.stations.ours_aboard and systems.size() > Net.ESYS_CREW and systems[Net.ESYS_CREW] == 0 \
 		or (crewless and server.stations.ours_aboard and enemy_hull > 0 and systems.size() > Net.ESYS_DRONES and systems[Net.ESYS_DRONES] == 0)
@@ -2267,8 +2276,8 @@ func _enemy_fires(w: int, fx: int = Weapons.FX_NONE, start: int = 0, k: int = 0)
 		if Weapons.guard_chance(w) > 0.0 and guard_ready():
 			# (v58) our point defence fires at it, hit or miss (v60: at slow shells too, less surely)
 			guard_charge = 0.0
-			if map.guns.size() > 0:              # (heard by the guns: it has no place of its own)
-				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.guns[0] % map.width, map.guns[0] / map.width))
+			if map.any_gun() >= 0:              # (heard by the guns: it has no place of its own)
+				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(map.any_gun() % map.width, map.any_gun() / map.width))
 			if _rng.randf() < Weapons.guard_chance(w):
 				var by: int = _hull_near_crew()
 				var spot := _draw_theirs(w, by, Net.SHOT_DOWN, delay)
@@ -2469,8 +2478,8 @@ func arena_guard(p: Dictionary, body_id: int, at: Vector2) -> bool:
 		server.wing.use(int(p["foe"]))
 		if guard_ready():
 			guard_charge = 0.0
-			if server.map.guns.size() > 0:
-				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(server.map.guns[0] % server.map.width, server.map.guns[0] / server.map.width))
+			if server.map.any_gun() >= 0:
+				server.combat.jolt(Net.JOLT_FIRE, Weapons.GUARD, Vector2(server.map.any_gun() % server.map.width, server.map.any_gun() / server.map.width))
 			if _rng.randf() < Weapons.guard_chance(w):
 				down_now = true
 				_their_shot_lands(meta["log"], Net.SHOT_DOWN, -1, -1, server.arena._grid_spot(server.arena.bodies[body_id], Vector2.ZERO))
@@ -2645,8 +2654,8 @@ func _jam_choice() -> int:
 	var gen := shield_cell()
 	if gen >= 0 and not server.ship.broken.has(gen):
 		return gen
-	var map = server.map
-	return map.guns[_rng.randi_range(0, map.guns.size() - 1)] if map.guns.size() > 0 else -1
+	var set_up: Array = Array(server.map.guns).filter(func(c: int) -> bool: return c >= 0)
+	return set_up[_rng.randi_range(0, set_up.size() - 1)] if not set_up.is_empty() else -1
 
 
 func _enemy_target() -> int:

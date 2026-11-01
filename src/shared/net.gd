@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 74
+const PROTOCOL := 75
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -200,6 +200,8 @@ const ITEM_GEAR := 170             # (v59) a crate of ship gear: ITEM_GEAR + Gea
 const ITEM_NVG := 191               # (v93, the author's O1) night vision goggles: the dark is seen as if lit, in green
 const ITEM_THERMAL := 192           # (v93) thermal goggles: living people show through walls nearby, as heat
 const ITEM_ROBOT := 195             # (v62) a security robot in its crate: set down on the floor, it switches on and guards
+const ITEM_MOUNT := 196             # (v101, his N2 A) a gun mount taken down, or a new one bought: an engineer sets it up in an outer
+                                    # wall or on the floor of the top or bottom deck (a turret)
 const ITEM_GUN_LATE := 200          # (v62) weapons from Weapons.HORNET on: ITEM_GUN_LATE + (w - Weapons.HORNET) (200..203; cargo)
 const ITEM_GUN_NEW := 228           # (v98) weapons from Weapons.PULSE on: ITEM_GUN_NEW + (w - Weapons.PULSE) (228, 229; cargo)
 const ITEM_SEED := 204              # (v63) a packet of seeds: ITEM_SEED + Plants.seed_item (204..227; carried, kept in the locker)
@@ -315,6 +317,8 @@ const POD_SEATS := 2
 const C_TELEPORT := 41              # (v97) our teleporter: u8 TELE_SEND (at the module bay), TELE_HOME (on the ship alongside), TELE_ALL (at the bay)
 const C_INFLATE := 42               # (v98, the author's idea) nothing else: let the suit down, or seal it again (Armour.SWITCH_SECONDS)
 const S_TELEPORT := 53              # (v97) to each player: u8 TELE_NONE/READY/CHARGING/HUMMING of the teleporter that serves them, u8 seconds to ready
+const S_MOUNT_CELLS := 54           # (v101, his N2 A) to all: u8 the ship's number in our fleet, u8 count, per mount s32 its cell
+                                    # (-1: taken down or a spare not set up): mounts moved about the hull and onto the floor
 const TELE_SEND := 0
 const TELE_HOME := 1
 const TELE_ALL := 2

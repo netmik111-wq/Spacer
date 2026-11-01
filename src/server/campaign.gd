@@ -16,6 +16,7 @@ const Sectors := preload("res://src/shared/sectors.gd")
 const Items := preload("res://src/shared/items.gd")
 const Gear := preload("res://src/shared/gear.gd")
 const ShipMap := preload("res://src/shared/ship_map.gd")
+const ArenaShape := preload("res://src/shared/arena_shape.gd")
 
 const PATH := "user://campaign.json"
 const VERSION := 1
@@ -117,7 +118,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"air": Marshalls.raw_to_base64(server.air.air.to_byte_array()),
 		"jammed": Marshalls.raw_to_base64(jammed), "faulty": Marshalls.raw_to_base64(faulty), "picked": Marshalls.raw_to_base64(picked),
 		"floor": floor, "crew": crew, "admins": server.admin.names.keys(),
-		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed),
+		"mounts": Array(server.ship.mounts), "armed": Array(server.ship.armed), "gun_cells": Array(map.mount_cells()),   # (v101)
 		"shield_on": server.ship.shield_on, "hardened": server.ship.hardened,
 		"mount_fx": Array(server.ship.mount_fx), "guard": server.ship.guard, "guard_armed": server.ship.guard_armed,
 		"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(), "usage": server.usage.used,
@@ -128,6 +129,7 @@ static func snapshot(server: Node) -> Dictionary:
 		"complex": server.complex_repairs,                                      # (v71)
 		"story": server.story.save(), "roam": server.flagship.save(), "garden": server.garden.save(),
 		"road": server.road.save(),                                          # (v64)
+		"run_log": server.run_log.save(),                                    # (v101)
 		# (v84, the author's H4) the drawings of one's own it is played with, as they were: the files may change since
 		"drawings": ShipMap.drawings_in_use(map.map_name), "own_others": ShipMap.own_others,
 		"made_others": ShipMap.made_others, "teleporter_found": server.derelict.teleporter_found,   # (v97)
@@ -151,7 +153,7 @@ static func _fleet_of(server: Node) -> Array:
 		out.append({
 			"store": store, "store_air": s.store_air, "tank": s.tank, "hull": s.hull, "hull_max": s.hull_max, "worn": _keyed(s.worn), "arc": s.shield_arc,
 			"lost": server.fleet.is_lost(i), "broken": broken,
-			"mounts": Array(s.mounts), "armed": Array(s.armed), "shield_on": s.shield_on, "hardened": s.hardened,
+			"mounts": Array(s.mounts), "armed": Array(s.armed), "gun_cells": Array(server.map.mount_cells()), "shield_on": s.shield_on, "hardened": s.hardened,
 			"mount_fx": Array(s.mount_fx), "guard": s.guard, "guard_armed": s.guard_armed,
 			"loaded": Array(server.mounts.loaded), "panel": server.power.save_panel(),
 			"gear": Array(s.gear), "modules": Array(s.modules), "teleporter": s.teleporter, "smes": server.power.save(), "garden": server.garden.save(),
@@ -178,21 +180,19 @@ static func _fleet_back(server: Node, saved: Array, redrawn: bool = false) -> vo
 		s.worn = _unkeyed(d.get("worn", {}))         # (v93; older saves: whole armour, a bubble)
 		s.shield_arc = int(d.get("arc", -1))
 		server.fleet.lost[i] = bool(d.get("lost", false))
-		var mounts := PackedByteArray(d["mounts"])
-		var armed := PackedByteArray(d["armed"])
-		if mounts.size() == s.mounts.size() and armed.size() == mounts.size():
-			s.mounts = mounts
-			s.armed = armed
+		_mounts_back(s, PackedByteArray(d["mounts"]), PackedByteArray(d["armed"]))
+		if not redrawn:
+			_guns_back(server, d.get("gun_cells", []))
 		s.shield_on = bool(d["shield_on"])
 		s.hardened = bool(d["hardened"])
 		var fx := PackedByteArray(d["mount_fx"])
-		if fx.size() == s.mount_fx.size():
-			s.mount_fx = fx
+		for k in mini(fx.size(), s.mount_fx.size()):
+			s.mount_fx[k] = fx[k]
 		s.guard = int(d["guard"])
 		s.guard_armed = bool(d["guard_armed"])
 		var loaded := PackedByteArray(d["loaded"])
-		if loaded.size() == server.mounts.loaded.size():
-			server.mounts.loaded = loaded
+		for k in mini(loaded.size(), server.mounts.loaded.size()):
+			server.mounts.loaded[k] = loaded[k]
 		server.power.load_panel(d["panel"])
 		var gear := PackedByteArray(d["gear"])
 		if gear.size() == Gear.SYSTEMS:
@@ -209,6 +209,32 @@ static func _fleet_back(server: Node, saved: Array, redrawn: bool = false) -> vo
 		for cell in (d["broken"] if not redrawn else []):
 			s.broken[int(cell)] = true
 	server.fleet.use(0)
+
+
+static func _mounts_back(s, mounts: PackedByteArray, armed: PackedByteArray) -> void:
+	## The guns on the mounts as saved. (v101) A save from before the turrets and spare mounts has fewer: they
+	## came at the end of the list, so the saved ones are the first.
+	if mounts.size() > s.mounts.size() or armed.size() != mounts.size():
+		return
+	for k in mounts.size():
+		s.mounts[k] = mounts[k]
+		s.armed[k] = armed[k]
+
+
+static func _guns_back(server: Node, cells: Array) -> void:
+	## (v101) The ship in place's mounts where they were saved: first every moved one comes down, then goes up.
+	var map = server.map
+	var n: int = mini(cells.size(), map.guns.size())
+	for k in n:
+		var c := int(cells[k])
+		if map.guns[k] >= 0 and map.guns[k] != c:
+			map.set_gun(k, -1)
+	for k in n:
+		var c := int(cells[k])
+		if c >= 0 and map.guns[k] != c and c < map.cells.size() and map.cells[c] >= 0:
+			map.set_gun(k, c)
+	ArenaShape.forget_kinds()
+	server.arena.mounts_moved()
 
 
 static func _keyed(d: Dictionary) -> Dictionary:
@@ -285,17 +311,13 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.power.load_panel(data.get("panel", {}))          # (v68) the power panel's breakers and engines
 	server.usage.load_from(data.get("usage", {}))            # (v82) what people used, over the evenings
 	if data.has("mounts"):
-		var mounts := PackedByteArray(data["mounts"])
-		var armed := PackedByteArray(data.get("armed", []))
-		if mounts.size() == server.ship.mounts.size() and armed.size() == mounts.size():
-			server.ship.mounts = mounts
-			server.ship.armed = armed
+		_mounts_back(server.ship, PackedByteArray(data["mounts"]), PackedByteArray(data.get("armed", [])))
 		server.ship.shield_on = bool(data.get("shield_on", true))
 		server.ship.hardened = bool(data.get("hardened", false))
 		var fx := PackedByteArray(data.get("mount_fx", []))
 		server.ship.mount_fx.fill(0)
-		if fx.size() == server.ship.mount_fx.size():
-			server.ship.mount_fx = fx
+		for k in mini(fx.size(), server.ship.mount_fx.size()):
+			server.ship.mount_fx[k] = fx[k]
 		server.ship.guard = int(data.get("guard", 0))
 		server.ship.guard_armed = bool(data.get("guard_armed", false))
 		var loaded := PackedByteArray(data.get("loaded", []))   # (v68)
@@ -351,6 +373,8 @@ static func restore(server: Node, data: Dictionary) -> String:
 		if d is Array and (d as Array).size() == 2:
 			server.deaths.append([str(d[0]), str(d[1])])
 	server.ship.earned = int(data.get("earned", 0))
+	if data.has("run_log"):
+		server.run_log.load_from(data["run_log"])   # (v101)
 	# (v91) a ship drawn anew since the save (v91 put the machines on the floor and redrew ours): what lay in
 	# its cells would land in the wrong ones. The air is fresh, holes and breakdowns gone, the things on the
 	# floor in the locker, everybody at the places one comes aboard.
@@ -363,6 +387,8 @@ static func restore(server: Node, data: Dictionary) -> String:
 	server.air.wake()
 	for cell in (data["broken"] if not redrawn else []):
 		server.ship.broken[int(cell)] = true
+	if not redrawn:
+		_guns_back(server, data.get("gun_cells", []))   # (v101) mounts moved about the hull
 	_fleet_back(server, data.get("fleet", []), redrawn)
 	var jammed := Marshalls.base64_to_raw(str(data["jammed"])) if not redrawn else PackedByteArray()
 	var faulty := Marshalls.base64_to_raw(str(data["faulty"]))

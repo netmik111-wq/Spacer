@@ -454,6 +454,10 @@ func _update_guns(fighting: bool) -> void:
 		var w: int = client.gun_weapon[i]
 		var flags: int = client.gun_flags[i]
 		var row: Array = _gun_rows[i]
+		var stowed: bool = i >= client.map.guns.size() or client.map.guns[i] < 0
+		((row[0] as Control).get_parent() as Control).visible = not stowed   # (v101) a mount taken down, or a spare place
+		if stowed:
+			continue
 		var place := _gun_place(i)
 		var state := ""
 		if c == Net.GUN_BROKEN:
@@ -615,10 +619,15 @@ func _gun_place(i: int) -> String:
 	if i >= map.guns.size():
 		return ""
 	var f: int = maxi(map.fleet_on, 0)
-	if not _shapes.has(f):
-		_shapes[f] = ArenaShape.of_fleet(map, f)
-	var sh = _shapes[f]
+	var key := "%d:%d" % [f, map.mounts_moved]
+	if not _shapes.has(key):
+		_shapes[key] = ArenaShape.of_fleet(map, f)
+	var sh = _shapes[key]
 	var c: int = map.guns[i]
+	if c < 0:
+		return "гнездо снято"
+	if map.on_floor.has(c):
+		return "башня на %s, кругом" % ("крыше" if map.roof(c) else "днище")   # (v101, his N3 A)
 	var kind: int = sh.mount_kind(c)
 	if kind == ArenaShape.MOUNT_HARD:
 		return "в носу, неподвижное"
@@ -628,6 +637,6 @@ func _gun_place(i: int) -> String:
 		side = "левый борт"
 	elif out.y > 0.5:
 		side = "днище" if map.deck_of(c / map.width) > 0 else "правый борт"
-	if out.x > -0.5 and sh.local_of(c).x > sh.w * 0.15:
+	if out.x > -0.5 and (sh.local_of(c) - sh.own_off).x > sh.own_w * 0.15:
 		side += " у носа"
 	return "%s, %s" % [side, ArenaShape.MOUNT_NAMES[kind]]

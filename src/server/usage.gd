@@ -11,7 +11,7 @@ const Player := preload("res://src/server/player.gd")
 ## Every counted thing, in the order shown, with its name for the player.
 const NAMES := {
 	"evade": "уклонение пилота", "panel": "щит питания", "overcharge": "форсаж реактора",
-	"load": "снаряды вручную", "alert": "уровни тревоги", "galley": "камбуз",
+	"load": "снаряды вручную", "mount_moved": "перенос орудийных гнёзд", "alert": "уровни тревоги", "galley": "камбуз",
 	"tend": "присмотр за автодоком", "scan": "сканер тела", "treat": "аптечки и шины", "box": "ящики на стенах",
 	"cuffs": "наручники", "sell_prisoners": "сдача пленных", "weld": "сварка дверей",
 	"hold": "держать позицию", "crawl": "лечь (C)", "drone": "дрон-разведчик",
