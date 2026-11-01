@@ -379,7 +379,10 @@ func _robots() -> void:
 	var foe = null
 	for d in [Vector2i(2, 0), Vector2i(-2, 0), Vector2i(0, 2), Vector2i(0, -2), Vector2i(3, 0), Vector2i(-3, 0)]:
 		var c: Vector2i = Vector2i(robot.st.x, robot.st.y) + d
-		if map.walkable(c.x, c.y) and map.on_ship(c.y * map.width + c.x) and map.door_at(c.x, c.y) < 0:
+		var mid: Vector2i = Vector2i(robot.st.x, robot.st.y) + d / 2
+		# (v101: a floor turret may stand between; shots stop at it as at any machine on the floor)
+		if map.walkable(c.x, c.y) and map.on_ship(c.y * map.width + c.x) and map.door_at(c.x, c.y) < 0 and map.passable(mid.x, mid.y) \
+				and (absi(d.x) < 3 or map.passable(mid.x + signi(d.x), mid.y)):
 			# (in sight: facing it and in the same room, else it may never notice an unarmed one)
 			server.pirates._face(robot, Vector2(c))
 			foe = server.pirates.spawn(c.x, c.y, false)
