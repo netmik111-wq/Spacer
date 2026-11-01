@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v101 (version 0.94: longer runs, movable mounts, turrets, plated ships) is the latest. Plans one to four are done except the darkness front (the
+Build v102 (version 0.95: his 1 November Notebook notes) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -173,6 +173,11 @@ scrap), an engineer moves empty gun mounts (outer walls, or the floor of the top
 spare mount places per ship (arms dealers, 400 cr), ships in space plated (bow, engine bells, fins; pirates too), his
 Notebook bugs (backpack from behind, shots over the one knocked down, hand shield 35%), `run_log.txt`. v102 is planned
 from the same page: heat instead of hunter timers, cluster contracts, harbours, one second chance per act.
+v102 (his two Notebook notes of 1 Nov and a video; questions `https://claude.ai/artifact/XVghu9LFyAHQBLRmfUuyCR`, built on
+my picks): out of a fight our second ship follows the first by itself (no more swinging round it) and flies alone from its
+own helm; the sliding-aside drawing eases and keeps its side (his "twitch"); X (hold position) reaches the server at last;
+F3 shows ping, the slowest frame and the longest server pause. Lag since v101 not reproduced here; his "view from above"
+asked about. The v101 page's heat, contracts, harbours and second chance moved to v103 (my Z1 pick).
 Next: asteroid dwellers and minibosses, quests inside places, places with decks with station landing, enemy decks and
 choosing them, enemy fleets. Long-term: races (a lore question round first).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -205,7 +210,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 56 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 57 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -262,6 +267,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/asteroidtest.gd (since v99: made asteroids and stations, landing, mantises, their leap, rooms' loot)
     godot --headless --path . --script res://tools/spritetest.gd (since v100: every item has a picture, wear sheets, the jumpsuit, the gear byte, solid wall blocks)
     godot --headless --path . --script res://tools/turrettest.gd (since v101: plated shapes, floor turrets at 0.8, moving mounts, S_MOUNT_CELLS, saves, the run log, longer runs)
+    godot --headless --path . --script res://tools/followtest.gd (since v102: the second ship follows, flies alone from its helm, X from a real client)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -286,7 +292,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 56 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 57 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -707,6 +713,10 @@ The parameters for these checks are described in the header of `src/main.gd`.
   wall's guns in the list; a `T` with floor left, right and above or below is a turret in both builders. ArenaShape is
   plated (`PLATE` cells, `proxy`, `own_w`/`own_off`): the drawing's own size is `own_w`, not `w`; `of_layout(map, true)`
   for ships in space, without for places. A hand shield blocks by chance (`combat.riot_block`, tests pin 1.0). Protocol 75.
+- (v102) Out of a fight our second ship flies itself (`Arena._follow`, `Body.solo` while flown from its own helm);
+  `Body.formed` only marks the tick it was put in place (`placed`, `form_slot`). Pilot keys at its helm no longer
+  copy into `pilots[0]`. Every input value a client sends must pass the C_INPUT check in `GameServer._on_packet`:
+  a new `Mover` input (as HOLD/LET_GO were until v102) is thrown away silently there; test it with a real client.
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

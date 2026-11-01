@@ -279,6 +279,10 @@ var want_dir := 0                    # direction the player holds right now; set
 
 # for the debug overlay
 var rtt_ms := 0.0
+var worst_gap_ms := 0                # (v102) the longest wait between the server's world packets in the last 5 s
+var gap_now := 0
+var _world_at := 0
+var _gap_since := 0
 var server_tick := 0
 var mispredicts := 0
 var steps_predicted := 0
@@ -2494,6 +2498,16 @@ func _on_welcome(pkt: PackedByteArray) -> void:
 func _on_world(pkt: PackedByteArray) -> void:
 	var s_tick := pkt.decode_u32(1)
 	server_tick = s_tick
+	# (v102, his "laggier since v101") the longest wait for the server's word in the last 5 s, for F3: a long one
+	# means the host's computer or the network held the game up, not our own picture
+	var now_ms := Time.get_ticks_msec()
+	if _world_at > 0:
+		gap_now = maxi(gap_now, now_ms - _world_at)
+	_world_at = now_ms
+	if now_ms - _gap_since >= 5000:
+		worst_gap_ms = gap_now
+		gap_now = 0
+		_gap_since = now_ms
 	_update_clock(s_tick)
 	var size := pkt.size()
 	var pos := 5
