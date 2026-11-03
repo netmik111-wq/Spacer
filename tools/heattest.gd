@@ -204,7 +204,8 @@ func _contracts() -> void:
 		if depth == Sectors.FLAG_DEPTH:
 			continue
 		_enter_cluster(depth)
-		if s.kind.count(Sectors.STATION) > 0 and s.kind.count(Sectors.DERELICT) > 0 and s.kind[server.ship.sector] != Sectors.STATION:
+		var plain: int = s.kind.count(Sectors.EMPTY) + s.kind.count(Sectors.METEORS) + s.kind.count(Sectors.DERELICT)
+		if s.kind.count(Sectors.STATION) > 0 and s.kind.count(Sectors.DERELICT) > 0 and plain >= 3 and s.kind[server.ship.sector] != Sectors.STATION:
 			break
 	st.contract_for = r.depth
 	# cargo
@@ -232,8 +233,9 @@ func _contracts() -> void:
 	credits = server.ship.credits
 	_run((Story.SURVEY_SECONDS + 2) * Net.TICK_HZ)
 	_expect(st.contract().is_empty() and server.ship.credits == credits + int(c["reward"]), "held still %d s: done" % Story.SURVEY_SECONDS)
-	# a captain
+	# a captain (from the cluster's entry: where the survey left us may be its only plain system)
 	_calm()
+	_arrive_at(r.entry)
 	_expect(st.offer_contract(Net.QUEST_BOUNTY), "a captain's contract")
 	c = st.contract()
 	_arrive_at(c["at"])
