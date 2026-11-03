@@ -973,5 +973,6 @@ Questions on `https://claude.ai/artifact/DmJnG7ivH1qdztfNvoiZpS` (H1-H3, K1-K3, 
 - New test `tools/heattest.gd` (58 scripts; 30 of 30 runs pass). Protocol 76.
 - Also found: the run log (v101) named the mode in the same wrong order (a normal run said «лёгкий»).
 - Checks: all 58 scripts; nettest with and without the lag proxy, with a derelict and a pirate ship: 0 bad state
-  checks, 0 errors, corrections 0-0.5% (one plain run had a client that never connected under load; reruns 8/8).
+  checks, 0 errors, corrections 0-0.5% (one plain run had a client that never connected under load; reruns 8/8);
+  soak 2 game hours: ok (tick at most 48 ms, memory steady).
   Archives in `/mnt/project-files/builds/v103/` (exe 111,139,600 bytes).
