@@ -164,6 +164,8 @@ func _initialize() -> void:
 	server.ship.credits = Net.START_CREDITS
 	server.ship.tank = Net.FUEL_MAX                       # the walk below is about the chart, not about fuel
 	var s: Sectors = server.sectors
+	server.story.contracts_on = false                  # (v103) no cluster contract paying on the way
+	server.story.quests = server.story.quests.filter(func(q: Dictionary) -> bool: return int(q["kind"]) != Net.QUEST_CONTRACT)
 	var credits := server.ship.credits
 	var fresh := 0
 	var ok := true

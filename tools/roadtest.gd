@@ -337,13 +337,17 @@ func _hunters() -> void:
 	# they come by themselves, and fewer at a time than the most
 	r.auto = true
 	server.director.auto = true
-	r.ticks_here = r.next_hunter - 1
+	for i in s.count:                        # (v103) not in a harbour or a nebula: heat drains there
+		if s.kind[i] != Sectors.STATION and s.kind[i] != Sectors.FLAGSHIP and s.fog[i] == 0:
+			_arrive_at(s.cell[i])
+			break
+	r.heat = r.HEAT_FULL - 0.01
 	_run(Net.TICK_HZ + 1)
 	var came := r.hunters.size()
 	for i in 10:
-		r.ticks_here = r.next_hunter
+		r.heat = r.HEAT_FULL
 		_run(Net.TICK_HZ)
-	_expect(came == 1 and r.hunters.size() <= r._most(), "the cluster's clock brings them, %d at most (%d now)" % [r._most(), r.hunters.size()])
+	_expect(came == 1 and r.hunters.size() <= r._most(), "(v103) full heat brings them, %d at most (%d now)" % [r._most(), r.hunters.size()])
 	r.auto = false
 	server.director.auto = false
 	_calm()

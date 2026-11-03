@@ -951,3 +951,28 @@ himself as if from above the ship (not reproduced); the game feels laggier since
 - New test `tools/followtest.gd` (57 scripts; 30 of 30 runs pass). No protocol change.
 - Checks: all 57 scripts; nettest with and without the lag proxy, with a derelict and a pirate ship: 0 bad state
   checks, 0 errors, corrections 0-0.1%. Archives in `/mnt/project-files/builds/v102/` (exe 111,127,424 bytes).
+
+## v103 (0.96): heat, cluster contracts, harbours, the second chance
+
+The four run-shape items he agreed to move here (Z1 A on the v102 page; P1, P2, S2, L14 A on the run-length page).
+Questions on `https://claude.ai/artifact/DmJnG7ivH1qdztfNvoiZpS` (H1-H3, K1-K3, R1, S1-S3), built on my picks (all A).
+
+- Hunters come by heat (0-100 on the sector console): 10 min of quiet fill it on normal, a fight +15, running from one
+  +20, a jump +2; a harbour drains it in 2 min, a nebula in 10 min, a contract takes 40 off; full, a hunter comes and it
+  starts at 0; a new cluster starts at 0.
+- Found on the way: the hunters' clock read the mode's pace in the wrong order since v64 (normal waited as easy should,
+  12.5 min and then 10 min). Heat's 10 min is set close to what he has been playing.
+- One main contract per cluster (not the flagship's), 15 s after coming in: guild cargo, a named captain (a gunship a
+  step above a hunter), a black box, or a survey (60 s held still). 3-6 jumps toward the exits; 100 + 20 a cluster,
+  a gear crate, -40 heat. Never locks the exits.
+- Stations are harbours: the heat drains, the chat says it and that the run is saved, «гавань» on the chart.
+- «Ранее в рейсе»: a panel for each player joining a continued run (where, hull, money, heat, contract, chance, the
+  last 8 run-log lines).
+- Normal mode: one second chance per act of 3 clusters (top strength -50, hull full, as on easy); hard has none.
+- The help book's «Путь» page tells heat, contracts and the second chance. The run log writes them all.
+- New test `tools/heattest.gd` (58 scripts; 30 of 30 runs pass). Protocol 76.
+- Also found: the run log (v101) named the mode in the same wrong order (a normal run said «лёгкий»).
+- Checks: all 58 scripts; nettest with and without the lag proxy, with a derelict and a pirate ship: 0 bad state
+  checks, 0 errors, corrections 0-0.5% (one plain run had a client that never connected under load; reruns 8/8);
+  soak 2 game hours: ok (tick at most 48 ms, memory steady).
+  Archives in `/mnt/project-files/builds/v103/` (exe 111,139,600 bytes).

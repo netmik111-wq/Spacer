@@ -150,6 +150,7 @@ func _initialize() -> void:
 	var sm := b.crew.summary_packet()
 	_expect(sm.size() > 10 + 1 + 4 * b.usage.NAMES.size(), "the end screen gets what people used")
 	b.ship.hull = 1
+	b.road.chances[b.road.act()] = true   # (v103) the act's second chance spent
 	b.crew.hull_hit(5)
 	_expect(b.over == Net.OVER_WRECKED and not Campaign.exists(PATH), "a lost campaign leaves no save behind")
 	_expect(not b.save_campaign(), "and the host's save button saves nothing")

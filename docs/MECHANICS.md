@@ -4,7 +4,7 @@ This describes everything already in the game: how it works and with what number
 grows with every build. What the game doesn't have yet is not written here: that is in
 `docs/VISION.md` (the author's vision and plans).
 
-Last updated: build v102 (version 0.95).
+Last updated: build v103 (version 0.96).
 
 Contents:
 
@@ -60,6 +60,7 @@ Contents:
 50. [Asteroids, landing, abandoned stations, mantises (v99)](#50-asteroids-landing-abandoned-stations-mantises-v99)
 51. [What people wear, drawn; NO SPRITE; solid wall blocks (v100)](#51-what-people-wear-drawn-no-sprite-solid-wall-blocks-v100)
 52. [Longer runs, movable gun mounts, turrets, ships that look like ships (v101)](#52-longer-runs-movable-gun-mounts-turrets-ships-that-look-like-ships-v101)
+53. [Heat, cluster contracts, harbours, the second chance (v103)](#53-heat-cluster-contracts-harbours-the-second-chance-v103)
 
 ---
 
@@ -1488,10 +1489,9 @@ on the small map; see section 47. The sector map console and jumps are as below.
 
 ### Pirate hunters (v64)
 
-- **Hunters** (the author's C15) are pirate ships the chart shows as red diamonds. The first comes **6 min 15 s** after the
-  ship enters a cluster, then one more every **5 min** (since v89); at most **3** at a time (**4** with a crew of 5 or more; **2** in
-  the flagship's cluster). These times are ×0.7 in pirate territory, ×1.4 in trade worlds, ×2 on the easy mode and ×0.75
-  on the hard one. Each comes in as far from us as it can.
+- **Hunters** (the author's C15) are pirate ships the chart shows as red diamonds. (v103) They come by **heat** (see
+  section 53), no longer by a clock; at most **3** at a time (**4** with a crew of 5 or more; **2** in the flagship's
+  cluster). Each comes in as far from us as it can.
 - Every **75 s** each hunter moves one lane closer to us. It **never enters a system with a supply station** (a safe
   harbour). From inside a nebula the chart shows no hunters, and they wander instead of following.
 - When one comes into our system, the chat warns: **20 s** to jump away. When we jump into its system, it comes out
@@ -1500,7 +1500,7 @@ on the small map; see section 47. The sector map console and jumps are as below.
   «Охотник «…»». Wreck it, take it, break off its boarding or take its ransom and it is gone; jump away and it stays on
   our trail from where we left it.
   (v67, the author's O3) Jumping out of any pirate fight: every pirate gun charged at least half fires a **parting
-  volley** as we go (it lands at once), and the next hunter comes **60 s** sooner.
+  volley** as we go (it lands at once), and (v103) the heat rises by **20**.
   (v69, the author's notes) A second hunter already waiting in our system comes out only **45 s** after a fight ends
   (the chat warns), so it can't be taken for the first one back at full strength. A hunter no longer waits while
   another ship is alongside or docked: if nobody of ours is outside, that ship is **pushed off** and the fight starts
@@ -3024,3 +3024,41 @@ N1-N6, P4-P6, S3, O2 on the run-length page.
   one of ours lost, and how it ended. Send it with `usage.txt` after an evening.
 - Protocol **75** (S_MOUNT_CELLS: where each ship's mounts are).
 
+## 53. Heat, cluster contracts, harbours, the second chance (v103)
+
+His answers P1, P2, S2 and L14 (all A) on the run-length page; questions on «Spacer v103 Questions».
+
+- **Heat («Шум»)** (P1 A), from **0 to 100**, shown on the sector console with a word: «тихо» (below 33), «нас слышно»,
+  «нас ищут» (from 67), and whether it rises or falls. **Full**, a hunter enters the cluster and the heat starts again
+  from **0** (while the cluster already has as many hunters as it may, it stays full).
+  - It rises **by itself**: **10 min** of quiet flying fill it on normal in the frontier. The time is ×0.7 in pirate
+    territory, ×1.4 in trade worlds, ×2 on easy, ×0.75 on hard.
+  - **Noise**: a pirate ship comes out to fight us **+15**, we jump or break away from a fight **+20**, every jump
+    between systems **+2**.
+  - It **falls**: in a station's system (a harbour) it drains from full in **2 min**; inside a nebula it does not rise
+    and drains from full in **10 min**; a cluster's contract done takes **40** off.
+  - A **new cluster** starts it at **0**. The first **5** quiet minutes of a campaign (easy, normal) it stays still.
+  - (Found on the way: since v64 the hunters' clock read the mode's pace in the wrong order, so normal waited as long
+    as easy should: first hunter **12.5 min**, then every **10 min**. Heat is set close to that.)
+- **The cluster's contract** (P2 A): **15 s** after coming into a cluster (not the flagship's: the flagship is its task),
+  the comms console gives one main contract, marked on the chart by a larger blue diamond with «K». One of:
+  - **guild cargo**: a sealed crate goes into the supply locker; deliver it by arriving at the station's system;
+  - **a named captain**: a gunship **1** step harder than a hunter there comes out **6 s** after we arrive; wreck it;
+  - **a black box**: from the wreck in that system, into the supply locker;
+  - **a survey**: hold the ship still in that system, out of a fight, for **60 s** in all.
+  It points **3 to 6** jumps away, toward the exits when it can. Reward: **100 + 20 for every cluster behind us**
+  credits, a **crate of ship gear**, and **−40 heat**. It does not count toward the 3 side quests, has no time limit,
+  and is lost with the cluster. It never locks the exits.
+- **Harbours** (S2 A): a station's system is a harbour: hunters never come in (as before), the director sends nothing
+  there (as before), and now the heat drains. Arriving, the chat says so and that the run is saved; the chart writes
+  «гавань» under every station it shows.
+- **The story so far** (his R1, my pick): when a saved run is continued, everyone who joins that evening sees a panel
+  «РАНЕЕ В РЕЙСЕ» for **45 s** (or until «Понятно»): the act, cluster and system, time on the road, hull, credits,
+  reserve, heat, the contract, whether the act's second chance is left, and the last **8** lines of the run log.
+- **The second chance** (L14 A): on **normal**, once per **act** (act 1 = clusters 1 to 3, act 2 = 4 to 6, act 3 = 7
+  on), when the hull of a ship of ours would give way, the frame holds: top strength **−50** and the hull back to full,
+  as on easy (not if that would leave the top strength below 50). It works for either ship of a fleet and in the
+  flagship's fight. A new act says so in the chat. Hard has none; easy keeps its own rule.
+- The run log also writes each contract (given, done, failed), each hunter the heat brought, each harbour, each act and
+  each second chance.
+- Protocol **76** (S_ROAD carries the heat and its flags instead of the seconds to the next hunter; S_RECAP).

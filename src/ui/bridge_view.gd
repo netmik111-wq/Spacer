@@ -95,11 +95,9 @@ func update_chart() -> void:
 		lines.append("Мы в туманности: охотники нас не видят, но и наши сенсоры слепы. Что в соседних секторах, не видно.")
 	else:
 		var hunters: Array = road.get("hunters", [])
-		var due := int(road.get("hunter_s", 65535))
 		var line := "Пиратских охотников в скоплении: %d (красные ромбы)." % hunters.size() if not hunters.is_empty() else "Охотников в скоплении пока нет."
-		if due != 65535:
-			line += " Следующий придёт через %d:%02d." % [due / 60, due % 60]
 		lines.append(line)
+	lines.append(heat_line(road))
 	var st: Dictionary = client.story
 	if st.hash() != _story_seen:
 		_story_seen = st.hash()
@@ -172,16 +170,40 @@ func _draw_story(place: Callable) -> void:
 		for m: Array in st.get("marks", []):
 			if m[1] == c and int(m[0]) == Net.MARK_SOS:
 				chart.draw_string(font, at + Vector2(-12, -12), "SOS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(1.0, 0.35, 0.3))
+		if sectors.kind[id] == Sectors.STATION and client.knows_sector(id):
+			chart.draw_string(font, at + Vector2(-30, 22), "гавань", HORIZONTAL_ALIGNMENT_CENTER, 60, 10, HARBOUR)   # (v103)
 		for q: Dictionary in st.get("quests", []):
 			if q["at"] == c:
-				var d := 9.0
+				var main := int(q["kind"]) == Net.QUEST_CONTRACT     # (v103) the cluster's contract: bigger, its own colour
+				var d := 12.0 if main else 9.0
+				var col := CONTRACT if main else QUEST
 				chart.draw_polyline(PackedVector2Array([at + Vector2(0, -d - 6), at + Vector2(d, -6), at + Vector2(0, d - 6),
-					at + Vector2(-d, -6), at + Vector2(0, -d - 6)]), QUEST, 2.0)
-				chart.draw_string(font, at + Vector2(10, -10), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, QUEST)
+					at + Vector2(-d, -6), at + Vector2(0, -d - 6)]), col, 2.0)
+				chart.draw_string(font, at + Vector2(10, -10), "K" if main else "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
 		if awake and st["flagship"] == c:
 			# (v80, the author's note: the mark hid the system under it) a pointer above the system, not on it
 			chart.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -17), at + Vector2(7, -29), at + Vector2(-7, -29)]), GOAL)
 			chart.draw_string(font, at + Vector2(-40, -33), "ФЛАГМАН", HORIZONTAL_ALIGNMENT_CENTER, 80, 11, GOAL)
+
+
+static func heat_line(road: Dictionary) -> String:
+	## (v103, his P1 A) The heat: how loudly we are heard; full, a hunter comes into the cluster.
+	var f := int(road.get("road_flags", 0))
+	var heat := int(road.get("heat", 0))
+	var out := ""
+	if f & Net.ROAD_HARBOUR:
+		out = "Гавань: в сектор станции охотники не заходят. "
+	if f & Net.ROAD_HEATING == 0:
+		out += "Шум: %d из 100 (пока он не растёт)." % heat
+	else:
+		var word: String = ["тихо", "нас слышно", "нас ищут"][clampi(heat * 3 / 100, 0, 2)]
+		out += "Шум: %d из 100, %s, %s. Наполнится: в скопление войдёт охотник. Шумят бои, бегство из боя и прыжки; гасят гавань, туманность и выполненный контракт." % [
+			heat, word, "стихает" if f & Net.ROAD_COOLING else "растёт"]
+		if f & Net.ROAD_FULL:
+			out += " Охотников уже столько, сколько может быть."
+	if f & Net.ROAD_CHANCE:
+		out += " Второй шанс этого акта есть."
+	return out
 
 
 static func _jumps_word(n: int) -> String:
@@ -557,6 +579,8 @@ func _draw_chart() -> void:
 
 const GOAL := Color(1.0, 0.25, 0.25)      # (v57) the flagship's sector, and the way to it
 const QUEST := Color(1.0, 0.85, 0.3)       # (v63) a quest's target
+const CONTRACT := Color(0.45, 0.9, 1.0)     # (v103) the cluster's contract
+const HARBOUR := Color(0.55, 0.85, 0.6)     # (v103) a station's system, a harbour
 const ION := Color(0.4, 0.55, 1.0)         # (v61) an ion storm
 const EXIT := Color(0.55, 0.95, 1.0)       # (v64) a way out of the cluster
 const HUNTER := Color(1.0, 0.3, 0.45)      # (v64) a pirate hunter

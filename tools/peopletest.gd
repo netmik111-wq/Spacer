@@ -500,7 +500,9 @@ func _drag() -> void:
 		if victim.taken:
 			gone = true
 			break
-	_expect(gone and victim.cond == Net.COND_DEAD, "a kidnapper hauls one of ours lying to its hole and off he goes")
+	_expect(gone and victim.cond == Net.COND_DEAD, "a kidnapper hauls one of ours lying to its hole and off he goes%s" % ("" if gone else
+		" (not gone: the pirate at %d,%d, goal %d, cond %d, its hole %d,%d; the victim at %d,%d)" % [p.st.x, p.st.y, p.goal, p.cond,
+		p.way_in % server.map.width, p.way_in / server.map.width, victim.st.x, victim.st.y]))
 	_expect(server.players[p.slot] != p, "and the pirate with him")
 	var bodies := server.corpses.size()
 	server.crew.respawn(victim)

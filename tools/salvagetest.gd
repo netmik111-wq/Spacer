@@ -390,13 +390,22 @@ func _parting() -> void:
 	g.enemy_charge.fill(1.0)
 	var hull: int = server.ship.hull
 	var shield: float = server.ship.shield
-	server.road.ticks_here = 0
-	server.road.next_hunter = 3000
+	var r_auto: bool = server.road.auto
+	var d_auto: bool = server.director.auto
+	var quiet_was: bool = server.director.quiet_start
+	server.road.auto = true
+	server.director.auto = true
+	server.director.quiet_start = false
+	server.road.heat = 10.0
 	server.ship.shield = 0.0
 	g.enemy_hit_chance = 1.0
 	g.parting_volley()
 	_expect(g.enemy_charge.count(0.0) == g.enemy_charge.size(), "jumping away, every charged pirate gun fires once")
-	_expect(server.road.next_hunter == 3000 - roundi(server.road.ESCAPE_SOONER * Net.TICK_HZ), "and the next hunter comes %d s sooner" % int(server.road.ESCAPE_SOONER))
+	_expect(is_equal_approx(server.road.heat, 10.0 + server.road.HEAT_ESCAPE), "and (v103) the heat rises by %d" % int(server.road.HEAT_ESCAPE))
+	server.road.auto = r_auto
+	server.director.auto = d_auto
+	server.director.quiet_start = quiet_was
+	server.road.heat = 0.0
 	g.enemy_hit_chance = -1.0
 	server.ship.shield = shield
 	d._leave(true)

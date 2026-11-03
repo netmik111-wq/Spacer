@@ -242,6 +242,7 @@ func _initialize() -> void:
 
 	print("a hull worn through")
 	server.over = Net.OVER_NONE
+	server.road.chances[server.road.act()] = true   # (v103) the act's second chance spent
 	server.ship.hull = Net.HULL_PER_HOLE
 	var other: int = map.hull[map.hull.size() / 2]
 	server.systems.breach(other)

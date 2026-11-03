@@ -129,6 +129,7 @@ func _initialize() -> void:
 	again.free()
 
 	# lost only when both are (FS6)
+	server.road.chances[server.road.act()] = true   # (v103) the act's second chance spent
 	fleet.use(1)
 	server.crew.hull_hit(server.ship.hull)
 	_expect(fleet.is_lost(1) and server.over == Net.OVER_NONE and not server.powered(), "the second ship's hull gives way: it goes dark, the run goes on")
