@@ -2311,3 +2311,20 @@ Z1 A on the v102 page; built on my picks while his answers on `https://claude.ai
 - **The second chance** (`Road.second_chance`, called from `Crew.hull_hit` before a fleet ship is lost): normal only,
   once per act (`ACT_CLUSTERS` 3, `Road.chances` saved), the same cost as easy's (top strength −50, hull full). It
   works in the flagship's fight (my S2 A: his "win or lose" there is about running away) and for either fleet ship.
+
+## 2026-11-03: test review (his question "do we need so many tests?")
+
+- **No test deleted** (my advice, his pick "speed up + pin luck"): most take 2-5 s and each guards a mechanic he asked
+  for; merging the build-named ones (polishtest, eveningtest...) costs work and saves no time.
+- **directortest** was ~233 s of ~500 s on GitHub: 12 runs of 30 game minutes. The supply station's four runs checked
+  one thing ("it is quiet"), so one run is kept (crew 4, holes left open). It now runs beside the other tests
+  (`SLOW` in `tools/runtests.sh`, its own `XDG_DATA_HOME`; its ports 26000-26045 are its own). The whole set took
+  5.5 min here instead of ~8. Shorter runs were not taken: the event counts would turn to luck.
+- **fluxtest**: 1 run in 40 the pirate left in the middle of the heat checks (every gun had just been fired at it),
+  so the overload, venting and pilot checks failed. A fresh pirate comes for those checks now; 120/120 pass.
+- **machinetest** went red on this PR's first run: since v103 a cargo contract could come and be delivered on the
+  test's jump, paying 100 credits (1 run in 60, not this change). It sets `story.contracts_on = false`; 160/160 pass.
+  The shotgun (peopletest) and robot (enemytest) failures seen on GitHub were already fixed on 1 Nov (40/40 each).
+- **Left for later**: 25 tests set `gunnery.flies = false` and 4 `arena.enabled = false`, the pre-v92 instant fight
+  players never meet. Most only skip waiting; guntest's fight half checks the old shield and damage numbers. Redo
+  those in space and delete `Navigation._old_flight` with a fight build.

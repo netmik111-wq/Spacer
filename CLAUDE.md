@@ -215,7 +215,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 58 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 58 scripts below; directortest beside the rest; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd

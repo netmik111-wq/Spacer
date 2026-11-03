@@ -230,11 +230,14 @@ func _initialize() -> void:
 		ship.mounts[k] = Weapons.LASER
 	b.heat = 0.0
 	b.hard = 0.0
-	if a.body(Arena.LEAD) == null:
-		d.pirates_wrecked()
-		server.road.hulks.clear()
-		d.pirates_come(2, true)
-		_run(1)
+	# a fresh pirate for the heat checks: every gun above may have left the old one without crew or
+	# systems, and then it broke off in the middle of them (1 run in 40, 2026-11-03)
+	if a.body(Arena.LEAD) != null:
+		g.enemy_gone()
+	d.pirates_wrecked()
+	server.road.hulks.clear()
+	d.pirates_come(2, true)
+	_run(1)
 	e = a.body(Arena.LEAD)
 
 	# (v94.1, his S4 B) firing heats nothing: only the shield heats the ship, and a hot ship still fires
