@@ -2284,3 +2284,30 @@ Questions page: `https://claude.ai/artifact/XVghu9LFyAHQBLRmfUuyCR` (db `answers
   client's own scripts the same. Nothing found, so nothing changed; F3 now shows the ping, the slowest frame and the
   longest wait between the server's world packets over 5 s, so his next screenshot tells network, host or picture.
 - **The view from above** (his third bug, not reproduced): asked when it happened (B2).
+
+## v103: heat, cluster contracts, harbours, the second chance
+
+His answers P1, P2, S2, L14 (all A) on the run-length page (`https://claude.ai/artifact/5v3oAETazwi2XUigNFwK15`) and
+Z1 A on the v102 page; built on my picks while his answers on `https://claude.ai/artifact/DmJnG7ivH1qdztfNvoiZpS` wait.
+
+- **Heat replaces the hunters' clock** (`Road.heat`, `noise`, `cool`, `_heat_second`). It still rises by itself
+  (`HEAT_QUIET` 600 s on normal in the frontier) so a careful crew cannot camp a cluster forever (my H1 A); noise
+  (`HEAT_FIGHT` 15 in `Derelict.pirates_come`, `HEAT_ESCAPE` 20 in `Road.escaped`, `HEAT_JUMP` 2 on every new system)
+  makes a loud crew hunted sooner. Full brings a hunter and starts at 0 (H2 A). A harbour drains it in 120 s, a nebula
+  in 600 s and it does not rise there; a contract done takes 40 off. It counts only while `heating()` (`road.auto`,
+  `director.auto`, not the quiet start), the same switches the clock had, so older tests stay still.
+- **A mistake since v64**: `MODE_PACE` was written for (easy, normal, hard) but indexed by `Net.MODE_*` (normal 0,
+  easy 1, hard 2), so normal had easy's ×2 and easy normal's ×1. Fixed with heat. The 600 s quiet fill is close to
+  what normal really was (12.5 min to the first hunter, then 10 min), so his feel of the pace does not jump.
+- **Contracts** are quests of kind `QUEST_CONTRACT` with a `job` inside (`Story.job(q)`: cargo, bounty, black box, or
+  `QUEST_SURVEY`), so the old delivery, hunt and black box code serves both. One per cluster (`Story.contract_for` =
+  the depth it was given for), 15 s after coming in, never in the flagship's cluster. They point 3 to 6 jumps toward
+  the exits. Reward 100 + 20 a cluster, a gear crate (`outfit.loot(..., true)`), −40 heat (my K2 A). They never lock
+  the exits (K3 A: his rule of never two obstacles to escape at once). A captain is a gunship one step above a hunter.
+- **Harbours** were already safe (hunters never enter a station's system, the director's `PACE` has none there) and
+  every landing already saves; v103 adds the draining heat, a chat line and the chart's «гавань» label.
+- **The story so far** (`RunLog.recap`, `S_RECAP`): sent once an evening to each name joining a continued run
+  (`RunLog.resumed`, `recapped`), as a panel for 45 s. Chat lines would scroll away under the joining noise.
+- **The second chance** (`Road.second_chance`, called from `Crew.hull_hit` before a fleet ship is lost): normal only,
+  once per act (`ACT_CLUSTERS` 3, `Road.chances` saved), the same cost as easy's (top strength −50, hull full). It
+  works in the flagship's fight (my S2 A: his "win or lose" there is about running away) and for either fleet ship.

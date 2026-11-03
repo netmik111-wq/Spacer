@@ -37,6 +37,14 @@ const M1_FROM := 3                   # the first mission is offered this many ju
 const M1_TO := 11                    # ... up to this many (v64: the second and third clusters)
 const M1_AGAIN := 3                  # turned down, it is offered again this many jumps later
 const DRY_DRIFT := 0.1               # out of fuel: this often it is still the drifting can (Director), not a call (v67: was 0.3)
+# (v103, his P2 A) the cluster's main contract
+const CONTRACT_AFTER := 15.0         # seconds in a new cluster before its contract comes over the comms
+const CONTRACT_NEAR := 3             # it points this many jumps away...
+const CONTRACT_FAR := 6              # ... up to this many, toward the exits
+const CONTRACT_BASE := 100           # credits, and this many more for every cluster behind us
+const CONTRACT_STEP := 20
+const SURVEY_SECONDS := 60           # a survey: the ship held still this long in that system, out of a fight
+const CONTRACT_HARDER := 1           # a contract's captain is this many steps harder than a hunter there
 const PIRATE_NAMES: Array[String] = ["Ржавый Клык", "Мясник Орро", "Вдова Кесс", "Шрам", "Безносый Тибо", "Капитан Гарь", "Сестра Зола"]
 
 var server: GameServer
@@ -49,6 +57,7 @@ var sos_done := {}                   # SOS sectors answered or passed by: Sector
 var chapter := 0                     # 0 the first mission not taken, 1 its convoy sought, 2 the courier sought, 3 the codes are ours
 var m1_next := 0                     # (jumps) the first mission may be offered from this many jumps on
 var codes := false
+var contract_for := -1               # (v103) the cluster (Road.depth) whose contract has been given
 var _due_at := -1                    # the tick a call on arriving comes
 var _due_event := -1
 var _hunt_at := -1                   # the tick a quest's pirate comes out
@@ -69,6 +78,7 @@ func setup(p_server: GameServer) -> void:
 	chapter = 0
 	m1_next = 0
 	codes = false
+	contract_for = -1
 	_due_at = -1
 	_hunt_at = -1
 	_hunt = -1
@@ -99,7 +109,7 @@ func entered_sector() -> void:
 	var kind: int = server.sectors.kind[server.ship.sector]
 	# cargo delivered to the station it was for
 	for q: Dictionary in quests.duplicate():
-		if int(q["kind"]) == Net.QUEST_CARGO and q["at"] == at:
+		if job(q) == Net.QUEST_CARGO and q["at"] == at:
 			if int(server.ship.store.get(Net.ITEM_CARGO, 0)) > 0:
 				server.ship.store[Net.ITEM_CARGO] = int(server.ship.store[Net.ITEM_CARGO]) - 1
 				server.supplies.tell_store()
@@ -107,7 +117,10 @@ func entered_sector() -> void:
 			else:
 				_fail(q, "Груз для станции потерян: его нет в шкафу снабжения.")
 	for q: Dictionary in quests:
-		if q["at"] == at and (int(q["kind"]) == Net.QUEST_BOUNTY or int(q.get("part", 0)) == 2):
+		if q["at"] == at and job(q) == Net.QUEST_SURVEY:
+			server.chat.say("Это сектор разведки по контракту: держите корабль неподвижно %d с вне боя, сенсоры снимут всё нужное." % SURVEY_SECONDS)
+	for q: Dictionary in quests:
+		if q["at"] == at and (job(q) == Net.QUEST_BOUNTY or int(q.get("part", 0)) == 2):
 			_hunt_at = server.tick + roundi(HUNT_DELAY * Net.TICK_HZ)
 			server.chat.say("Сенсоры видят %s. Он нас тоже заметил." % str(q["name"]))
 			return
@@ -444,7 +457,7 @@ func _new_quest(kind: int) -> String:
 func _side_quests() -> int:
 	var n := 0
 	for q: Dictionary in quests:
-		if int(q["kind"]) != Net.QUEST_MISSION:
+		if int(q["kind"]) != Net.QUEST_MISSION and int(q["kind"]) != Net.QUEST_CONTRACT:
 			n += 1
 	return n
 
@@ -486,6 +499,11 @@ func _done(q: Dictionary, why: String) -> void:
 		codes = true
 		server.flagship.growth = maxi(server.flagship.growth - 1, 0)
 		extra = " Коды флагмана наши: в бою будут видны все его отсеки, а его подготовка отброшена на шаг назад."
+	elif int(q["kind"]) == Net.QUEST_CONTRACT:
+		_store(server.outfit.loot(server.sectors.far_from_start(server.ship.sector), _rng, true), 1)
+		server.road.cool(server.road.HEAT_CONTRACT)
+		extra = " Заказчик прислал ящик снаряжения (в шкафу снабжения) и замёл наш след: шум стих на %d." % int(server.road.HEAT_CONTRACT)
+		server.run_log.add("Контракт скопления выполнен: «%s», %d кредитов." % [q["title"], int(q["reward"])])
 	server.chat.say("Задание «%s» выполнено. %s Награда: %d кредитов.%s" % [q["title"], why, int(q["reward"]), extra])
 	server.supplies.tell_store()
 	_dirty = true
@@ -495,6 +513,8 @@ func _done(q: Dictionary, why: String) -> void:
 
 func _fail(q: Dictionary, why: String) -> void:
 	quests.erase(q)
+	if int(q["kind"]) == Net.QUEST_CONTRACT:
+		server.run_log.add("Контракт скопления провален: «%s». %s" % [q["title"], why])
 	server.chat.say("Задание «%s» провалено. %s" % [q["title"], why])
 	_dirty = true
 
@@ -504,7 +524,7 @@ func derelict_arrived(cells: PackedInt32Array) -> void:
 	if cells.is_empty():
 		return
 	for q: Dictionary in quests:
-		var boxed := int(q["kind"]) == Net.QUEST_BLACKBOX or (int(q["kind"]) == Net.QUEST_MISSION and int(q["part"]) == 1)
+		var boxed := job(q) == Net.QUEST_BLACKBOX or (int(q["kind"]) == Net.QUEST_MISSION and int(q["part"]) == 1)
 		if boxed and not bool(q["placed"]) and q["at"] == here():
 			if server.put_on_floor(cells[_rng.randi_range(0, cells.size() - 1)], Net.ITEM_BLACKBOX):
 				q["placed"] = true
@@ -527,19 +547,20 @@ func _hunt_tick() -> void:
 		_hunt_at = -1
 		var q := {}
 		for k: Dictionary in quests:
-			if k["at"] == here() and (int(k["kind"]) == Net.QUEST_BOUNTY or int(k.get("part", 0)) == 2):
+			if k["at"] == here() and (job(k) == Net.QUEST_BOUNTY or int(k.get("part", 0)) == 2):
 				q = k
 		if q.is_empty():
 			return
 		var yard = server.shipyard
 		var was: int = yard.force_class
-		if int(q["kind"]) == Net.QUEST_MISSION:
+		if int(q["kind"]) == Net.QUEST_MISSION or int(q["kind"]) == Net.QUEST_CONTRACT:
 			yard.force_class = Net.ECLASS_GUNSHIP
-		var design: Dictionary = yard.make(server.director._party(), true, d._pirate_spots())
+		var harder: int = server.road.hunter_level() + CONTRACT_HARDER if int(q["kind"]) == Net.QUEST_CONTRACT else 0
+		var design: Dictionary = yard.make(server.director._party(), true, d._pirate_spots(), harder)
 		yard.force_class = was
 		if design.is_empty():
 			return
-		design["name"] = "Корабль «%s»" % q["pirate"] if int(q["kind"]) == Net.QUEST_BOUNTY else "Курьер пиратов «Вестник»"
+		design["name"] = "Корабль «%s»" % q["pirate"] if job(q) == Net.QUEST_BOUNTY else "Курьер пиратов «Вестник»"
 		if d.pirates_come(server.director._party(), true, design):
 			_hunt = quests.find(q)
 			_beaten = false
@@ -565,6 +586,92 @@ func _hunt_tick() -> void:
 		_hunt = -1
 		if not q.is_empty():
 			_done(q, "Цель уничтожена.")
+
+
+static func job(q: Dictionary) -> int:
+	## (v103) What a quest asks: its kind, or for a cluster's contract the kind of job inside it.
+	return int(q.get("job", -1)) if int(q["kind"]) == Net.QUEST_CONTRACT else int(q["kind"])
+
+
+func contract() -> Dictionary:
+	## (v103) This cluster's contract while it is open, or {}.
+	for q: Dictionary in quests:
+		if int(q["kind"]) == Net.QUEST_CONTRACT:
+			return q
+	return {}
+
+
+func _contract_tick() -> void:
+	## (v103, his P2 A) Once a second: the cluster's contract comes over the comms a little after we come in
+	## (never in the flagship's cluster: the flagship is its task), and a survey counts the seconds held still.
+	if server.sectors.count == 0:
+		return
+	var busy: bool = server.gunnery.fighting() or server.pirates.aboard() > 0
+	var road = server.road
+	if contract_for != road.depth and road.ticks_here >= roundi(CONTRACT_AFTER * Net.TICK_HZ) and not busy:
+		contract_for = road.depth
+		if not (road.depth == Sectors.FLAG_DEPTH and not server.won):
+			offer_contract()
+	var q := contract()
+	if q.is_empty() or job(q) != Net.QUEST_SURVEY or q["at"] != here():
+		return
+	if busy or server.ship.moving or server.ship.jump_to != Net.NO_SECTOR:
+		return
+	q["held"] = int(q.get("held", 0)) + 1
+	if int(q["held"]) == SURVEY_SECONDS / 2:
+		server.chat.say("Разведка по контракту: снята половина данных.")
+	if int(q["held"]) >= SURVEY_SECONDS:
+		_done(q, "Сенсоры сняли всё, что просил заказчик.")
+
+
+func offer_contract(only: int = -1) -> bool:
+	## The cluster's main contract (`only`: that job, for tests and the admin): a job 3 to 6 jumps toward the exits,
+	## paid well. Tries the jobs in a random order until one finds a system.
+	var jobs: Array = [Net.QUEST_CARGO, Net.QUEST_BOUNTY, Net.QUEST_BLACKBOX, Net.QUEST_SURVEY] if only < 0 else [only]
+	jobs.shuffle()
+	for j: int in jobs:
+		var q := {"kind": Net.QUEST_CONTRACT, "job": j, "placed": false, "part": 0, "name": "", "held": 0}
+		var at := Vector2i.MAX
+		match j:
+			Net.QUEST_CARGO:
+				at = _contract_target([Sectors.STATION])
+				q["title"] = "Контракт: груз гильдии"
+				q["text"] = "Доставить опечатанный ящик гильдии из шкафа снабжения на станцию в секторе %s."
+			Net.QUEST_BOUNTY:
+				at = _contract_target([Sectors.EMPTY, Sectors.METEORS, Sectors.DERELICT])
+				q["pirate"] = PIRATE_NAMES[_rng.randi_range(0, PIRATE_NAMES.size() - 1)]
+				q["name"] = "капитан «%s»" % q["pirate"]
+				q["title"] = "Контракт: капитан «%s»" % q["pirate"]
+				q["text"] = "Найти и разбить канонерку капитана «%s» в секторе %%s. Она сильнее обычных пиратов." % q["pirate"]
+			Net.QUEST_BLACKBOX:
+				at = _contract_target([Sectors.DERELICT])
+				q["title"] = "Контракт: чёрный ящик"
+				q["text"] = "Найти чёрный ящик на обломках в секторе %s и принести в шкаф снабжения."
+			Net.QUEST_SURVEY:
+				at = _contract_target([Sectors.EMPTY, Sectors.METEORS, Sectors.DERELICT, Sectors.ION_STORM])
+				q["title"] = "Контракт: разведка"
+				q["text"] = "Долететь до сектора %%s и простоять там неподвижно %d с вне боя, пока сенсоры снимают данные." % SURVEY_SECONDS
+		if at == Vector2i.MAX:
+			continue
+		q["at"] = at
+		q["text"] = str(q["text"]) % Sectors.name_at(server.space_seed, at)
+		q["reward"] = CONTRACT_BASE + CONTRACT_STEP * server.road.depth
+		if j == Net.QUEST_CARGO:
+			_store(Net.ITEM_CARGO, 1)
+		quests.append(q)
+		last_title = "Контракт скопления"
+		last_text = "%s Награда: %d кредитов и ящик снаряжения. Срока нет, но в другом скоплении контракт пропадёт." % [q["text"], int(q["reward"])]
+		_comms_dirty = true
+		_dirty = true
+		server.chat.say("Связь: заказчик предлагает контракт скопления. %s Награда: %d кредитов и ящик снаряжения (подробнее на пульте связи)." % [q["text"], int(q["reward"])])
+		server.run_log.add("Контракт скопления: %s" % q["text"])
+		return true
+	return false
+
+
+func _contract_target(kinds: Array) -> Vector2i:
+	var at := _target(kinds, CONTRACT_NEAR, CONTRACT_FAR, true)
+	return at if at != Vector2i.MAX else _target(kinds, CONTRACT_NEAR, CONTRACT_FAR)
 
 
 func left_cluster() -> void:
@@ -626,6 +733,7 @@ func tick() -> void:
 	_hunt_tick()
 	if server.tick % Net.TICK_HZ == 0:
 		_boxes()
+		_contract_tick()
 	if _comms_dirty:
 		_comms_dirty = false
 		server.to_all(comms_packet())
@@ -655,8 +763,9 @@ func _boxes() -> void:
 		return
 	var best := {}
 	for q: Dictionary in quests:
-		if bool(q["placed"]) and (int(q["kind"]) == Net.QUEST_BLACKBOX or int(q["kind"]) == Net.QUEST_MISSION):
-			if best.is_empty() or int(q["kind"]) == Net.QUEST_MISSION:
+		if bool(q["placed"]) and (job(q) == Net.QUEST_BLACKBOX or int(q["kind"]) == Net.QUEST_MISSION):
+			# (the mission first, then the cluster's contract, then a side quest)
+			if best.is_empty() or int(q["kind"]) == Net.QUEST_MISSION or (int(q["kind"]) == Net.QUEST_CONTRACT and int(best["kind"]) != Net.QUEST_MISSION):
 				best = q
 	if best.is_empty():
 		return
@@ -762,7 +871,7 @@ func save() -> Dictionary:
 		var c := q.duplicate()
 		c["at"] = [(q["at"] as Vector2i).x, (q["at"] as Vector2i).y]
 		qs.append(c)
-	return {"quests": qs, "sos": sos_done.keys(), "chapter": chapter, "m1_next": m1_next, "codes": codes,
+	return {"quests": qs, "sos": sos_done.keys(), "chapter": chapter, "m1_next": m1_next, "codes": codes, "contract_for": contract_for,
 		"last_title": last_title, "last_text": last_text}
 
 
@@ -774,6 +883,8 @@ func load_from(d: Dictionary) -> void:
 		c["kind"] = int(c["kind"])
 		c["reward"] = int(c["reward"])
 		c["part"] = int(c.get("part", 0))
+		c["job"] = int(c.get("job", -1))
+		c["held"] = int(c.get("held", 0))
 		quests.append(c)
 	sos_done = {}
 	for k in d.get("sos", []):
@@ -781,6 +892,7 @@ func load_from(d: Dictionary) -> void:
 	chapter = int(d.get("chapter", 0))
 	m1_next = int(d.get("m1_next", 0))
 	codes = bool(d.get("codes", false))
+	contract_for = int(d.get("contract_for", server.road.depth))   # (an older save: no contract offered mid-cluster)
 	last_title = str(d.get("last_title", ""))
 	last_text = str(d.get("last_text", ""))
 	_dirty = true

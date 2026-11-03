@@ -121,6 +121,9 @@ func hello(peer: ENetPacketPeer, pkt: PackedByteArray) -> void:
 	peer.send(0, server.story.story_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.garden.packet(), ENetPacketPeer.FLAG_RELIABLE)
 	peer.send(0, server.road.packet(), ENetPacketPeer.FLAG_RELIABLE)        # (v64)
+	if server.run_log.resumed and not server.run_log.recapped.has(p.name):
+		server.run_log.recapped[p.name] = true   # (v103, his R1 A) the story so far, once an evening for each
+		peer.send(0, server.run_log.recap_packet(), ENetPacketPeer.FLAG_RELIABLE)
 	for q: Player in server.players:
 		if q != null and q != p:
 			peer.send(0, look_packet(q), ENetPacketPeer.FLAG_RELIABLE)
@@ -763,6 +766,8 @@ func hull_hit(amount: int) -> void:
 		server.chat.say("Обшивка не выдержала, но экипаж успел залатать каркас: корабль держится. Наибольшая прочность теперь %d%s." % [
 			server.ship.hull_max, "" if server.ship.hull_max - Net.EASY_HULL_LOSS >= Net.EASY_HULL_LEAST else " — следующий раз станет последним"])
 		tell_campaign()
+	elif server.ship.hull == 0 and server.road.second_chance():
+		tell_campaign()                      # (v103, his L14 A) normal mode: once an act the frame holds
 	elif server.ship.hull == 0 and server.fleet.standing() > 1:
 		if not server.fleet.is_lost():
 			server.fleet.ship_lost()      # (v85, the author's FS6) the run goes on while another ship of ours stands

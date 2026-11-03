@@ -15,9 +15,11 @@ extends RefCounted
 ## abandoned ship comes alongside as a derelict does while the ship is near it;
 ## coming within AMBUSH_REACH of an ambush brings its pirate ship out.
 ##
-## Hunters (the author's C15, my V6..V8): pirate ships seen on the chart. The
-## first comes HUNTER_FIRST seconds after the ship enters a cluster, then one
-## more every HUNTER_EVERY, at most HUNTER_MOST at a time. Every HUNTER_STEP
+## Hunters (the author's C15, my V6..V8): pirate ships seen on the chart. (v103, his
+## P1 A) They come by heat, not by a clock: `heat` fills from 0 to HEAT_FULL slowly by
+## itself (HEAT_QUIET seconds of quiet) and faster with noise (fights, running from
+## them, jumps); a station's system (a harbour) and a nebula drain it. Full, a hunter
+## enters the cluster and it starts again from 0. At most HUNTER_MOST at a time. Every HUNTER_STEP
 ## seconds each moves one lane toward our ship, never into a system with a
 ## supply station; inside a nebula they lose the trail and wander. Meeting one
 ## in a system is a fight with a pirate ship a cluster harder than the rest
@@ -34,15 +36,23 @@ const Player := preload("res://src/server/player.gd")
 const SCAN: Array[float] = [35.0, 50.0, 70.0]   # how far the sensors find a hidden place, by their tier
 const SCAN_FOG := 15.0               # inside a nebula
 const LANES_SEEN: Array[int] = [1, 2, 3]   # (the author's C7) how many lanes away the chart shows what a system holds, by tier
-const HUNTER_FIRST := 375.0          # seconds in a cluster before the first hunter comes (v89, the author: 1.25 times fewer; was 300)
-const HUNTER_EVERY := 300.0          # and then one more this often (v89: was 240)
+# (v103, his P1 A: heat instead of the hunters' clock, which was HUNTER_FIRST 375 s and HUNTER_EVERY 300 s, read ×2 on
+# normal since v64 by a mistake in MODE_PACE's order, so normal really waited 12.5 min and then 10 min)
+const HEAT_FULL := 100.0             # heat this high brings a hunter into the cluster
+const HEAT_QUIET := 600.0            # seconds of quiet flying that fill it from nothing (frontier, normal)
+const HEAT_FIGHT := 15.0             # a pirate ship comes out to fight us
+const HEAT_ESCAPE := 20.0            # we jump or break away from a fight
+const HEAT_JUMP := 2.0               # every jump between systems
+const HEAT_CONTRACT := 40.0          # a cluster's contract done takes this much off
+const HEAT_HARBOUR := 120.0          # seconds in a station's system (a harbour) that drain it from full
+const HEAT_FOG := 600.0              # and inside a nebula (it does not rise there)
+const HEAT_WORDS: Array[String] = ["тихо", "нас слышно", "нас ищут"]
 const HUNTER_MOST := 3               # at most this many at a time...
 const HUNTER_MOST_BIG := 4           # ... with a crew of BIG_CREW and more
 const HUNTER_MOST_FLAG := 2          # ... in the flagship's cluster (it is the pressure there)
 const BIG_CREW := 5
 const HUNTER_STEP := 75.0            # each moves one lane this often
 const HUNTER_SLOWER := 0.5           # (the author's pick, 2026-10-19) each time we escape one, its step is this much of HUNTER_STEP longer
-const ESCAPE_SOONER := 60.0          # (v67, the author's O3) jumping out of a fight brings the next hunter this much sooner
 const HUNTER_WARN := 20.0            # coming into our system, it is seen this long before it comes out
 const HUNTER_COME := 6.0             # we jump into its system: it comes out this much later
 const HUNTER_BREATHER := 45.0        # (v69, the author's note) after a fight, a hunter waiting in our system comes out no sooner than this
@@ -53,7 +63,8 @@ const HUNTER_LEVEL := 3              # a hunter is this many steps of danger har
 # the next two, two in the fifth, HUNTER_LEVEL from the sixth (the flagship's)
 const HUNTER_LEVEL_BY_DEPTH: Array[int] = [0, 0, 1, 1, 2]
 const PACE: Array[float] = [1.0, 0.7, 1.4, 1.0, 1.0]   # per kind of cluster: how long they take to come (pirates sooner, traders later)
-const MODE_PACE: Array[float] = [2.0, 1.0, 0.75]       # per mode (easy, normal, hard)
+const MODE_PACE: Array[float] = [1.0, 2.0, 0.75]       # per mode (Net.MODE_NORMAL, EASY, HARD); (v103) was in the wrong order
+const ACT_CLUSTERS := 3              # (v103) an act of the run is this many clusters (his plan's L1/L14)
 const MINE_SHARE := 0.2              # (my V4) a container that is a pirate mine
 const MINE_HULL := 12
 const SURVIVOR_SHARE := 0.25         # (my V4) bodies with a survivor among them
@@ -87,7 +98,9 @@ var entry := Vector2i.ZERO           # where the ship came into this cluster
 var history := PackedByteArray()     # the kinds of the clusters left behind
 var ticks_here := 0                  # ticks since the ship came into this cluster
 var hunters: Array = []              # each {"at": system, "move": ticks, "coming": tick or -1}
-var next_hunter := 0                 # ticks in the cluster at which the next hunter comes
+var heat := 0.0                      # (v103) 0..HEAT_FULL: how loudly we are heard in this cluster
+var _heat_was := 0.0                 # a second ago (rising or falling, for the chart)
+var chances := {}                    # (v103, his L14 A) act number -> true: that act's second chance is spent
 var found := {}                      # Sectors.key * 8 + place -> true: places the sensors have found
 var taken := {}                      # the same: places taken (an abandoned ship: one that has come alongside)
 var auto := true                     # (tests) false: no hunters come by themselves
@@ -117,6 +130,7 @@ func setup(p_server: GameServer) -> void:
 	taken = {}
 	work = {}
 	hulks = {}
+	chances = {}
 	_fight = {}
 	_rng.randomize()
 	_restart_clock()
@@ -124,7 +138,8 @@ func setup(p_server: GameServer) -> void:
 
 func _restart_clock() -> void:
 	ticks_here = 0
-	next_hunter = roundi(HUNTER_FIRST * _pace() * Net.TICK_HZ)
+	heat = 0.0
+	_heat_was = 0.0
 	_places_for = -1
 	_last_system = -1
 	_dirty = true
@@ -132,7 +147,7 @@ func _restart_clock() -> void:
 
 func _pace() -> float:
 	var k: int = server.sectors.ckind if server.sectors.count > 0 else Sectors.C_FRONTIER
-	return PACE[k] * MODE_PACE[clampi(server.mode, 0, 2)]
+	return PACE[k] * MODE_PACE[clampi(server.mode, 0, MODE_PACE.size() - 1)]
 
 
 func crew() -> int:
@@ -172,6 +187,11 @@ func next_cluster(exit_k: int) -> void:
 	server.story.left_cluster()
 	server.chat.say("Корабль вышел в скопление «%s» (%d-е на пути): %s.%s" % [Sectors.CLUSTER_NAMES[into], depth + 1,
 		Sectors.CLUSTER_ABOUT[into], _flagship_word()])
+	if depth % ACT_CLUSTERS == 0:
+		# (v103) a new act of the run: on normal its second chance is there again
+		server.chat.say("Начинается %d-й акт пути (скопления %d–%d).%s" % [act() + 1, depth + 1, depth + ACT_CLUSTERS,
+			" У экипажа снова есть второй шанс: один раз за акт каркас выдержит, даже если обшивка рухнет." if chance_left() else ""])
+		server.run_log.add("Начался %d-й акт пути." % (act() + 1))
 
 
 func hunting() -> bool:
@@ -215,6 +235,8 @@ func tick() -> void:
 	ticks_here += 1
 	var sys: int = server.ship.sector
 	if sys != _last_system:
+		if _last_system >= 0:
+			noise(HEAT_JUMP)                 # (v103) a jump's flash is heard (not the cluster's first system, not a load)
 		_last_system = sys
 		_arrived(sys)
 	if _places_for != sys:
@@ -240,6 +262,11 @@ func _arrived(sys: int) -> void:
 		if int(h["at"]) == sys:
 			h["coming"] = server.tick + roundi(HUNTER_COME * Net.TICK_HZ)
 			server.chat.alarm("Здесь ждёт пиратский охотник! Он выйдет на нас через %d с." % int(HUNTER_COME))
+	if harbour() and ticks_here > 1:
+		# (v103, his S2 A) a station's system is a harbour: a natural place to stop for the evening
+		server.chat.say("Гавань: в сектор станции охотники не заходят, здесь шум быстро стихает.%s" % (
+			" Кампания сохранена: здесь удобно закончить вечер." if server.save_path != "" else ""))
+		server.run_log.add("Гавань в секторе %s (шум %d)." % [server.sectors.names[sys], int(heat)])
 	_dirty = true
 
 
@@ -512,10 +539,7 @@ func _most() -> int:
 func _hunters_second() -> void:
 	var s: Sectors = server.sectors
 	var ours: int = server.ship.sector
-	if auto and server.director.auto and ticks_here >= next_hunter and not server.director.quiet():
-		next_hunter = ticks_here + roundi(HUNTER_EVERY * _pace() * Net.TICK_HZ)
-		if hunters.size() + (1 if not _fight.is_empty() else 0) < _most():
-			spawn_hunter()
+	_heat_second()
 	var d := s.distances(ours)
 	# (v73, the author's note: "another hunter waits" every second) a wreck left
 	# alongside is no fight: only a live pirate ship keeps the breather from starting
@@ -548,6 +572,74 @@ func _hunters_second() -> void:
 		if pick == ours:
 			h["coming"] = server.tick + roundi(HUNTER_WARN * Net.TICK_HZ)
 			server.chat.alarm("Пиратский охотник вошёл в наш сектор! Он выйдет на нас через %d с. Успеем прыгнуть, или будем драться." % int(HUNTER_WARN))
+
+
+func harbour() -> bool:
+	## (v103, his S2 A) Is the ship in a station's system? Hunters never come in, the director sends nothing, heat drains.
+	return server.sectors.count > 0 and server.sectors.kind[server.ship.sector] == Sectors.STATION
+
+
+func heating() -> bool:
+	## Does heat count now? (tests set `auto` off; the first quiet minutes of a campaign keep it still)
+	return auto and server.director.auto and not server.director.quiet()
+
+
+func noise(amount: float) -> void:
+	## (v103) Something loud: a fight, running from one, a jump. A full meter brings a hunter on the next second.
+	if heating():
+		heat = minf(heat + amount, HEAT_FULL)
+		_dirty = true
+
+
+func cool(amount: float) -> void:
+	heat = maxf(heat - amount, 0.0)
+	_dirty = true
+
+
+func _heat_second() -> void:
+	_heat_was = heat
+	if not heating():
+		return
+	if harbour():
+		cool(HEAT_FULL / HEAT_HARBOUR)
+	elif in_fog():
+		cool(HEAT_FULL / HEAT_FOG)
+	else:
+		heat = minf(heat + HEAT_FULL / (HEAT_QUIET * _pace()), HEAT_FULL)
+	if heat >= HEAT_FULL and hunters.size() + (1 if not _fight.is_empty() else 0) < _most() and spawn_hunter():
+		heat = 0.0
+		server.run_log.add("Шум привёл охотника (охотников в скоплении: %d)." % hunters.size())
+	if int(heat) != int(_heat_was):
+		_dirty = true
+
+
+func heat_level() -> int:
+	## 0 quiet, 1 heard, 2 hunted (by thirds of the meter).
+	return clampi(int(heat / HEAT_FULL * 3.0), 0, 2)
+
+
+func act() -> int:
+	## (v103) The act of the run we are in: 0 for clusters 1..3, 1 for 4..6, 2 from the 7th on.
+	return depth / ACT_CLUSTERS
+
+
+func chance_left() -> bool:
+	## (v103, his L14 A) Normal mode: is this act's second chance still there?
+	return server.mode == Net.MODE_NORMAL and not chances.has(act())
+
+
+func second_chance() -> bool:
+	## (Crew.hull_hit) A hull worn to nothing on normal: once an act the crew saves the frame (top strength -50,
+	## the hull back to full, as on easy). False if the chance is spent (or not this mode).
+	if not chance_left() or server.ship.hull_max - Net.EASY_HULL_LOSS < Net.EASY_HULL_LEAST:
+		return false
+	chances[act()] = true
+	server.ship.hull_max -= Net.EASY_HULL_LOSS
+	server.ship.hull = server.ship.hull_max
+	server.chat.alarm("Обшивка не выдержала, но экипаж чудом удержал каркас: второй шанс этого акта истрачен. Наибольшая прочность теперь %d." % server.ship.hull_max)
+	server.run_log.add("Второй шанс %d-го акта истрачен: обшивка рухнула, наибольшая прочность теперь %d." % [act() + 1, server.ship.hull_max])
+	_dirty = true
+	return true
 
 
 func spawn_hunter() -> bool:
@@ -624,9 +716,8 @@ func _watch_fight() -> void:
 
 
 func escaped() -> void:
-	## (v67, the author's O3) We jumped out of a fight: the next hunter comes sooner.
-	next_hunter = maxi(ticks_here, next_hunter - roundi(ESCAPE_SOONER * Net.TICK_HZ))
-	_dirty = true
+	## (v67, the author's O3) We jumped out of a fight: (v103) it is heard, the heat rises.
+	noise(HEAT_ESCAPE)
 
 
 func pirates_beaten() -> void:
@@ -635,10 +726,20 @@ func pirates_beaten() -> void:
 		_fight["at"] = server.ship.sector
 
 
-func seconds_to_hunter() -> int:
-	if not auto or not server.director.auto or hunters.size() >= _most():
-		return 65535
-	return maxi(next_hunter - ticks_here, 0) / Net.TICK_HZ
+func road_flags() -> int:
+	## S_ROAD's byte 3 (Net.ROAD_*).
+	var f := 0
+	if heating():
+		f |= Net.ROAD_HEATING
+		if harbour() or in_fog():
+			f |= Net.ROAD_COOLING
+	if harbour():
+		f |= Net.ROAD_HARBOUR
+	if chance_left():
+		f |= Net.ROAD_CHANCE
+	if hunters.size() + (1 if not _fight.is_empty() else 0) >= _most():
+		f |= Net.ROAD_FULL
+	return f
 
 
 func admin_next(exit_k: int) -> void:
@@ -678,8 +779,7 @@ func known() -> PackedByteArray:
 
 func packet() -> PackedByteArray:
 	## Net.S_ROAD.
-	var out := PackedByteArray([Net.S_ROAD, 1 if in_fog() else 0, 0, 0])
-	out.encode_u16(2, seconds_to_hunter())
+	var out := PackedByteArray([Net.S_ROAD, 1 if in_fog() else 0, clampi(int(heat), 0, 100), road_flags()])
 	var seen: Array = [] if in_fog() else hunters
 	out.append(seen.size())
 	for h: Dictionary in seen:
@@ -813,7 +913,7 @@ func save() -> Dictionary:
 	if not _fight.is_empty():
 		hs.append(int(_fight["at"]))
 		esc.append(int(_fight.get("escaped", 0)))
-	return {"depth": depth, "entry": [entry.x, entry.y], "history": Array(history), "ticks": ticks_here, "next": next_hunter,
+	return {"depth": depth, "entry": [entry.x, entry.y], "history": Array(history), "ticks": ticks_here, "heat": heat, "chances": chances.keys(),
 		"hunters": hs, "escaped": esc, "found": found.keys(), "taken": taken.keys(), "work": work, "hulks": _hulks_saved()}
 
 
@@ -837,7 +937,11 @@ func load_from(d: Dictionary) -> void:
 	entry = Vector2i(int(d["entry"][0]), int(d["entry"][1])) if d.has("entry") else Vector2i.ZERO
 	history = PackedByteArray(d.get("history", []))
 	ticks_here = int(d.get("ticks", 0))
-	next_hunter = int(d.get("next", roundi(HUNTER_FIRST * Net.TICK_HZ)))
+	heat = float(d.get("heat", 0.0))
+	_heat_was = heat
+	chances = {}
+	for k in d.get("chances", []):
+		chances[int(k)] = true
 	hunters = []
 	var esc: Array = d.get("escaped", [])
 	for i in d.get("hunters", []).size():

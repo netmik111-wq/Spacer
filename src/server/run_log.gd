@@ -5,11 +5,17 @@ extends RefCounted
 ## every save and at the end, so the author can send it with usage.txt after an evening (real play, not the simulator).
 ## The campaign save keeps it. Part of the server: GameServer keeps one of these.
 
+const Net := preload("res://src/shared/net.gd")
+const Sectors := preload("res://src/shared/sectors.gd")
+
 var server: GameServer
 var lines: Array = []                # "[mm:ss] text"
 var _cluster_ticks := 0              # voyage_ticks when the cluster in hand began
 var _cluster_earned := 0             # ship.earned then
 var _cluster_credits := 0            # and ship.credits
+var resumed := false                 # (v103, his R1 A) this evening goes on with a saved run: joiners see the story so far
+var recapped := {}                   # the names already shown it this evening
+const RECAP_LINES := 8
 
 
 func setup(p_server: GameServer) -> void:
@@ -44,6 +50,36 @@ func _mark() -> void:
 	_cluster_credits = server.ship.credits
 
 
+func recap() -> String:
+	## (v103, his R1 A) The story so far: where the run stands and its last lines (the newest last).
+	var s: Sectors = server.sectors
+	var out := PackedStringArray()
+	if s.count > 0:
+		out.append("%d-й акт, скопление «%s» (%d-е на пути), сектор %s." % [server.road.act() + 1, Sectors.CLUSTER_NAMES[s.ckind],
+			server.road.depth + 1, s.names[server.ship.sector]])
+	out.append("В пути %s, обшивка %d из %d, на счету %d кредитов, в резерве %d. Шум: %d из 100 (%s)." % [server.crew.voyage_text(server.voyage_ticks),
+		server.ship.hull, server.ship.hull_max, server.ship.credits, server.reserve, int(server.road.heat), server.road.HEAT_WORDS[server.road.heat_level()]])
+	var c: Dictionary = server.story.contract()
+	out.append(("Контракт скопления: %s" % c["text"]) if not c.is_empty() else "Контракта в этом скоплении нет.")
+	if server.mode == Net.MODE_NORMAL:
+		out.append("Второй шанс этого акта: %s." % ("есть" if server.road.chance_left() else "истрачен"))
+	var tail: Array = lines.slice(maxi(lines.size() - RECAP_LINES - 1, 0), maxi(lines.size() - 1, 0))   # (not "continued")
+	if not tail.is_empty():
+		out.append("")
+		out.append("Последнее в журнале:")
+		for line: String in tail:
+			out.append(line)
+	return "\n".join(out)
+
+
+func recap_packet() -> PackedByteArray:
+	var b := recap().to_utf8_buffer().slice(0, 4000)
+	var out := PackedByteArray([Net.S_RECAP, 0, 0])
+	out.encode_u16(1, b.size())
+	out.append_array(b)
+	return out
+
+
 func text() -> String:
 	return "Журнал прохождения (Spacer %s, записан %s)\n%s\n" % [
 		str(ProjectSettings.get_setting("application/config/version", "")), Time.get_datetime_string_from_system(), "\n".join(lines)]
@@ -72,4 +108,6 @@ func load_from(d: Dictionary) -> void:
 	_cluster_ticks = int(d.get("ticks", server.voyage_ticks))
 	_cluster_earned = int(d.get("earned", server.ship.earned))
 	_cluster_credits = int(d.get("credits", server.ship.credits))
+	resumed = true
+	recapped = {}
 	add("Продолжение с сохранения.")

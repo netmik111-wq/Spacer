@@ -278,6 +278,7 @@ func pirates_come(party: int, p_raid: bool = false, given: Dictionary = {}) -> b
 		_drop(_floor_cells(), PIRATE_LOOT)
 	server.air.wake()
 	server.gunnery.enemy_arrives(design, raid)
+	server.road.noise(server.road.HEAT_FIGHT)  # (v103) a fight is heard across the cluster
 	var who := "Пиратский корабль" if design.has("classic") else str(design["name"])
 	if design.has("boss"):
 		server.chat.say(("Тревога! Из тени выходит %s, флагман пиратов. Это цель пути: бой до конца, он не бежит и не сдаётся. Разбейте его, и игра выиграна. " % who) +

@@ -13,7 +13,6 @@ const INK := Color(0.86, 0.9, 0.95)
 const DIM := Color(0.58, 0.62, 0.7)
 const BLUE := Color(0.45, 0.75, 1.0)
 const WARN := Color(0.95, 0.75, 0.3)
-const QUEST_NAMES: Array[String] = ["груз", "охота", "чёрный ящик", "сюжет"]
 
 var client: GameClient
 var _title: Label
@@ -115,7 +114,7 @@ func _quest_text() -> String:
 	var lines: Array[String] = ["Задания:"]
 	for q: Dictionary in qs:
 		var d: int = client.sectors.hops_between(here, q["at"])
-		lines.append("• %s (%s, %d кр.): %s Прыжков до цели: %d." % [q["title"], QUEST_NAMES[clampi(int(q["kind"]), 0, 3)],
+		lines.append("• %s (%s, %d кр.): %s Прыжков до цели: %d." % [q["title"], Net.QUEST_NAMES[clampi(int(q["kind"]), 0, Net.QUEST_NAMES.size() - 1)],
 			int(q["reward"]), q["text"], d])
 	return "\n".join(lines)
 

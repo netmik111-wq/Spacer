@@ -34,7 +34,7 @@ needs:
 
 ## Where things stand
 
-Build v102 (version 0.95: his 1 November Notebook notes) is the latest. Plans one to four are done except the darkness front (the
+Build v103 (version 0.96: heat, cluster contracts, harbours, the second chance) is the latest. Plans one to four are done except the darkness front (the
 author is still thinking it through); builds v40 to v60 were the author's own requests, one build each.
 v58 and v59 built the gear tiers plan (`/mnt/project-files/plans/tiers-plan.md`): guns in v58, ship gear
 (systems' tiers, the module bay, armour, focusing array, phase drive) in v59. v60 began the road plan
@@ -178,6 +178,11 @@ my picks): out of a fight our second ship follows the first by itself (no more s
 own helm; the sliding-aside drawing eases and keeps its side (his "twitch"); X (hold position) reaches the server at last;
 F3 shows ping, the slowest frame and the longest server pause. Lag since v101 not reproduced here; his "view from above"
 asked about. The v101 page's heat, contracts, harbours and second chance moved to v103 (my Z1 pick).
+v103 (his P1/P2/S2/L14 A on the run-length page; questions `https://claude.ai/artifact/DmJnG7ivH1qdztfNvoiZpS`, built on my
+picks): hunters come by heat (`Road.heat`: 10 min of quiet fill it, fights +15, escapes +20, jumps +2, harbours and nebulae
+drain it, a contract -40), a main contract per cluster (`QUEST_CONTRACT` with a `job`: cargo, captain, black box, survey),
+stations are harbours (heat drains, «гавань» on the chart), «Ранее в рейсе» for a continued run (`S_RECAP`), one second
+chance per act of 3 clusters on normal (`Road.second_chance`). Found: `MODE_PACE` was read in the wrong order since v64.
 Next: asteroid dwellers and minibosses, quests inside places, places with decks with station landing, enemy decks and
 choosing them, enemy fleets. Long-term: races (a lore question round first).
 Engines and complex atmosphere (gases, fire, electricity) only after asking the author in detail.
@@ -210,7 +215,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
 
 ## Checks before shipping
 
-    tools/runtests.sh          (all 57 scripts below in a row; GitHub Actions runs it on every push)
+    tools/runtests.sh          (all 58 scripts below in a row; GitHub Actions runs it on every push)
     godot --headless --path . --script res://tools/airtest.gd
     godot --headless --path . --script res://tools/directortest.gd
     godot --headless --path . --script res://tools/machinetest.gd
@@ -268,6 +273,7 @@ The author's standing rules (details in `docs/DECISIONS.md`):
     godot --headless --path . --script res://tools/spritetest.gd (since v100: every item has a picture, wear sheets, the jumpsuit, the gear byte, solid wall blocks)
     godot --headless --path . --script res://tools/turrettest.gd (since v101: plated shapes, floor turrets at 0.8, moving mounts, S_MOUNT_CELLS, saves, the run log, longer runs)
     godot --headless --path . --script res://tools/followtest.gd (since v102: the second ship follows, flies alone from its helm, X from a real client)
+    godot --headless --path . --script res://tools/heattest.gd (since v103: heat, contracts, harbours, the second chance, the story so far)
     GODOT=... tools/soak.sh 2      (since v75, the author's S3: 2 game hours with 7 bots; last line "soak: ok")
     rustc -O tools/lagproxy.rs -o tools/lagproxy
     GODOT=... tools/nettest.sh 8 30
@@ -292,7 +298,7 @@ How long ship fights last, per class and temper (since v54; rerun after changing
 1 = a pilot at the controls). Runs side by side need different mend seconds or jumps out: they pick the port.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs `tools/runtests.sh` on every push and pull
-request. A red check on GitHub means one of the 57 scripts failed; its log is attached to the run.
+request. A red check on GitHub means one of the 58 scripts failed; its log is attached to the run.
 
 Host scenarios (server as a separate process) are checked on the built game: the guest
 gets "connection lost" right after the host leaves; a busy port gives a clear
@@ -717,6 +723,13 @@ The parameters for these checks are described in the header of `src/main.gd`.
   `Body.formed` only marks the tick it was put in place (`placed`, `form_slot`). Pilot keys at its helm no longer
   copy into `pilots[0]`. Every input value a client sends must pass the C_INPUT check in `GameServer._on_packet`:
   a new `Mover` input (as HOLD/LET_GO were until v102) is thrown away silently there; test it with a real client.
+- (v103) Hunters come by `Road.heat`, not a clock: a test that wants one sets `road.heat = Road.HEAT_FULL` outside a
+  harbour or a nebula (both drain it); heat counts only while `road.heating()` (`road.auto`, `director.auto`, not the
+  quiet start). `Road.MODE_PACE` is indexed by `Net.MODE_*` (normal 0, easy 1, hard 2). A cluster's contract is a quest
+  of kind `QUEST_CONTRACT`: ask `Story.job(q)` for what it asks, never `q["kind"]` alone; one is offered per cluster
+  (`story.contract_for`), so a test that empties `story.quests` and wants none sets `contract_for = road.depth`. A ship's
+  hull at 0 on normal first spends the act's second chance (`road.chances`; tests of losing set `road.chances[road.act()]
+  = true` or play hard). S_ROAD's bytes 2-3 are heat and `Net.ROAD_*` flags; `S_RECAP` is new (protocol 76).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
   this way, v60 to v63). Before a pull request, run the new test 30+ times. Parallel runs collide on ports and on
   `user://`: run each in `unshare -n` with its own `XDG_DATA_HOME`. Pin what the check is not about (keep a target in

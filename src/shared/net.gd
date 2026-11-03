@@ -3,7 +3,7 @@ extends RefCounted
 ## network protocol. Change PROTOCOL whenever a packet layout changes, so old
 ## clients are refused with a clear message instead of misreading data.
 
-const PROTOCOL := 75
+const PROTOCOL := 76
 const DEFAULT_PORT := 24500
 
 const TICK_HZ := 20                 # server steps per second
@@ -319,6 +319,7 @@ const C_INFLATE := 42               # (v98, the author's idea) nothing else: let
 const S_TELEPORT := 53              # (v97) to each player: u8 TELE_NONE/READY/CHARGING/HUMMING of the teleporter that serves them, u8 seconds to ready
 const S_MOUNT_CELLS := 54           # (v101, his N2 A) to all: u8 the ship's number in our fleet, u8 count, per mount s32 its cell
                                     # (-1: taken down or a spare not set up): mounts moved about the hull and onto the floor
+const S_RECAP := 55                 # (v103, his R1 A) to one: u16 length, the run so far (UTF-8), shown when joining a continued run
 const TELE_SEND := 0
 const TELE_HOME := 1
 const TELE_ALL := 2
@@ -614,15 +615,23 @@ const QUEST_CARGO := 0              # carry a crate of cargo to a station
 const QUEST_BOUNTY := 1             # a named pirate ship waits in a sector: beat it
 const QUEST_BLACKBOX := 2           # a wreck's black box: bring it back to the supply locker
 const QUEST_MISSION := 3            # a chapter of the story (it has a quest kind of its own inside)
+const QUEST_CONTRACT := 4           # (v103, his P2 A) the cluster's main contract: its job is one of the kinds above or QUEST_SURVEY
+const QUEST_SURVEY := 5             # (v103) a contract's survey: hold the ship still in that system, out of a fight
+const QUEST_NAMES: Array[String] = ["груз", "охота", "чёрный ящик", "сюжет", "контракт", "разведка"]
 const MARK_SOS := 0                 # a distress call comes from that sector
 const MARK_QUEST := 1               # a quest's target
 const S_GARDEN := 43                # to all: u8 count of trays, per tray u16 cell, u8 seed (ITEM_SEED + ...; 0 = empty),
                                     # u8 stage (GROW_*), u8 growth 0..100, u8 flags (GARDEN_*)
-const S_ROAD := 44                  # (v64) to all: u8 flags (1 = the ship is inside a nebula), u16 seconds to the next
-                                    # pirate hunter (65535 = none due), u8 count of hunters seen, per hunter u8 system,
+const S_ROAD := 44                  # (v64) to all: u8 flags (1 = the ship is inside a nebula), (v103) u8 heat 0..100,
+                                    # u8 ROAD_* flags, u8 count of hunters seen, per hunter u8 system,
                                     # u8 1 if it is coming out at us; u8 count of systems, per system u8 1 if the chart
                                     # shows what it holds; u8 count of places found in the ship's system, per place
                                     # u8 kind (Sectors.P_*), u8 x, u8 y, u8 1 if taken
+const ROAD_HEATING := 1             # (v103) S_ROAD byte 3: heat counts now (not the quiet start, not a test)
+const ROAD_COOLING := 2             # it falls (a harbour or a nebula)
+const ROAD_HARBOUR := 4             # the ship is in a station's system: a harbour
+const ROAD_CHANCE := 8              # this act's second chance is still there (normal mode)
+const ROAD_FULL := 16               # as many hunters as can be in the cluster are here already
 const S_BOTLOG := 45                # (v72) to all: u16 the bot's id, u32 seconds since the game began, u16 length,
                                     # then the line (UTF-8): what one of our bots set about (the bots' log)
 const S_HIT := 46                   # (v75, the author's F1) somebody hurt, to those near on that deck: u8 BLOOD_*, u16 their id,

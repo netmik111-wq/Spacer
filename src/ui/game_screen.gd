@@ -77,6 +77,11 @@ var _shade: ColorRect
 var _fate: Label
 var _over: PanelContainer            # the end of the campaign: what the voyage came to
 var _over_text: Label
+var _recap: PanelContainer           # (v103, his R1 A) the story so far, on joining a continued run
+var _recap_text: Label
+var _recap_shown := ""               # the recap last shown (a new one shows again)
+var _recap_left := 0.0
+const RECAP_SECONDS := 45.0
 var _won_known := false              # (v57) we have seen the flagship beaten (shown once, for VICTORY_SECONDS)
 var _victory_left := 0.0
 var _life := 0.0                     # seconds this screen has been up
@@ -435,6 +440,33 @@ func setup(p_client: GameClient, p_hosting: bool, p_port: int) -> void:
 	root.add_child(_over)
 	_over_text = _text(_over, 20)
 	_over_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_recap = PanelContainer.new()
+	_recap.visible = false
+	_recap.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	_recap.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_recap.offset_top = 70
+	var recap_style := StyleBoxFlat.new()
+	recap_style.bg_color = Color(0.03, 0.05, 0.09, 0.92)
+	recap_style.border_color = Color(0.35, 0.6, 0.9)
+	recap_style.set_border_width_all(2)
+	recap_style.set_content_margin_all(18)
+	_recap.add_theme_stylebox_override("panel", recap_style)
+	root.add_child(_recap)
+	var recap_box := VBoxContainer.new()
+	recap_box.add_theme_constant_override("separation", 10)
+	_recap.add_child(recap_box)
+	var recap_title := _text(recap_box, 20)
+	recap_title.text = "РАНЕЕ В РЕЙСЕ"
+	recap_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_recap_text = _text(recap_box, 15)
+	_recap_text.custom_minimum_size = Vector2(640, 0)
+	_recap_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var recap_ok := Button.new()
+	recap_ok.text = "Понятно"
+	recap_ok.focus_mode = Control.FOCUS_NONE
+	recap_ok.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	recap_ok.pressed.connect(func() -> void: _recap_left = 0.0)
+	recap_box.add_child(recap_ok)
 
 	_chat_box = VBoxContainer.new()
 	_chat_box.alignment = BoxContainer.ALIGNMENT_END
@@ -2629,6 +2661,13 @@ func _process(delta: float) -> void:
 			Net.OVER_TEXT[clampi(client.over, 0, Net.OVER_TEXT.size() - 1)],
 			client.sectors_seen, client.farthest, client.jumps, _voyage(client.voyage_seconds), _story()]
 	_shade.color.a = lerpf(_shade.color.a, dark, 1.0 - exp(-delta * 4.0))
+	# (v103) the story so far, for a while or until «Понятно»
+	if client.recap != _recap_shown:
+		_recap_shown = client.recap
+		_recap_text.text = client.recap
+		_recap_left = RECAP_SECONDS if client.recap != "" else 0.0
+	_recap_left = maxf(_recap_left - delta, 0.0)
+	_recap.visible = _recap_left > 0.0 and not _over.visible
 
 	# the jump
 	_jump_label.visible = client.jump_to != Net.NO_SECTOR and not _console.visible

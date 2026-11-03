@@ -251,7 +251,7 @@ var story := {}                      # (v63) Net.S_STORY: {flags, flagship (Vect
                                      # reward, title, text}], marks: [[kind, Vector2i]]}
 var garden := {}                     # (v63) the hydroponic trays (Net.S_GARDEN): cell -> [seed, stage, growth, flags]
 var comms_seen := 0                  # (v63) calls heard since joining (the HUD blinks while one waits)
-var road := {"fog": false, "hunter_s": 65535, "hunters": [], "known": PackedByteArray(), "places": []}
+var road := {"fog": false, "heat": 0, "road_flags": 0, "hunters": [], "known": PackedByteArray(), "places": []}
                                      # (v64) Net.S_ROAD: hunters [[system, coming]], what the chart shows per system,
                                      # places found here [[kind, Vector2, taken]]
 
@@ -271,6 +271,7 @@ var deflated := false                # (v98) our suit is let down (SEC_VITALS fl
 var eshield := 0                     # (v98) the charge of the energy shield we wear (0..Net.SHIELD_FULL)
 var boards := 0                      # (v71) circuit boards we carry
 var toolbox := false                 # (v71) we carry a toolbox
+var recap := ""                      # (v103, his R1 A) Net.S_RECAP: the run so far, shown once on joining a continued run
 var summary := {}                    # (v75, the author's E1) the run's story at its end (Net.S_SUMMARY): ships, boarders, earned, deaths
 var complex_repairs := false         # (v71) the game was made with complex repairs (S_CAMPAIGN)
 var hauling := false                 # (v70) the server says we hold somebody (with a broken leg pred.slow alone does not tell)
@@ -1098,7 +1099,7 @@ func _read_road(pkt: PackedByteArray) -> void:
 	## (v64) The hunters, what the chart shows, the places found in our system.
 	if pkt.size() < 5:
 		return
-	var got := {"fog": pkt[1] & 1 != 0, "hunter_s": pkt.decode_u16(2), "hunters": [], "known": PackedByteArray(), "places": []}
+	var got := {"fog": pkt[1] & 1 != 0, "heat": pkt[2], "road_flags": pkt[3], "hunters": [], "known": PackedByteArray(), "places": []}
 	var o := 5
 	for i in pkt[4]:
 		if o + 2 > pkt.size():
@@ -2226,6 +2227,9 @@ func _on_packet(pkt: PackedByteArray) -> void:
 			_read_story(pkt)
 		Net.S_ROAD:
 			_read_road(pkt)
+		Net.S_RECAP:
+			if pkt.size() >= 3:
+				recap = pkt.slice(3, 3 + pkt.decode_u16(1)).get_string_from_utf8()
 		Net.S_GARDEN:
 			if pkt.size() >= 2:
 				var got := {}
