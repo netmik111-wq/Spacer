@@ -273,6 +273,7 @@ func _gear_count() -> int:
 func _chance() -> void:
 	print("  -- the second chance")
 	var other := _new_server(26611)
+	_expect(str(other.run_log.lines[0]).contains(Net.MODE_NAMES[other.mode].to_lower()), "the run log names the mode right (%s)" % other.run_log.lines[0])
 	other.mode = Net.MODE_NORMAL
 	var r: Road = other.road
 	r.depth = 0

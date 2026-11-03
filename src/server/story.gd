@@ -58,6 +58,7 @@ var chapter := 0                     # 0 the first mission not taken, 1 its conv
 var m1_next := 0                     # (jumps) the first mission may be offered from this many jumps on
 var codes := false
 var contract_for := -1               # (v103) the cluster (Road.depth) whose contract has been given
+var contracts_on := true             # (tests) false: no cluster contract comes by itself
 var _due_at := -1                    # the tick a call on arriving comes
 var _due_event := -1
 var _hunt_at := -1                   # the tick a quest's pirate comes out
@@ -608,7 +609,7 @@ func _contract_tick() -> void:
 		return
 	var busy: bool = server.gunnery.fighting() or server.pirates.aboard() > 0
 	var road = server.road
-	if contract_for != road.depth and road.ticks_here >= roundi(CONTRACT_AFTER * Net.TICK_HZ) and not busy:
+	if contracts_on and contract_for != road.depth and road.ticks_here >= roundi(CONTRACT_AFTER * Net.TICK_HZ) and not busy:
 		contract_for = road.depth
 		if not (road.depth == Sectors.FLAG_DEPTH and not server.won):
 			offer_contract()

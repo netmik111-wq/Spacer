@@ -25,7 +25,7 @@ func setup(p_server: GameServer) -> void:
 func started(ship_name: String) -> void:
 	lines = []
 	_mark()
-	add("Начало кампании: корабль «%s», режим %s, %d кредитов." % [ship_name, ["лёгкий", "обычный", "трудный"][clampi(server.mode, 0, 2)],
+	add("Начало кампании: корабль «%s», режим %s, %d кредитов." % [ship_name, Net.MODE_NAMES[clampi(server.mode, 0, Net.MODE_NAMES.size() - 1)].to_lower(),
 		server.ship.credits])
 
 

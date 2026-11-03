@@ -727,7 +727,7 @@ The parameters for these checks are described in the header of `src/main.gd`.
   harbour or a nebula (both drain it); heat counts only while `road.heating()` (`road.auto`, `director.auto`, not the
   quiet start). `Road.MODE_PACE` is indexed by `Net.MODE_*` (normal 0, easy 1, hard 2). A cluster's contract is a quest
   of kind `QUEST_CONTRACT`: ask `Story.job(q)` for what it asks, never `q["kind"]` alone; one is offered per cluster
-  (`story.contract_for`), so a test that empties `story.quests` and wants none sets `contract_for = road.depth`. A ship's
+  (`story.contract_for`), so a test that counts quests sets `story.contracts_on = false`. A ship's
   hull at 0 on normal first spends the act's second chance (`road.chances`; tests of losing set `road.chances[road.act()]
   = true` or play hard). S_ROAD's bytes 2-3 are heat and `Net.ROAD_*` flags; `S_RECAP` is new (protocol 76).
 - Tests play with dice, so a new check that passes once may fail 1 run in 30 in CI (each build's first push went red
