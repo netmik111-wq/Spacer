@@ -2322,6 +2322,8 @@ Z1 A on the v102 page; built on my picks while his answers on `https://claude.ai
   5.5 min here instead of ~8. Shorter runs were not taken: the event counts would turn to luck.
 - **fluxtest**: 1 run in 40 the pirate left in the middle of the heat checks (every gun had just been fired at it),
   so the overload, venting and pilot checks failed. A fresh pirate comes for those checks now; 120/120 pass.
+- **machinetest** went red on this PR's first run: since v103 a cargo contract could come and be delivered on the
+  test's jump, paying 100 credits (1 run in 60, not this change). It sets `story.contracts_on = false`; 160/160 pass.
   The shotgun (peopletest) and robot (enemytest) failures seen on GitHub were already fixed on 1 Nov (40/40 each).
 - **Left for later**: 25 tests set `gunnery.flies = false` and 4 `arena.enabled = false`, the pre-v92 instant fight
   players never meet. Most only skip waiting; guntest's fight half checks the old shield and damage numbers. Redo

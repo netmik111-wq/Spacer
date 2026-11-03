@@ -34,6 +34,7 @@ func _initialize() -> void:
 		quit(1)
 		return
 	server.director.auto = false
+	server.story.contracts_on = false # (v103) a cargo contract delivered on arriving paid 100: the explore check failed 1 run in 60
 	server.systems.vents_on = false   # (v69) the rooms' vents would fill the compartments this test keeps shut
 	var map := server.map
 	_expect(map.engine.size() == 1 and map.air_plant.size() == 1, "the ship has an engine and an air plant")
@@ -370,7 +371,8 @@ func _initialize() -> void:
 	var tank_before: float = server.ship.tank
 	server.navigation.start_jump(target, "Проверка")
 	_run(Net.JUMP_TICKS + 2)
-	_expect(server.sectors.cell[server.ship.sector] == target_cell and server.ship.credits == Net.EXPLORE_REWARD, "(v67) the first visit to a sector pays %d credits" % Net.EXPLORE_REWARD)
+	_expect(server.sectors.cell[server.ship.sector] == target_cell and server.ship.credits == Net.EXPLORE_REWARD, "(v67) the first visit to a sector pays %d credits (%d, landed %s)" % [Net.EXPLORE_REWARD,
+		server.ship.credits, server.sectors.cell[server.ship.sector] == target_cell])
 
 	print("fuel")
 	_expect(absf(server.ship.tank - (tank_before - server.ship.jump_cost)) < 1.0,
