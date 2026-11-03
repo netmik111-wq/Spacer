@@ -18,6 +18,10 @@ func _initialize() -> void:
 	for crew in [1, 4]:
 		for kind in [Sectors.STATION, Sectors.EMPTY, Sectors.METEORS]:
 			for mends in [false, true]:
+				# a supply station checks one thing only (it stays quiet): one run of the four is enough,
+				# and each run is 30 game minutes (2026-11-03 test review: this test was half of CI's time)
+				if kind == Sectors.STATION and (crew != 4 or mends):
+					continue
 				_run(crew, kind, mends)
 	_rarer()
 	print("DIRECTORTEST %s" % ("FAILED: %d" % failed if failed > 0 else "ok"))
